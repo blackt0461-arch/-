@@ -17,10 +17,12 @@ import threading
 import time
 import uuid
 import webbrowser
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import parse_qs, quote, unquote
 
-from .detect import Config, analyze
+from .clipmaker import ClipOptions, make_clips
+from .detect import Config, Highlight, analyze
 from .evaluate import evaluate
 from .fetch import ffmpeg_exe, fetch, video_id_from_url
 from .log import set_sink
@@ -34,7 +36,17 @@ REPORTS = os.path.join(BASE, "reports")
 HISTORY = os.path.join(REPORTS, "history.json")
 REPORT_NAME = re.compile(r"^report_[A-Za-z0-9_-]+\.html$")
 
-STEPS = ["動画の情報・チャット・コメントを取得", "盛り上がりを解析", "切り抜き動画を検索して照合", "レポートを作成"]
+CLIPS = os.path.join(BASE, "clips")
+CLIP_INDEX = os.path.join(CLIPS, "index.json")
+CLIP_NAME = re.compile(r"^[\w-]+\.(mp4|txt)$")
+SE_DIR = os.path.join(BASE, "se")
+
+STEP_FETCH = "動画の情報・チャット・コメントを取得"
+STEP_ANALYZE = "盛り上がりを解析"
+STEP_EVAL = "切り抜き動画を検索して照合"
+STEP_REPORT = "レポートを作成"
+STEP_PREPARE = "準備 (チャット・字幕の読み込み)"
+STEP_CLIPS = "切り抜き動画を作成 (ダウンロード・字幕・効果音)"
 
 
 class UserError(Exception):
@@ -46,6 +58,8 @@ class Job:
     id: str
     url: str
     options: dict
+    kind: str = "analyze"              # analyze / clip
+    steps: list[str] = field(default_factory=list)
     status: str = "running"            # running / done / error
     step: int = 0
     logs: list[str] = field(default_factory=list)
@@ -53,22 +67,36 @@ class Job:
     report: str | None = None
     error: str | None = None
     title: str = ""
+    clips: list[dict] = field(default_factory=list)
+    report_file: str = ""
+    indices: list[int] = field(default_factory=list)
 
     def log(self, msg: str) -> None:
         self.logs.append(msg)
         del self.logs[:-200]
 
-    def _evaluates(self) -> bool:
-        return bool(self.options.get("evaluate") or self.options.get("clipUrls"))
+    def set_step(self, name: str) -> None:
+        self.step = self.steps.index(name)
 
     def to_dict(self) -> dict:
         return {
-            "id": self.id, "status": self.status, "step": self.step,
-            "steps": [s for i, s in enumerate(STEPS) if i != 2 or self._evaluates()],
-            "stepIndex": self.step - (1 if self.step > 2 and not self._evaluates() else 0),
+            "id": self.id, "kind": self.kind, "status": self.status, "steps": self.steps,
+            "stepIndex": len(self.steps) if self.status == "done" else self.step,
             "logs": self.logs[-50:], "elapsed": round(time.time() - self.started),
-            "report": self.report, "error": self.error, "title": self.title,
+            "report": self.report, "error": self.error, "title": self.title, "clips": self.clips,
         }
+
+
+def _steps_for(kind: str, opts: dict) -> list[str]:
+    if kind == "clip":
+        return [STEP_PREPARE, STEP_CLIPS]
+    steps = [STEP_FETCH, STEP_ANALYZE]
+    if opts.get("evaluate") or opts.get("clipUrls"):
+        steps.append(STEP_EVAL)
+    steps.append(STEP_REPORT)
+    if opts.get("makeClips"):
+        steps.append(STEP_CLIPS)
+    return steps
 
 
 _jobs: dict[str, Job] = {}
@@ -77,9 +105,10 @@ _lock = threading.Lock()
 
 
 def capabilities() -> dict:
-    audio = importlib.util.find_spec("numpy") is not None and ffmpeg_exe() is not None
+    has_ffmpeg = ffmpeg_exe() is not None
+    audio = importlib.util.find_spec("numpy") is not None and has_ffmpeg
     ytdlp = importlib.util.find_spec("yt_dlp") is not None
-    return {"audio": audio, "ytdlp": ytdlp}
+    return {"audio": audio, "ytdlp": ytdlp, "clips": has_ffmpeg}
 
 
 # ---------------------------------------------------------------------------
@@ -102,9 +131,25 @@ def save_history(entry: dict) -> None:
         json.dump(items[:100], f, ensure_ascii=False, indent=1)
 
 
-# ---------------------------------------------------------------------------
-# 解析ジョブ
-# ---------------------------------------------------------------------------
+def load_clip_index() -> list[dict]:
+    try:
+        with open(CLIP_INDEX, encoding="utf-8") as f:
+            items = json.load(f)
+    except (OSError, ValueError):
+        return []
+    return [c for c in items if os.path.exists(os.path.join(CLIPS, c.get("file", "")))]
+
+
+def save_clips(video_id: str, made: list[dict]) -> None:
+    files = {m["file"] for m in made}
+    items = [c for c in load_clip_index() if c["file"] not in files]
+    stamp = time.strftime("%Y-%m-%d %H:%M")
+    items = [{**m, "video": video_id, "created": stamp} for m in made] + items
+    os.makedirs(CLIPS, exist_ok=True)
+    with open(CLIP_INDEX, "w", encoding="utf-8") as f:
+        json.dump(items[:500], f, ensure_ascii=False, indent=1)
+
+
 def _friendly(e: BaseException) -> str:
     msg = str(e).replace("ERROR: ", "").strip()
     if "Private video" in msg or "members-only" in msg or "Join this channel" in msg:
@@ -124,67 +169,17 @@ def _friendly(e: BaseException) -> str:
 def run_job(job: Job) -> None:
     global _current
     set_sink(job.log)
-    opts = job.options
     try:
-        job.step = 0
-        if opts.get("refresh"):
-            vid = video_id_from_url(job.url)
-            for name in os.listdir(WORKDIR) if os.path.isdir(WORKDIR) else []:
-                if vid and name.startswith(vid + "."):
-                    os.remove(os.path.join(WORKDIR, name))
-        data = fetch(job.url, WORKDIR, use_chat=True, max_comments=int(opts.get("maxComments", 500)))
-        job.title = data.title
-        if not data.duration:
-            raise UserError("動画の長さが取得できませんでした。配信が終了してアーカイブになっているか確認してください。")
-        sources = data_sources(data)
-        if not sources:
-            raise UserError("解析に使えるデータがありませんでした (チャットのリプレイ・コメント・再生回数の山のいずれも取得できません)。"
-                            "再生回数が少ない動画や、チャットとコメントが無効の動画は解析できません。")
-        job.log("使用データ: " + "、".join(sources))
-
-        job.step = 1
-        top = int(opts["top"]) if opts.get("top") else None
-        result = analyze(data.duration, Config(top=top), messages=data.messages,
-                         heatmap=data.heatmap, comments=data.comments)
-        job.log(f"{len(result.highlights)} 件のシーンを検出しました")
-
-        ev = found = None
-        if opts.get("evaluate") or opts.get("clipUrls"):
-            job.step = 2
-            extra = [u for u in re.split(r"\s+", opts.get("clipUrls") or "") if u]
-            found = gather_clips(
-                data, WORKDIR, search=True, max_clips=int(opts.get("maxClips", 20)),
-                match_audio=bool(opts.get("matchAudio")), extra_urls=extra,
-            )
-            ev = evaluate(result.highlights, found.clips, data.duration)
-            if ev.scenes:
-                job.log(f"切り抜き場面 {len(ev.scenes)} か所と照合: 適合率 {ev.precision:.0%}・再現率 {ev.recall:.0%}")
-            else:
-                job.log("位置が分かる切り抜き動画が見つかりませんでした")
-
-        job.step = 3
-        name = f"report_{data.video_id or uuid.uuid4().hex[:8]}.html"
-        payload = build_payload(result, data.title, data.url, data.video_id, data.duration,
-                                Config().threshold, ev, found)
-        os.makedirs(REPORTS, exist_ok=True)
-        write_html(os.path.join(REPORTS, name), payload)
-        entry = {
-            "file": name, "title": data.title, "url": data.url, "channel": data.channel,
-            "duration": fmt_time(data.duration), "created": time.strftime("%Y-%m-%d %H:%M"),
-            "count": len(result.highlights),
-        }
-        if ev and ev.scenes:
-            entry.update(precision=ev.precision, recall=ev.recall,
-                         lift=None if math.isnan(ev.lift) else ev.lift)
-        save_history(entry)
-        job.report = "/report/" + name
-        job.step = len(STEPS)
+        if job.kind == "clip":
+            _run_clip(job)
+        else:
+            _run_analyze(job)
         job.status = "done"
     except UserError as e:
         job.error, job.status = str(e), "error"
     except SystemExit as e:
         job.error, job.status = str(e) or "処理が中断されました", "error"
-    except Exception as e:  # yt-dlp のエラーなど
+    except Exception as e:  # yt-dlp・ffmpeg のエラーなど
         job.error, job.status = _friendly(e), "error"
     finally:
         set_sink(None)
@@ -192,16 +187,123 @@ def run_job(job: Job) -> None:
             _current = None
 
 
-def start_job(url: str, options: dict) -> Job:
+def _run_analyze(job: Job) -> None:
+    opts = job.options
+    job.set_step(STEP_FETCH)
+    if opts.get("refresh"):
+        vid = video_id_from_url(job.url)
+        for name in os.listdir(WORKDIR) if os.path.isdir(WORKDIR) else []:
+            if vid and name.startswith(vid + "."):
+                os.remove(os.path.join(WORKDIR, name))
+    data = fetch(job.url, WORKDIR, use_chat=True, max_comments=int(opts.get("maxComments", 500)))
+    job.title = data.title
+    if not data.duration:
+        raise UserError("動画の長さが取得できませんでした。配信が終了してアーカイブになっているか確認してください。")
+    sources = data_sources(data)
+    if not sources:
+        raise UserError("解析に使えるデータがありませんでした (チャットのリプレイ・コメント・再生回数の山のいずれも取得できません)。"
+                        "再生回数が少ない動画や、チャットとコメントが無効の動画は解析できません。")
+    job.log("使用データ: " + "、".join(sources))
+
+    job.set_step(STEP_ANALYZE)
+    top = int(opts["top"]) if opts.get("top") else None
+    cfg = Config(top=top)
+    result = analyze(data.duration, cfg, messages=data.messages, heatmap=data.heatmap, comments=data.comments)
+    job.log(f"{len(result.highlights)} 件のシーンを検出しました")
+
+    ev = found = None
+    if STEP_EVAL in job.steps:
+        job.set_step(STEP_EVAL)
+        extra = [u for u in re.split(r"\s+", opts.get("clipUrls") or "") if u]
+        found = gather_clips(
+            data, WORKDIR, search=bool(opts.get("evaluate")), max_clips=int(opts.get("maxClips", 20)),
+            match_audio=bool(opts.get("matchAudio")), extra_urls=extra,
+        )
+        ev = evaluate(result.highlights, found.clips, data.duration)
+        if ev.scenes:
+            job.log(f"切り抜き場面 {len(ev.scenes)} か所と照合: 適合率 {ev.precision:.0%}・再現率 {ev.recall:.0%}")
+        else:
+            job.log("位置が分かる切り抜き動画が見つかりませんでした")
+
+    job.set_step(STEP_REPORT)
+    name = f"report_{data.video_id or uuid.uuid4().hex[:8]}.html"
+    payload = build_payload(result, data.title, data.url, data.video_id, data.duration, cfg.threshold, ev, found)
+    os.makedirs(REPORTS, exist_ok=True)
+    write_html(os.path.join(REPORTS, name), payload)
+    # 後から切り抜き動画を作れるよう、検出結果を保存しておく
+    with open(os.path.join(REPORTS, name[:-5] + ".json"), "w", encoding="utf-8") as f:
+        json.dump({"url": data.url, "video_id": data.video_id, "title": data.title, "duration": data.duration,
+                   "chat_delay": cfg.chat_delay, "highlights": [asdict(h) for h in result.highlights]},
+                  f, ensure_ascii=False)
+    entry = {
+        "file": name, "title": data.title, "url": data.url, "channel": data.channel,
+        "duration": fmt_time(data.duration), "created": time.strftime("%Y-%m-%d %H:%M"),
+        "count": len(result.highlights),
+    }
+    if ev and ev.scenes:
+        entry.update(precision=ev.precision, recall=ev.recall, lift=None if math.isnan(ev.lift) else ev.lift)
+    save_history(entry)
+    job.report = "/report/" + name
+
+    if STEP_CLIPS in job.steps:
+        job.set_step(STEP_CLIPS)
+        n = int(opts.get("clipCount") or 3)
+        chosen = sorted(result.highlights, key=lambda h: h.score, reverse=True)[:n]
+        chosen.sort(key=lambda h: h.start)
+        _make(job, data, chosen, opts, cfg.chat_delay)
+
+
+def _run_clip(job: Job) -> None:
+    job.set_step(STEP_PREPARE)
+    path = os.path.join(REPORTS, job.report_file[:-5] + ".json")
+    try:
+        with open(path, encoding="utf-8") as f:
+            saved = json.load(f)
+    except (OSError, ValueError):
+        raise UserError("このレポートには切り抜き用のデータがありません。もう一度解析してから試してください。")
+    highlights = [Highlight(**h) for h in saved["highlights"]]
+    chosen = [highlights[i] for i in job.indices if 0 <= i < len(highlights)]
+    if not chosen:
+        raise UserError("切り抜くシーンが選ばれていません。")
+    job.title = saved.get("title", "")
+    data = fetch(saved["url"], WORKDIR, use_chat=True, max_comments=0)
+    job.report = "/report/" + job.report_file
+    job.set_step(STEP_CLIPS)
+    _make(job, data, chosen, job.options, saved.get("chat_delay", 8.0))
+
+
+def _make(job: Job, data, chosen: list[Highlight], opts: dict, chat_delay: float) -> None:
+    if not ffmpeg_exe():
+        raise UserError("動画の書き出しに必要な ffmpeg がありません。「起動」から開き直すと自動でインストールされます。")
+    copts = ClipOptions(
+        vertical=bool(opts.get("vertical")), captions=opts.get("captions", True) is not False,
+        sfx=opts.get("sfx", True) is not False, chat=opts.get("chat", True) is not False,
+        custom_title=(opts.get("clipTitle") or "").strip()[:30],
+    )
+    made = make_clips(data, chosen, CLIPS, WORKDIR, copts, chat_delay=chat_delay,
+                      compile_all=bool(opts.get("compile", True)), se_dir=SE_DIR)
+    save_clips(data.video_id, made)
+    job.clips = made
+    job.log(f"切り抜き動画を {len([m for m in made if not m.get('compiled')])} 本作りました")
+
+
+def start_job(url: str, options: dict, kind: str = "analyze", report_file: str = "",
+              indices: list[int] | None = None) -> Job:
     global _current
-    url = (url or "").strip()
-    vid = video_id_from_url(url)
-    if not vid:
-        raise UserError("YouTube の動画・配信の URL を入力してください (例: https://www.youtube.com/watch?v=...)")
+    if kind == "clip":
+        if not REPORT_NAME.match(report_file or ""):
+            raise UserError("レポートが指定されていません")
+        url = ""
+    else:
+        vid = video_id_from_url((url or "").strip())
+        if not vid:
+            raise UserError("YouTube の動画・配信の URL を入力してください (例: https://www.youtube.com/watch?v=...)")
+        url = f"https://www.youtube.com/watch?v={vid}"
     with _lock:
         if _current is not None:
-            raise UserError("別の解析を実行中です。終わるまでお待ちください。")
-        job = Job(id=uuid.uuid4().hex[:12], url=f"https://www.youtube.com/watch?v={vid}", options=options)
+            raise UserError("別の処理を実行中です。終わるまでお待ちください。")
+        job = Job(id=uuid.uuid4().hex[:12], url=url, options=options, kind=kind,
+                  steps=_steps_for(kind, options), report_file=report_file, indices=list(indices or []))
         _jobs[job.id] = job
         _current = job
     threading.Thread(target=run_job, args=(job,), daemon=True).start()
@@ -228,14 +330,59 @@ class Handler(BaseHTTPRequestHandler):
     def _json(self, obj, code: int = 200) -> None:
         self._send(code, json.dumps(obj, ensure_ascii=False).encode("utf-8"), "application/json; charset=utf-8")
 
+    def _send_file(self, fp: str, ctype: str, download_name: str | None = None) -> None:
+        """Range 指定に対応したファイル送信 (動画のシーク再生に必要)。"""
+        size = os.path.getsize(fp)
+        start, end = 0, size - 1
+        m = re.match(r"bytes=(\d*)-(\d*)", self.headers.get("Range") or "")
+        if m and (m.group(1) or m.group(2)):
+            if m.group(1):
+                start = int(m.group(1))
+                end = int(m.group(2)) if m.group(2) else size - 1
+            else:
+                start = max(0, size - int(m.group(2)))
+            end = min(end, size - 1)
+            if start > end:
+                self.send_response(416)
+                self.send_header("Content-Range", f"bytes */{size}")
+                self.end_headers()
+                return
+            self.send_response(206)
+            self.send_header("Content-Range", f"bytes {start}-{end}/{size}")
+        else:
+            self.send_response(200)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Accept-Ranges", "bytes")
+        self.send_header("Content-Length", str(end - start + 1))
+        if download_name:
+            self.send_header("Content-Disposition", f"attachment; filename*=UTF-8''{quote(download_name)}")
+        self.end_headers()
+        with open(fp, "rb") as f:
+            f.seek(start)
+            left = end - start + 1
+            try:
+                while left > 0:
+                    chunk = f.read(min(1 << 20, left))
+                    if not chunk:
+                        break
+                    self.wfile.write(chunk)
+                    left -= len(chunk)
+            except (BrokenPipeError, ConnectionResetError):
+                pass  # 再生位置を変えた時など、ブラウザが途中で切ることがある
+
     def do_GET(self):
-        path = self.path.split("?", 1)[0]
+        path, _, query = self.path.partition("?")
+        path = unquote(path)
+        params = parse_qs(query)
         if path == "/":
             self._send(200, INDEX_HTML.encode("utf-8"), "text/html; charset=utf-8")
         elif path == "/api/info":
             self._json({**capabilities(), "current": _current.id if _current else None})
         elif path == "/api/history":
             self._json(load_history())
+        elif path == "/api/clips":
+            vid = (params.get("video") or [""])[0]
+            self._json([c for c in load_clip_index() if not vid or c.get("video") == vid])
         elif path.startswith("/api/job/"):
             job = _jobs.get(path.rsplit("/", 1)[-1])
             self._json(job.to_dict() if job else {"error": "not found"}, 200 if job else 404)
@@ -247,20 +394,36 @@ class Handler(BaseHTTPRequestHandler):
                     self._send(200, f.read(), "text/html; charset=utf-8")
             else:
                 self._send(404, "レポートが見つかりません".encode("utf-8"), "text/plain; charset=utf-8")
+        elif path.startswith("/clips/"):
+            name = path.rsplit("/", 1)[-1]
+            fp = os.path.join(CLIPS, name)
+            if CLIP_NAME.match(name) and os.path.isfile(fp):
+                if name.endswith(".txt"):
+                    with open(fp, "rb") as f:
+                        self._send(200, f.read(), "text/plain; charset=utf-8")
+                else:
+                    self._send_file(fp, "video/mp4", name if "download" in params else None)
+            else:
+                self._send(404, b"not found", "text/plain")
         else:
             self._send(404, b"not found", "text/plain")
 
     def do_POST(self):
-        if self.path != "/api/analyze":
+        if self.path not in ("/api/analyze", "/api/clip"):
             return self._send(404, b"not found", "text/plain")
         try:
             n = int(self.headers.get("Content-Length") or 0)
             body = json.loads(self.rfile.read(min(n, 100_000)) or b"{}")
-            job = start_job(body.get("url", ""), body.get("options") or {})
+            if self.path == "/api/clip":
+                job = start_job("", body.get("options") or {}, kind="clip",
+                                report_file=str(body.get("report") or ""),
+                                indices=[int(i) for i in body.get("indices") or []])
+            else:
+                job = start_job(body.get("url", ""), body.get("options") or {})
             self._json({"id": job.id})
         except UserError as e:
             self._json({"error": str(e)}, 400)
-        except ValueError:
+        except (ValueError, TypeError):
             self._json({"error": "リクエストが不正です"}, 400)
 
 
@@ -376,6 +539,14 @@ h2 { font-size: 16px; margin: 0 0 8px; }
     </div>
     <label class="check"><input type="checkbox" id="evaluate" checked>
       <span>実際の切り抜き動画と照合して、正確性を測る<br><span class="note">切り抜き動画を検索するので、1〜3 分ほど長くかかります</span></span></label>
+    <label class="check"><input type="checkbox" id="makeClips">
+      <span>切り抜き動画も作る (字幕・効果音・テロップ付き)<br><span class="note" id="clipNote">スコア上位のシーンをダウンロードして動画にします。1 本あたり数分かかります</span></span></label>
+    <div id="clipOpts" class="opts" style="margin:6px 0 0 24px" hidden>
+      <div><label for="clipCount">本数</label>
+        <select id="clipCount"><option>1</option><option selected>3</option><option>5</option><option>10</option></select></div>
+      <div><label for="vertical">形</label>
+        <select id="vertical"><option value="">横型 (16:9)</option><option value="1">縦型 (ショート 9:16)</option></select></div>
+    </div>
     <div id="clipBox" style="margin:10px 0 0 24px">
       <label for="clipUrls" class="note">知っている切り抜き動画の URL (任意・複数なら改行で区切る)。検索で見つからなくても直接調べます</label>
       <textarea id="clipUrls" rows="2" placeholder="https://www.youtube.com/watch?v=..."></textarea>
@@ -430,6 +601,10 @@ async function init() {
     $("matchAudio").disabled = true;
     $("audioNote").textContent = "(使うには「起動」から開き直して、追加の部品をインストールしてください)";
   }
+  if (!info.clips) {
+    $("makeClips").disabled = true;
+    $("clipNote").textContent = "動画の書き出しに必要な ffmpeg がありません。「起動」から開き直すと自動でインストールされます";
+  }
   if (!info.ytdlp) showError("yt-dlp がインストールされていません。「起動」から開き直してください。");
   if (info.current) watch(info.current);
   loadHistory();
@@ -458,6 +633,7 @@ $("form").addEventListener("submit", async (ev) => {
     evaluate: $("evaluate").checked, matchAudio: $("matchAudio").checked, refresh: $("refresh").checked,
     top: $("top").value, maxComments: $("comments").value, maxClips: $("clips").value,
     clipUrls: $("evaluate").checked ? $("clipUrls").value : "",
+    makeClips: $("makeClips").checked, clipCount: $("clipCount").value, vertical: !!$("vertical").value,
   };
   $("go").disabled = true;
   try {
@@ -493,7 +669,7 @@ function watch(id) {
     if (j.status === "done") {
       clearInterval(timer);
       $("ptitle").textContent = "完了しました。結果を表示します...";
-      location.href = j.report;
+      location.href = j.report + (j.clips && j.clips.length ? "#clips" : "");
     } else if (j.status === "error") {
       clearInterval(timer);
       $("progress").hidden = true;
@@ -506,6 +682,7 @@ function watch(id) {
 }
 
 $("evaluate").addEventListener("change", () => { $("clipBox").hidden = !$("evaluate").checked; });
+$("makeClips").addEventListener("change", () => { $("clipOpts").hidden = !$("makeClips").checked; });
 init();
 </script>
 </body>

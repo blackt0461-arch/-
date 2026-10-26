@@ -201,6 +201,13 @@ button.primary { background: var(--series-1); color: #fff; border-color: transpa
 .diag p { margin: 2px 0; }
 details summary { cursor: pointer; color: var(--ink-2); font-size: 13px; margin: 8px 0; }
 .notice { color: var(--ink-2); }
+.mk-opts { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; margin: 0 0 12px; font-size: 13px; color: var(--ink-2); }
+.mk-opts select, .mk-opts input[type=text] { font: inherit; color: var(--ink); background: var(--page); border: 1px solid var(--border); border-radius: 6px; padding: 3px 6px; }
+.mk-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; margin-top: 12px; }
+.mk-list .card { padding: 12px; }
+.mk-list video { width: 100%; border-radius: 8px; background: #000; max-height: 420px; }
+.mk-list .t { font-weight: 600; margin: 6px 0 2px; }
+.mk-list .a { display: flex; gap: 12px; font-size: 13px; flex-wrap: wrap; }
 .toolbar { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
 </style>
 </head>
@@ -230,6 +237,25 @@ details summary { cursor: pointer; color: var(--ink-2); font-size: 13px; margin:
 
   <h2>検出したシーン</h2>
   <div class="card table-wrap"><table id="hl"></table></div>
+
+  <div id="maker" hidden>
+    <h2 id="clips">切り抜き動画を作る</h2>
+    <div class="card">
+      <p class="hint" style="margin-top:0">上の表の「動画」で選んだシーンを、字幕・効果音・テロップ付きの動画にします (1 本あたり数分かかります)。</p>
+      <div class="mk-opts">
+        <label>形 <select id="mk-vertical"><option value="">横型 (16:9)</option><option value="1">縦型 (ショート 9:16)</option></select></label>
+        <label><input type="checkbox" id="mk-captions" checked> 字幕</label>
+        <label><input type="checkbox" id="mk-sfx" checked> 効果音・リアクション文字</label>
+        <label><input type="checkbox" id="mk-chat" checked> コメントを流す</label>
+        <label><input type="checkbox" id="mk-compile" checked> まとめ動画も作る</label>
+        <label>タイトル <input type="text" id="mk-title" maxlength="30" placeholder="空欄なら自動"></label>
+      </div>
+      <button class="primary" id="mk-go">選んだシーンを動画にする</button>
+      <div id="mk-progress" class="hint"></div>
+      <p class="hint">公開する場合は、配信者・事務所の切り抜きガイドラインに従ってください (元配信へのリンクの記載が必要なことが多いです。説明文の例を動画ごとに用意しています)。</p>
+    </div>
+    <div id="mk-list" class="mk-list"></div>
+  </div>
 
   <div id="search-sec" hidden>
     <h2>切り抜き検索の内訳</h2>
@@ -482,15 +508,69 @@ renderAll();
 // ---- 表 ----
 {
   const evald = D.metrics != null;
-  let h = `<tr><th>順位</th><th>時刻</th><th>内容</th><th>スコア</th>${evald ? "<th>判定</th>" : ""}<th class="why">根拠</th><th>代表的なチャット</th></tr>`;
-  for (const x of D.highlights) {
+  const app = location.protocol.startsWith("http");
+  let h = `<tr>${app ? '<th title="動画にするシーンを選ぶ">動画</th>' : ""}<th>順位</th><th>時刻</th><th>内容</th><th>区間</th><th>スコア</th>${evald ? "<th>判定</th>" : ""}<th class="why">根拠</th><th>代表的なチャット</th></tr>`;
+  for (const [i, x] of D.highlights.entries()) {
     const u = link(x.time);
     const ts = u ? `<a href="${u}" target="_blank" rel="noopener">${fmt(x.time)}</a>` : fmt(x.time);
     const judge = evald ? `<td>${x.hit ? `<span class="ok">✓ ${x.clips} 本</span>` : `<span class="ng">✗ なし</span>`}</td>` : "";
-    h += `<tr><td class="num">${x.rank}</td><td class="num">${ts}</td><td>${esc(x.label)}</td><td class="num">${x.score.toFixed(2)}</td>${judge}<td class="why">${x.reasons.map(esc).join("、") || "-"}</td><td class="chat">${x.samples.length ? "「" + x.samples.map(esc).join("」「") + "」" : ""}</td></tr>`;
+    const pick = app ? `<td><input type="checkbox" class="pick" data-i="${i}" ${x.rank <= 3 ? "checked" : ""} aria-label="#${x.rank} を動画にする"></td>` : "";
+    h += `<tr>${pick}<td class="num">${x.rank}</td><td class="num">${ts}</td><td>${esc(x.label)}</td><td class="num">${Math.round(x.end - x.start)} 秒</td><td class="num">${x.score.toFixed(2)}</td>${judge}<td class="why">${x.reasons.map(esc).join("、") || "-"}</td><td class="chat">${x.samples.length ? "「" + x.samples.map(esc).join("」「") + "」" : ""}</td></tr>`;
   }
   $("hl").innerHTML = h;
 }
+// ---- 切り抜き動画 (アプリから開いた時だけ) ----
+if (location.protocol.startsWith("http") && D.videoId) {
+  $("maker").hidden = false;
+  const report = location.pathname.split("/").pop();
+  const loadClips = async () => {
+    let items = [];
+    try { items = await (await fetch("/api/clips?video=" + encodeURIComponent(D.videoId))).json(); } catch (e) { return; }
+    $("mk-list").innerHTML = items.map((c) => `<div class="card">
+      <video controls preload="metadata" src="/clips/${encodeURIComponent(c.file)}"></video>
+      <div class="t">${esc(c.compiled ? "まとめ動画" : c.title)} <span class="chat">${c.compiled ? "" : fmt(c.start) + "〜" + fmt(c.end)}${c.vertical ? "・縦型" : ""}</span></div>
+      <div class="a"><a href="/clips/${encodeURIComponent(c.file)}?download=1">ダウンロード</a>
+      ${c.description ? `<a href="#" data-desc="${esc(c.description)}" class="copy-desc">説明文をコピー</a>` : ""}<span class="chat">${esc(c.created || "")}</span></div></div>`).join("");
+  };
+  $("mk-list").addEventListener("click", async (ev) => {
+    const a = ev.target.closest(".copy-desc");
+    if (!a) return;
+    ev.preventDefault();
+    try { await navigator.clipboard.writeText(a.dataset.desc); a.textContent = "コピーしました ✓"; } catch (e) { alert(a.dataset.desc); }
+  });
+  $("mk-go").addEventListener("click", async () => {
+    const indices = [...document.querySelectorAll(".pick:checked")].map((c) => +c.dataset.i);
+    if (!indices.length) { $("mk-progress").textContent = "表の「動画」でシーンを選んでください"; return; }
+    const options = { vertical: !!$("mk-vertical").value, captions: $("mk-captions").checked, sfx: $("mk-sfx").checked,
+      chat: $("mk-chat").checked, compile: $("mk-compile").checked && indices.length > 1, clipTitle: $("mk-title").value };
+    const r = await fetch("/api/clip", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ report, indices, options }) });
+    const j = await r.json();
+    if (!r.ok) { $("mk-progress").textContent = j.error; return; }
+    $("mk-go").disabled = true;
+    watchJob(j.id);
+  });
+  const watchJob = (id) => {
+    const tick = async () => {
+      const j = await (await fetch("/api/job/" + id)).json();
+      const last = j.logs.length ? j.logs[j.logs.length - 1] : "";
+      $("mk-progress").textContent = `作成中 (${Math.floor(j.elapsed / 60)} 分 ${j.elapsed % 60} 秒): ${last}`;
+      if (j.status === "running") return;
+      clearInterval(t);
+      $("mk-go").disabled = false;
+      $("mk-progress").textContent = j.status === "done" ? "完成しました ✓" : "失敗しました: " + j.error;
+      loadClips();
+    };
+    const t = setInterval(tick, 1500);
+    tick();
+  };
+  fetch("/api/info").then((r) => r.json()).then((info) => {
+    if (!info.clips) { $("mk-go").disabled = true; $("mk-progress").textContent = "動画の書き出しに必要な ffmpeg がありません。「起動」から開き直してください。"; }
+    if (info.current) watchJob(info.current);
+  });
+  loadClips();
+}
+
 if (D.scenes.length) {
   $("scenes-sec").hidden = false;
   const methodName = D.methodLabel;
