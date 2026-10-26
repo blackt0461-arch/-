@@ -176,3 +176,33 @@ class DetectTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class RegionTest(unittest.TestCase):
+    def lines(self, events, seed=3):
+        rnd = random.Random(seed)
+        out = []
+        for sec in range(1800):
+            for _ in range(1 + (rnd.random() < 0.3)):
+                out.append(chat_line(sec + rnd.random(), f"u{rnd.randrange(300)}", rnd.choice(NORMAL)))
+        for t0, n in events:
+            for i in range(n):
+                out.append(chat_line(t0 + 3 + rnd.random() * 15, f"r{t0}_{i}", rnd.choice(LAUGH)))
+        return parse_live_chat_lines(out)
+
+    def test_close_peaks_become_one_region(self):
+        # 600 秒と 625 秒の連続した笑い (間もざわついている) → 1 つの面
+        msgs = self.lines([(600, 50), (612, 25), (625, 50), (1200, 50)])
+        result = analyze(1800, Config(top=5), messages=msgs)
+        first = [h for h in result.highlights if h.start < 700]
+        self.assertEqual(len(first), 1, [(h.start, h.end) for h in result.highlights])
+        self.assertLessEqual(first[0].start, 600)
+        self.assertGreaterEqual(first[0].end, 630)
+        self.assertGreaterEqual(len(first[0].peaks), 2)
+
+    def test_far_peaks_stay_separate(self):
+        msgs = self.lines([(600, 50), (900, 50)])
+        result = analyze(1800, Config(top=5), messages=msgs)
+        starts = [h.start for h in result.highlights]
+        self.assertTrue(any(580 <= s <= 605 for s in starts), starts)
+        self.assertTrue(any(880 <= s <= 905 for s in starts), starts)

@@ -86,6 +86,21 @@ class MetricsTest(unittest.TestCase):
         self.assertLess(ev.baseline_precision, 0.2)
         self.assertEqual(ev.median_abs_offset, 10)
 
+    def test_compilation_excluded(self):
+        clips = [Clip("a", "A", "", intervals=[(100, 150)]),
+                 Clip("m", "45 分のまとめ", "", intervals=[(0, 1500), (1600, 3000)])]
+        ev = evaluate([hl(2000)], clips, 3600)
+        self.assertEqual([c.video_id for c in ev.excluded], ["m"])
+        self.assertEqual(len(ev.scenes), 1)
+        self.assertEqual(ev.precision, 0.0)  # まとめ動画を除けば 2000 秒付近は切り抜かれていない
+
+    def test_time_overlap(self):
+        clips = [Clip("a", "A", "", intervals=[(100, 160)])]
+        h = Highlight(time=90, peak=110, start=100, end=130, score=5, label="", reasons=[], samples=[])
+        ev = evaluate([h], clips, 3600)
+        self.assertAlmostEqual(ev.time_precision, 1.0)   # 検出区間 100-130 は全部切り抜き区間内
+        self.assertAlmostEqual(ev.time_recall, 0.5)      # 切り抜き区間 60 秒のうち 30 秒
+
     def test_no_clips(self):
         ev = evaluate([hl(100)], [], 3600)
         self.assertEqual(ev.precision, 0.0)

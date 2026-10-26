@@ -61,6 +61,7 @@ def build_payload(
             "hits": sum(1 for r in evaluation.results if r.scenes),
             "n": len(evaluation.results), "covered": sum(evaluation.covered),
             "scenes": len(evaluation.scenes), "tolerance": evaluation.tolerance,
+            "timePrecision": evaluation.time_precision, "timeRecall": evaluation.time_recall,
         }
     order = ["reaction", "comments", "heatmap", "activity", "audio", "money"]
     comps = [
@@ -91,6 +92,8 @@ def build_payload(
     return {
         "search": search_info,
         "evaluated": evaluation is not None,
+        "excluded": [{"title": c.title, "url": c.url, "span": round(sum(e - s0 for s0, e in c.intervals))}
+                     for c in (evaluation.excluded if evaluation else [])],
         "methodLabel": METHOD_LABEL,
         "commentText": "\n".join(comment_lines),
         "title": title, "url": url, "videoId": video_id, "duration": duration,
@@ -157,7 +160,7 @@ h2 { font-size: 16px; margin: 32px 0 8px; }
 a { color: var(--series-1); }
 .sub { color: var(--ink-2); margin: 0 0 16px; }
 .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
-.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin: 16px 0; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin: 16px 0; }
 .tile .k { color: var(--ink-2); font-size: 13px; }
 .tile .v { font-size: 30px; font-weight: 600; line-height: 1.2; }
 .tile .d { color: var(--muted); font-size: 12px; }
@@ -297,6 +300,7 @@ if (D.metrics) {
     ["適合率", pct(M.precision), `検出 ${M.n} 件中 ${M.hits} 件が切り抜かれていた`],
     ["再現率", pct(M.recall), `切り抜き場面 ${M.scenes} か所中 ${M.covered} か所を検出`],
     ["ランダム比", M.lift == null ? "-" : M.lift.toFixed(1) + " 倍", `ランダムに選んだ場合の適合率 ${pct(M.baseline)}`],
+    ["時間の重なり", pct(M.timePrecision), `検出区間のうち切り抜かれた部分の割合 (切り抜き区間の ${pct(M.timeRecall)} をカバー)`],
     ["タイミング誤差", M.offset == null ? "-" : Math.round(M.offset) + " 秒", "当たったシーンの、切り抜き開始とのずれ (中央値)"],
   ];
   $("tiles").innerHTML = tiles.map(([k, v, d]) =>
@@ -306,7 +310,8 @@ if (D.metrics) {
 // ---- 凡例 ----
 const legend = [`<span><i class="sw" style="background:var(--series-1)"></i>盛り上がりスコア</span>`,
   `<span><i class="sw" style="background:none;border-top:2px dashed var(--muted);height:0"></i>しきい値</span>`,
-  `<span><i class="sw" style="background:var(--badge);border-radius:50%;width:12px;height:12px"></i>検出したシーン (数字はスコア順位)</span>`];
+  `<span><i class="sw" style="background:var(--badge);border-radius:50%;width:12px;height:12px"></i>検出したシーン (数字はスコア順位)</span>`,
+  `<span><i class="sw" style="background:var(--ink-2);opacity:0.2"></i>検出した区間</span>`];
 if (D.metrics) {
   legend.push(`<span><i class="sw" style="background:var(--series-2)"></i>実際に切り抜かれた場面 (濃いほど本数が多い)</span>`);
   legend.push(`<span><span class="ok">✓ 当たり</span><span class="ng">✗ 外れ</span></span>`);
@@ -378,12 +383,19 @@ function lineChart(svg, values, opts) {
   if (opts.fill) el("path", { d: d + `L${x((i1 + 0.5) * D.bin)},${y(0)}L${x((i0 + 0.5) * D.bin)},${y(0)}Z`, fill: css("--series-1-fill") }, svg);
   el("path", { d, fill: "none", stroke: css("--series-1"), "stroke-width": opts.fill ? 2 : 1.5, "stroke-linejoin": "round" }, svg);
 
+  // 検出区間 (面) の帯
+  if (opts.markers || opts.bands) {
+    for (const h of D.highlights) {
+      if (h.end < t0 || h.start > t1) continue;
+      const a = x(Math.max(h.start, t0)), z = x(Math.min(h.end, t1));
+      el("rect", { x: a, y: padT, width: Math.max(2, z - a), height: ih, fill: css("--ink-2"), "fill-opacity": 0.08 }, svg);
+    }
+  }
   // 検出マーカー
   if (opts.markers) {
     for (const h of D.highlights) {
       if (h.peak < t0 || h.peak > t1) continue;
       const px = x(h.peak + D.bin / 2), py = y(h.score);
-      el("line", { x1: x(h.time), x2: x(h.time), y1: padT, y2: padT + ih, stroke: css("--ink-2"), "stroke-width": 1, "stroke-dasharray": "2 3", opacity: 0.6 }, svg);
       el("circle", { cx: px, cy: py, r: 9, fill: css("--badge"), stroke: css("--surface"), "stroke-width": 2 }, svg);
       const t = el("text", { x: px, y: py + 4, "text-anchor": "middle", style: `fill:${css("--badge-ink")};font-size:10px;font-weight:600` }, svg);
       t.textContent = h.rank;
@@ -458,7 +470,7 @@ function renderAll() {
   for (const c of D.components) {
     const name = document.createElement("div"); name.className = "name"; name.textContent = c.name; multi.appendChild(name);
     const svg = document.createElementNS(NS, "svg"); multi.appendChild(svg);
-    lineChart(svg, c.values, { height: 70, axis: false });
+    lineChart(svg, c.values, { height: 70, axis: false, bands: true });
   }
   $("reset").hidden = view[0] === 0 && view[1] === D.duration;
 }
@@ -491,6 +503,14 @@ if (D.scenes.length) {
     h += `<tr><td class="num">${ts}-${fmt(s.end)}</td><td class="num">${s.n}</td><td>${s.covered ? '<span class="ok">✓ 検出</span>' : '<span class="ng">✗ 見逃し</span>'}</td><td>${clips}</td></tr>`;
   }
   $("sc").innerHTML = h;
+}
+if (D.excluded && D.excluded.length) {
+  $("scenes-sec").hidden = false;
+  const p = document.createElement("p");
+  p.className = "hint";
+  p.innerHTML = `元配信の 10 分以上を使った「まとめ動画」${D.excluded.length} 本は、配信のほぼ全体が当たりになってしまうため評価から外しました: `
+    + D.excluded.map((c) => `<a href="${esc(c.url)}" target="_blank" rel="noopener">${esc(c.title)}</a> (${Math.round(c.span / 60)} 分)`).join("、");
+  $("scenes-sec").appendChild(p);
 }
 if (D.search) {
   const S = D.search;

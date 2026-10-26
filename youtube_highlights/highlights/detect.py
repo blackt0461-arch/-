@@ -43,6 +43,8 @@ class Config:
     pre_roll: float = 10.0         # 出力タイムスタンプを前倒しする秒数 (前振りから見られるように)
     threshold: float = 1.5         # 統合スコアの最低値
     top: int | None = None         # 出力件数 (None なら動画の長さから自動)
+    merge_gap: float = 30.0        # この秒数以内の盛り上がりは 1 つの区間 (面) にまとめる
+    max_region: float = 180.0      # 1 区間の最大長 (秒)
     weights: dict[str, float] = field(default_factory=lambda: dict(DEFAULT_WEIGHTS))
 
 
@@ -56,6 +58,7 @@ class Highlight:
     label: str
     reasons: list[str]   # どのシグナルが効いたか
     samples: list[str]   # 代表的なチャット
+    peaks: list[float] = field(default_factory=list)  # 区間内の盛り上がりの山の時刻 (効果音の位置などに使う)
 
 
 @dataclass
@@ -155,6 +158,70 @@ def pick_peaks(score: Series, cfg: Config, top: int) -> list[int]:
     return sorted(chosen)
 
 
+@dataclass
+class Region:
+    peak: int                 # 最もスコアが高い bin
+    lo: int
+    hi: int
+    peaks: list[int]
+
+
+def pick_regions(score: Series, cfg: Config, top: int) -> list[Region]:
+    """盛り上がりを「点」ではなく「面 (区間)」で選ぶ。
+
+    1. 局所最大かつ閾値以上の bin を、スコアの高い順に見ていく。
+    2. 各山の区間は、±15 秒で平滑化したスコアがその山の 35% を下回るまで左右に広げる
+       (片側最大 90 秒)。生のスコアは 5 秒単位でとがっているので、平滑化して面として見る。
+    3. 既存の区間と merge_gap 秒以内で、間が静まり返っていなければ (平滑化スコアの平均が
+       閾値の半分以上) 同じ盛り上がりとして区間を広げる (最大 max_region 秒)。
+    4. どの区間にもまとめられない山は、既存の山から min_gap 秒以上離れていれば新しい区間。
+    """
+    n = len(score)
+    b = cfg.bin_size
+    slow = smooth(score, max(1, int(15 / b)))
+    cands = [
+        i for i in range(n)
+        if score[i] >= cfg.threshold
+        and (i == 0 or score[i] >= score[i - 1])
+        and (i == n - 1 or score[i] >= score[i + 1])
+    ]
+    cands.sort(key=lambda i: score[i], reverse=True)
+    gap = max(1, int(cfg.min_gap / b))
+    merge = max(0, int(cfg.merge_gap / b))
+    max_len = max(1, int(cfg.max_region / b))
+    regions: list[Region] = []
+    for i in cands:
+        inside = next((r for r in regions if r.lo <= i <= r.hi), None)
+        if inside:
+            inside.peaks.append(i)
+            continue
+        lo, hi = expand_segment(slow, i, ratio=0.35, max_bins=int(90 / b))
+        merged = False
+        for r in regions:
+            if lo - merge > r.hi or hi + merge < r.lo:
+                continue
+            nlo, nhi = min(r.lo, lo), max(r.hi, hi)
+            between = slow[min(r.hi, hi) : max(r.lo, lo) + 1] or [cfg.threshold]
+            if nhi - nlo + 1 <= max_len and sum(between) / len(between) >= cfg.threshold * 0.5:
+                r.lo, r.hi = nlo, nhi
+                r.peaks.append(i)
+                merged = True
+                break
+        if merged:
+            continue
+        if all(abs(i - r.peak) >= gap for r in regions) and len(regions) < top:
+            regions.append(Region(i, lo, hi, [i]))
+    # 平滑化で広がった分を、元のスコアで切り詰める (区間の端はスコアが山の 30% 以上の所まで)
+    for r in regions:
+        limit = score[r.peak] * 0.3
+        first, last = min(r.peaks), max(r.peaks)
+        while r.lo < first and score[r.lo] < limit:
+            r.lo += 1
+        while r.hi > last and score[r.hi] < limit:
+            r.hi -= 1
+    return sorted(regions, key=lambda r: r.lo)
+
+
 def expand_segment(score: Series, peak: int, ratio: float = 0.4, max_bins: int = 18) -> tuple[int, int]:
     """ピークから左右へ、スコアがピークの ratio 倍を下回るまで区間を広げる。"""
     limit = score[peak] * ratio
@@ -216,9 +283,9 @@ def analyze(
     b = cfg.bin_size
     top = cfg.top or auto_top(duration)
     highlights = []
-    for p in pick_peaks(score, cfg, top):
-        lo, hi = expand_segment(score, p)
-        start, end = lo * b, (hi + 1) * b
+    for region in pick_regions(score, cfg, top):
+        p = region.peak
+        start, end = region.lo * b, (region.hi + 1) * b
         reasons = sorted(
             (k for k in comps if comps[k][p] >= 1.5),
             key=lambda k: comps[k][p] * cfg.weights.get(k, 0),
@@ -237,6 +304,7 @@ def analyze(
                 label=label,
                 reasons=[REASON_LABEL[k] for k in reasons],
                 samples=samples,
+                peaks=sorted(i * b for i in region.peaks),
             )
         )
     return Analysis(highlights, score, comps, b)

@@ -58,6 +58,9 @@ class Evaluation:
     median_abs_offset: float | None
     precision_at: dict[int, float]  # 上位 k 件の適合率
     tolerance: float
+    time_precision: float = 0.0     # 検出区間の長さのうち、切り抜かれた区間と重なる割合
+    time_recall: float = 0.0        # 切り抜かれた区間の長さのうち、検出区間と重なる割合
+    excluded: list[Clip] = field(default_factory=list)  # 長すぎて評価から外した「まとめ動画」
 
 
 def build_scenes(clips: Sequence[Clip], merge_gap: float = 20.0) -> list[Scene]:
@@ -90,13 +93,39 @@ def _union_length(intervals: list[tuple[float, float]]) -> float:
     return total
 
 
+# 元配信の合計この秒数より長い範囲を使った切り抜きは「まとめ動画」とみなし、評価に使わない。
+# (数十分のまとめ動画が混ざると配信のほぼ全体が「切り抜かれた場面」になり、何でも当たりになるため)
+MAX_CLIP_SPAN = 600.0
+
+
+def _intersection(a: list[tuple[float, float]], b: list[tuple[float, float]]) -> float:
+    total = 0.0
+    for s0, e0 in _union(a):
+        for s1, e1 in _union(b):
+            total += _overlap(s0, e0, s1, e1)
+    return total
+
+
+def _union(intervals: list[tuple[float, float]]) -> list[tuple[float, float]]:
+    out: list[tuple[float, float]] = []
+    for s, e in sorted(intervals):
+        if out and s <= out[-1][1]:
+            out[-1] = (out[-1][0], max(out[-1][1], e))
+        else:
+            out.append((s, e))
+    return out
+
+
 def evaluate(
     highlights: Sequence[Highlight],
     clips: Sequence[Clip],
     duration: float,
     tolerance: float = 30.0,
+    max_clip_span: float = MAX_CLIP_SPAN,
 ) -> Evaluation:
     """highlight の判定窓 [出力時刻 − tol, 区間終了 + tol] が切り抜き場面と重なれば「当たり」。"""
+    excluded = [c for c in clips if sum(e - s for s, e in c.intervals) > max_clip_span]
+    clips = [c for c in clips if c not in excluded]
     scenes = build_scenes(clips)
     by_score = sorted(range(len(highlights)), key=lambda i: highlights[i].score, reverse=True)
     rank = {i: r + 1 for r, i in enumerate(by_score)}
@@ -136,6 +165,8 @@ def evaluate(
         if k <= len(ranked):
             precision_at[k] = sum(1 for r in ranked[:k] if r.scenes) / k
 
+    det = [(h.start, h.end) for h in highlights]
+    truth = [(sc.start, sc.end) for sc in scenes]
     return Evaluation(
         results=results,
         scenes=scenes,
@@ -149,6 +180,9 @@ def evaluate(
         median_abs_offset=statistics.median(offsets) if offsets else None,
         precision_at=precision_at,
         tolerance=tolerance,
+        time_precision=_intersection(det, truth) / max(1e-9, _union_length(det)) if det and truth else 0.0,
+        time_recall=_intersection(det, truth) / max(1e-9, _union_length(truth)) if det and truth else 0.0,
+        excluded=excluded,
     )
 
 
@@ -173,8 +207,12 @@ def to_text(ev: Evaluation, searched: int | None = None) -> str:
         f"ランダム比: {ev.lift:.1f} 倍  (ランダムな時刻を選んだ場合の適合率 {pct(ev.baseline_precision)})"
         if not math.isnan(ev.lift) else "ランダム比: -",
     ]
+    lines.append(f"時間の重なり: 検出区間の {pct(ev.time_precision)} が切り抜き区間と重なり、"
+                 f"切り抜き区間の {pct(ev.time_recall)} を検出区間がカバー")
     if ev.median_abs_offset is not None:
         lines.append(f"タイミング誤差: 中央値 {ev.median_abs_offset:.0f} 秒")
+    if ev.excluded:
+        lines.append(f"(元配信の {MAX_CLIP_SPAN / 60:.0f} 分以上を使った「まとめ動画」{len(ev.excluded)} 本は評価から除外)")
     if ev.precision_at:
         lines.append("上位 k 件の適合率: " + "  ".join(f"@{k}={pct(v)}" for k, v in ev.precision_at.items()))
     lines.append(f"(判定: 検出区間の前後 {ev.tolerance:.0f} 秒以内に切り抜き場面があれば当たり)")
