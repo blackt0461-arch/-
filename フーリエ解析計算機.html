@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>フーリエ解析レポート用計算機</title>
+<style>
+:root{--bg:#f6f7f9;--fg:#1b1d21;--mut:#6a6f78;--card:#fff;--line:#dde0e5;--acc:#2563eb;--grid:#eceef2;box-sizing:border-box}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#121316;--fg:#ecedef;--mut:#9aa0a9;--card:#1c1e22;--line:#34373d;--acc:#6ea0ff;--grid:#272a2f}}
+*{box-sizing:border-box}
+body{margin:0 auto;background:var(--bg);color:var(--fg);font:16px/1.6 -apple-system,"Hiragino Sans","Noto Sans JP",sans-serif;padding:14px;max-width:960px}
+h1{font-size:20px;margin:4px 0 14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:14px}
+.step{display:flex;align-items:center;gap:8px;font-weight:700;margin-bottom:10px}
+.step b{background:var(--acc);color:#fff;border-radius:50%;width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;font-size:14px}
+button,input{font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:8px 12px;max-width:100%}
+button{cursor:pointer}button.p{background:var(--acc);color:#fff;border-color:var(--acc);font-weight:700;padding:10px 22px}
+.r{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-bottom:8px}
+.r span{font-weight:700;min-width:3.2ch;font-size:17px}.r input{flex:1;font-size:17px;min-width:0}
+.r button{padding:6px 10px;color:var(--mut)}
+.pv{flex-basis:100%;font-size:12px;color:var(--mut);padding-left:3.6ch;margin-top:-4px;word-break:break-all}.pv.e{color:#d33}
+.bar{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;padding-top:12px;border-top:2px solid var(--line)}
+.hint{font-size:13px;color:var(--mut);margin-top:8px}
+.err{color:#d33;font-size:14px;margin-top:8px;min-height:1.2em}
+.sc{overflow-x:auto}
+table{border-collapse:collapse;font-size:14px;white-space:nowrap}
+th,td{border:1px solid var(--line);padding:5px 9px;text-align:right}
+th:first-child,td:first-child{text-align:left;position:sticky;left:0;background:var(--card);font-weight:700}
+th{background:var(--grid)}
+svg{width:100%;height:auto;display:block;margin-bottom:6px}
+details summary{cursor:pointer;color:var(--acc);margin:10px 0 6px}
+.g{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
+.g label{display:flex;flex-direction:column;gap:3px;font-size:13px;color:var(--mut)}
+.sm{font-size:13px;color:var(--mut)}
+.kp{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-top:8px}
+.kp button{padding:11px 0;font-size:17px;text-align:center;min-width:0}
+.kp .f{color:var(--acc);font-weight:700}.kp .o{background:var(--grid)}.kp .d{color:#d33}
+#ky{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}#ky button{font-weight:700;padding:8px 14px}
+</style>
+</head>
+<body>
+<h1>📈 フーリエ解析レポート用計算機</h1>
+
+<div class="card">
+<div class="step"><b>1</b>y を入力する（変数は x。前の y も使えます）</div>
+<div id="rows"></div>
+<div class="hint" style="display:flex;justify-content:space-between;gap:8px;align-items:center;margin-top:10px"><span id="cur">入力する行をタップ → 下のボタンで入力</span><button id="kb" onclick="togKB()" style="padding:4px 10px;font-size:13px">⌨ キーボード: ON</button></div>
+<div id="ky"></div>
+<div class="kp" id="kp"></div>
+<div class="bar">
+<button onclick="addRow('')">＋ 追加</button>
+<button class="p" onclick="run(true)">決定</button>
+</div>
+<div class="hint">見たままの書き方でOK: sin(2πx) ／ 1/3 sin(3πx) ／ y1×y2 ／ 1/2+2/π(y1+y2+y3)（入力欄の下に、計算用に変換した式が出ます）<br>
+使える記号: + − * / ^ ( )、関数: sin cos tan exp log sqrt abs、定数: pi。「2x」「2pi」のように掛け算の * を省略できます。</div>
+<div class="pre" style="margin-top:10px;display:flex;flex-wrap:wrap;gap:8px">
+<button onclick="setSample(0)">例1: 矩形波の合成</button>
+<button onclick="setSample(1)">例2: 積の波形</button>
+<button onclick="clr()">全部消す</button>
+</div>
+<details><summary>表とグラフの範囲を変える</summary>
+<div class="g">
+<label>表 x の開始<input id="x0" value="0"></label>
+<label>表 x の終了<input id="x1" value="2"></label>
+<label>表 x の刻み<input id="st" value="1/6"></label>
+<label>グラフ x の最小<input id="g0" value="-2"></label>
+<label>グラフ x の最大<input id="g1" value="2"></label>
+<label>小数の桁数<input id="dg" type="number" min="0" max="6" value="2"></label>
+</div>
+<div class="hint">pi も使えます（例: 終了 2*pi、刻み pi/6）。</div></details>
+<div class="err" id="err"></div>
+</div>
+
+<div id="out" style="display:none">
+<div class="card"><div class="step"><b>2</b>表</div>
+<div class="sc" id="tbl"></div>
+<div style="margin-top:8px"><button onclick="copyT()">表をコピー（Excel等に貼付）</button> <span class="sm" id="cm"></span></div></div>
+<div class="card"><div class="step"><b>3</b>波形</div><div id="gr"></div></div>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+const COL=['#2563eb','#d9480f','#2f9e44','#9c36b5','#0c8599','#c2255c','#5f3dc4','#e67700'];
+const FN=['asin','acos','atan','sinh','cosh','tanh','sin','cos','tan','exp','log','sqrt','abs','floor','sign'];
+
+function conv(s,names){
+ s=String(s).replace(/π/g,'pi').replace(/[×·＊]/g,'*').replace(/[÷／]/g,'/').replace(/[−–ー－]/g,'-').replace(/＋/g,'+').replace(/√/g,'sqrt').replace(/（/g,'(').replace(/）/g,')').replace(/²/g,'^2').replace(/³/g,'^3');
+ const ids=[...FN,'pi',...names].sort((a,b)=>b.length-a.length);
+ const T=[];let i=0,m;
+ while(i<s.length){
+  const c=s[i];
+  if(/\s/.test(c)){i++;continue}
+  if(m=s.slice(i).match(/^(\d+\.?\d*|\.\d+)/)){T.push({k:'n',v:m[0]});i+=m[0].length;continue}
+  if(/[a-zA-Z_]/.test(c)){
+   const id=ids.find(d=>s.startsWith(d,i));
+   if(!id)throw new Error('「'+s.slice(i).match(/^[a-zA-Z_0-9]+/)[0]+'」は認識できません');
+   T.push({k:FN.includes(id)?'f':'i',v:id});
+   i+=id.length;continue;
+  }
+  if(c==='^'){T.push({k:'o',v:'**'});i++;continue}
+  if(c==='*'&&s[i+1]==='*'){T.push({k:'o',v:'**'});i+=2;continue}
+  if('+-*/'.includes(c)){T.push({k:'o',v:c});i++;continue}
+  if(c==='('||c===')'||c===','){T.push({k:c,v:c});i++;continue}
+  throw new Error('「'+c+'」は使用できません');
+ }
+ let out='',prev=null,dp=0;
+ for(const t of T){
+  if(prev&&prev.k==='f'&&t.k!=='(')throw new Error(prev.v+' の後ろには ( ) が必要です');
+  if(prev&&['n','i',')'].includes(prev.k)&&['n','i','f','('].includes(t.k))out+='*';
+  out+=t.v;if(t.k==='(')dp++;if(t.k===')'){dp--;if(dp<0)throw new Error('閉じる括弧「)」が多すぎます')}
+  prev=t;
+ }
+ if(prev&&prev.k==='f')throw new Error(prev.v+' の後ろには ( ) が必要です');
+ return out+')'.repeat(Math.max(0,dp));
+}
+
+function comp(s,names){
+ const js=conv(s,names);
+ if(!js.trim())throw new Error('式が入力されていません');
+ const tk=js.match(/\*\*|\d+\.?\d*|\.\d+|[a-zA-Z_][a-zA-Z_0-9]*|[-+*\/(),]/g)||[];
+ let p=0;const peek=()=>tk[p],nx=()=>tk[p++];
+ const bad=()=>new Error('式の記述を確認してください');
+ const expr=()=>{let l=term();while(peek()==='+'||peek()==='-'){const o=nx(),r=term(),a=l;l=o==='+'?v=>a(v)+r(v):v=>a(v)-r(v)}return l};
+ const term=()=>{let l=power();while(peek()==='*'||peek()==='/'){const o=nx(),r=power(),a=l;l=o==='*'?v=>a(v)*r(v):v=>a(v)/r(v)}return l};
+ const power=()=>{const b=unary();if(peek()==='**'){nx();const e=unary();return v=>Math.pow(b(v),e(v))}return b};
+ const unary=()=>{
+  if(peek()==='-'){nx();const n=unary();return v=>-n(v)}
+  if(peek()==='+'){nx();return unary()}
+  return atom();
+ };
+ const atom=()=>{
+  const t=nx();if(t===undefined)throw bad();
+  if(/^[\d.]/.test(t)){const n=parseFloat(t);return()=>n}
+  if(t==='('){const e=expr();if(nx()!==')')throw bad();return e}
+  if(t==='pi')return()=>Math.PI;
+  const i=names.indexOf(t);if(i>=0)return v=>v[i];
+  if(FN.includes(t)){
+   if(nx()!=='(')throw bad();
+   const args=[expr()];while(peek()===','){nx();args.push(expr())}
+   if(nx()!==')')throw bad();
+   const f=Math[t];return v=>f(...args.map(a=>a(v)));
+  }
+  throw bad();
+ };
+ const root=expr();if(p<tk.length)throw bad();
+ return (...a)=>root(a);
+}
+
+const cst=s=>{const v=comp(s,[])();if(!isFinite(v))throw new Error('数値化できません: '+s);return v};
+const gcd=(a,b)=>b?gcd(b,a%b):Math.abs(a);
+const fz=(v,d)=>{if(!isFinite(v))return '–';let s=v.toFixed(d);if(/^-0(\.0*)?$/.test(s))s=s.slice(1);return s};
+
+function lab(v){
+ if(Math.abs(v)<1e-9)return '0';
+ for(let q=1;q<=24;q++){const n=v*q;if(Math.abs(n-Math.round(n))<1e-7){let a=Math.round(n),g=gcd(a,q);a/=g;const b=q/g;return b===1?String(a):a+'/'+b}}
+ for(let q=1;q<=24;q++){const n=v/Math.PI*q;if(Math.abs(n-Math.round(n))<1e-7){let a=Math.round(n),g=gcd(a,q);a/=g;const b=q/g;return (Math.abs(a)===1?(a<0?'-':''):a)+'π'+(b>1?'/'+b:'')}}
+ return fz(v,2);
+}
+
+let cur=null,KB=true;
+const KEY_DEFS=[
+ ['7','7'],['8','8'],['9','9'],['÷','/','o'],['⌫','BS','d'],
+ ['4','4'],['5','5'],['6','6'],['×','*','o'],['(','(','o'],
+ ['1','1'],['2','2'],['3','3'],['−','-','o'],[')',')','o'],
+ ['0','0'],['.','.'],['π','π','f'],['+','+','o'],['^','^','o'],
+ ['x','x','f'],['sin','sin(','f'],['cos','cos(','f'],['tan','tan(','f'],['√','sqrt(','f'],
+ ['abs','abs(','f'],['exp','exp(','f'],['log','log(','f'],['◀','L','o'],['▶','R','o'],
+ ['x²','^2','f'],['x³','^3','f'],['sign','sign(','f'],['floor','floor(','f'],['atan','atan(','f']
+];
+
+function pv(el){
+ const row=el.parentNode,k=[...$('rows').children].indexOf(row),box=row.querySelector('.pv');
+ if(!box)return;
+ if(!el.value.trim()){box.textContent='';box.className='pv';return}
+ const names=['x','t'];for(let j=0;j<k;j++)names.push('y'+(j+1));
+ try{
+  const js=conv(el.value,names);
+  comp(el.value,names);
+  box.textContent='変換後: '+js.replace(/\*\*/g,'^');box.className='pv';
+ }catch(e){box.textContent='⚠ '+e.message;box.className='pv e'}
+}
+function allPv(){$('rows').querySelectorAll('input').forEach(pv)}
+
+function ins(v){
+ if(!cur||!cur.isConnected){cur=$('rows').querySelector('input');if(!cur)return}
+ const el=cur,val=el.value;let s=el.selectionStart,e=el.selectionEnd;
+ if(s==null){s=e=val.length}
+ if(v==='BS'){if(s===e&&s>0)s--;el.value=val.slice(0,s)+val.slice(e);e=s}
+ else if(v==='L'){s=e=Math.max(0,s-1)}
+ else if(v==='R'){s=e=Math.min(val.length,e+1)}
+ else{el.value=val.slice(0,s)+v+val.slice(e);s=e=s+v.length}
+ el.focus();el.setSelectionRange(s,s);pv(el);
+}
+
+function kbtn(label,v,cls,color){
+ const b=document.createElement('button');b.textContent=label;if(cls)b.className=cls;if(color)b.style.color=color;
+ b.onmousedown=e=>e.preventDefault();b.onclick=()=>ins(v);return b;
+}
+
+KEY_DEFS.forEach(k=>$('kp').appendChild(kbtn(k[0],k[1],k[2])));
+
+function buildY(){
+ if(cur&&!cur.isConnected)cur=null;
+ const rows=[...$('rows').children],i=cur?rows.indexOf(cur.parentNode):rows.length;
+ $('ky').innerHTML='';
+ for(let j=0;j<i;j++)$('ky').appendChild(kbtn('y'+(j+1),'y'+(j+1),'',COL[j%8]));
+ $('cur').textContent=cur&&i>=0?'入力中: y'+(i+1)+' ＝ （タップで入力）':'入力する行をタップ → 下のボタンで入力';
+}
+
+function togKB(){
+ KB=!KB;$('kb').textContent='⌨ キーボード: '+(KB?'ON':'OFF');
+ $('rows').querySelectorAll('input').forEach(i=>i.inputMode=KB?'text':'none');
+}
+
+function addRow(v=''){
+ const d=document.createElement('div');d.className='r';
+ d.innerHTML='<span></span><input placeholder="式を入力（例: sin(2πx)）" value="'+v.replace(/"/g,'&quot;')+'"><button title="この行を削除">✕</button><div class="pv"></div>';
+ d.querySelector('button').onclick=()=>{d.remove();ren()};
+ const inp=d.querySelector('input');inp.inputMode=KB?'text':'none';cur=inp;
+ inp.onfocus=()=>{cur=inp;buildY()};inp.oninput=()=>pv(inp);
+ inp.onkeydown=e=>{if(e.key==='Enter')run(true)};
+ $('rows').appendChild(d);ren();
+}
+
+function ren(){[...$('rows').children].forEach((r,i)=>r.firstChild.textContent='y'+(i+1)+' =');buildY();allPv()}
+
+function setSample(i){
+ $('rows').innerHTML='';
+ const SAMPLES=[
+  ['sin(πx)','1/3*sin(3πx)','1/5*sin(5πx)','y1+y2+y3'],
+  ['sin(2πx)','cos(πx)','y1*y2']
+ ];
+ SAMPLES[i].forEach(s=>addRow(s));
+ run(false);
+}
+
+function clr(){$('rows').innerHTML='';addRow('');$('out').style.display='none'}
+
+let S={};
+function run(scroll){
+ $('err').textContent='';
+ try{
+  const inputs=[...$('rows').querySelectorAll('input')];
+  const validInputs=inputs.filter(i=>i.value.trim()!=='');
+  if(!validInputs.length)throw new Error('y の式を1つ以上入力してください');
+  
+  const src=validInputs.map(i=>i.value.trim());
+  const fns=src.map((s,k)=>{
+   const names=['x','t'];for(let j=0;j<k;j++)names.push('y'+(j+1));
+   return comp(s,names);
+  });
+  
+  const x0=cst($('x0').value),x1=cst($('x1').value),st=cst($('st').value),g0=cst($('g0').value),g1=cst($('g1').value);
+  const dg=Math.max(0,Math.min(6,+$('dg').value));
+  if(!(st>0))throw new Error('刻み幅は正の数を指定してください');
+  if(!(x1>=x0)||!(g1>g0))throw new Error('範囲の最小値・最大値を確認してください');
+  const n=Math.round((x1-x0)/st+1e-9);if(n>300)throw new Error('表のステップ数が多すぎます（刻み幅を大きくしてください）');
+  
+  const ev=x=>{const ys=[];for(let k=0;k<fns.length;k++){let v;try{v=fns[k](x,x,...ys)}catch(e){v=NaN}ys.push(v)}return ys};
+  const xs=[];for(let i=0;i<=n;i++)xs.push(x0+i*st);
+  S={ev,xs,st,g0,g1,dg,N:fns.length,src};
+  render();
+  $('out').style.display='block';
+  if(scroll)$('out').scrollIntoView({behavior:'smooth'});
+ }catch(e){$('err').textContent='⚠ '+e.message}
+}
+
+function render(){
+ const {ev,xs,dg,N,src,g0,g1,st}=S;
+ const Y=xs.map(ev);
+ let t='<table><tr><th>y ＼ x</th>'+xs.map(x=>'<th>'+lab(x)+'</th>').join('')+'</tr>';
+ for(let k=0;k<N;k++)t+='<tr><td style="color:'+COL[k%8]+'">y'+(k+1)+'</td>'+Y.map(r=>'<td>'+fz(r[k],dg)+'</td>').join('')+'</tr>';
+ $('tbl').innerHTML=t+'</table>';
+ const M=800,cx=[];for(let i=0;i<=M;i++)cx.push(g0+(g1-g0)*i/M);
+ const CY=cx.map(ev);
+ let g='';
+ for(let k=0;k<N;k++)g+=graph('y'+(k+1)+' = '+src[k],[{c:COL[k%8],pl:poly(cx,CY,k)}],xs.map((x,i)=>[x,Y[i][k]]).filter(p=>p[0]>=g0-1e-9&&p[0]<=g1+1e-9),COL[k%8],200);
+ if(N>1)g+=graph('重ね描き',[...Array(N).keys()].map(k=>({c:COL[k%8],pl:poly(cx,CY,k)})),[],'',240);
+ $('gr').innerHTML=g;
+}
+
+function poly(cx,CY,k){
+ const out=[];let cur=[];cx.forEach((x,i)=>{const v=CY[i][k];if(isFinite(v)&&Math.abs(v)<1e6)cur.push([x,v]);else{if(cur.length)out.push(cur);cur=[]}});if(cur.length)out.push(cur);return out;
+}
+
+let gid=0;
+function graph(title,ser,pt,pc,H){
+ const {g0,g1,st}=S,W=900,ml=44,mr=16,mt=26,mb=34;
+ let lo=0,hi=0;ser.forEach(s=>s.pl.forEach(p=>p.forEach(q=>{lo=Math.min(lo,q[1]);hi=Math.max(hi,q[1])})));
+ if(hi-lo<1e-9){hi=1;lo=-1}
+ const raw=(hi-lo)/4,mg=Math.pow(10,Math.floor(Math.log10(raw))),sy=[1,2,2.5,5,10].find(m=>m*mg>=raw)*mg;
+ lo=Math.floor(lo/sy-1e-9)*sy;hi=Math.ceil(hi/sy-1e-9)*sy;
+ const X=x=>ml+(x-g0)/(g1-g0)*(W-ml-mr),Y=y=>mt+(hi-y)/(hi-lo)*(H-mt-mb),id='c'+(gid++);
+ let s='<svg viewBox="0 0 '+W+' '+H+'"><defs><clipPath id="'+id+'"><rect x="'+ml+'" y="'+mt+'" width="'+(W-ml-mr)+'" height="'+(H-mt-mb)+'"/></clipPath></defs>';
+ s+='<text x="'+ml+'" y="16" font-size="13" fill="currentColor">'+title.replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</text>';
+ for(let y=Math.round(lo/sy);y<=Math.round(hi/sy);y++){const v=y*sy;s+='<line x1="'+ml+'" x2="'+(W-mr)+'" y1="'+Y(v)+'" y2="'+Y(v)+'" stroke="var(--grid)"/><text x="'+(ml-5)+'" y="'+(Y(v)+3)+'" font-size="11" text-anchor="end" fill="currentColor">'+(+v.toFixed(3))+'</text>'}
+ const y0=Y(0);
+ s+='<line x1="'+ml+'" x2="'+(W-mr)+'" y1="'+y0+'" y2="'+y0+'" stroke="currentColor" opacity=".7"/>';
+ if(g0<=0&&g1>=0)s+='<line x1="'+X(0)+'" x2="'+X(0)+'" y1="'+mt+'" y2="'+(H-mb)+'" stroke="currentColor" opacity=".5"/>';
+ const a=Math.ceil(g0/st-1e-9),b=Math.floor(g1/st+1e-9),cnt=b-a+1,sk=Math.max(1,Math.ceil(cnt/30));
+ for(let i=a;i<=b;i++){const x=X(i*st);s+='<line x1="'+x+'" x2="'+x+'" y1="'+(y0-3)+'" y2="'+(y0+3)+'" stroke="currentColor"/>';
+  if(i!==0&&(i-a)%sk===0)s+='<text x="'+x+'" y="'+(H-mb+14)+'" font-size="9" text-anchor="middle" fill="currentColor">'+lab(i*st)+'</text>'}
+ s+='<g clip-path="url(#'+id+')">';
+ ser.forEach(r=>r.pl.forEach(p=>{s+='<polyline fill="none" stroke="'+r.c+'" stroke-width="2" stroke-linejoin="round" points="'+p.map(q=>X(q[0]).toFixed(1)+','+Y(q[1]).toFixed(1)).join(' ')+'"/>'}));
+ pt.forEach(q=>{if(isFinite(q[1]))s+='<circle cx="'+X(q[0])+'" cy="'+Y(q[1])+'" r="3.5" fill="'+pc+'"/>'});
+ return s+'</g></svg>';
+}
+
+function copyT(){
+ const tsv=[...document.querySelector('#tbl table').rows].map(r=>[...r.cells].map(c=>c.textContent).join('\t')).join('\n');
+ const m=x=>{$('cm').textContent=x};
+ try{navigator.clipboard.writeText(tsv).then(()=>m('コピーしました'),()=>m('コピーできませんでした'))}catch(e){m('コピーできませんでした')}
+}
+
+addRow('sin(2πx)');
+</script>
+</body>
+</html>
