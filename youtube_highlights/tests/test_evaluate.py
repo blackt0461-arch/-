@@ -46,6 +46,13 @@ class DescriptionTest(unittest.TestCase):
         text = f"元配信 (1:02:03~)\nhttps://youtu.be/{SID}\n0:00 オープニング"
         self.assertEqual(locate_from_text(text, SID, 7200), ([3723.0], "description"))
 
+    def test_adjacent_line(self):
+        # 「元配信」の次の行に時刻だけ書く形式。切り抜き自身の目次 (0:00, 0:45) は拾わない
+        text = f"▼元配信\nhttps://youtu.be/{SID}\n1:02:03〜\n\n0:00 オープニング\n0:45 本題"
+        self.assertEqual(locate_from_text(text, SID, 7200, clip_duration=90), ([3723.0], "description"))
+        text = f"元配信\nhttps://youtu.be/{SID}\n0:30 本題"
+        self.assertEqual(locate_from_text(text, SID, 7200, clip_duration=90)[0], [])
+
     def test_other_video_ignored(self):
         text = "元配信 https://youtu.be/zzzzzzzzzzz?t=100"
         times, _ = locate_from_text(text, SID, 7200)

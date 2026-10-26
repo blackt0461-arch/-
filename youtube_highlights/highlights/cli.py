@@ -10,6 +10,7 @@ import webbrowser
 from pathlib import Path
 
 from .chat import load_live_chat
+from .clips import STATUS_LABEL
 from .detect import DEFAULT_WEIGHTS, Config, analyze
 from .evaluate import evaluate
 from .evaluate import to_text as eval_text
@@ -133,14 +134,14 @@ def main(argv: list[str] | None = None) -> int:
     else:
         print(to_text(result, data.title, data.url, data.video_id, verbose=args.verbose))
 
-    evaluation = None
+    evaluation = found = None
     if args.evaluate or args.truth or args.clip:
-        evaluation = run_evaluation(args, data, result)
+        evaluation, found = run_evaluation(args, data, result)
 
     if not args.no_html:
         path = args.html or f"report_{data.video_id or 'result'}.html"
         payload = build_payload(result, data.title, data.url, data.video_id, data.duration,
-                                cfg.threshold, evaluation)
+                                cfg.threshold, evaluation, found)
         write_html(path, payload)
         print(f"\nグラフ付きレポート: {os.path.abspath(path)}", file=sys.stderr)
         if not args.no_open:
@@ -152,13 +153,19 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def run_evaluation(args: argparse.Namespace, data, result):
-    clips, searched = gather_clips(
+    found = gather_clips(
         data, args.workdir, search=args.evaluate, max_clips=args.max_clips,
         match_audio=args.match_audio, extra_urls=args.clip, truth=args.truth,
     )
-    ev = evaluate(result.highlights, clips, data.duration, tolerance=args.tolerance)
-    print(eval_text(ev, searched), file=sys.stderr if args.format == "json" else sys.stdout)
-    return ev
+    ev = evaluate(result.highlights, found.clips, data.duration, tolerance=args.tolerance)
+    out = sys.stderr if args.format == "json" else sys.stdout
+    print(eval_text(ev, found.searched if found.candidates else None), file=out)
+    if found.candidates and args.verbose:
+        print("\n切り抜き候補の内訳:", file=out)
+        for c in found.candidates:
+            print(f"  [{STATUS_LABEL.get(c.status, c.status)}] {c.title[:50]}  {c.url}"
+                  + (f"  ({c.detail})" if c.detail else ""), file=out)
+    return ev, found
 
 
 if __name__ == "__main__":

@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import math
 
+from .clips import METHOD_LABEL, STATUS_LABEL, ClipSearchResult
 from .detect import REASON_LABEL, Analysis
 from .evaluate import Evaluation
 from .report import fmt_time
@@ -25,9 +26,11 @@ def build_payload(
     duration: float,
     threshold: float,
     evaluation: Evaluation | None = None,
+    search: ClipSearchResult | None = None,
 ) -> dict:
     hl = []
-    results = {id(r.highlight): r for r in evaluation.results} if evaluation else {}
+    # 切り抜き場面が 1 つも無い時は当たり・外れを付けない (全部「外れ」に見えてしまうため)
+    results = {id(r.highlight): r for r in evaluation.results} if evaluation and evaluation.scenes else {}
     by_score = sorted(analysis.highlights, key=lambda h: h.score, reverse=True)
     rank = {id(h): i + 1 for i, h in enumerate(by_score)}
     for h in analysis.highlights:
@@ -41,7 +44,7 @@ def build_payload(
         })
     scenes = []
     metrics = None
-    if evaluation:
+    if evaluation and evaluation.scenes:
         for sc, cov in zip(evaluation.scenes, evaluation.covered):
             uniq = list({id(c): c for c in sc.clips}.values())
             scenes.append({
@@ -70,7 +73,25 @@ def build_payload(
         if h.samples:
             line += "「" + "」「".join(h.samples) + "」"
         comment_lines.append(line)
+    search_info = None
+    if search is not None and (search.candidates or search.queries):
+        cnt = search.counts()
+        order = ["located", "unlocated", "no_mention", "older", "length", "fetch_error"]
+        search_info = {
+            "counts": [{"status": k, "label": STATUS_LABEL[k], "n": cnt[k]} for k in order if cnt.get(k)],
+            "diagnosis": search.diagnosis(),
+            "queries": [{"q": q, "n": n} for q, n in search.queries],
+            "transcript": search.stream_transcript,
+            "candidates": [
+                {"title": c.title, "url": c.url, "channel": c.channel, "status": c.status,
+                 "label": STATUS_LABEL.get(c.status, c.status), "detail": c.detail, "query": c.query}
+                for c in sorted(search.candidates, key=lambda c: order.index(c.status) if c.status in order else 99)
+            ],
+        }
     return {
+        "search": search_info,
+        "evaluated": evaluation is not None,
+        "methodLabel": METHOD_LABEL,
         "commentText": "\n".join(comment_lines),
         "title": title, "url": url, "videoId": video_id, "duration": duration,
         "bin": analysis.bin_size, "threshold": threshold,
@@ -171,6 +192,12 @@ button { font: inherit; font-size: 12px; color: var(--ink); background: var(--su
 .copy .bar b { font-size: 14px; }
 button.primary { background: var(--series-1); color: #fff; border-color: transparent; padding: 6px 14px; }
 #home { display: inline-block; margin: 0 0 12px; font-size: 13px; }
+.counts { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0; }
+.counts span { background: var(--page); border: 1px solid var(--border); border-radius: 999px; padding: 2px 12px; font-size: 13px; }
+.diag { border-left: 3px solid var(--series-2); padding: 4px 0 4px 12px; margin: 0 0 12px; }
+.diag p { margin: 2px 0; }
+details summary { cursor: pointer; color: var(--ink-2); font-size: 13px; margin: 8px 0; }
+.notice { color: var(--ink-2); }
 .toolbar { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
 </style>
 </head>
@@ -200,6 +227,16 @@ button.primary { background: var(--series-1); color: #fff; border-color: transpa
 
   <h2>検出したシーン</h2>
   <div class="card table-wrap"><table id="hl"></table></div>
+
+  <div id="search-sec" hidden>
+    <h2>切り抜き検索の内訳</h2>
+    <div class="card">
+      <div id="diag"></div>
+      <div id="counts" class="counts"></div>
+      <p class="hint" id="queries"></p>
+      <details><summary>候補の一覧を見る</summary><div class="table-wrap"><table id="cands"></table></div></details>
+    </div>
+  </div>
 
   <div id="scenes-sec" hidden>
     <h2>実際に切り抜かれた場面</h2>
@@ -250,6 +287,10 @@ $("title").textContent = D.title || "ハイライト分析";
 const subParts = [`長さ ${fmt(D.duration)}`, `検出 ${D.highlights.length} 件`];
 if (D.url) subParts.push(`<a href="${esc(D.url)}" target="_blank" rel="noopener">動画を開く</a>`);
 $("sub").innerHTML = subParts.join(" ・ ");
+if (D.evaluated && !D.metrics) {
+  $("tiles").innerHTML = `<div class="card tile" style="grid-column:1/-1"><div class="k">正確性の評価</div>
+    <div class="notice">元配信上の位置が分かる切り抜き動画が見つからなかったため、評価できませんでした。下の「切り抜き検索の内訳」で原因を確認できます。</div></div>`;
+}
 if (D.metrics) {
   const M = D.metrics;
   const tiles = [
@@ -440,7 +481,7 @@ renderAll();
 }
 if (D.scenes.length) {
   $("scenes-sec").hidden = false;
-  const methodName = { link: "概要欄の時刻リンク", description: "概要欄の時刻", audio: "音声照合", manual: "正解ファイル" };
+  const methodName = D.methodLabel;
   let h = `<tr><th>区間</th><th>本数</th><th>検出</th><th>切り抜き動画</th></tr>`;
   for (const s of D.scenes) {
     const u = link(s.start);
@@ -450,6 +491,20 @@ if (D.scenes.length) {
     h += `<tr><td class="num">${ts}-${fmt(s.end)}</td><td class="num">${s.n}</td><td>${s.covered ? '<span class="ok">✓ 検出</span>' : '<span class="ng">✗ 見逃し</span>'}</td><td>${clips}</td></tr>`;
   }
   $("sc").innerHTML = h;
+}
+if (D.search) {
+  const S = D.search;
+  $("search-sec").hidden = false;
+  if (S.diagnosis.length) $("diag").innerHTML = `<div class="diag"><b>考えられる原因</b>${S.diagnosis.map((d) => `<p>${esc(d)}</p>`).join("")}</div>`;
+  $("counts").innerHTML = S.counts.map((c) => `<span>${c.status === "located" ? "✓ " : ""}${esc(c.label)}: <b>${c.n}</b> 本</span>`).join("");
+  $("queries").innerHTML = "検索語: " + S.queries.map((q) => `「${esc(q.q)}」${q.n < 0 ? "(失敗)" : q.n + " 件"}`).join("、")
+    + (S.transcript === false ? " ・ 元配信に自動字幕なし (字幕照合は使えません)" : S.transcript ? " ・ 字幕照合: 使用" : "");
+  let h = `<tr><th>判定</th><th>動画</th><th>チャンネル</th><th>詳細</th></tr>`;
+  for (const c of S.candidates) {
+    const cls = c.status === "located" ? "ok" : "";
+    h += `<tr><td class="${cls}">${esc(c.label)}</td><td><a href="${esc(c.url)}" target="_blank" rel="noopener">${esc(c.title || c.url)}</a></td><td>${esc(c.channel)}</td><td class="chat">${esc(c.detail)}</td></tr>`;
+  }
+  $("cands").innerHTML = h;
 }
 </script>
 </body>

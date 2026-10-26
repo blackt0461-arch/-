@@ -13,7 +13,6 @@ import json
 import math
 import os
 import re
-import shutil
 import threading
 import time
 import uuid
@@ -23,7 +22,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from .detect import Config, analyze
 from .evaluate import evaluate
-from .fetch import fetch, video_id_from_url
+from .fetch import ffmpeg_exe, fetch, video_id_from_url
 from .log import set_sink
 from .pipeline import data_sources, gather_clips
 from .report import fmt_time
@@ -59,11 +58,14 @@ class Job:
         self.logs.append(msg)
         del self.logs[:-200]
 
+    def _evaluates(self) -> bool:
+        return bool(self.options.get("evaluate") or self.options.get("clipUrls"))
+
     def to_dict(self) -> dict:
         return {
             "id": self.id, "status": self.status, "step": self.step,
-            "steps": [s for i, s in enumerate(STEPS) if i != 2 or self.options.get("evaluate")],
-            "stepIndex": self.step - (1 if self.step > 2 and not self.options.get("evaluate") else 0),
+            "steps": [s for i, s in enumerate(STEPS) if i != 2 or self._evaluates()],
+            "stepIndex": self.step - (1 if self.step > 2 and not self._evaluates() else 0),
             "logs": self.logs[-50:], "elapsed": round(time.time() - self.started),
             "report": self.report, "error": self.error, "title": self.title,
         }
@@ -75,7 +77,7 @@ _lock = threading.Lock()
 
 
 def capabilities() -> dict:
-    audio = importlib.util.find_spec("numpy") is not None and shutil.which("ffmpeg") is not None
+    audio = importlib.util.find_spec("numpy") is not None and ffmpeg_exe() is not None
     ytdlp = importlib.util.find_spec("yt_dlp") is not None
     return {"audio": audio, "ytdlp": ytdlp}
 
@@ -146,14 +148,15 @@ def run_job(job: Job) -> None:
                          heatmap=data.heatmap, comments=data.comments)
         job.log(f"{len(result.highlights)} 件のシーンを検出しました")
 
-        ev = None
-        if opts.get("evaluate"):
+        ev = found = None
+        if opts.get("evaluate") or opts.get("clipUrls"):
             job.step = 2
-            clips, searched = gather_clips(
+            extra = [u for u in re.split(r"\s+", opts.get("clipUrls") or "") if u]
+            found = gather_clips(
                 data, WORKDIR, search=True, max_clips=int(opts.get("maxClips", 20)),
-                match_audio=bool(opts.get("matchAudio")),
+                match_audio=bool(opts.get("matchAudio")), extra_urls=extra,
             )
-            ev = evaluate(result.highlights, clips, data.duration)
+            ev = evaluate(result.highlights, found.clips, data.duration)
             if ev.scenes:
                 job.log(f"切り抜き場面 {len(ev.scenes)} か所と照合: 適合率 {ev.precision:.0%}・再現率 {ev.recall:.0%}")
             else:
@@ -162,7 +165,7 @@ def run_job(job: Job) -> None:
         job.step = 3
         name = f"report_{data.video_id or uuid.uuid4().hex[:8]}.html"
         payload = build_payload(result, data.title, data.url, data.video_id, data.duration,
-                                Config().threshold, ev)
+                                Config().threshold, ev, found)
         os.makedirs(REPORTS, exist_ok=True)
         write_html(os.path.join(REPORTS, name), payload)
         entry = {
@@ -334,6 +337,8 @@ details { margin: 12px 0 0; }
 summary { cursor: pointer; color: var(--ink-2); font-size: 14px; }
 .opts { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin: 12px 0 0; }
 .opts label { font-size: 13px; color: var(--ink-2); display: block; }
+textarea { width: 100%; font: inherit; font-size: 14px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border);
+  background: var(--page); color: var(--ink); resize: vertical; margin-top: 4px; }
 select { font: inherit; font-size: 14px; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--border);
   background: var(--page); color: var(--ink); width: 100%; }
 .steps { list-style: none; padding: 0; margin: 8px 0 12px; }
@@ -371,6 +376,10 @@ h2 { font-size: 16px; margin: 0 0 8px; }
     </div>
     <label class="check"><input type="checkbox" id="evaluate" checked>
       <span>実際の切り抜き動画と照合して、正確性を測る<br><span class="note">切り抜き動画を検索するので、1〜3 分ほど長くかかります</span></span></label>
+    <div id="clipBox" style="margin:10px 0 0 24px">
+      <label for="clipUrls" class="note">知っている切り抜き動画の URL (任意・複数なら改行で区切る)。検索で見つからなくても直接調べます</label>
+      <textarea id="clipUrls" rows="2" placeholder="https://www.youtube.com/watch?v=..."></textarea>
+    </div>
     <details>
       <summary>詳細設定</summary>
       <div class="opts">
@@ -419,7 +428,7 @@ async function init() {
   const info = await (await fetch("/api/info")).json();
   if (!info.audio) {
     $("matchAudio").disabled = true;
-    $("audioNote").textContent = "(使うには numpy と ffmpeg のインストールが必要です)";
+    $("audioNote").textContent = "(使うには「起動」から開き直して、追加の部品をインストールしてください)";
   }
   if (!info.ytdlp) showError("yt-dlp がインストールされていません。「起動」から開き直してください。");
   if (info.current) watch(info.current);
@@ -448,6 +457,7 @@ $("form").addEventListener("submit", async (ev) => {
   const options = {
     evaluate: $("evaluate").checked, matchAudio: $("matchAudio").checked, refresh: $("refresh").checked,
     top: $("top").value, maxComments: $("comments").value, maxClips: $("clips").value,
+    clipUrls: $("evaluate").checked ? $("clipUrls").value : "",
   };
   $("go").disabled = true;
   try {
@@ -495,6 +505,7 @@ function watch(id) {
   timer = setInterval(tick, 1000);
 }
 
+$("evaluate").addEventListener("change", () => { $("clipBox").hidden = !$("evaluate").checked; });
 init();
 </script>
 </body>

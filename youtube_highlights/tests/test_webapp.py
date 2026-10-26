@@ -12,7 +12,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import highlights.webapp as w  # noqa: E402
 from highlights.chat import parse_live_chat_lines  # noqa: E402
-from highlights.clips import Clip  # noqa: E402
+from highlights.clips import Candidate, Clip, ClipSearchResult  # noqa: E402
 from highlights.fetch import VideoData  # noqa: E402
 from test_highlights import DURATION, synth_chat  # noqa: E402
 
@@ -25,7 +25,8 @@ def fake_fetch(url, workdir, use_chat=True, max_comments=500, use_audio=False):
 
 
 def fake_gather(data, workdir, **kw):
-    return [Clip("a", "切り抜き", "https://youtu.be/a", intervals=[(595, 660)])], 3
+    return ClipSearchResult(clips=[Clip("a", "切り抜き", "https://youtu.be/a", intervals=[(595, 660)])],
+                            candidates=[Candidate("a", "切り抜き", "https://youtu.be/a", status="located")])
 
 
 class WebAppTest(unittest.TestCase):

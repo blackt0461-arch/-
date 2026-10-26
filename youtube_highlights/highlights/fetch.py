@@ -6,6 +6,7 @@ import glob
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 from dataclasses import dataclass, field
@@ -126,6 +127,18 @@ def from_info(info: dict, url: str | None = None) -> VideoData:
     )
 
 
+def ffmpeg_exe() -> str | None:
+    """ffmpeg の実行ファイル。PATH に無ければ pip で入る imageio-ffmpeg 同梱のものを使う。"""
+    exe = shutil.which("ffmpeg")
+    if exe:
+        return exe
+    try:
+        import imageio_ffmpeg
+        return imageio_ffmpeg.get_ffmpeg_exe()
+    except Exception:
+        return None
+
+
 def fetch_audio(
     url: str, workdir: str, video_id: str, sample_rate: int = 8000, quiet: bool = False
 ) -> str | None:
@@ -152,7 +165,7 @@ def fetch_audio(
         _log("音声を解析用に変換中 (ffmpeg)...")
     try:
         subprocess.run(
-            ["ffmpeg", "-loglevel", "error", "-y", "-i", src[0],
+            [ffmpeg_exe() or "ffmpeg", "-loglevel", "error", "-y", "-i", src[0],
              "-ac", "1", "-ar", str(sample_rate), "-f", "s16le", pcm],
             check=True,
         )
