@@ -11,9 +11,9 @@ from __future__ import annotations
 
 import os
 import re
-import sys
 from dataclasses import dataclass, field
 
+from .log import log as _log
 from .signals import extract_timestamps
 
 # 切り抜き 1 本が元配信のどのくらいの長さに対応すると見なすか (時刻リンクしか無い場合)
@@ -39,9 +39,6 @@ class ClipSearchResult:
     referencing: int = 0       # 元配信に言及していた候補数
     unlocated: list[Clip] = field(default_factory=list)  # 元配信に言及しているが位置不明
 
-
-def _log(msg: str) -> None:
-    print(msg, file=sys.stderr)
 
 
 # ---------------------------------------------------------------------------

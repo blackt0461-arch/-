@@ -10,11 +10,11 @@ import webbrowser
 from pathlib import Path
 
 from .chat import load_live_chat
-from .clips import collect_clips, load_truth_file
 from .detect import DEFAULT_WEIGHTS, Config, analyze
 from .evaluate import evaluate
 from .evaluate import to_text as eval_text
-from .fetch import fetch, fetch_audio, from_info
+from .fetch import fetch, from_info
+from .pipeline import data_sources, gather_clips
 from .report import to_csv_curve, to_json, to_text
 from .visualize import build_payload, write_html
 
@@ -110,15 +110,7 @@ def main(argv: list[str] | None = None) -> int:
     if not data.duration:
         sys.exit("動画の長さが分かりません (--duration を指定してください)")
 
-    sources = []
-    if data.messages:
-        sources.append(f"チャット {len(data.messages)} 件")
-    if data.heatmap:
-        sources.append("Most Replayed")
-    if data.comments:
-        sources.append(f"コメント {len(data.comments)} 件")
-    if data.audio_pcm:
-        sources.append("音声")
+    sources = data_sources(data)
     if not sources:
         sys.exit("解析に使えるデータがありません (チャット・ヒートマップ・コメントのいずれも取得できませんでした)")
     print("使用データ: " + ", ".join(sources), file=sys.stderr)
@@ -160,26 +152,10 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def run_evaluation(args: argparse.Namespace, data, result):
-    clips = []
-    searched = None
-    if args.truth:
-        clips += load_truth_file(args.truth, data.duration)
-    if (args.evaluate or args.clip) and data.video_id:
-        stream_pcm = None
-        if args.match_audio:
-            stream_pcm = data.audio_pcm or fetch_audio(data.url, args.workdir, data.video_id)
-        found = collect_clips(
-            data.video_id, data.title, data.channel, data.duration, data.upload_date,
-            args.workdir, max_clips=args.max_clips, extra_urls=args.clip,
-            match_audio=args.match_audio, stream_pcm=stream_pcm,
-        )
-        clips += found.clips
-        searched = found.searched
-        if found.unlocated and not args.match_audio:
-            print(f"(元配信に言及しているが位置が書かれていない切り抜きが {len(found.unlocated)} 本ありました。"
-                  "--match-audio を付けると音声照合で位置を特定できます)", file=sys.stderr)
-    elif args.evaluate:
-        print("動画 ID が分からないため切り抜き検索をスキップしました", file=sys.stderr)
+    clips, searched = gather_clips(
+        data, args.workdir, search=args.evaluate, max_clips=args.max_clips,
+        match_audio=args.match_audio, extra_urls=args.clip, truth=args.truth,
+    )
     ev = evaluate(result.highlights, clips, data.duration, tolerance=args.tolerance)
     print(eval_text(ev, searched), file=sys.stderr if args.format == "json" else sys.stdout)
     return ev

@@ -14,7 +14,21 @@ $ python find_highlights.py "https://www.youtube.com/watch?v=XXXXXXXXXXX"
 ...
 ```
 
-## セットアップ
+## かんたんな使い方 (ブラウザで操作)
+
+1. [Python](https://www.python.org/downloads/) をインストール(初回のみ)。
+2. **Windows**: `起動.bat` をダブルクリック / **Mac**: `起動_Mac.command` をダブルクリック。
+   - 必要なもの(yt-dlp)の準備が自動で行われ、ブラウザに操作画面が開きます。
+   - 黒い画面(アプリ本体)は、使い終わるまで閉じないでください。
+3. 配信の URL を貼り付けて **「解析する」**。進み具合が表示され、終わると結果(グラフ・コメント欄に貼る用のテキスト)が表示されます。
+4. 過去の結果はトップ画面の「これまでの結果」から開けます。
+
+手動で起動する場合は `python app.py`(http://127.0.0.1:8765 で開きます。自分のパソコンからのみ接続可能)。
+起動のたびに yt-dlp を最新版に更新するので、YouTube の仕様変更で取得できなくなった時は開き直してください。
+
+## コマンドでの使い方
+
+### セットアップ
 
 ```bash
 pip install -r requirements.txt       # yt-dlp
@@ -24,7 +38,7 @@ pip install numpy && (ffmpeg をインストール)
 
 Python 3.10 以上。チャット・コメント・ヒートマップの解析は標準ライブラリのみで動きます。
 
-## 使い方
+### 使い方
 
 ```bash
 python find_highlights.py URL                 # 基本
@@ -225,7 +239,8 @@ score(t) = Σ_k  w_k / Σ(利用可能な w) × z_k(t)
 ## 構成
 
 ```
-find_highlights.py      エントリポイント
+app.py                  ブラウザで操作するアプリ (起動.bat / 起動_Mac.command から起動)
+find_highlights.py      コマンドラインのエントリポイント
 highlights/
   chat.py               live_chat.json のパース、反応語辞書と分類
   signals.py            時系列化・平滑化・ロバスト z・各シグナル生成
@@ -236,8 +251,12 @@ highlights/
   audiomatch.py         音声照合 (スペクトル特徴 + FFT 相互相関)
   evaluate.py           正確性の評価 (適合率・再現率・ランダム比など)
   visualize.py          グラフ付き HTML レポート
+  webapp.py             ローカル Web アプリ (標準ライブラリの http.server)
+  pipeline.py           コマンドと Web アプリ共通の処理
+  log.py                進捗メッセージの出力先の切り替え
 tests/test_highlights.py
 tests/test_evaluate.py
+tests/test_webapp.py
 ```
 
 テスト(合成チャットで、ベースラインのドリフトや 1 人の連投スパムがあっても

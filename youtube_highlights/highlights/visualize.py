@@ -10,6 +10,7 @@ import math
 
 from .detect import REASON_LABEL, Analysis
 from .evaluate import Evaluation
+from .report import fmt_time
 
 
 def _round(xs, nd=3):
@@ -63,7 +64,14 @@ def build_payload(
         {"key": k, "name": REASON_LABEL[k], "values": _round(analysis.components[k], 2)}
         for k in order if k in analysis.components
     ]
+    comment_lines = []
+    for h in analysis.highlights:
+        line = f"{fmt_time(h.time)} {h.label}"
+        if h.samples:
+            line += "「" + "」「".join(h.samples) + "」"
+        comment_lines.append(line)
     return {
+        "commentText": "\n".join(comment_lines),
         "title": title, "url": url, "videoId": video_id, "duration": duration,
         "bin": analysis.bin_size, "threshold": threshold,
         "score": _round(analysis.score, 3), "components": comps,
@@ -157,14 +165,26 @@ td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
 @media (max-width: 640px) { .why { display: none; } }
 button { font: inherit; font-size: 12px; color: var(--ink); background: var(--surface);
   border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; cursor: pointer; }
+.copy textarea { width: 100%; min-height: 120px; resize: vertical; font: 13px/1.6 ui-monospace, Consolas, "BIZ UDGothic", monospace;
+  background: var(--page); color: var(--ink); border: 1px solid var(--border); border-radius: 8px; padding: 8px; }
+.copy .bar { display: flex; justify-content: space-between; align-items: center; margin: 0 0 8px; gap: 8px; }
+.copy .bar b { font-size: 14px; }
+button.primary { background: var(--series-1); color: #fff; border-color: transparent; padding: 6px 14px; }
+#home { display: inline-block; margin: 0 0 12px; font-size: 13px; }
 .toolbar { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
 </style>
 </head>
 <body>
 <main>
+  <a id="home" href="/" hidden>← 別の配信を解析する</a>
   <h1 id="title"></h1>
   <p class="sub" id="sub"></p>
   <div id="tiles" class="tiles"></div>
+
+  <div class="card copy" id="copy-card" style="margin-bottom:16px">
+    <div class="bar"><b>コメント欄に貼る用</b><button class="primary" id="copy">コピー</button></div>
+    <textarea id="copy-text" readonly></textarea>
+  </div>
 
   <div class="card">
     <div class="toolbar">
@@ -211,6 +231,20 @@ function el(tag, attrs, parent) {
 }
 function esc(s) { return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
 
+// ---- 戻るリンク・コピー ----
+if (location.protocol.startsWith("http")) $("home").hidden = false;
+if (D.commentText) {
+  $("copy-text").value = D.commentText;
+  $("copy").addEventListener("click", async () => {
+    try { await navigator.clipboard.writeText(D.commentText); }
+    catch (e) { $("copy-text").select(); document.execCommand("copy"); }
+    $("copy").textContent = "コピーしました ✓";
+    setTimeout(() => { $("copy").textContent = "コピー"; }, 2000);
+  });
+} else {
+  $("copy-card").hidden = true;
+}
+
 // ---- 見出し・指標 ----
 $("title").textContent = D.title || "ハイライト分析";
 const subParts = [`長さ ${fmt(D.duration)}`, `検出 ${D.highlights.length} 件`];
@@ -234,7 +268,7 @@ const legend = [`<span><i class="sw" style="background:var(--series-1)"></i>盛�
   `<span><i class="sw" style="background:var(--badge);border-radius:50%;width:12px;height:12px"></i>検出したシーン (数字はスコア順位)</span>`];
 if (D.metrics) {
   legend.push(`<span><i class="sw" style="background:var(--series-2)"></i>実際に切り抜かれた場面 (濃いほど本数が多い)</span>`);
-  legend.push(`<span class="ok">✓ 当たり</span><span class="ng">✗ 外れ</span>`);
+  legend.push(`<span><span class="ok">✓ 当たり</span><span class="ng">✗ 外れ</span></span>`);
 }
 $("legend").innerHTML = legend.join("");
 

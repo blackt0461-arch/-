@@ -11,6 +11,7 @@ import sys
 from dataclasses import dataclass, field
 
 from .chat import ChatMessage, load_live_chat
+from .log import log as _log
 
 
 @dataclass
@@ -26,9 +27,6 @@ class VideoData:
     comments: list[dict] | None = None
     audio_pcm: str | None = None
 
-
-def _log(msg: str) -> None:
-    print(msg, file=sys.stderr)
 
 
 def _yt_dlp():
