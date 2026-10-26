@@ -24,8 +24,9 @@ KINDS = {
 }
 
 # 反応の種類 → 効果音
+# 「ボヨン」などのおふざけ系は空気を壊すので使わず、控えめな音だけにする
 CATEGORY_SFX = {
-    "laugh": "boing",
+    "laugh": "pop",
     "surprise": "don",
     "hype": "whoosh",
     "cute": "kira",

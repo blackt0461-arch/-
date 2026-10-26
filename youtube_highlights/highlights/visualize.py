@@ -241,12 +241,12 @@ details summary { cursor: pointer; color: var(--ink-2); font-size: 13px; margin:
   <div id="maker" hidden>
     <h2 id="clips">切り抜き動画を作る</h2>
     <div class="card">
-      <p class="hint" style="margin-top:0">上の表の「動画」で選んだシーンを、字幕・効果音・テロップ付きの動画にします (1 本あたり数分かかります)。</p>
+      <p class="hint" style="margin-top:0">上の表の「動画」で選んだシーンを、字幕・コメント付きの動画にします (1 本あたり数分かかります)。出来事の瞬間を音声で合わせ、字幕は音声認識で付けます。</p>
       <div class="mk-opts">
         <label>形 <select id="mk-vertical"><option value="">横型 (16:9)</option><option value="1">縦型 (ショート 9:16)</option></select></label>
         <label><input type="checkbox" id="mk-captions" checked> 字幕</label>
-        <label><input type="checkbox" id="mk-sfx" checked> 効果音・リアクション文字</label>
         <label><input type="checkbox" id="mk-chat" checked> コメントを流す</label>
+        <label><input type="checkbox" id="mk-sfx"> 効果音 (控えめ)</label>
         <label><input type="checkbox" id="mk-compile" checked> まとめ動画も作る</label>
         <label>タイトル <input type="text" id="mk-title" maxlength="30" placeholder="空欄なら自動"></label>
       </div>
@@ -509,13 +509,14 @@ renderAll();
 {
   const evald = D.metrics != null;
   const app = location.protocol.startsWith("http");
-  let h = `<tr>${app ? '<th title="動画にするシーンを選ぶ">動画</th>' : ""}<th>順位</th><th>時刻</th><th>内容</th><th>区間</th><th>スコア</th>${evald ? "<th>判定</th>" : ""}<th class="why">根拠</th><th>代表的なチャット</th></tr>`;
+  const hasProb = D.highlights.some((x) => x.prob != null);
+  let h = `<tr>${app ? '<th title="動画にするシーンを選ぶ">動画</th>' : ""}<th>順位</th><th>時刻</th><th>内容</th><th>区間</th><th>スコア</th>${hasProb ? '<th title="学習結果による予測">切り抜かれやすさ</th>' : ""}${evald ? "<th>判定</th>" : ""}<th class="why">根拠</th><th>代表的なチャット</th></tr>`;
   for (const [i, x] of D.highlights.entries()) {
     const u = link(x.time);
     const ts = u ? `<a href="${u}" target="_blank" rel="noopener">${fmt(x.time)}</a>` : fmt(x.time);
     const judge = evald ? `<td>${x.hit ? `<span class="ok">✓ ${x.clips} 本</span>` : `<span class="ng">✗ なし</span>`}</td>` : "";
     const pick = app ? `<td><input type="checkbox" class="pick" data-i="${i}" ${x.rank <= 3 ? "checked" : ""} aria-label="#${x.rank} を動画にする"></td>` : "";
-    h += `<tr>${pick}<td class="num">${x.rank}</td><td class="num">${ts}</td><td>${esc(x.label)}</td><td class="num">${Math.round(x.end - x.start)} 秒</td><td class="num">${x.score.toFixed(2)}</td>${judge}<td class="why">${x.reasons.map(esc).join("、") || "-"}</td><td class="chat">${x.samples.length ? "「" + x.samples.map(esc).join("」「") + "」" : ""}</td></tr>`;
+    h += `<tr>${pick}<td class="num">${x.rank}</td><td class="num">${ts}</td><td>${esc(x.label)}</td><td class="num">${Math.round(x.end - x.start)} 秒</td><td class="num">${x.score.toFixed(2)}</td>${hasProb ? `<td class="num">${x.prob != null ? Math.round(x.prob * 100) + "%" : "-"}</td>` : ""}${judge}<td class="why">${x.reasons.map(esc).join("、") || "-"}</td><td class="chat">${x.samples.length ? "「" + x.samples.map(esc).join("」「") + "」" : ""}</td></tr>`;
   }
   $("hl").innerHTML = h;
 }
@@ -528,6 +529,7 @@ if (location.protocol.startsWith("http") && D.videoId) {
     try { items = await (await fetch("/api/clips?video=" + encodeURIComponent(D.videoId))).json(); } catch (e) { return; }
     $("mk-list").innerHTML = items.map((c) => `<div class="card">
       <video controls preload="metadata" src="/clips/${encodeURIComponent(c.file)}"></video>
+      ${c.suggested_title ? `<div class="chat" title="投稿用タイトルの提案">${esc(c.suggested_title)}</div>` : ""}
       <div class="t">${esc(c.compiled ? "まとめ動画" : c.title)} <span class="chat">${c.compiled ? "" : fmt(c.start) + "〜" + fmt(c.end)}${c.vertical ? "・縦型" : ""}</span></div>
       <div class="a"><a href="/clips/${encodeURIComponent(c.file)}?download=1">ダウンロード</a>
       ${c.description ? `<a href="#" data-desc="${esc(c.description)}" class="copy-desc">説明文をコピー</a>` : ""}<span class="chat">${esc(c.created || "")}</span></div></div>`).join("");

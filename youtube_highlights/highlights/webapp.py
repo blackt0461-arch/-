@@ -25,6 +25,7 @@ from .clipmaker import ClipOptions, make_clips
 from .detect import Config, Highlight, analyze
 from .evaluate import evaluate
 from .fetch import ffmpeg_exe, fetch, video_id_from_url
+from .learn import load_model, rank_highlights
 from .log import set_sink
 from .pipeline import data_sources, gather_clips
 from .report import fmt_time
@@ -40,13 +41,19 @@ CLIPS = os.path.join(BASE, "clips")
 CLIP_INDEX = os.path.join(CLIPS, "index.json")
 CLIP_NAME = re.compile(r"^[\w-]+\.(mp4|txt)$")
 SE_DIR = os.path.join(BASE, "se")
+MODEL = os.path.join(BASE, "model.json")
+LEARN_DATASET = os.path.join(BASE, "learn", "dataset.jsonl")
+TRENDS_DIR = os.path.join(BASE, "trends")
 
 STEP_FETCH = "動画の情報・チャット・コメントを取得"
 STEP_ANALYZE = "盛り上がりを解析"
 STEP_EVAL = "切り抜き動画を検索して照合"
 STEP_REPORT = "レポートを作成"
 STEP_PREPARE = "準備 (チャット・字幕の読み込み)"
-STEP_CLIPS = "切り抜き動画を作成 (ダウンロード・字幕・効果音)"
+STEP_CLIPS = "切り抜き動画を作成 (ダウンロード・音声解析・字幕)"
+STEP_TRENDS = "人気の切り抜きの情報を集めて分析"
+STEP_LEARN_DATA = "切り抜きと元配信を調べて学習データを作成"
+STEP_TRAIN = "学習"
 
 
 class UserError(Exception):
@@ -70,6 +77,7 @@ class Job:
     clips: list[dict] = field(default_factory=list)
     report_file: str = ""
     indices: list[int] = field(default_factory=list)
+    result_text: str = ""
 
     def log(self, msg: str) -> None:
         self.logs.append(msg)
@@ -84,12 +92,17 @@ class Job:
             "stepIndex": len(self.steps) if self.status == "done" else self.step,
             "logs": self.logs[-50:], "elapsed": round(time.time() - self.started),
             "report": self.report, "error": self.error, "title": self.title, "clips": self.clips,
+            "resultText": self.result_text,
         }
 
 
 def _steps_for(kind: str, opts: dict) -> list[str]:
     if kind == "clip":
         return [STEP_PREPARE, STEP_CLIPS]
+    if kind == "trends":
+        return [STEP_TRENDS]
+    if kind == "learn":
+        return [STEP_LEARN_DATA, STEP_TRAIN]
     steps = [STEP_FETCH, STEP_ANALYZE]
     if opts.get("evaluate") or opts.get("clipUrls"):
         steps.append(STEP_EVAL)
@@ -108,7 +121,8 @@ def capabilities() -> dict:
     has_ffmpeg = ffmpeg_exe() is not None
     audio = importlib.util.find_spec("numpy") is not None and has_ffmpeg
     ytdlp = importlib.util.find_spec("yt_dlp") is not None
-    return {"audio": audio, "ytdlp": ytdlp, "clips": has_ffmpeg}
+    from . import asr
+    return {"audio": audio, "ytdlp": ytdlp, "clips": has_ffmpeg, "whisper": asr.available()}
 
 
 # ---------------------------------------------------------------------------
@@ -175,6 +189,10 @@ def run_job(job: Job) -> None:
     try:
         if job.kind == "clip":
             _run_clip(job)
+        elif job.kind == "trends":
+            _run_trends(job)
+        elif job.kind == "learn":
+            _run_learn(job)
         else:
             _run_analyze(job)
         job.status = "done"
@@ -231,6 +249,11 @@ def _run_analyze(job: Job) -> None:
     job.set_step(STEP_REPORT)
     name = f"report_{data.video_id or uuid.uuid4().hex[:8]}.html"
     payload = build_payload(result, data.title, data.url, data.video_id, data.duration, cfg.threshold, ev, found)
+    model = load_model(MODEL)
+    if model:
+        probs = {id(h): p for p, h in rank_highlights(model, result, data.messages, data.duration)}
+        for item, h in zip(payload["highlights"], result.highlights):
+            item["prob"] = round(probs[id(h)], 3)
     os.makedirs(REPORTS, exist_ok=True)
     write_html(os.path.join(REPORTS, name), payload)
     # 後から切り抜き動画を作れるよう、検出結果を保存しておく
@@ -251,7 +274,11 @@ def _run_analyze(job: Job) -> None:
     if STEP_CLIPS in job.steps:
         job.set_step(STEP_CLIPS)
         n = int(opts.get("clipCount") or 3)
-        chosen = sorted(result.highlights, key=lambda h: h.score, reverse=True)[:n]
+        model = load_model(MODEL)
+        if model:   # 学習結果があれば「切り抜かれやすさ」の高い順
+            chosen = [h for _p, h in rank_highlights(model, result, data.messages, data.duration)[:n]]
+        else:
+            chosen = sorted(result.highlights, key=lambda h: h.score, reverse=True)[:n]
         chosen.sort(key=lambda h: h.start)
         _make(job, data, chosen, opts, cfg.chat_delay)
 
@@ -275,16 +302,66 @@ def _run_clip(job: Job) -> None:
     _make(job, data, chosen, job.options, saved.get("chat_delay", 8.0))
 
 
+def _names(opts: dict) -> list[str]:
+    names = [n.strip() for n in re.split(r"[\n,、]", opts.get("names") or "") if n.strip()]
+    if not names:
+        raise UserError("配信者名を 1 人以上入力してください")
+    return names[:30]
+
+
+def _run_trends(job: Job) -> None:
+    import collections
+
+    from .trends import analyze as t_analyze
+    from .trends import collect, collect_channels, regress, regress_text, save, to_text
+    job.set_step(STEP_TRENDS)
+    out = TRENDS_DIR
+    os.makedirs(out, exist_ok=True)
+    stamp = time.strftime("%Y%m%d_%H%M")
+    rows = collect(_names(job.options), limit=int(job.options.get("perName") or 100))
+    save(rows, os.path.join(out, f"search_{stamp}.json"))
+    cnt = collections.Counter(r["channel_id"] for r in rows if r["channel_id"])
+    official = {r["channel_id"] for r in rows
+                if any(k in r["channel"] for k in ("Ch.", "ch.", "Channel", "公式"))
+                and not any(k in r["channel"] for k in ("切り抜き", "切抜", "clip", "Clip"))}
+    ids = [c for c, _n in cnt.most_common() if c not in official][: int(job.options.get("channels") or 40)]
+    ch_rows = collect_channels(ids)
+    save(ch_rows, os.path.join(out, f"channels_{stamp}.json"))
+    res = regress(ch_rows)
+    with open(os.path.join(out, f"result_{stamp}.json"), "w", encoding="utf-8") as f:
+        json.dump(res, f, ensure_ascii=False, indent=1)
+    job.result_text = regress_text(res) + "\n\n----- 参考: 検索結果だけでの集計 (偏りあり) -----\n" + to_text(t_analyze(rows))
+    with open(os.path.join(out, f"result_{stamp}.txt"), "w", encoding="utf-8") as f:
+        f.write(job.result_text)
+
+
+def _run_learn(job: Job) -> None:
+    from .learn import build_dataset, load_dataset, report_text, save_model, train
+    dataset = LEARN_DATASET
+    os.makedirs(os.path.dirname(dataset), exist_ok=True)
+    job.set_step(STEP_LEARN_DATA)
+    if not job.options.get("trainOnly"):
+        n = build_dataset(_names(job.options), WORKDIR, dataset, per_name=int(job.options.get("perName") or 40))
+        job.log(f"切り抜き {n} 本ぶんのデータを追加しました")
+    job.set_step(STEP_TRAIN)
+    try:
+        model = train(load_dataset(dataset) if os.path.exists(dataset) else [])
+    except ValueError as e:
+        raise UserError(str(e) + "。配信者を増やして、もう一度「配信から学習」を実行してください。")
+    save_model(model, MODEL)
+    job.result_text = report_text(model)
+
+
 def _make(job: Job, data, chosen: list[Highlight], opts: dict, chat_delay: float) -> None:
     if not ffmpeg_exe():
         raise UserError("動画の書き出しに必要な ffmpeg がありません。「起動」から開き直すと自動でインストールされます。")
     copts = ClipOptions(
         vertical=bool(opts.get("vertical")), captions=opts.get("captions", True) is not False,
-        sfx=opts.get("sfx", True) is not False, chat=opts.get("chat", True) is not False,
+        sfx=bool(opts.get("sfx", False)), chat=opts.get("chat", True) is not False,
         custom_title=(opts.get("clipTitle") or "").strip()[:30],
     )
     made = make_clips(data, chosen, CLIPS, WORKDIR, copts, chat_delay=chat_delay,
-                      compile_all=bool(opts.get("compile", True)), se_dir=SE_DIR)
+                      compile_all=bool(opts.get("compile", True)), se_dir=SE_DIR, model=load_model(MODEL))
     save_clips(data.video_id, made)
     job.clips = made
     job.log(f"切り抜き動画を {len([m for m in made if not m.get('compiled')])} 本作りました")
@@ -296,6 +373,8 @@ def start_job(url: str, options: dict, kind: str = "analyze", report_file: str =
     if kind == "clip":
         if not REPORT_NAME.match(report_file or ""):
             raise UserError("レポートが指定されていません")
+        url = ""
+    elif kind in ("trends", "learn"):
         url = ""
     else:
         vid = video_id_from_url((url or "").strip())
@@ -380,7 +459,12 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/":
             self._send(200, INDEX_HTML.encode("utf-8"), "text/html; charset=utf-8")
         elif path == "/api/info":
-            self._json({**capabilities(), "current": _current.id if _current else None})
+            m = load_model(MODEL)
+            summary = None
+            if m:
+                summary = {"created": m.get("created"), "n_pos": m.get("n_pos"), "n_streams": m.get("n_streams"),
+                           "auc": m.get("clip", {}).get("cv_auc"), "production": m.get("production")}
+            self._json({**capabilities(), "current": _current.id if _current else None, "model": summary})
         elif path == "/api/history":
             self._json(load_history())
         elif path == "/api/clips":
@@ -412,12 +496,14 @@ class Handler(BaseHTTPRequestHandler):
             self._send(404, b"not found", "text/plain")
 
     def do_POST(self):
-        if self.path not in ("/api/analyze", "/api/clip"):
+        if self.path not in ("/api/analyze", "/api/clip", "/api/trends", "/api/learn"):
             return self._send(404, b"not found", "text/plain")
         try:
             n = int(self.headers.get("Content-Length") or 0)
             body = json.loads(self.rfile.read(min(n, 100_000)) or b"{}")
-            if self.path == "/api/clip":
+            if self.path in ("/api/trends", "/api/learn"):
+                job = start_job("", body.get("options") or {}, kind=self.path.rsplit("/", 1)[-1])
+            elif self.path == "/api/clip":
                 job = start_job("", body.get("options") or {}, kind="clip",
                                 report_file=str(body.get("report") or ""),
                                 indices=[int(i) for i in body.get("indices") or []])
@@ -543,7 +629,7 @@ h2 { font-size: 16px; margin: 0 0 8px; }
     <label class="check"><input type="checkbox" id="evaluate" checked>
       <span>実際の切り抜き動画と照合して、正確性を測る<br><span class="note">切り抜き動画を検索するので、1〜3 分ほど長くかかります</span></span></label>
     <label class="check"><input type="checkbox" id="makeClips">
-      <span>切り抜き動画も作る (字幕・効果音・テロップ付き)<br><span class="note" id="clipNote">スコア上位のシーンをダウンロードして動画にします。1 本あたり数分かかります</span></span></label>
+      <span>切り抜き動画も作る (字幕・コメント付き)<br><span class="note" id="clipNote">スコア上位のシーンをダウンロードして動画にします。1 本あたり数分かかります</span></span></label>
     <div id="clipOpts" class="opts" style="margin:6px 0 0 24px" hidden>
       <div><label for="clipCount">本数</label>
         <select id="clipCount"><option>1</option><option selected>3</option><option>5</option><option>10</option></select></div>
@@ -588,6 +674,21 @@ h2 { font-size: 16px; margin: 0 0 8px; }
     </ul>
   </div>
 
+  <details class="card" id="learnCard">
+    <summary style="font-size:15px;color:var(--ink)"><b>学習・分析</b> <span class="note" id="modelState"></span></summary>
+    <p class="note">人気の切り抜き動画を調べて、どんな切り抜きが伸びるかを分析・学習します。学習結果は自動切り抜きに使われます
+      (場面の選び方・前振りと余韻の長さ)。</p>
+    <label class="note" for="names">配信者名 (1 行に 1 人。多いほど正確ですが時間がかかります)</label>
+    <textarea id="names" rows="4" placeholder="兎田ぺこら&#10;宝鐘マリン&#10;葛葉"></textarea>
+    <div class="row" style="margin-top:10px">
+      <button class="go" type="button" id="trendsGo" style="font-size:14px;padding:8px 16px">傾向を分析 (速い)</button>
+      <button class="go" type="button" id="learnGo" style="font-size:14px;padding:8px 16px">配信から学習 (時間がかかる)</button>
+    </div>
+    <p class="note">「傾向を分析」: 切り抜きの長さ・タイトルと再生数の関係 (数分)。<br>
+      「配信から学習」: 切り抜かれた場面の元配信のチャットなどを調べ、切り抜かれやすい場面と伸びる作り方を学習 (1 人あたり数十分)。</p>
+    <pre id="learnResult" class="logs" hidden style="max-height:none"></pre>
+  </details>
+
   <div class="card" id="histCard" hidden>
     <h2>これまでの結果</h2>
     <ul class="hist" id="hist"></ul>
@@ -610,6 +711,13 @@ async function init() {
   }
   if (!info.ytdlp) showError("yt-dlp がインストールされていません。「起動」から開き直してください。");
   if (info.current) watch(info.current);
+  if (info.model) {
+    const p = info.model.production || {};
+    $("modelState").textContent = `学習済み (${info.model.created}・切り抜き ${info.model.n_pos} 本・配信 ${info.model.n_streams} 本`
+      + (p.lead != null ? `・前振り ${Math.round(p.lead)} 秒・余韻 ${Math.round(p.tail)} 秒` : "") + ")";
+  } else {
+    $("modelState").textContent = "(未学習)";
+  }
   loadHistory();
 }
 
@@ -669,6 +777,16 @@ function watch(id) {
     $("elapsed").textContent = `経過時間 ${m ? m + " 分 " : ""}${s} 秒`;
     $("logs").textContent = j.logs.join("\n");
     $("logs").scrollTop = $("logs").scrollHeight;
+    if (j.status === "done" && !j.report) {
+      clearInterval(timer);
+      $("progress").hidden = true;
+      $("go").disabled = false;
+      $("learnCard").open = true;
+      $("learnResult").hidden = false;
+      $("learnResult").textContent = j.resultText;
+      init();
+      return;
+    }
     if (j.status === "done") {
       clearInterval(timer);
       $("ptitle").textContent = "完了しました。結果を表示します...";
@@ -684,6 +802,16 @@ function watch(id) {
   timer = setInterval(tick, 1000);
 }
 
+async function startLearn(kind) {
+  $("error").hidden = true;
+  const r = await fetch("/api/" + kind, { method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ options: { names: $("names").value } }) });
+  const j = await r.json();
+  if (!r.ok) { showError(j.error); return; }
+  watch(j.id);
+}
+$("trendsGo").addEventListener("click", () => startLearn("trends"));
+$("learnGo").addEventListener("click", () => startLearn("learn"));
 $("evaluate").addEventListener("change", () => { $("clipBox").hidden = !$("evaluate").checked; });
 $("makeClips").addEventListener("change", () => { $("clipOpts").hidden = !$("makeClips").checked; });
 init();

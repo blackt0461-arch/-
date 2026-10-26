@@ -143,6 +143,53 @@ class WebAppTest(unittest.TestCase):
             urllib.request.urlopen(req)
         self.assertEqual(cm.exception.code, 400)
 
+    def test_learn_and_trends_jobs(self):
+        import highlights.trends as tr
+        from test_learn import synth_rows
+        saved = (w.LEARN_DATASET, w.TRENDS_DIR, w.MODEL, tr.collect, tr.collect_channels)
+        w.LEARN_DATASET = os.path.join(self.tmp.name, "learn", "dataset.jsonl")
+        w.TRENDS_DIR = os.path.join(self.tmp.name, "trends")
+        w.MODEL = os.path.join(self.tmp.name, "model.json")
+        try:
+            os.makedirs(os.path.dirname(w.LEARN_DATASET))
+            with open(w.LEARN_DATASET, "w", encoding="utf-8") as f:
+                for r in synth_rows():
+                    f.write(json.dumps(r, ensure_ascii=False) + "\n")
+
+            def post(path, options):
+                req = urllib.request.Request(self.base + path, method="POST",
+                                             data=json.dumps({"options": options}).encode())
+                try:
+                    with urllib.request.urlopen(req) as r:
+                        return json.load(r)
+                except urllib.error.HTTPError as e:
+                    return json.load(e)
+
+            j = self.wait(post("/api/learn", {"trainOnly": True})["id"])
+            self.assertEqual(j["status"], "done", j)
+            self.assertIn("前振り", j["resultText"])
+            info = json.loads(self.get("/api/info"))
+            self.assertEqual(info["model"]["n_pos"], 90)
+            # 学習結果があると、検出したシーンに「切り抜かれやすさ」が付く
+            code, a = self.post("https://www.youtube.com/watch?v=abcDEF12345", {"top": "4"})
+            a = self.wait(a["id"])
+            self.assertIn('"prob":', self.get(a["report"]))
+
+            tr.collect = lambda names, limit=100: [
+                {"id": f"v{i}", "title": "t", "views": 100 + i, "duration": 300, "channel": "c",
+                 "channel_id": "UCx", "query": "", "sort": "views", "streamer": names[0]} for i in range(5)]
+            tr.collect_channels = lambda ids, limit=100: [
+                {"id": f"v{i}", "channel_id": "UCx", "channel": "c", "subs": 1, "kind": "video",
+                 "views": 1000 + i * 10, "duration": 100 if i % 2 else 900, "title": "t", "age_days": 30 + i}
+                for i in range(40)]
+            j = self.wait(post("/api/trends", {"names": "テスト"})["id"])
+            self.assertEqual(j["status"], "done", j)
+            self.assertIn("倍率", j["resultText"])
+            self.assertIn("配信者名", post("/api/trends", {"names": ""}).get("error", "") or
+                          self.wait(post("/api/trends", {"names": ""})["id"])["error"])
+        finally:
+            (w.LEARN_DATASET, w.TRENDS_DIR, w.MODEL, tr.collect, tr.collect_channels) = saved
+
     def test_report_path_is_restricted(self):
         with self.assertRaises(urllib.error.HTTPError):
             self.get("/report/..%2Fhistory.json")
