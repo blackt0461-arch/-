@@ -164,7 +164,7 @@ class DetectTest(unittest.TestCase):
             stdout = sys.stdout
             try:
                 with open(out, "w", encoding="utf-8") as sys.stdout:
-                    main(["--info-json", info, "--chat-file", chat, "-f", "json", "-n", "4"])
+                    main(["--info-json", info, "--chat-file", chat, "-f", "json", "-n", "4", "--no-html"])
             finally:
                 sys.stdout = stdout
             with open(out, encoding="utf-8") as f:

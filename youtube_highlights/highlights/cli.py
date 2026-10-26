@@ -6,12 +6,17 @@ import argparse
 import json
 import os
 import sys
-import tempfile
+import webbrowser
+from pathlib import Path
 
 from .chat import load_live_chat
+from .clips import collect_clips, load_truth_file
 from .detect import DEFAULT_WEIGHTS, Config, analyze
-from .fetch import fetch, from_info
+from .evaluate import evaluate
+from .evaluate import to_text as eval_text
+from .fetch import fetch, fetch_audio, from_info
 from .report import to_csv_curve, to_json, to_text
+from .visualize import build_payload, write_html
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -26,11 +31,23 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--audio", action="store_true", help="音声もダウンロードして音量の急上昇を使う (ffmpeg, numpy 必須)")
     p.add_argument("--no-chat", action="store_true", help="ライブチャットを使わない")
     p.add_argument("--max-comments", type=int, default=500, help="取得するコメント数 (0 で無効, 既定 500)")
-    p.add_argument("--workdir", help="取得データの保存先 (既定: 一時ディレクトリ)")
+    p.add_argument("--workdir", default="data", help="取得データの保存先 (既定: data)。2 回目以降は再利用")
     p.add_argument("--info-json", help="オフライン解析: yt-dlp の info.json")
     p.add_argument("--chat-file", help="オフライン解析: yt-dlp の live_chat.json")
     p.add_argument("--duration", type=float, help="動画の長さ(秒)。info.json が無い場合に指定")
     p.add_argument("--curve", help="スコア曲線を CSV で書き出すパス")
+    p.add_argument("--html", help="グラフ付きレポートの保存先 (既定: report_<動画ID>.html)")
+    p.add_argument("--no-html", action="store_true", help="グラフ付きレポートを作らない")
+    p.add_argument("--no-open", action="store_true", help="レポートをブラウザで自動的に開かない")
+
+    e = p.add_argument_group("正確性の評価 (実際の切り抜きとの照合)")
+    e.add_argument("-e", "--evaluate", action="store_true", help="切り抜き動画を検索して正確性を測る")
+    e.add_argument("--max-clips", type=int, default=20, help="検索 1 回あたりの切り抜き候補数 (既定 20)")
+    e.add_argument("--match-audio", action="store_true",
+                   help="概要欄に時刻が無い切り抜きも音声照合で位置を特定 (ffmpeg, numpy 必須・時間がかかる)")
+    e.add_argument("--clip", action="append", default=[], metavar="URL", help="切り抜き動画の URL を直接追加")
+    e.add_argument("--truth", help="正解ファイル (1 行 1 シーン: 開始[,終了][,メモ])")
+    e.add_argument("--tolerance", type=float, default=30.0, help="当たり判定の許容秒数 (既定 30)")
 
     g = p.add_argument_group("アルゴリズムの調整")
     g.add_argument("--bin", type=float, default=5.0, help="時間分解能 秒 (既定 5)")
@@ -82,10 +99,9 @@ def main(argv: list[str] | None = None) -> int:
         if not data.duration and data.messages:
             data.duration = data.messages[-1].time + 1
     else:
-        workdir = args.workdir or tempfile.mkdtemp(prefix="yt_highlights_")
         data = fetch(
             args.url,
-            workdir,
+            args.workdir,
             use_chat=not args.no_chat,
             max_comments=args.max_comments,
             use_audio=args.audio,
@@ -124,7 +140,49 @@ def main(argv: list[str] | None = None) -> int:
         print(to_json(result, data.title, data.url, data.video_id))
     else:
         print(to_text(result, data.title, data.url, data.video_id, verbose=args.verbose))
+
+    evaluation = None
+    if args.evaluate or args.truth or args.clip:
+        evaluation = run_evaluation(args, data, result)
+
+    if not args.no_html:
+        path = args.html or f"report_{data.video_id or 'result'}.html"
+        payload = build_payload(result, data.title, data.url, data.video_id, data.duration,
+                                cfg.threshold, evaluation)
+        write_html(path, payload)
+        print(f"\nグラフ付きレポート: {os.path.abspath(path)}", file=sys.stderr)
+        if not args.no_open:
+            try:
+                webbrowser.open(Path(path).resolve().as_uri())
+            except Exception:
+                pass
     return 0
+
+
+def run_evaluation(args: argparse.Namespace, data, result):
+    clips = []
+    searched = None
+    if args.truth:
+        clips += load_truth_file(args.truth, data.duration)
+    if (args.evaluate or args.clip) and data.video_id:
+        stream_pcm = None
+        if args.match_audio:
+            stream_pcm = data.audio_pcm or fetch_audio(data.url, args.workdir, data.video_id)
+        found = collect_clips(
+            data.video_id, data.title, data.channel, data.duration, data.upload_date,
+            args.workdir, max_clips=args.max_clips, extra_urls=args.clip,
+            match_audio=args.match_audio, stream_pcm=stream_pcm,
+        )
+        clips += found.clips
+        searched = found.searched
+        if found.unlocated and not args.match_audio:
+            print(f"(元配信に言及しているが位置が書かれていない切り抜きが {len(found.unlocated)} 本ありました。"
+                  "--match-audio を付けると音声照合で位置を特定できます)", file=sys.stderr)
+    elif args.evaluate:
+        print("動画 ID が分からないため切り抜き検索をスキップしました", file=sys.stderr)
+    ev = evaluate(result.highlights, clips, data.duration, tolerance=args.tolerance)
+    print(eval_text(ev, searched), file=sys.stderr if args.format == "json" else sys.stdout)
+    return ev
 
 
 if __name__ == "__main__":
