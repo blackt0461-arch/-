@@ -17,6 +17,7 @@ import os
 import re
 from collections import Counter
 from dataclasses import dataclass, field
+from urllib.parse import quote
 
 from .log import log as _log
 from .signals import extract_timestamps
@@ -235,9 +236,14 @@ def collect_clips(
     with yt_dlp.YoutubeDL(flat_opts) as ydl:
         for q, order in search_queries(stream_id, title, channel) if max_clips > 0 else []:
             n = max_clips * (2 if order == "date" else 1)
-            prefix = "ytsearchdate" if order == "date" else "ytsearch"
             try:
-                res = ydl.extract_info(f"{prefix}{n}:{q}", download=False)
+                if order == "date":
+                    # yt-dlp の ytsearchdate は廃止されたため、検索結果ページを「アップロード日順」(sp=CAI=) で読む
+                    url = f"https://www.youtube.com/results?search_query={quote(q)}&sp=CAI%253D"
+                    with yt_dlp.YoutubeDL({**flat_opts, "playlistend": n}) as ydl_date:
+                        res = ydl_date.extract_info(url, download=False)
+                else:
+                    res = ydl.extract_info(f"ytsearch{n}:{q}", download=False)
             except Exception as e:  # 検索失敗は致命的ではない
                 _log(f"  検索「{q}」に失敗しました: {e}")
                 result.queries.append((q, -1))
@@ -256,7 +262,8 @@ def collect_clips(
         entries[vid or u] = {"id": vid or u, "url": url, "manual": True, "_query": "手動で追加"}
 
     index = None
-    full_opts = {"quiet": True, "no_warnings": True, "skip_download": True}
+    # 候補を続けて取得するので、YouTube に負担をかけないよう 1 リクエストごとに少し待つ
+    full_opts = {"quiet": True, "no_warnings": True, "skip_download": True, "sleep_interval_requests": 0.5}
     audio_budget = max_clips
     errors = 0
     with yt_dlp.YoutubeDL(full_opts) as ydl:

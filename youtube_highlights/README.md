@@ -31,7 +31,7 @@ $ python find_highlights.py "https://www.youtube.com/watch?v=XXXXXXXXXXX"
 ### セットアップ
 
 ```bash
-pip install -r requirements.txt       # yt-dlp
+pip install -r requirements.txt       # yt-dlp (YouTube の取得に必要な JavaScript 実行環境 deno も入る)
 # 音声解析 (--audio) と音声照合 (--match-audio) を使う場合のみ (ffmpeg も pip で入ります)
 pip install -r requirements-audio.txt
 ```
@@ -87,6 +87,7 @@ python find_highlights.py ... --curve curve.csv   # スコア曲線を CSV に�
 ### 切り抜き動画の集め方
 
 1. YouTube を検索: 「動画 ID」「配信タイトル + 切り抜き」(関連順)、「チャンネル名 + 切り抜き」(**新しい順** と関連順)。
+   新しい順は検索結果ページを「アップロード日順」で読みます (yt-dlp の `ytsearchdate` は廃止されたため)。
    チャンネル名は「Ch.」「/ 所属」などの飾りを除いて使います。新しい順の検索で、配信後に投稿された切り抜きを拾います。
 2. 元配信より前の動画・長さが切り抜きらしくない動画・チャンネルなど動画以外の結果は除外。
 3. 元配信のどこを切り抜いたかを特定(上から順に試す):

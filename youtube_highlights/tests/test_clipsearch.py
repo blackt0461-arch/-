@@ -71,7 +71,7 @@ class FakeYDL:
         return False
 
     def extract_info(self, url, download=False):
-        if url.startswith("ytsearch"):
+        if url.startswith("ytsearch") or "/results?search_query=" in url:
             ids = [v for v in VIDEOS if v != SID] + [SID, "UCchannelxxxxxxxxx"]
             return {"entries": [{"id": v, "url": f"https://www.youtube.com/watch?v={v}", "title": v,
                                  "duration": (VIDEOS.get(v) or {}).get("duration")} for v in ids]}
