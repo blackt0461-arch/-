@@ -127,16 +127,45 @@ def from_info(info: dict, url: str | None = None) -> VideoData:
     )
 
 
+BIN_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "bin")
+
+
 def ffmpeg_exe() -> str | None:
-    """ffmpeg の実行ファイル。PATH に無ければ pip で入る imageio-ffmpeg 同梱のものを使う。"""
+    """ffmpeg の実行ファイル。PATH に無ければ pip で入る imageio-ffmpeg 同梱のものを使う。
+
+    yt-dlp は部分ダウンロードの前に「PATH 上の ffmpeg」だけを確認する (ffmpeg_location の指定を
+    見ない) ため、imageio-ffmpeg 版 (ffmpeg-win-x86_64-v7.1.exe のような名前) は見つけられない。
+    そこでアプリの bin/ に ffmpeg という名前でリンク (できなければコピー) を作り、PATH の先頭に足す。
+    """
     exe = shutil.which("ffmpeg")
     if exe:
         return exe
     try:
         import imageio_ffmpeg
-        return imageio_ffmpeg.get_ffmpeg_exe()
+        src = imageio_ffmpeg.get_ffmpeg_exe()
     except Exception:
         return None
+    try:
+        return _expose_on_path(src)
+    except OSError:
+        return src
+
+
+def _expose_on_path(src: str) -> str:
+    name = "ffmpeg.exe" if os.name == "nt" else "ffmpeg"
+    dst = os.path.join(BIN_DIR, name)
+    if not os.path.exists(dst) or os.path.getsize(dst) != os.path.getsize(src):
+        os.makedirs(BIN_DIR, exist_ok=True)
+        tmp = dst + ".tmp"
+        try:
+            os.link(src, tmp)
+        except OSError:
+            shutil.copyfile(src, tmp)
+        shutil.copymode(src, tmp)
+        os.replace(tmp, dst)
+    if BIN_DIR not in os.environ.get("PATH", "").split(os.pathsep):
+        os.environ["PATH"] = BIN_DIR + os.pathsep + os.environ.get("PATH", "")
+    return dst
 
 
 def fetch_audio(

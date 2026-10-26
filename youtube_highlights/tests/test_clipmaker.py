@@ -153,3 +153,26 @@ class RenderTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FfmpegPathTest(unittest.TestCase):
+    """yt-dlp は PATH 上の「ffmpeg」しか確認しないので、imageio-ffmpeg 版を PATH に出す必要がある。"""
+
+    def test_expose_on_path(self):
+        import highlights.fetch as fm
+        saved_bin, saved_path = fm.BIN_DIR, os.environ.get("PATH", "")
+        with tempfile.TemporaryDirectory() as d:
+            src = os.path.join(d, "ffmpeg-win-x86_64-v7.1.exe")
+            with open(src, "wb") as f:
+                f.write(b"x" * 100)
+            fm.BIN_DIR = os.path.join(d, "bin")
+            try:
+                out = fm._expose_on_path(src)
+                self.assertEqual(os.path.basename(out), "ffmpeg.exe" if os.name == "nt" else "ffmpeg")
+                self.assertEqual(os.path.getsize(out), 100)
+                self.assertTrue(os.environ["PATH"].startswith(fm.BIN_DIR + os.pathsep))
+                fm._expose_on_path(src)  # 2 回目は PATH に重複して足さない
+                self.assertEqual(os.environ["PATH"].count(fm.BIN_DIR), 1)
+            finally:
+                fm.BIN_DIR = saved_bin
+                os.environ["PATH"] = saved_path

@@ -3,4 +3,5 @@ __pycache__/
 data/
 reports/
 clips/
+bin/
 report_*.html

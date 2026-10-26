@@ -151,7 +151,10 @@ def save_clips(video_id: str, made: list[dict]) -> None:
 
 
 def _friendly(e: BaseException) -> str:
-    msg = str(e).replace("ERROR: ", "").strip()
+    msg = re.sub(r"\x1b\[[0-9;]*m", "", str(e)).replace("ERROR: ", "").strip()  # yt-dlp の色付け文字を除く
+    if "ffmpeg is not installed" in msg or "ffmpeg not found" in msg:
+        return ("動画の切り出しに必要な ffmpeg が見つかりませんでした。アプリを閉じて「起動」から開き直してください "
+                "(自動でインストールされます)。直らない場合は、このフォルダの bin を削除してから開き直してください。")
     if "Private video" in msg or "members-only" in msg or "Join this channel" in msg:
         return "この動画は非公開またはメンバー限定のため取得できません。"
     if "Video unavailable" in msg or "not available" in msg:
