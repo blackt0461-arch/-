@@ -628,8 +628,15 @@ def make_clips(
         lines = yt_lines
         if use_whisper:
             log(f"[{k}/{total}] 文字起こし中 (Whisper)...")
-            words = asr.transcribe(wav, model=opts.whisper_model)
-            lines = words_to_lines([(s0 + sec0, e0 + sec0, t) for s0, e0, t in words])
+            try:
+                words = asr.transcribe(wav, model=opts.whisper_model)
+                lines = words_to_lines([(s0 + sec0, e0 + sec0, t) for s0, e0, t in words])
+            except Exception as e:  # 音声認識の失敗で動画づくり全体を止めない
+                log(f"※ 音声認識に失敗しました ({str(e)[:200]})。YouTube の自動字幕で代用します")
+                use_whisper = False
+                if data.video_id and not yt_lines:
+                    yt_lines = caption_lines(load_transcript(data.url, data.video_id, workdir) or [])
+                lines = yt_lines
         plan = plan_clip(k, h, data.messages, lines, data.duration, opts, chat_delay, events=events,
                          source_title=data.title, source_url=data.url)
         name = clip_filename(data.video_id, plan.start, opts.vertical)

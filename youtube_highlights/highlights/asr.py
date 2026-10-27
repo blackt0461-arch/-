@@ -41,12 +41,27 @@ def _model(name: str, device: str):
     return WhisperModel(name, device=device, compute_type="int8" if device == "cpu" else "float16")
 
 
+def load_wav(path: str, sr: int = 16000):
+    """16bit PCM の WAV を Whisper 用の配列 (float32, -1〜1) にする。"""
+    import wave
+
+    import numpy as np
+    with wave.open(path, "rb") as w:
+        if w.getframerate() != sr or w.getnchannels() != 1 or w.getsampwidth() != 2:
+            raise ValueError(f"16kHz・モノラル・16bit の WAV が必要です: {path}")
+        raw = w.readframes(w.getnframes())
+    return np.frombuffer(raw, dtype="<i2").astype(np.float32) / 32768.0
+
+
 def transcribe(wav_path: str, model: str = "large-v3-turbo", language: str = "ja",
                device: str = "cpu", prompt: str | None = None) -> list[tuple[float, float, str]]:
     """単語 (日本語では数文字のかたまり) ごとの (開始, 終了, 文字) のリスト。時刻は音声ファイルの先頭から。"""
     m = _model(model, device)
+    # ファイルのパスを渡すと faster-whisper は PyAV で読み込むが、faster-whisper 1.2 は PyAV 15 以降で
+    # 廃止された引数 (metadata_errors) を使っていて失敗する (Python 3.15 では古い PyAV が入らない)。
+    # 16kHz・モノラルの WAV を自分で読んで配列で渡し、PyAV を通らないようにする。
     segments, _info = m.transcribe(
-        wav_path, language=language, word_timestamps=True, vad_filter=False, beam_size=5,
+        load_wav(wav_path), language=language, word_timestamps=True, vad_filter=False, beam_size=5,
         condition_on_previous_text=False, initial_prompt=prompt,
     )
     words: list[tuple[float, float, str]] = []

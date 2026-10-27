@@ -238,3 +238,82 @@ class FfmpegPathTest(unittest.TestCase):
             finally:
                 fm.BIN_DIR = saved_bin
                 os.environ["PATH"] = saved_path
+
+
+class AsrTest(unittest.TestCase):
+    def test_load_wav_and_reject_other_formats(self):
+        from highlights.asr import load_wav
+        with tempfile.TemporaryDirectory() as d:
+            p = os.path.join(d, "a.wav")
+            with wave.open(p, "wb") as w:
+                w.setnchannels(1)
+                w.setsampwidth(2)
+                w.setframerate(16000)
+                w.writeframes(struct.pack("<3h", 0, 16384, -32768))
+            a = load_wav(p)
+            self.assertEqual(str(a.dtype), "float32")
+            self.assertEqual([round(float(x), 2) for x in a], [0.0, 0.5, -1.0])
+            with wave.open(p, "wb") as w:
+                w.setnchannels(2)
+                w.setsampwidth(2)
+                w.setframerate(44100)
+                w.writeframes(b"\0" * 8)
+            with self.assertRaises(ValueError):
+                load_wav(p)
+
+    def test_transcribe_passes_array_not_path(self):
+        """faster-whisper にファイルのパスを渡すと PyAV の非互換で落ちるので、必ず配列で渡す。"""
+        import highlights.asr as asr
+        seen = {}
+
+        class Fake:
+            def transcribe(self, audio, **kw):
+                seen["audio"] = audio
+                return iter([]), None
+        saved = asr._model
+        asr._model = lambda name, device: Fake()
+        try:
+            with tempfile.TemporaryDirectory() as d:
+                p = os.path.join(d, "a.wav")
+                with wave.open(p, "wb") as w:
+                    w.setnchannels(1)
+                    w.setsampwidth(2)
+                    w.setframerate(16000)
+                    w.writeframes(b"\0\0" * 1600)
+                asr.transcribe(p)
+        finally:
+            asr._model = saved
+        self.assertFalse(isinstance(seen["audio"], str))
+        self.assertEqual(len(seen["audio"]), 1600)
+
+    def test_asr_failure_falls_back(self):
+        """音声認識が失敗しても、動画づくりは止めずに YouTube の自動字幕で続ける。"""
+        import subprocess
+
+        import highlights.asr as asr
+        import highlights.clipmaker as cm
+        from highlights.fetch import VideoData, ffmpeg_exe
+        ff = ffmpeg_exe()
+        if not ff:
+            self.skipTest("ffmpeg が無い")
+        saved = (asr.available, asr.transcribe, cm.load_transcript)
+        asr.available = lambda: True
+
+        def broken(*a, **k):
+            raise TypeError("open() got an unexpected keyword argument 'metadata_errors'")
+        asr.transcribe = broken
+        cm.load_transcript = lambda url, vid, workdir: [(100.5 + i * 0.5, "こんにちは") for i in range(10)]
+        try:
+            with tempfile.TemporaryDirectory() as d:
+                src = os.path.join(d, "src.mp4")
+                subprocess.run([ff, "-loglevel", "error", "-f", "lavfi", "-i", "testsrc=size=320x180:rate=30",
+                                "-f", "lavfi", "-i", "sine=frequency=300", "-t", "40", "-c:v", "libx264",
+                                "-preset", "ultrafast", "-c:a", "aac", src], check=True)
+                data = VideoData(url="", video_id="vidTEST0001", title="配信", duration=40, messages=[])
+                h = Highlight(time=10, peak=20, start=15, end=25, score=5, label="", reasons=[], samples=[], peaks=[20])
+                made = cm.make_clips(data, [h], os.path.join(d, "out"), os.path.join(d, "work"),
+                                     ClipOptions(min_len=8, lead=6, tail=4), source_file=src, compile_all=False)
+                self.assertEqual(len(made), 1)
+                self.assertTrue(os.path.exists(os.path.join(d, "out", made[0]["file"])))
+        finally:
+            asr.available, asr.transcribe, cm.load_transcript = saved
