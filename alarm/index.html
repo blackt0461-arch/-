@@ -207,11 +207,11 @@
 </dialog>
 
 <script type="module">
-import { DAYS, DAY_JA, emptyData, defaultProfile, regenerate, resolveDay, expandTimes, todayJST, addDays, weekdayKey } from './schedule.js?v=2026-10-30.1529';
-import { DEFAULT_MODEL, askGemini, applyChanges, lookupTransit, searchTransit, stationName, arriveByOf } from './assistant.js?v=2026-10-30.1529';
+import { DAYS, DAY_JA, emptyData, defaultProfile, regenerate, resolveDay, expandTimes, todayJST, addDays, weekdayKey } from './schedule.js?v=2026-10-30.1535';
+import { DEFAULT_MODEL, askGemini, applyChanges, searchTransit, stationName } from './assistant.js?v=2026-10-30.1535';
 
 // Set by tools/bump.mjs together with version.json and the ?v= on the imports above.
-const APP_VERSION = '2026-10-30.1529';
+const APP_VERSION = '2026-10-30.1535';
 
 const $ = id => document.getElementById(id);
 const ORDER = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
@@ -482,18 +482,10 @@ async function withTransitTimes(changes, apiKey, progress) {
     if (c.op !== 'meeting' || c.travelSource === 'user' || !c.date || !c.meetTime || !c.place) continue;
     if (data.places?.[c.place]?.verified) continue;
     const to = stationName(c.mapsQuery || c.place);
-    const { date, time } = arriveByOf(data, c);
-    progress(`Yahoo!乗換案内で ${from} → ${to}（${time}着）を調べています…`);
     const model = store.get('alarm.geminiModel') || DEFAULT_MODEL;
-    try {
-      const r = await lookupTransit({ apiKey, model, from, to, date, time });
-      c.travelMinutes = r.minutes;
-      c.travelSource = 'yahoo';
-      c.transit = { depart: r.depart, summary: r.summary, url: r.url };
-      continue;
-    } catch (e) {
-      progress(`乗換案内のページを読めなかったので、検索で ${from} → ${to} の所要時間を調べています…`);
-    }
+    // Reading the Yahoo!乗換案内 page (lookupTransit) was tried and Gemini can't fetch it, so go
+    // straight to a web search; each Gemini call counts against the free quota.
+    progress(`検索で ${from} → ${to} の所要時間を調べています…`);
     try {
       const r = await searchTransit({ apiKey, model, from, to });
       c.travelMinutes = r.minutes;
