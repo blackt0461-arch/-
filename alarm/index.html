@@ -176,6 +176,12 @@
       </div>
     </details>
   </div>
+  <div class="card" style="margin-top:10px">
+    <div class="settings" style="padding-top:14px">
+      <p class="sub" style="margin:0">Safariとホーム画面のアプリは設定が別々に保存されます。片方で「コピー」、もう片方で「貼り付け」を押すと、GitHubとAIの設定をまとめて移せます。</p>
+      <div class="actions"><button id="cfgExport">設定をコピー</button><button id="cfgImport">設定を貼り付け</button></div>
+    </div>
+  </div>
 </main>
 
 <div class="updatebar" id="updateBar" hidden><p id="updateText"></p><button id="updateBtn">更新する</button></div>
@@ -201,11 +207,11 @@
 </dialog>
 
 <script type="module">
-import { DAYS, DAY_JA, emptyData, defaultProfile, regenerate, resolveDay, expandTimes, todayJST, addDays, weekdayKey } from './schedule.js?v=2026-10-30.1526';
-import { DEFAULT_MODEL, askGemini, applyChanges, lookupTransit, searchTransit, stationName, arriveByOf } from './assistant.js?v=2026-10-30.1526';
+import { DAYS, DAY_JA, emptyData, defaultProfile, regenerate, resolveDay, expandTimes, todayJST, addDays, weekdayKey } from './schedule.js?v=2026-10-30.1529';
+import { DEFAULT_MODEL, askGemini, applyChanges, lookupTransit, searchTransit, stationName, arriveByOf } from './assistant.js?v=2026-10-30.1529';
 
 // Set by tools/bump.mjs together with version.json and the ?v= on the imports above.
-const APP_VERSION = '2026-10-30.1526';
+const APP_VERSION = '2026-10-30.1529';
 
 const $ = id => document.getElementById(id);
 const ORDER = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
@@ -608,6 +614,37 @@ for (const id of ['pfStation', 'pfPrep', 'pfWalk', 'pfBuffer']) $(id).addEventLi
 $('cfgGemKey').value = store.get('alarm.geminiKey');
 $('cfgGemModel').value = store.get('alarm.geminiModel');
 $('cfgGemModel').placeholder = DEFAULT_MODEL;
+// Settings transfer between Safari and the home-screen app (their storage is separate on iOS).
+const CFG_KEYS = ['alarm.repo', 'alarm.path', 'alarm.token', 'alarm.geminiKey', 'alarm.geminiModel'];
+const CFG_PREFIX = 'ALARMCFG:';
+$('cfgExport').onclick = async () => {
+  const text = CFG_PREFIX + b64encode(JSON.stringify(Object.fromEntries(CFG_KEYS.map(k => [k, store.get(k)]))));
+  try {
+    await navigator.clipboard.writeText(text);
+    alert('設定をコピーしました。もう片方で「設定を貼り付け」を押してください。\n（キーが含まれるので、ほかの場所には貼らないでください）');
+  } catch {
+    prompt('この文字列をコピーしてください（キーが含まれます）', text);
+  }
+};
+$('cfgImport').onclick = async () => {
+  let text = '';
+  try { text = await navigator.clipboard.readText(); } catch {}
+  if (!text.startsWith(CFG_PREFIX)) text = prompt('コピーした設定を貼り付けてください') || '';
+  if (!text.startsWith(CFG_PREFIX)) { if (text) alert('設定の文字列ではありません'); return; }
+  try {
+    const cfg = JSON.parse(b64decode(text.slice(CFG_PREFIX.length)));
+    for (const k of CFG_KEYS) if (typeof cfg[k] === 'string') store.set(k, cfg[k]);
+  } catch { alert('設定を読み取れませんでした'); return; }
+  try { await navigator.clipboard.writeText(''); } catch {}
+  $('cfgRepo').value = store.get('alarm.repo');
+  $('cfgPath').value = store.get('alarm.path');
+  $('cfgToken').value = store.get('alarm.token');
+  $('cfgGemKey').value = store.get('alarm.geminiKey');
+  $('cfgGemModel').value = store.get('alarm.geminiModel');
+  addMsg('ai', '設定を読み込みました。');
+  load();
+};
+
 $('aiSave').onclick = () => {
   store.set('alarm.geminiKey', $('cfgGemKey').value.trim());
   store.set('alarm.geminiModel', $('cfgGemModel').value.trim());

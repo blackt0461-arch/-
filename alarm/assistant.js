@@ -1,7 +1,7 @@
 // Chat assistant: turns Japanese requests ("明日は5時に起こして") into edits of alarms.json via Gemini.
 // The model only proposes `changes`; the page shows them and saves only after the user confirms.
 
-import { DAYS, DAY_JA, validate, resolveDay, expandTimes, todayJST, addDays, weekdayKey, defaultProfile } from './schedule.js?v=2026-10-30.1526';
+import { DAYS, DAY_JA, validate, resolveDay, expandTimes, todayJST, addDays, weekdayKey, defaultProfile } from './schedule.js?v=2026-10-30.1529';
 
 export const DEFAULT_MODEL = 'gemini-3.6-flash';
 const ORDER = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
