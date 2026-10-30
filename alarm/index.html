@@ -1,0 +1,664 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="目覚まし">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#e8743b">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<title>目覚まし管理</title>
+<style>
+  :root {
+    --bg: #f4f4f6; --card: #ffffff; --text: #1c1c1e; --muted: #6e6e73; --line: #e2e2e6;
+    --accent: #e8743b; --accent-text: #ffffff; --danger: #d93a32; --ok: #2f8a4c; --chip: #f1e4dc;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #111113; --card: #1c1c1f; --text: #f2f2f4; --muted: #9a9aa1; --line: #2c2c31;
+      --accent: #f08a52; --accent-text: #1a0d05; --danger: #ff6b62; --ok: #5fc27c; --chip: #3a2a20;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #111113; --card: #1c1c1f; --text: #f2f2f4; --muted: #9a9aa1; --line: #2c2c31;
+    --accent: #f08a52; --accent-text: #1a0d05; --danger: #ff6b62; --ok: #5fc27c; --chip: #3a2a20;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 16px/1.5 -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", sans-serif;
+    padding: env(safe-area-inset-top) 16px calc(96px + env(safe-area-inset-bottom));
+  }
+  main { max-width: 560px; margin: 0 auto; }
+  header { display: flex; align-items: baseline; justify-content: space-between; padding: 20px 0 8px; }
+  h1 { font-size: 26px; margin: 0; }
+  h2 { font-size: 14px; color: var(--muted); font-weight: 600; margin: 24px 4px 8px; }
+  .status { font-size: 13px; color: var(--muted); }
+  .status.err { color: var(--danger); }
+  .card { background: var(--card); border-radius: 14px; overflow: hidden; }
+  .row { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-top: 1px solid var(--line); min-height: 52px; }
+  .row:first-child { border-top: 0; }
+  .day { width: 2.2em; font-weight: 700; flex: none; }
+  .date { width: 4.6em; color: var(--muted); font-variant-numeric: tabular-nums; flex: none; }
+  .times { flex: 1; font-variant-numeric: tabular-nums; min-width: 0; }
+  .times.off { color: var(--muted); }
+  .chip { font-size: 12px; background: var(--chip); color: var(--accent); border-radius: 6px; padding: 1px 6px; margin-left: 6px; white-space: nowrap; }
+  button { font: inherit; border: 0; border-radius: 10px; padding: 8px 12px; background: var(--line); color: var(--text); cursor: pointer; }
+  button.primary { background: var(--accent); color: var(--accent-text); font-weight: 700; }
+  button.danger { color: var(--danger); background: transparent; padding: 8px; }
+  button.link { background: transparent; color: var(--accent); padding: 8px 4px; }
+  button:disabled { opacity: .45; }
+  input, select { font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; }
+  input[type="time"] { min-width: 0; width: 7em; }
+  #weekly .row { gap: 6px; padding: 10px 12px; }
+  #weekly select { padding: 6px 2px; }
+  #weekly .day { width: 1.4em; }
+  label.switch { display: inline-flex; align-items: center; gap: 6px; }
+  .sub { font-size: 13px; color: var(--muted); }
+  .grow { flex: 1; }
+  .updatebar {
+    position: fixed; left: 0; right: 0; top: 0; z-index: 10; padding: calc(10px + env(safe-area-inset-top)) 16px 10px;
+    background: var(--accent); color: var(--accent-text); display: flex; gap: 10px; align-items: center;
+  }
+  .updatebar[hidden] { display: none; }
+  .updatebar p { margin: 0; flex: 1; font-size: 14px; }
+  .updatebar button { background: var(--accent-text); color: var(--accent); font-weight: 700; flex: none; }
+  .savebar {
+    position: fixed; left: 0; right: 0; bottom: 0; padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+    background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(12px);
+    display: flex; justify-content: center; border-top: 1px solid var(--line);
+  }
+  .savebar button { width: 100%; max-width: 560px; padding: 14px; font-size: 17px; }
+  details summary { cursor: pointer; padding: 12px 14px; }
+  .settings { padding: 0 14px 14px; display: grid; gap: 10px; }
+  .settings input { width: 100%; }
+  dialog { border: 0; border-radius: 16px; background: var(--card); color: var(--text); width: min(92vw, 400px); padding: 20px; }
+  dialog::backdrop { background: rgba(0,0,0,.4); }
+  dialog h3 { margin: 0 0 12px; }
+  .stack { display: grid; gap: 12px; }
+  .actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+  .empty { padding: 14px; color: var(--muted); }
+  .chatlog { display: grid; gap: 8px; padding: 12px; max-height: 46vh; overflow-y: auto; }
+  .chatlog:empty { display: none; }
+  .msg { max-width: 85%; padding: 8px 12px; border-radius: 14px; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .msg.user { justify-self: end; background: var(--accent); color: var(--accent-text); border-bottom-right-radius: 4px; }
+  .msg.ai { justify-self: start; background: var(--bg); border-bottom-left-radius: 4px; }
+  .msg.err { color: var(--danger); }
+  .msg.pending { color: var(--muted); }
+  .proposal { margin-top: 8px; padding: 8px 10px; border-radius: 10px; background: var(--card); border: 1px solid var(--line); }
+  .proposal ul { margin: 0 0 8px; padding-left: 1.2em; }
+  .proposal .actions { justify-content: flex-start; }
+  .proposal .warn { color: var(--danger); font-size: 14px; margin: 0 0 8px; }
+  .proposal a { display: inline-block; color: var(--accent); margin: 0 0 8px; font-size: 14px; }
+  .note { font-size: 12px; color: var(--muted); margin-left: 6px; }
+  .chatbar { display: flex; gap: 8px; align-items: flex-end; padding: 10px 12px; border-top: 1px solid var(--line); }
+  .chatlog:empty + .chatbar { border-top: 0; }
+  .chatbar textarea {
+    flex: 1; min-width: 0; resize: none; font: inherit; color: var(--text); background: var(--bg);
+    border: 1px solid var(--line); border-radius: 18px; padding: 8px 12px; max-height: 8em;
+  }
+  .iconbtn { width: 40px; height: 40px; padding: 0; border-radius: 50%; display: grid; place-items: center; flex: none; }
+  .iconbtn svg { width: 20px; height: 20px; }
+  #micBtn.listening { background: var(--danger); color: #fff; animation: pulse 1.2s infinite; }
+  @keyframes pulse { 50% { opacity: .6; } }
+  @media (prefers-reduced-motion: reduce) { #micBtn.listening { animation: none; } }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>目覚まし</h1>
+    <span id="status" class="status">読み込み中…</span>
+  </header>
+
+  <h2>話しかける</h2>
+  <div class="card">
+    <div class="chatlog" id="chatLog" aria-live="polite"></div>
+    <form class="chatbar" id="chatForm">
+      <button type="button" class="iconbtn" id="micBtn" aria-label="音声入力">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+      </button>
+      <textarea id="chatInput" rows="1" placeholder="例：明日は5時に起こして" enterkeyhint="send"></textarea>
+      <button type="submit" class="iconbtn primary" id="sendBtn" aria-label="送信">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+      </button>
+    </form>
+  </div>
+
+  <h2>これから14日</h2>
+  <div class="card" id="upcoming"></div>
+
+  <h2>曜日ごとの基本パターン</h2>
+  <div class="card" id="weekly"></div>
+  <p class="sub" style="margin:6px 4px">「+5分×2」は、最初の時刻のあと5分おきに2回追加で鳴らす設定です。</p>
+
+  <h2>例外の日</h2>
+  <div class="card" id="overrides"></div>
+
+  <h2>起床時刻の計算（集合時刻から逆算）</h2>
+  <div class="card">
+    <div class="settings" style="padding-top:14px">
+      <label>家の最寄り駅<input id="pfStation" placeholder="例：〇〇駅" autocomplete="off"></label>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
+        <label>支度（分）<input id="pfPrep" type="number" min="0" max="300" inputmode="numeric"></label>
+        <label>駅まで（分）<input id="pfWalk" type="number" min="0" max="300" inputmode="numeric"></label>
+        <label>余裕（分）<input id="pfBuffer" type="number" min="0" max="300" inputmode="numeric"></label>
+      </div>
+      <p class="sub">起床 ＝ 集合時刻 − 余裕 − 移動 − 駅まで − 支度。チャットで「10時に渋谷集合」と言うと計算します。</p>
+    </div>
+    <div id="places"></div>
+  </div>
+
+  <h2>設定</h2>
+  <div class="card">
+    <details id="settingsBox">
+      <summary>GitHub接続</summary>
+      <div class="settings">
+        <label>データのリポジトリ（owner/repo）<input id="cfgRepo" placeholder="blackt0461-arch/alarm-data" autocomplete="off"></label>
+        <label>ファイル<input id="cfgPath" placeholder="alarms.json" autocomplete="off"></label>
+        <label>トークン（このリポジトリの Contents 読み書き権限のみ）<input id="cfgToken" type="password" autocomplete="off"></label>
+        <p class="sub">トークンはこの端末のブラウザにだけ保存されます。</p>
+        <div class="actions"><button class="primary" id="cfgSave">保存して再読み込み</button></div>
+      </div>
+    </details>
+  </div>
+  <div class="card" style="margin-top:10px">
+    <details id="aiBox">
+      <summary>AIアシスタント（Gemini）</summary>
+      <div class="settings">
+        <label>Gemini APIキー（Google AI Studio で発行）<input id="cfgGemKey" type="password" autocomplete="off"></label>
+        <label>モデル<input id="cfgGemModel" autocomplete="off"></label>
+        <p class="sub">キーはこの端末のブラウザにだけ保存されます。話しかけた内容と今の予定がGoogleに送られます。</p>
+        <div class="actions"><button class="primary" id="aiSave">保存</button></div>
+      </div>
+    </details>
+  </div>
+  <div class="card" style="margin-top:10px">
+    <div class="settings" style="padding-top:14px">
+      <p class="sub" style="margin:0">Safariとホーム画面のアプリは設定が別々に保存されます。片方で「コピー」、もう片方で「貼り付け」を押すと、GitHubとAIの設定をまとめて移せます。</p>
+      <div class="actions"><button id="cfgExport">設定をコピー</button><button id="cfgImport">設定を貼り付け</button></div>
+    </div>
+  </div>
+</main>
+
+<div class="updatebar" id="updateBar" hidden><p id="updateText"></p><button id="updateBtn">更新する</button></div>
+<div class="savebar"><button class="primary" id="saveBtn" disabled>変更なし</button></div>
+
+<dialog id="dayDialog">
+  <form method="dialog" class="stack">
+    <h3 id="dlgTitle"></h3>
+    <p class="sub" id="dlgBase"></p>
+    <label class="switch"><input type="radio" name="mode" value="time" checked> 時刻を指定</label>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <input type="time" id="dlgTime" value="06:30">
+      <span>+</span><select id="dlgInterval"></select><span>×</span><select id="dlgExtra"></select>
+    </div>
+    <label class="switch"><input type="radio" name="mode" value="off"> この日は鳴らさない</label>
+    <div class="actions">
+      <button value="reset" id="dlgReset" class="link">例外を解除</button>
+      <span class="grow"></span>
+      <button value="cancel">キャンセル</button>
+      <button value="ok" class="primary">決定</button>
+    </div>
+  </form>
+</dialog>
+
+<script type="module">
+import { DAYS, DAY_JA, emptyData, defaultProfile, regenerate, resolveDay, expandTimes, todayJST, addDays, weekdayKey } from './schedule.js?v=2026-10-30.1548';
+import { DEFAULT_MODEL, askGemini, applyChanges } from './assistant.js?v=2026-10-30.1548';
+
+// Set by tools/bump.mjs together with version.json and the ?v= on the imports above.
+const APP_VERSION = '2026-10-30.1548';
+
+const $ = id => document.getElementById(id);
+const ORDER = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+const store = {
+  get(k) { try { return localStorage.getItem(k) || ''; } catch { return ''; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch {} },
+};
+
+let data = emptyData();
+let sha = null;
+let dirty = false;
+
+function setStatus(text, err = false) {
+  $('status').textContent = text;
+  $('status').className = 'status' + (err ? ' err' : '');
+}
+function markDirty() {
+  dirty = true;
+  $('saveBtn').disabled = false;
+  $('saveBtn').textContent = '保存してiPhoneに反映';
+  render();
+}
+function describe(slot) {
+  if (!slot) return 'なし';
+  return slot.extra ? `${slot.time}（+${slot.interval || 5}分×${slot.extra}）` : slot.time;
+}
+function options(sel, values, suffix, current) {
+  sel.innerHTML = values.map(v => `<option value="${v}"${v === current ? ' selected' : ''}>${v}${suffix}</option>`).join('');
+}
+function el(html) {
+  const t = document.createElement('template');
+  t.innerHTML = html.trim();
+  return t.content.firstChild;
+}
+
+// ---------- rendering ----------
+function render() {
+  const today = todayJST();
+  const up = $('upcoming');
+  up.innerHTML = '';
+  for (let i = 0; i < 14; i++) {
+    const date = addDays(today, i);
+    const { source, slot } = resolveDay(data, date);
+    const row = el(`<div class="row" role="button" tabindex="0" style="cursor:pointer">
+      <span class="date">${date.slice(5).replace('-', '/')}</span>
+      <span class="day">${DAY_JA[weekdayKey(date)]}</span>
+      <span class="times ${slot ? '' : 'off'}"></span>
+      <span class="sub">›</span></div>`);
+    row.querySelector('.times').textContent = slot ? expandTimes(slot).join('  ') : 'なし';
+    if (source === 'override') row.querySelector('.times').append(el('<span class="chip">例外</span>'));
+    if (slot?.note) { const n = el('<span class="note"></span>'); n.textContent = slot.note; row.querySelector('.times').append(n); }
+    row.onclick = () => openDay(date);
+    up.append(row);
+  }
+
+  const wk = $('weekly');
+  wk.innerHTML = '';
+  for (const d of ORDER) {
+    const slot = data.weekly[d];
+    const row = el(`<div class="row">
+      <span class="day">${DAY_JA[d]}</span>
+      <label class="switch"><input type="checkbox" ${slot ? 'checked' : ''}></label>
+      <input type="time" value="${slot ? slot.time : '06:30'}" ${slot ? '' : 'disabled'}>
+      <span class="grow"></span>
+      <select aria-label="間隔" ${slot ? '' : 'disabled'}></select>
+      <select aria-label="回数" ${slot ? '' : 'disabled'}></select>
+    </div>`);
+    const [chk, time, interval, extra] = row.querySelectorAll('input, select');
+    options(interval, [1, 2, 3, 5, 10, 15], '分', slot?.interval ?? 5);
+    options(extra, [0, 1, 2, 3, 4, 5], '回', slot?.extra ?? 0);
+    const update = () => {
+      data.weekly[d] = chk.checked ? { time: time.value || '06:30', extra: +extra.value, interval: +interval.value } : null;
+      markDirty();
+    };
+    chk.onchange = time.onchange = interval.onchange = extra.onchange = update;
+    wk.append(row);
+  }
+
+  const pf = { ...defaultProfile(), ...(data.profile || {}) };
+  if (document.activeElement?.closest?.('.settings') == null) {
+    $('pfStation').value = pf.homeStation;
+    $('pfPrep').value = pf.prepMinutes;
+    $('pfWalk').value = pf.walkMinutes;
+    $('pfBuffer').value = pf.bufferMinutes;
+  }
+  const pl = $('places');
+  pl.innerHTML = '';
+  for (const [name, p] of Object.entries(data.places || {})) {
+    const row = el(`<div class="row"><span class="times"></span><button class="danger">削除</button></div>`);
+    row.querySelector('.times').textContent = `${name}：${p.minutes}分${p.verified ? '' : '（未確認）'}`;
+    row.querySelector('button').onclick = () => { delete data.places[name]; markDirty(); };
+    pl.append(row);
+  }
+
+  const ov = $('overrides');
+  ov.innerHTML = '';
+  const entries = Object.entries(data.overrides).filter(([date]) => date >= today);
+  if (!entries.length) ov.append(el('<div class="empty">なし（上の日付をタップすると追加できます）</div>'));
+  for (const [date, slot] of entries) {
+    const row = el(`<div class="row">
+      <span class="date">${date.slice(5).replace('-', '/')}</span>
+      <span class="day">${DAY_JA[weekdayKey(date)]}</span>
+      <span class="times"></span>
+      <button class="danger" aria-label="削除">削除</button></div>`);
+    row.querySelector('.times').textContent = describe(slot);
+    row.querySelector('button').onclick = () => { delete data.overrides[date]; markDirty(); };
+    ov.append(row);
+  }
+}
+
+// ---------- per-day dialog ----------
+function openDay(date) {
+  const dlg = $('dayDialog');
+  const hasOverride = Object.prototype.hasOwnProperty.call(data.overrides, date);
+  const base = data.weekly[weekdayKey(date)];
+  const slot = hasOverride ? data.overrides[date] : base;
+  $('dlgTitle').textContent = `${date.replace(/-/g, '/')}（${DAY_JA[weekdayKey(date)]}）`;
+  $('dlgBase').textContent = `基本パターン: ${describe(base)}`;
+  $('dlgTime').value = slot?.time || base?.time || '06:30';
+  options($('dlgInterval'), [1, 2, 3, 5, 10, 15], '分', slot?.interval ?? 5);
+  options($('dlgExtra'), [0, 1, 2, 3, 4, 5], '回', slot?.extra ?? 0);
+  dlg.querySelector(`input[value="${slot ? 'time' : 'off'}"]`).checked = true;
+  $('dlgReset').hidden = !hasOverride;
+  dlg.onclose = () => {
+    if (dlg.returnValue === 'reset') { delete data.overrides[date]; markDirty(); }
+    if (dlg.returnValue !== 'ok') return;
+    const mode = dlg.querySelector('input[name="mode"]:checked').value;
+    data.overrides[date] = mode === 'off' ? null
+      : { time: $('dlgTime').value || '06:30', extra: +$('dlgExtra').value, interval: +$('dlgInterval').value };
+    markDirty();
+  };
+  dlg.returnValue = '';
+  dlg.showModal();
+}
+
+// ---------- GitHub ----------
+function cfg() {
+  return { repo: store.get('alarm.repo'), path: store.get('alarm.path') || 'alarms.json', token: store.get('alarm.token') };
+}
+function api(c) {
+  return `https://api.github.com/repos/${c.repo}/contents/${c.path.split('/').map(encodeURIComponent).join('/')}`;
+}
+function headers(c) {
+  return { Authorization: `Bearer ${c.token}`, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' };
+}
+function b64encode(text) {
+  const bytes = new TextEncoder().encode(text);
+  let bin = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(bin);
+}
+function b64decode(b64) {
+  const bin = atob(b64.replace(/\s/g, ''));
+  return new TextDecoder().decode(Uint8Array.from(bin, ch => ch.charCodeAt(0)));
+}
+
+async function load() {
+  const c = cfg();
+  if (!c.repo || !c.token) {
+    setStatus('未接続');
+    $('settingsBox').open = true;
+    render();
+    return;
+  }
+  setStatus('読み込み中…');
+  try {
+    const res = await fetch(api(c) + `?t=${Date.now()}`, { headers: headers(c), cache: 'no-store' });
+    if (res.status === 404) {
+      data = emptyData(); sha = null;
+      setStatus('新規ファイル（まだ保存されていません）');
+    } else if (!res.ok) {
+      throw new Error(`${res.status} ${(await res.json().catch(() => ({}))).message || ''}`);
+    } else {
+      const json = await res.json();
+      data = { ...emptyData(), ...JSON.parse(b64decode(json.content)) };
+      sha = json.sha;
+      setStatus(data.updatedAt ? `更新 ${new Date(data.updatedAt).toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}` : '読み込み完了');
+    }
+    dirty = false;
+    $('saveBtn').disabled = true;
+    $('saveBtn').textContent = '変更なし';
+  } catch (e) {
+    setStatus('読み込み失敗: ' + e.message, true);
+  }
+  render();
+}
+
+async function save() {
+  const c = cfg();
+  if (!c.repo || !c.token) { $('settingsBox').open = true; setStatus('先にGitHub接続を設定してください', true); return false; }
+  let ok = false;
+  $('saveBtn').disabled = true;
+  $('saveBtn').textContent = '保存中…';
+  try {
+    regenerate(data);
+    const body = { message: 'Update alarms (web)', content: b64encode(JSON.stringify(data, null, 2) + '\n') };
+    if (sha) body.sha = sha;
+    const res = await fetch(api(c), { method: 'PUT', headers: { ...headers(c), 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    if (res.status === 409 || res.status === 422) throw new Error('他の場所（Claudeなど）で先に更新されています。再読み込みしてからやり直してください');
+    if (!res.ok) throw new Error(`${res.status} ${(await res.json().catch(() => ({}))).message || ''}`);
+    sha = (await res.json()).content.sha;
+    dirty = false;
+    $('saveBtn').textContent = '保存しました';
+    setStatus('保存しました。iPhoneは次の同期で反映されます');
+    ok = true;
+  } catch (e) {
+    $('saveBtn').disabled = false;
+    $('saveBtn').textContent = '保存してiPhoneに反映';
+    setStatus('保存失敗: ' + e.message, true);
+  }
+  render();
+  return ok;
+}
+
+// ---------- chat ----------
+const history = [];      // [{role: 'user'|'model', text}] sent to Gemini for follow-ups
+let busy = false;
+
+function addMsg(cls, text) {
+  const m = el(`<div class="msg ${cls}"></div>`);
+  m.textContent = text;
+  $('chatLog').append(m);
+  $('chatLog').scrollTop = $('chatLog').scrollHeight;
+  return m;
+}
+function disableProposals() {
+  $('chatLog').querySelectorAll('.proposal button').forEach(b => { b.disabled = true; });
+}
+
+async function send(text) {
+  text = text.trim();
+  if (!text || busy) return;
+  const apiKey = store.get('alarm.geminiKey');
+  if (!apiKey) { $('aiBox').open = true; addMsg('ai err', '先に「設定 → AIアシスタント」で Gemini APIキーを入れてください。'); return; }
+  disableProposals();
+  addMsg('user', text);
+  $('chatInput').value = '';
+  history.push({ role: 'user', text });
+  busy = true;
+  const pending = addMsg('ai pending', '考え中…');
+  try {
+    const res = await askGemini({ apiKey, model: store.get('alarm.geminiModel') || DEFAULT_MODEL, data, history: history.slice(-12), onRetry: t => { pending.textContent = t; } });
+    pending.remove();
+    history.push({ role: 'model', text: res.reply || '（返事なし）' });
+    const m = addMsg('ai', res.reply || 'すみません、うまく理解できませんでした。');
+    if (res.changes.length) showProposal(m, res.changes);
+  } catch (e) {
+    pending.remove();
+    history.pop();
+    addMsg('ai err', 'エラー: ' + e.message);
+  } finally {
+    busy = false;
+  }
+}
+
+function showProposal(msgEl, changes) {
+  let result;
+  try {
+    result = applyChanges(data, changes);
+  } catch (e) {
+    msgEl.append(el('<div class="proposal sub"></div>'));
+    msgEl.lastChild.textContent = 'この変更は実行できません: ' + e.message;
+    return;
+  }
+  const box = el(`<div class="proposal"><ul></ul><div class="actions">
+    <button type="button" class="primary">保存する</button><button type="button">やめる</button></div></div>`);
+  for (const line of result.lines) {
+    const li = el('<li></li>');
+    li.textContent = line;
+    box.querySelector('ul').append(li);
+  }
+  for (const w of result.warnings) {
+    const p = el('<p class="warn"></p>');
+    p.textContent = '⚠ ' + w;
+    box.querySelector('.actions').before(p);
+  }
+  const checks = result.unverified.map(place => {
+    const label = el('<label class="switch" style="margin:0 0 8px;font-size:14px"><input type="checkbox"> <span></span></label>');
+    label.querySelector('span').textContent = `${place} までの移動時間は乗換案内で確認した（次から確認済み）`;
+    box.querySelector('.actions').before(label);
+    return { place, input: label.querySelector('input') };
+  });
+  for (const l of result.links) {
+    const a = el('<a target="_blank" rel="noopener"></a>');
+    a.href = l.url;
+    a.textContent = l.label + ' ↗';
+    box.querySelector('.actions').before(a);
+  }
+  const [ok, cancel] = box.querySelectorAll('button');
+  ok.onclick = async () => {
+    disableProposals();
+    // Re-apply on the latest data so edits made in the meantime are kept.
+    let next;
+    try { next = applyChanges(data, changes).data; } catch (e) { addMsg('ai err', '保存できません: ' + e.message); return; }
+    for (const c of checks) if (c.input.checked && next.places?.[c.place]) next.places[c.place].verified = true;
+    const backup = data;
+    data = next;
+    if (await save()) {
+      addMsg('ai', '保存しました。iPhoneには次の同期（充電時か22時）で反映されます。急ぐときは「目覚まし同期」を手動で実行してください。');
+    } else {
+      data = backup;
+      render();
+      addMsg('ai err', '保存に失敗しました。上の表示を確認して、もう一度話しかけてください。');
+    }
+  };
+  cancel.onclick = () => { disableProposals(); addMsg('ai', '変更はしませんでした。'); };
+  msgEl.append(box);
+  $('chatLog').scrollTop = $('chatLog').scrollHeight;
+}
+
+$('chatForm').onsubmit = e => { e.preventDefault(); send($('chatInput').value); };
+$('chatInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); send($('chatInput').value); }
+});
+
+// Voice input: Web Speech API where available, otherwise point to the keyboard's dictation key.
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+let rec = null;
+$('micBtn').onclick = () => {
+  if (!SR) {
+    $('chatInput').focus();
+    addMsg('ai', 'この画面では音声認識が使えません。キーボードのマイクボタンで話してください。');
+    return;
+  }
+  if (rec) { rec.stop(); return; }
+  rec = new SR();
+  rec.lang = 'ja-JP';
+  rec.interimResults = true;
+  let finalText = '';
+  rec.onresult = e => {
+    let interim = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      if (e.results[i].isFinal) finalText += e.results[i][0].transcript;
+      else interim += e.results[i][0].transcript;
+    }
+    $('chatInput').value = finalText + interim;
+  };
+  rec.onerror = e => { if (e.error !== 'no-speech' && e.error !== 'aborted') addMsg('ai err', '音声入力エラー: ' + e.error); };
+  rec.onend = () => {
+    rec = null;
+    $('micBtn').classList.remove('listening');
+    if (finalText.trim()) send(finalText);
+  };
+  $('micBtn').classList.add('listening');
+  rec.start();
+};
+
+const profileInput = () => {
+  const num = id => { const v = parseInt($(id).value, 10); return Number.isInteger(v) && v >= 0 && v <= 300 ? v : undefined; };
+  const pf = { ...defaultProfile(), ...(data.profile || {}) };
+  data.profile = {
+    homeStation: $('pfStation').value.trim(),
+    prepMinutes: num('pfPrep') ?? pf.prepMinutes,
+    walkMinutes: num('pfWalk') ?? pf.walkMinutes,
+    bufferMinutes: num('pfBuffer') ?? pf.bufferMinutes,
+  };
+  markDirty();
+};
+for (const id of ['pfStation', 'pfPrep', 'pfWalk', 'pfBuffer']) $(id).addEventListener('change', profileInput);
+
+$('cfgGemKey').value = store.get('alarm.geminiKey');
+$('cfgGemModel').value = store.get('alarm.geminiModel');
+$('cfgGemModel').placeholder = DEFAULT_MODEL;
+// Settings transfer between Safari and the home-screen app (their storage is separate on iOS).
+const CFG_KEYS = ['alarm.repo', 'alarm.path', 'alarm.token', 'alarm.geminiKey', 'alarm.geminiModel'];
+const CFG_PREFIX = 'ALARMCFG:';
+$('cfgExport').onclick = async () => {
+  const text = CFG_PREFIX + b64encode(JSON.stringify(Object.fromEntries(CFG_KEYS.map(k => [k, store.get(k)]))));
+  try {
+    await navigator.clipboard.writeText(text);
+    alert('設定をコピーしました。もう片方で「設定を貼り付け」を押してください。\n（キーが含まれるので、ほかの場所には貼らないでください）');
+  } catch {
+    prompt('この文字列をコピーしてください（キーが含まれます）', text);
+  }
+};
+$('cfgImport').onclick = async () => {
+  let text = '';
+  try { text = await navigator.clipboard.readText(); } catch {}
+  if (!text.startsWith(CFG_PREFIX)) text = prompt('コピーした設定を貼り付けてください') || '';
+  if (!text.startsWith(CFG_PREFIX)) { if (text) alert('設定の文字列ではありません'); return; }
+  try {
+    const cfg = JSON.parse(b64decode(text.slice(CFG_PREFIX.length)));
+    for (const k of CFG_KEYS) if (typeof cfg[k] === 'string') store.set(k, cfg[k]);
+  } catch { alert('設定を読み取れませんでした'); return; }
+  try { await navigator.clipboard.writeText(''); } catch {}
+  $('cfgRepo').value = store.get('alarm.repo');
+  $('cfgPath').value = store.get('alarm.path');
+  $('cfgToken').value = store.get('alarm.token');
+  $('cfgGemKey').value = store.get('alarm.geminiKey');
+  $('cfgGemModel').value = store.get('alarm.geminiModel');
+  addMsg('ai', '設定を読み込みました。');
+  load();
+};
+
+$('aiSave').onclick = () => {
+  store.set('alarm.geminiKey', $('cfgGemKey').value.trim());
+  store.set('alarm.geminiModel', $('cfgGemModel').value.trim());
+  $('aiBox').open = false;
+  addMsg('ai', 'AIアシスタントの設定を保存しました。「明日は5時に起こして」のように話しかけてください。');
+};
+
+$('saveBtn').onclick = save;
+$('cfgRepo').value = store.get('alarm.repo');
+$('cfgPath').value = store.get('alarm.path');
+$('cfgToken').value = store.get('alarm.token');
+$('cfgSave').onclick = () => {
+  store.set('alarm.repo', $('cfgRepo').value.trim());
+  store.set('alarm.path', $('cfgPath').value.trim() || 'alarms.json');
+  store.set('alarm.token', $('cfgToken').value.trim());
+  $('settingsBox').open = false;
+  load();
+};
+window.addEventListener('beforeunload', e => { if (dirty) e.preventDefault(); });
+document.addEventListener('visibilitychange', () => { if (!document.hidden && !dirty) load(); });
+
+// ---------- update notice ----------
+// version.json is fetched past the caches; when it differs from APP_VERSION a banner offers a
+// reload with ?v=<new>, which also busts the cached modules because their URLs change.
+async function checkUpdate() {
+  try {
+    const res = await fetch(`version.json?t=${Date.now()}`, { cache: 'no-store' });
+    if (!res.ok) return;
+    const v = await res.json();
+    if (!v.version || v.version === APP_VERSION) return;
+    $('updateText').textContent = `新しい版があります${v.notes ? '：' + v.notes : ''}`;
+    $('updateBtn').onclick = () => {
+      if (dirty && !confirm('保存していない変更があります。更新すると消えます。更新しますか？')) return;
+      dirty = false;
+      location.replace(`${location.pathname}?v=${encodeURIComponent(v.version)}`);
+    };
+    $('updateBar').hidden = false;
+  } catch {}
+}
+(async () => {
+  const params = new URLSearchParams(location.search);
+  if (params.get('v') === APP_VERSION) {
+    try {
+      const v = await (await fetch(`version.json?t=${Date.now()}`, { cache: 'no-store' })).json();
+      if (v.version === APP_VERSION) addMsg('ai', `新しい版に更新しました（${APP_VERSION}）${v.notes ? '\n' + v.notes : ''}`);
+    } catch {}
+    window.history.replaceState(null, '', location.pathname);
+  }
+  checkUpdate();
+})();
+document.addEventListener('visibilitychange', () => { if (!document.hidden) checkUpdate(); });
+setInterval(checkUpdate, 30 * 60 * 1000);
+load();
+</script>
+</body>
+</html>
