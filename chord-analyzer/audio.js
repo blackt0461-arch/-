@@ -206,7 +206,7 @@ async function openMicrophone(fftSize) {
 }
 
 /**
- * マイクを使い始め、フレームごとに onFrame({ chroma, bass, level, state }) を呼ぶ。
+ * マイクを使い始め、フレームごとに onFrame({ chroma, bass, notes, level, state }) を呼ぶ。
  * state は 'calibrating'（周りの雑音を覚えている途中）/ 'quiet'（弾いていない）/ 'playing'。
  * 戻り値の stop() で止める。
  */
@@ -262,7 +262,7 @@ export async function startListening(onFrame, { smoothing = 0.2, calibrationSeco
     else if (loudSince === null) loudSince = now;
     const playing = loud && now - loudSince >= ONSET_WAIT_MS;
 
-    const { chroma, bass } = analyzeSpectrum(noise.subtract(linear), ctx.sampleRate, analyser.fftSize);
+    const { chroma, bass, notes } = analyzeSpectrum(noise.subtract(linear), ctx.sampleRate, analyser.fftSize);
     // 約 smoothing 秒で追いつく指数移動平均（表示のチラつきを抑える）
     const total = chroma.reduce((s, v) => s + v, 0) || 1;
     // 判定を始めた瞬間は平均をとらず、すぐに新しい音に切り替える
@@ -273,7 +273,8 @@ export async function startListening(onFrame, { smoothing = 0.2, calibrationSeco
     const bassMax = Math.max(...smoothBass);
     const smoothedBass = bassMax > 0.3 ? smoothBass.indexOf(bassMax) : null;
 
-    onFrame({ chroma: smoothChroma, bass: smoothedBass, level, state: playing ? 'playing' : 'quiet' });
+    // notes は平均をとらない生の判定（タブ譜づくりで、音の鳴り始めを拾うため）
+    onFrame({ chroma: smoothChroma, bass: smoothedBass, notes: playing ? notes : [], level, state: playing ? 'playing' : 'quiet' });
   };
   rafId = requestAnimationFrame(tick);
 
