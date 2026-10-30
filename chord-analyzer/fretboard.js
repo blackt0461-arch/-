@@ -42,28 +42,127 @@ export function soundingNotes(frets, tuning, capo = 0) {
 }
 
 /**
- * 縦向きの指板（スマホの縦画面向け）を container に描画する。
- * 左が6弦、右が1弦。いちばん上の行は開放弦（○）とミュート（×）の切り替え。
+ * 押さえ方の候補を探す（コード名 → 押さえ方の辞書）。
+ * 4フレットの幅に収まり、指4本（セーハは1本と数える）で押さえられ、
+ * いちばん低い音が bass になる形を、弾きやすい順に返す。フレット番号はカポからの数え方。
+ */
+export function findVoicings(root, type, bass, tuning, { capo = 0, maxFret = 12, limit = 6 } = {}) {
+  const mod12 = (n) => ((n % 12) + 12) % 12;
+  const tones = type.intervals.map((i) => mod12(root + i));
+  const required = tones.filter((t) => !(type.optional5 && t === mod12(root + 7)));
+  const minStrings = type.suffix === '5' ? 2 : Math.min(4, tones.length + 1);
+  const isTone = (s, f) => tones.includes(mod12(tuning.strings[s] + capo + f));
+  const found = new Map();
+
+  for (let base = 0; base <= maxFret - 3; base++) {
+    // 弦ごとに置ける場所：ミュート、開放弦（低いポジションのみ）、base〜base+3 フレット
+    const options = tuning.strings.map((_, s) => {
+      const list = [MUTED];
+      if (base <= 4 && isTone(s, 0)) list.push(0);
+      for (let f = Math.max(1, base); f <= base + 3; f++) if (isTone(s, f)) list.push(f);
+      return list;
+    });
+    const shape = new Array(6);
+    const visit = (s) => {
+      if (s === 6) return consider([...shape]);
+      for (const f of options[s]) { shape[s] = f; visit(s + 1); }
+    };
+    visit(0);
+  }
+
+  function consider(frets) {
+    const sounding = frets.map((f, s) => (f === MUTED ? -1 : s)).filter((s) => s >= 0);
+    if (sounding.length < minStrings) return;
+    // ミュートは低音側と高音側だけ（間の弦を消す押さえ方は難しいので除く）
+    const first = sounding[0], last = sounding[sounding.length - 1];
+    if (last - first + 1 !== sounding.length) return;
+    const pcs = sounding.map((s) => mod12(tuning.strings[s] + capo + frets[s]));
+    if (pcs[0] !== bass) return;
+    if (!required.every((t) => pcs.includes(t))) return;
+
+    const fretted = frets.filter((f) => f !== MUTED && f > 0);
+    const minF = fretted.length ? Math.min(...fretted) : 0;
+    const maxF = fretted.length ? Math.max(...fretted) : 0;
+    // セーハ：いちばん低いフレットを複数の弦で押さえ、その間に開放弦が無ければ人差し指1本で押さえられる
+    const atMin = sounding.filter((s) => frets[s] === minF && minF > 0);
+    const barre = atMin.length >= 2 && sounding.every((s) => s < atMin[0] || s > atMin[atMin.length - 1] || frets[s] > 0);
+    const fingers = barre ? 1 + fretted.filter((f) => f > minF).length : fretted.length;
+    if (fingers > 4) return;
+
+    const opens = frets.filter((f) => f === 0).length;
+    const span = maxF - minF;
+    const score = sounding.length * 2
+      + (maxF <= 3 ? opens * 0.5 : -opens * 1.5) // 開放弦は低いポジションでは弾きやすく、高いと不自然
+      - minF * 0.2
+      - span * 0.5 - (span >= 3 ? 1 : 0)         // 指を大きく広げる形は難しい
+      - fingers * 0.3 - (fingers === 4 ? 0.5 : 0)
+      + (pcs.filter((p) => p === root).length > 1 ? 0.3 : 0);
+    const key = formatShape(frets);
+    if (!found.has(key)) found.set(key, { frets, score, position: minF });
+  }
+
+  // 弾きやすいものから選ぶ。すでに選んだ形の弦を減らしただけの形は、ほぼ同じなので除く
+  const picked = [];
+  for (const v of [...found.values()].sort((a, b) => b.score - a.score)) {
+    const isSubset = picked.some((p) => v.frets.every((f, s) => f === MUTED || f === p.frets[s]));
+    if (!isSubset) picked.push(v);
+    if (picked.length === limit) break;
+  }
+  return picked.sort((a, b) => a.position - b.position).map((v) => v.frets);
+}
+
+const MARKERS = { 3: [0.5], 5: [0.5], 7: [0.5], 9: [0.5], 12: [1 / 3, 2 / 3], 15: [0.5] };
+
+/**
+ * 指板を container に描画する。
+ * - 縦向き（スマホの縦画面）：左が6弦、右が1弦、上がヘッド側
+ * - 横向き（タブレットの横画面）：上が1弦、下が6弦、左がヘッド側（タブ譜と同じ向き）
+ * - 左利き：縦向きは弦の左右を、横向きはヘッドの左右を入れ替える
+ * いちばんヘッド側の列（0フレット）は開放弦（○）とミュート（×）の切り替え。
  * labelFor(弦の番号) は、その弦で鳴っている音の表示（音名や度数）を返す。
  */
-export function renderFretboard(container, frets, onChange, labelFor = () => '') {
+export function renderFretboard(container, frets, onChange, { labelFor = () => '', horizontal = false, lefty = false } = {}) {
   container.innerHTML = '';
   const board = document.createElement('div');
-  board.className = 'board';
+  board.className = `board ${horizontal ? 'horizontal' : 'vertical'}${lefty ? ' lefty' : ''}`;
+
+  // 弦 s（0 = 6弦）とフレット fret の、グリッド上の位置
+  const place = (el, s, fret) => {
+    const stringPos = horizontal ? 1 + (5 - s) : 2 + (lefty ? 5 - s : s);
+    const fretPos = horizontal ? 2 + (lefty ? MAX_FRET - fret : fret) : 2 + fret;
+    el.style.gridRow = horizontal ? stringPos : fretPos;
+    el.style.gridColumn = horizontal ? fretPos : stringPos;
+  };
+  const placeLabel = (el, { s = null, fret = null }) => {
+    if (s !== null) {
+      el.style.gridRow = horizontal ? 1 + (5 - s) : 1;
+      el.style.gridColumn = horizontal ? 1 : 2 + (lefty ? 5 - s : s);
+    } else {
+      el.style.gridRow = horizontal ? 7 : 2 + fret;
+      el.style.gridColumn = horizontal ? 2 + (lefty ? MAX_FRET - fret : fret) : 1;
+    }
+  };
+
+  for (let s = 0; s < 6; s++) {
+    const label = document.createElement('span');
+    label.className = 'string-label';
+    label.textContent = `${6 - s}弦`;
+    placeLabel(label, { s });
+    board.appendChild(label);
+  }
 
   for (let fret = 0; fret <= MAX_FRET; fret++) {
-    const row = document.createElement('div');
-    row.className = fret === 0 ? 'fret-row nut-row' : 'fret-row';
-
-    const label = document.createElement('span');
-    label.className = 'fret-number';
-    label.textContent = fret === 0 ? '' : fret;
-    row.appendChild(label);
+    const number = document.createElement('span');
+    number.className = 'fret-number';
+    number.textContent = fret === 0 ? '' : fret;
+    placeLabel(number, { fret });
+    board.appendChild(number);
 
     for (let s = 0; s < 6; s++) {
       const cell = document.createElement('button');
       cell.type = 'button';
-      cell.className = 'cell';
+      cell.className = fret === 0 ? 'cell nut' : 'cell';
+      place(cell, s, fret);
       const current = frets[s];
 
       if (fret === 0) {
@@ -96,15 +195,25 @@ export function renderFretboard(container, frets, onChange, labelFor = () => '')
           onChange(next);
         });
       }
-      row.appendChild(cell);
+      board.appendChild(cell);
     }
-    if ([3, 5, 7, 9, 15].includes(fret)) row.classList.add('marker-single');
-    if (fret === 12) row.classList.add('marker-double');
-    board.appendChild(row);
+
+    // ポジションマーク：弦をまたぐ帯を置き、その中に丸を描く
+    if (MARKERS[fret]) {
+      const band = document.createElement('span');
+      band.className = 'marker-band';
+      const fretPos = horizontal ? 2 + (lefty ? MAX_FRET - fret : fret) : 2 + fret;
+      band.style.gridRow = horizontal ? '1 / 7' : fretPos;
+      band.style.gridColumn = horizontal ? fretPos : '2 / 8';
+      MARKERS[fret].forEach((pos) => {
+        const mark = document.createElement('span');
+        mark.className = 'marker';
+        mark.style.setProperty('--pos', `${pos * 100}%`);
+        band.appendChild(mark);
+      });
+      board.appendChild(band);
+    }
   }
 
-  const header = document.createElement('div');
-  header.className = 'string-labels';
-  header.innerHTML = '<span></span>' + [6, 5, 4, 3, 2, 1].map((n) => `<span>${n}弦</span>`).join('');
-  container.append(header, board);
+  container.appendChild(board);
 }

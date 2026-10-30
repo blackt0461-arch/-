@@ -4,7 +4,13 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#16161d">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="コード解析">
   <title>ギターコード解析</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -18,35 +24,40 @@
     <nav class="tabs" role="tablist">
       <button type="button" role="tab" class="tab" id="tab-fret" aria-controls="panel-fret" aria-selected="true">🎸 指板</button>
       <button type="button" role="tab" class="tab" id="tab-mic" aria-controls="panel-mic" aria-selected="false">🎤 マイク</button>
+      <button type="button" role="tab" class="tab" id="tab-tuner" aria-controls="panel-tuner" aria-selected="false">🎵 チューナー</button>
     </nav>
   </header>
 
   <main>
-    <section id="panel-fret" class="panel" role="tabpanel" aria-labelledby="tab-fret">
+    <section id="panel-fret" class="panel fret-panel" role="tabpanel" aria-labelledby="tab-fret">
       <div id="fret-result" class="result sticky" aria-live="polite"></div>
 
       <div class="toolbar">
-        <label class="capo">カポ
-          <select id="capo"></select>
-        </label>
+        <select id="capo" class="capo" aria-label="カポ"></select>
         <div class="segmented" role="radiogroup" aria-label="丸の中の表示">
           <button type="button" role="radio" data-label="note" aria-checked="true">音名</button>
           <button type="button" role="radio" data-label="degree" aria-checked="false">度数</button>
         </div>
-        <button type="button" id="clear-shape" class="secondary-button">クリア</button>
+        <button type="button" id="play-shape" class="secondary-button play-button" aria-label="押さえた形を鳴らす" title="押さえた形を鳴らす">▶</button>
+        <button type="button" id="clear-shape" class="secondary-button clear">クリア</button>
       </div>
 
       <div id="fretboard" class="fretboard"></div>
 
       <div class="settings">
+        <label>コード名から押さえ方を探す
+          <input id="chord-search" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="例: Cadd9、F#m7-5、D/F#">
+        </label>
+        <div id="search-results" class="search-results"></div>
+
         <label>押さえ方を文字で入力（6弦 → 1弦）
-          <input id="shape-input" type="text" inputmode="text" autocomplete="off" autocapitalize="off" spellcheck="false"
-                 placeholder="例: x32010">
+          <input id="shape-input" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="例: x32010">
         </label>
         <p id="shape-error" class="error" hidden>6弦分を「x32010」や「x-10-12-12-11-10」の形で入力してください</p>
         <label>チューニング
           <select id="tuning"></select>
         </label>
+        <label class="check"><input id="lefty" type="checkbox"> 左利き（指板の左右を反転）</label>
       </div>
     </section>
 
@@ -55,7 +66,29 @@
       <p id="mic-status" class="status"></p>
       <p id="mic-error" class="error" hidden></p>
       <div id="mic-result" class="result" aria-live="polite"></div>
+      <div class="history-row">
+        <div id="history" class="history"></div>
+        <button type="button" id="clear-history" class="secondary-button">消す</button>
+      </div>
       <div id="chroma" class="chroma" aria-hidden="true"></div>
+    </section>
+
+    <section id="panel-tuner" class="panel" role="tabpanel" aria-labelledby="tab-tuner" hidden>
+      <button type="button" id="tuner-toggle" class="primary-button">チューナーを開始</button>
+      <p id="tuner-error" class="error" hidden></p>
+      <div class="tuner">
+        <div class="tuner-note-row">
+          <span id="tuner-note" class="tuner-note">―</span>
+          <span id="tuner-cents" class="tuner-cents"></span>
+        </div>
+        <div class="meter">
+          <div class="meter-scale"><span>-50</span><span>0</span><span>+50</span></div>
+          <div id="tuner-needle" class="needle"></div>
+        </div>
+        <p id="tuner-freq" class="tuner-freq"></p>
+        <div id="tuner-strings" class="tuner-strings"></div>
+        <p class="hint">1本ずつ弾いてください。針が真ん中で緑になれば合っています。チューニングの種類は「指板」タブで選べます。</p>
+      </div>
     </section>
   </main>
 
