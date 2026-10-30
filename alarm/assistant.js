@@ -17,11 +17,6 @@ function profileOf(data) {
   return { ...defaultProfile(), ...(data.profile || {}) };
 }
 
-export function mapsUrl(origin, destination) {
-  const q = new URLSearchParams({ api: '1', origin, destination, travelmode: 'transit' });
-  return `https://www.google.com/maps/dir/?${q}`;
-}
-
 function toMinutes(time) {
   const [h, m] = time.split(':').map(Number);
   return h * 60 + m;
@@ -101,7 +96,7 @@ ${upcoming.join('\n')}
 - 指示が曖昧なら、推測で変更せず changes を空にして reply で質問する。
 - 「10時に渋谷集合」「明日13時に〇〇大学」のように集合・待ち合わせ・到着時刻を言われたら meeting を使う。date は集合する日。
   - place は短い地名に揃える（「渋谷駅ハチ公前」→「渋谷」）。
-  - mapsQuery には、地図アプリで検索して1か所に決まる文字列を入れる（駅なら正式な駅名、例：「三ノ宮駅」。施設なら正式名称＋市区町村）。施設名に自信がなければ、その最寄り駅名にする。
+  - mapsQuery には、集合場所の最寄り駅の正式な駅名を入れる（例：「三ノ宮駅」「大阪駅」）。乗換案内の検索に使うので、施設名ではなく駅名にする。
   - 覚えている移動時間にある場所なら、その分数を travelMinutes に入れ、travelSource は "saved"。
   - ユーザーが移動時間を言ったら、その値で travelSource は "user"（同時に remember_place も出す）。
   - 「マップで見たら合ってた」「その時間で大丈夫」と言われたら、その場所の今の分数で remember_place を出す（確認済みになる）。
@@ -165,14 +160,8 @@ async function callModel(model, apiKey, body) {
   return json.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('') || '';
 }
 
-// history: [{role: 'user'|'model', text}]
-// onRetry(message) is called before each retry so the page can show progress.
-export async function askGemini({ apiKey, model, data, history, now = new Date(), onRetry = () => {} }) {
-  const body = {
-    systemInstruction: { parts: [{ text: buildSystemPrompt(data, now) }] },
-    contents: history.map(m => ({ role: m.role, parts: [{ text: m.text }] })),
-    generationConfig: { responseMimeType: 'application/json', responseSchema: RESPONSE_SCHEMA },
-  };
+// Call Gemini with retries and model fallback. onRetry(message) lets the page show progress.
+async function generate({ apiKey, model, body, onRetry = () => {} }) {
   const primary = model || DEFAULT_MODEL;
   const models = [primary, ...FALLBACK_MODELS.filter(m => m !== primary)];
   let lastError;
@@ -180,7 +169,7 @@ export async function askGemini({ apiKey, model, data, history, now = new Date()
     // The first model gets one retry after a short wait; busy spikes often pass quickly.
     for (let attempt = 0; attempt < (i === 0 ? 2 : 1); attempt++) {
       try {
-        return { ...parseReply(await callModel(m, apiKey, body)), model: m };
+        return { text: await callModel(m, apiKey, body), model: m };
       } catch (e) {
         lastError = e;
         if (!RETRYABLE.has(e.status) && e.status !== 404) throw e;
@@ -191,6 +180,65 @@ export async function askGemini({ apiKey, model, data, history, now = new Date()
     if (i + 1 < models.length) onRetry(`混み合っているので、別のモデル（${models[i + 1]}）で試しています…`);
   }
   throw new Error(`${lastError.message}（時間をおいて、もう一度送ってください）`);
+}
+
+// history: [{role: 'user'|'model', text}]
+export async function askGemini({ apiKey, model, data, history, now = new Date(), onRetry }) {
+  const body = {
+    systemInstruction: { parts: [{ text: buildSystemPrompt(data, now) }] },
+    contents: history.map(m => ({ role: m.role, parts: [{ text: m.text }] })),
+    generationConfig: { responseMimeType: 'application/json', responseSchema: RESPONSE_SCHEMA },
+  };
+  const r = await generate({ apiKey, model, body, onRetry });
+  return { ...parseReply(r.text), model: r.model };
+}
+
+// Station name as Yahoo!乗換案内 expects it: "JR須磨駅" -> "須磨".
+export function stationName(name) {
+  return String(name || '').trim().replace(/^(JR|ＪＲ)\s*/, '').replace(/駅$/, '');
+}
+
+// When the traveller must be at the meeting place (meeting time minus buffer), as JST parts.
+export function arriveByOf(data, change) {
+  const buffer = isMinutes(change.bufferMinutes) ? change.bufferMinutes : profileOf(data).bufferMinutes;
+  const t = toMinutes(change.meetTime) - buffer;
+  const date = t < 0 ? addDays(change.date, -1) : change.date;
+  return { date, time: fromMinutes((t + 1440) % 1440) };
+}
+
+export function yahooTransitUrl(from, to, date, time) {
+  const [y, m, d] = date.split('-');
+  const [hh, mm] = time.split(':');
+  const q = new URLSearchParams({ from, to, y, m, d, hh, m1: mm[0], m2: mm[1], type: '4' });
+  return `https://transit.yahoo.co.jp/search/result?${q}`;
+}
+
+// Ask Gemini to read the Yahoo!乗換案内 result page (URL context tool) and report the latest
+// train that still arrives by `time`. Returns {minutes, depart, summary, url}.
+export async function lookupTransit({ apiKey, model, from, to, date, time, onRetry }) {
+  const url = yahooTransitUrl(from, to, date, time);
+  const body = {
+    tools: [{ url_context: {} }],
+    contents: [{ role: 'user', parts: [{ text: `次のページはYahoo!乗換案内の検索結果（${from}→${to}、${date} ${time}到着）です。
+${url}
+ページを読み、${time}までに${to}に着く経路のうち、${from}を出発する時刻が最も遅いものを1つ選んでください。
+ページを読めない、または経路が書かれていない場合は、推測せずに {"error":"理由"} とだけ答えてください。
+答えはJSONだけで、{"depart":"HH:MM","arrive":"HH:MM","summary":"路線名など短く"} の形にしてください。` }] }],
+  };
+  const r = await generate({ apiKey, model, body, onRetry });
+  const match = r.text.match(/\{[\s\S]*\}/);
+  if (!match) throw new Error('乗換案内の結果を読み取れませんでした');
+  const obj = JSON.parse(match[0]);
+  if (obj.error) throw new Error(`乗換案内を読めませんでした（${obj.error}）`);
+  const ok = v => /^([01]?\d|2[0-3]):[0-5]\d$/.test(v || '');
+  if (!ok(obj.depart) || !ok(obj.arrive)) throw new Error('乗換案内の時刻を読み取れませんでした');
+  const minutes = (toMinutes(time) - toMinutes(obj.depart) + 1440) % 1440;
+  const ride = (toMinutes(obj.arrive) - toMinutes(obj.depart) + 1440) % 1440;
+  const late = (toMinutes(obj.arrive) - toMinutes(time) + 1440) % 1440;
+  if (!(minutes > 0 && minutes <= 600) || ride > minutes || (late > 0 && late < 720)) {
+    throw new Error(`乗換案内の時刻が合いません（${obj.depart}発 ${obj.arrive}着）`);
+  }
+  return { minutes, depart: obj.depart, summary: String(obj.summary || '').slice(0, 40), url };
 }
 
 export function parseReply(text) {
@@ -220,7 +268,8 @@ function planMeeting(next, c, today) {
   if (!profile.homeStation) throw new Error('家の最寄り駅が未設定です（設定 → 起床時刻の計算）');
   const saved = next.places?.[place];
   let travel, source;
-  if (c.travelSource === 'user' && isMinutes(c.travelMinutes)) { travel = c.travelMinutes; source = 'user'; }
+  if (c.travelSource === 'yahoo' && isMinutes(c.travelMinutes)) { travel = c.travelMinutes; source = 'yahoo'; }
+  else if (c.travelSource === 'user' && isMinutes(c.travelMinutes)) { travel = c.travelMinutes; source = 'user'; }
   else if (saved) { travel = saved.minutes; source = saved.verified ? 'saved' : 'estimate'; }
   else if (isMinutes(c.travelMinutes) && c.travelMinutes > 0) { travel = c.travelMinutes; source = 'estimate'; }
   else throw new Error(`${place} までの移動時間がわかりません`);
@@ -240,10 +289,10 @@ function planMeeting(next, c, today) {
     meeting: { dest: String(c.mapsQuery || place).trim(), travel },
   };
   // Remember estimates (unverified) so the next request reuses the same number.
-  if (!saved || source === 'user') {
-    next.places = { ...(next.places || {}), [place]: { minutes: travel, verified: source === 'user' } };
+  if (!saved || source === 'user' || source === 'yahoo') {
+    next.places = { ...(next.places || {}), [place]: { minutes: travel, verified: source !== 'estimate' } };
   }
-  return { date, slot, place, travel, source, prep, walk, buffer };
+  return { date, slot, place, travel, source, prep, walk, buffer, transit: c.transit };
 }
 
 // Apply proposed changes to a copy of `data`.
@@ -283,8 +332,13 @@ export function applyChanges(data, changes, now = new Date()) {
       next.overrides[m.date] = m.slot;
       lines.push(`${md(m.date)} ${m.slot.time} 起床（${m.slot.note}）`);
       lines.push(`内訳：支度${m.prep}分＋駅まで${m.walk}分＋移動${m.travel}分＋余裕${m.buffer}分`);
-      lines.push(`前の晩の同期で、iPhoneがAppleマップの電車の時間（${next.profile.homeStation} → ${m.slot.meeting.dest}）に合わせて起床時刻を自動で補正します`);
-      links.push({ label: `Googleマップで確認（${next.profile.homeStation} → ${m.place}）`, url: mapsUrl(next.profile.homeStation, m.place) });
+      if (m.source === 'yahoo') lines.push(`✓ Yahoo!乗換案内で確認（${m.transit?.depart || ''}発${m.transit?.summary ? ' ' + m.transit.summary : ''}）`);
+      if (m.source === 'estimate') {
+        warnings.push(`${m.place} までの移動${m.travel}分は未確認の見積もりです。下のリンクで確かめて、違っていたら「${m.place}は○分」と教えてください。`);
+        unverified.push(m.place);
+      }
+      links.push({ label: `Yahoo!乗換案内で確認（${stationName(next.profile.homeStation)} → ${stationName(m.slot.meeting.dest)}）`,
+        url: m.transit?.url || yahooTransitUrl(stationName(next.profile.homeStation), stationName(m.slot.meeting.dest), ...Object.values(arriveByOf(next, c))) });
     } else if (c.op.startsWith('override_')) {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(c.date || '')) throw new Error(`日付が不正です: ${c.date}`);
       if (c.date < today) throw new Error(`過去の日付は変更できません: ${c.date}`);

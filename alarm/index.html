@@ -194,7 +194,7 @@
 
 <script type="module">
 import { DAYS, DAY_JA, emptyData, defaultProfile, regenerate, resolveDay, expandTimes, todayJST, addDays, weekdayKey } from './schedule.js';
-import { DEFAULT_MODEL, askGemini, applyChanges } from './assistant.js';
+import { DEFAULT_MODEL, askGemini, applyChanges, lookupTransit, stationName, arriveByOf } from './assistant.js';
 
 const $ = id => document.getElementById(id);
 const ORDER = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
@@ -440,7 +440,12 @@ async function send(text) {
     pending.remove();
     history.push({ role: 'model', text: res.reply || '（返事なし）' });
     const m = addMsg('ai', res.reply || 'すみません、うまく理解できませんでした。');
-    if (res.changes.length) showProposal(m, res.changes);
+    if (res.changes.length) {
+      const notes = await withTransitTimes(res.changes, apiKey, t => { pending.textContent = t; m.after(pending); });
+      pending.remove();
+      for (const n of notes) addMsg('ai err', n);
+      showProposal(m, res.changes);
+    }
   } catch (e) {
     pending.remove();
     history.pop();
@@ -448,6 +453,30 @@ async function send(text) {
   } finally {
     busy = false;
   }
+}
+
+// Have Gemini read Yahoo!乗換案内 for meeting changes whose travel time isn't confirmed yet.
+// Mutates `changes`; returns messages for lookups that failed (the estimate is then kept).
+async function withTransitTimes(changes, apiKey, progress) {
+  const notes = [];
+  const from = stationName((data.profile || {}).homeStation);
+  if (!from) return notes;
+  for (const c of changes) {
+    if (c.op !== 'meeting' || c.travelSource === 'user' || !c.date || !c.meetTime || !c.place) continue;
+    if (data.places?.[c.place]?.verified) continue;
+    const to = stationName(c.mapsQuery || c.place);
+    const { date, time } = arriveByOf(data, c);
+    progress(`Yahoo!乗換案内で ${from} → ${to}（${time}着）を調べています…`);
+    try {
+      const r = await lookupTransit({ apiKey, model: store.get('alarm.geminiModel') || DEFAULT_MODEL, from, to, date, time });
+      c.travelMinutes = r.minutes;
+      c.travelSource = 'yahoo';
+      c.transit = { depart: r.depart, summary: r.summary, url: r.url };
+    } catch (e) {
+      notes.push(`乗換案内で確認できなかったので、見積もりを使います（${e.message}）`);
+    }
+  }
+  return notes;
 }
 
 function showProposal(msgEl, changes) {
