@@ -471,6 +471,12 @@ function showProposal(msgEl, changes) {
     p.textContent = '⚠ ' + w;
     box.querySelector('.actions').before(p);
   }
+  const checks = result.unverified.map(place => {
+    const label = el('<label class="switch" style="margin:0 0 8px;font-size:14px"><input type="checkbox"> <span></span></label>');
+    label.querySelector('span').textContent = `${place} までの移動時間はマップで確認した（次から確認済み）`;
+    box.querySelector('.actions').before(label);
+    return { place, input: label.querySelector('input') };
+  });
   for (const l of result.links) {
     const a = el('<a target="_blank" rel="noopener"></a>');
     a.href = l.url;
@@ -483,6 +489,7 @@ function showProposal(msgEl, changes) {
     // Re-apply on the latest data so edits made in the meantime are kept.
     let next;
     try { next = applyChanges(data, changes).data; } catch (e) { addMsg('ai err', '保存できません: ' + e.message); return; }
+    for (const c of checks) if (c.input.checked && next.places?.[c.place]) next.places[c.place].verified = true;
     const backup = data;
     data = next;
     if (await save()) {

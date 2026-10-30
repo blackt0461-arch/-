@@ -103,6 +103,7 @@ ${upcoming.join('\n')}
   - place は短い地名に揃える（「渋谷駅ハチ公前」→「渋谷」）。
   - 覚えている移動時間にある場所なら、その分数を travelMinutes に入れ、travelSource は "saved"。
   - ユーザーが移動時間を言ったら、その値で travelSource は "user"（同時に remember_place も出す）。
+  - 「マップで見たら合ってた」「その時間で大丈夫」と言われたら、その場所の今の分数で remember_place を出す（確認済みになる）。
   - それ以外は、最寄り駅からその場所までの電車での所要時間（乗り換え・待ち時間・到着後の徒歩を含む）を見積もり、travelSource は "estimate"。迷ったら長いほうの時間にする。
   - 家の最寄り駅が未設定なら、変更せずに最寄り駅を質問する。
   - 「支度を長めに」「今日はゆっくり準備したい」はその回だけ prepMinutes を増やす（量の指定がなければ +15分）。「いつも支度40分」のような恒久的な指示は set_profile。
@@ -249,6 +250,7 @@ export function applyChanges(data, changes, now = new Date()) {
   const lines = [];
   const warnings = [];
   const links = [];
+  const unverified = [];
   const md = date => `${Number(date.slice(5, 7))}/${Number(date.slice(8, 10))}（${DAY_JA[weekdayKey(date)]}）`;
   // Profile and place updates first, so a meeting in the same reply uses them.
   const order = { set_profile: 0, remember_place: 1 };
@@ -276,7 +278,10 @@ export function applyChanges(data, changes, now = new Date()) {
       next.overrides[m.date] = m.slot;
       lines.push(`${md(m.date)} ${m.slot.time} 起床（${m.slot.note}）`);
       lines.push(`内訳：支度${m.prep}分＋駅まで${m.walk}分＋移動${m.travel}分＋余裕${m.buffer}分`);
-      if (m.source === 'estimate') warnings.push(`${m.place} までの移動${m.travel}分はAIの見積もり（未確認）です。マップで確かめて、違っていたら「${m.place}は○分」と教えてください。`);
+      if (m.source === 'estimate') {
+        warnings.push(`${m.place} までの移動${m.travel}分は未確認です。マップで確かめて、合っていれば下のチェックを入れて保存、違っていたら「${m.place}は○分」と教えてください。`);
+        unverified.push(m.place);
+      }
       links.push({ label: `Googleマップで確認（${next.profile.homeStation} → ${m.place}）`, url: mapsUrl(next.profile.homeStation, m.place) });
     } else if (c.op.startsWith('override_')) {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(c.date || '')) throw new Error(`日付が不正です: ${c.date}`);
@@ -304,5 +309,5 @@ export function applyChanges(data, changes, now = new Date()) {
     }
   }
   validate(next);
-  return { data: next, lines, warnings, links };
+  return { data: next, lines, warnings, links, unverified: [...new Set(unverified)] };
 }
