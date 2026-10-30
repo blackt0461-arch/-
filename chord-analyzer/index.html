@@ -45,6 +45,12 @@
 
       <div id="fretboard" class="fretboard"></div>
 
+      <div class="shape-check">
+        <button type="button" id="check-toggle" class="secondary-button check-button">🎤 押さえ方チェック</button>
+        <p id="check-status" class="status"></p>
+        <div id="check-results" class="check-results" hidden></div>
+      </div>
+
       <div class="settings">
         <label>コード名から押さえ方を探す
           <input id="chord-search" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="例: Cadd9、F#m7-5、D/F#">
@@ -67,6 +73,7 @@
       <p id="mic-status" class="status"></p>
       <p id="mic-error" class="error" hidden></p>
       <div id="mic-result" class="result" aria-live="polite"></div>
+      <button type="button" id="mic-to-fret" class="secondary-button">🎸 今のコードを指板で見る</button>
       <div class="history-row">
         <div id="history" class="history"></div>
         <button type="button" id="clear-history" class="secondary-button">消す</button>
@@ -94,8 +101,22 @@
 
       <div id="song-result" hidden>
         <video id="song-media" class="song-media" controls playsinline preload="metadata"></video>
+        <div class="practice-row">
+          <label class="speed">速さ
+            <select id="song-speed">
+              <option value="0.5">0.5倍</option>
+              <option value="0.75">0.75倍</option>
+              <option value="1" selected>ふつう</option>
+            </select>
+          </label>
+          <button type="button" id="loop-a" class="secondary-button">A</button>
+          <button type="button" id="loop-b" class="secondary-button">B</button>
+          <button type="button" id="loop-clear" class="secondary-button" disabled>くり返し解除</button>
+        </div>
+        <p id="loop-status" class="hint">A と B を押すと、その間をくり返し再生します</p>
         <div id="song-now" class="song-now">―</div>
         <p id="song-info" class="hint"></p>
+        <div id="song-key" class="song-key" hidden></div>
 
         <div class="play-buttons">
           <button type="button" id="play-tab" class="secondary-button">▶ タブ譜どおりに鳴らす</button>
@@ -130,9 +151,17 @@
     </section>
 
     <section id="panel-tuner" class="panel" role="tabpanel" aria-labelledby="tab-tuner" hidden>
+      <div class="segmented tuner-mode" role="radiogroup" aria-label="チューナーの使い方">
+        <button type="button" role="radio" data-mode="single" aria-checked="true">1本ずつ</button>
+        <button type="button" role="radio" data-mode="all" aria-checked="false">全部まとめて</button>
+      </div>
       <button type="button" id="tuner-toggle" class="primary-button">チューナーを開始</button>
       <p id="tuner-error" class="error" hidden></p>
-      <div class="tuner">
+      <div id="tuner-all" class="tuner-all" hidden>
+        <p class="hint">6本の弦を全部、ジャラーンと鳴らしてください。弦ごとのずれを表示します。</p>
+        <div id="tuner-all-rows"></div>
+      </div>
+      <div class="tuner" id="tuner-single">
         <div class="tuner-note-row">
           <span id="tuner-note" class="tuner-note">―</span>
           <span id="tuner-cents" class="tuner-cents"></span>

@@ -97,7 +97,7 @@ export function estimateBeats(onsets, duration, { minBpm = 60, maxBpm = 180, pre
   return { bpm: best.bpm, period, beats };
 }
 
-const cosine = (a, b) => {
+export const cosine = (a, b) => {
   let dot = 0, na = 0, nb = 0;
   for (let i = 0; i < 12; i++) { dot += a[i] * b[i]; na += a[i] * a[i]; nb += b[i] * b[i]; }
   return na && nb ? dot / Math.sqrt(na * nb) : 0;
@@ -129,7 +129,7 @@ export function findDownbeatScored(beatChromas) {
 const RARE = new Set(['sus4', 'sus2', 'dim', 'dim7', 'aug', 'm7♭5', '7sus4']);
 
 // コード譜の候補（12音 × コードの種類）。パワーコードは、コード譜では使わない
-const STATES = [];
+export const STATES = [];
 for (let root = 0; root < 12; root++) {
   CHORD_TYPES.forEach((type, typeIndex) => {
     if (type.suffix === '5') return;
@@ -146,22 +146,28 @@ for (let root = 0; root < 12; root++) {
  * - 変わるなら小節の頭が多く、次が小節の真ん中（3拍目）。それ以外の拍で変わるのは珍しい
  * という音楽の決まりを点数にして、曲全体でいちばん自然なコードの並びを選ぶ。
  */
-export function decodeChords(beatChromas, downbeat, { beatBass = [], rootBonus = 0.1, foreignBassPenalty = 0.1, changePenalty = 0.12, offBarPenalty = 0.25, halfBarPenalty = 0.08, tensionPenalty = 0.03, extraTonePenalty = 0.02, rarePenalty = 0.08 } = {}) {
-  const n = beatChromas.length;
-  if (!n) return [];
-  const emit = beatChromas.map((c, b) => STATES.map((st) => {
-    // ベース音（いちばん低い音）は歌に邪魔されにくく、多くはコードのルート（土台の音）を弾いている
-    const bass = beatBass[b];
-    const bassTerm = bass === null || bass === undefined ? 0 : bass === st.root ? rootBonus : st.template[bass] ? 0 : -foreignBassPenalty;
-    const total = c.reduce((a, b) => a + b, 0);
+/**
+ * 12音の強さ（chroma）とベース音から、コードの候補（STATES）それぞれの点数を出す。
+ * 曲の解析（拍ごと）とマイク（その瞬間ごと）の両方で使う。
+ */
+export function scoreStates(c, bass, { rootBonus = 0.1, foreignBassPenalty = 0.1, tensionPenalty = 0.03, extraTonePenalty = 0.02, rarePenalty = 0.08 } = {}) {
+  const total = c.reduce((a, b) => a + b, 0);
+  return STATES.map((st) => {
     if (!total) return 0;
-    // 構成音にどれだけ音が集まっているか（コサイン類似度）。9th などは少し控えめに
+    // ベース音（いちばん低い音）は歌に邪魔されにくく、多くはコードのルート（土台の音）を弾いている
+    const bassTerm = bass === null || bass === undefined ? 0 : bass === st.root ? rootBonus : st.template[bass] ? 0 : -foreignBassPenalty;
     // 3音より多いコード（7th・6th・9th など）は、メロディの音を構成音と取り違えやすいので、音の数に応じて控えめにする
     const extra = Math.max(0, st.type.intervals.length - 3);
     // sus4・sus2・dim・aug などは実際の曲では少ないので、はっきりした証拠があるときだけ選ぶ
     const rare = RARE.has(st.type.suffix) ? rarePenalty : 0;
     return cosine(c, st.template) + bassTerm - (st.type.tension ? tensionPenalty : 0) - extra * extraTonePenalty - rare - st.typeIndex * 0.001;
-  }));
+  });
+}
+
+export function decodeChords(beatChromas, downbeat, { beatBass = [], changePenalty = 0.12, offBarPenalty = 0.25, halfBarPenalty = 0.08, ...scoreOptions } = {}) {
+  const n = beatChromas.length;
+  if (!n) return [];
+  const emit = beatChromas.map((c, b) => scoreStates(c, beatBass[b], scoreOptions));
   let score = emit[0].slice();
   const back = [];
   for (let b = 1; b < n; b++) {

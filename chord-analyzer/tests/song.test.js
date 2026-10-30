@@ -83,3 +83,84 @@ test('拍（テンポ）を見つけ、小節ごとのコード譜を作れる',
   }).length;
   assert.ok(ok >= 7, `コード譜 ${ok}/8`);
 });
+
+test('マイク判定：歌いながら弾いても、以前より正しくコードを表示できる', async () => {
+  const { runLive } = await import('./live-bench.js');
+  let before = 0, after = 0;
+  for (const seed of [1, 2, 3]) {
+    const song = { stereo: false, withRhythm: false, vocalGain: 0.25, seed };
+    before += runLive(song, { legacy: true }).accuracy / 3;
+    after += runLive(song).accuracy / 3;
+  }
+  assert.ok(after >= 0.8, `新しい判定 ${(after * 100).toFixed(0)}%`);
+  assert.ok(after > before + 0.1, `以前 ${(before * 100).toFixed(0)}% → 新しい ${(after * 100).toFixed(0)}%`);
+});
+
+test('全弦チューナー：6本を同時に鳴らしても、弦ごとのずれを測れる', async () => {
+  const { measureStrings } = await import('../audio.js');
+  const { magnitudeSpectrum } = await import('../dsp.js');
+  const sr = 48000, n = 32768;
+  const targets = [40, 45, 50, 55, 59, 64];
+  for (const detune of [[12, -18, 5, 25, -8, -30], [-25, 7, -12, 0, 18, 10], [0, 0, 0, 0, 0, 0]]) {
+    const sig = new Float32Array(n);
+    targets.forEach((m, s) => {
+      const f0 = 440 * 2 ** ((m - 69 + detune[s] / 100) / 12);
+      for (let h = 1; h <= 10; h++) {
+        const f = f0 * h * Math.sqrt(1 + 0.00008 * h * h); // 弦の硬さで高い倍音ほど少し上にずれる
+        const amp = (s === 0 ? 0.5 : 1) / h ** 0.8;
+        for (let i = 0; i < n; i++) sig[i] += amp * Math.sin(2 * Math.PI * f * i / sr + h + s) * Math.exp(-i / sr * 1.5);
+      }
+    });
+    const result = measureStrings(magnitudeSpectrum(sig, 0, n), sr, n, targets);
+    result.forEach((r, s) => {
+      assert.ok(r.found, `${6 - s}弦が見つからない`);
+      assert.ok(Math.abs(r.cents - detune[s]) <= 3, `${6 - s}弦：${r.cents.toFixed(1)}セント（正解 ${detune[s]}）`);
+    });
+  }
+  // 5弦を鳴らさないと「見つからない」になる
+  const sig = new Float32Array(n);
+  targets.forEach((m, s) => { if (s === 1) return; const f0 = 440 * 2 ** ((m - 69) / 12); for (let h = 1; h <= 6; h++) for (let i = 0; i < n; i++) sig[i] += Math.sin(2 * Math.PI * f0 * h * i / sr) / h; });
+  assert.equal(measureStrings(magnitudeSpectrum(sig, 0, n), sr, n, targets)[1].found, false);
+});
+
+test('押さえ方チェック：鳴っていない弦・ずれた弦・鳴らさない弦を見つける', async () => {
+  const { checkShape } = await import('../audio.js');
+  const { magnitudeSpectrum } = await import('../dsp.js');
+  const sr = 48000, n = 32768;
+  const open = [40, 45, 50, 55, 59, 64];
+  const strum = (midis) => {
+    const sig = new Float32Array(n);
+    midis.forEach((m, s) => {
+      if (m === null) return;
+      const f0 = 440 * 2 ** ((m - 69) / 12);
+      for (let h = 1; h <= 8; h++) for (let i = 0; i < n; i++) sig[i] += Math.sin(2 * Math.PI * f0 * h * i / sr + h + s) / h ** 0.9 * Math.exp(-i / sr * 2);
+    });
+    return magnitudeSpectrum(sig, 0, n);
+  };
+  const C = [null, 48, 52, 55, 60, 64]; // x32010
+  const status = (played) => checkShape(strum(played), sr, n, C, open).map((r) => r.status);
+  // 正しく弾けば、どの弦も「鳴っていない」「違う」にはならない（1オクターブ上の弦は確かめきれないことがある）
+  status(C).forEach((st, s) => assert.ok(s === 0 ? st === 'muted' : ['ok', 'unsure'].includes(st), `${6 - s}弦が ${st}`));
+  // 3弦（G3）を鳴らし損ねた
+  assert.equal(status([null, 48, 52, null, 60, 64])[3], 'missing');
+  // 4弦を1フレット低く押さえた（E3 ではなく E♭3）
+  assert.equal(status([null, 48, 51, 55, 60, 64])[2], 'wrong');
+  // 鳴らさないはずの6弦（E2）も鳴らしてしまった：E は C コードの音だが E2 の高さは説明できないので見つかる
+  assert.equal(status([40, 48, 52, 55, 60, 64])[0], 'muted-ringing');
+});
+
+test('曲の調を推定し、弾きやすいカポの位置を提案できる', async () => {
+  const { estimateKey, suggestCapo } = await import('../practice.js');
+  const chart = (names) => names.map((name, i) => ({ name, start: i * 2, end: i * 2 + 2 }));
+  assert.equal(estimateKey(chart(['C', 'G', 'Am', 'F'])).name, 'C');
+  assert.equal(estimateKey(chart(['Am', 'F', 'C', 'G', 'Am'])).name, 'Am');
+  assert.equal(estimateKey(chart(['E', 'B', 'C#m', 'A'])).name, 'E');
+  // セーハの多い進行（B♭ F Gm E♭）は、カポ3で G D Em C の形にできる
+  const s = suggestCapo(chart(['B♭', 'F', 'Gm', 'E♭']), STANDARD);
+  assert.equal(s.capo, 3);
+  assert.deepEqual([...s.shapes].sort(), ['C', 'D', 'Em', 'G']);
+  // もともと弾きやすい進行（開放弦の形だけ）はカポなし
+  assert.equal(suggestCapo(chart(['G', 'D', 'Em', 'C']), STANDARD).capo, 0);
+  // F のセーハがある C G Am F は、カポ5で G D Em C の形にすると楽になる
+  assert.equal(suggestCapo(chart(['C', 'G', 'Am', 'F']), STANDARD).capo, 5);
+});

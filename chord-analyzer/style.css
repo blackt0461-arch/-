@@ -369,7 +369,7 @@ select, input[type="text"] {
   scrollbar-width: none;
 }
 
-.history-chord { background: var(--surface); border-radius: 8px; padding: 6px 10px; font-weight: 700; }
+.history-chord { background: var(--surface); border: 0; color: var(--text); border-radius: 8px; padding: 6px 10px; font-weight: 700; }
 .history-chord:last-child { background: var(--surface-2); color: var(--accent); }
 .arrow { color: var(--muted); }
 
@@ -499,15 +499,26 @@ select, input[type="text"] {
 
 .song-chord {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  min-width: 72px;
-  padding: 6px 10px;
+  align-items: stretch;
   border: 1px solid var(--line);
   border-radius: 10px;
   background: var(--surface);
-  color: var(--text);
+  overflow: hidden;
 }
+
+.chord-seek {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 64px;
+  padding: 6px 4px 6px 10px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+}
+
+.to-fret { border: 0; border-left: 1px solid var(--line); background: transparent; padding: 0 8px; font-size: 1rem; }
 
 .song-chord small { color: var(--muted); font-size: 0.7rem; }
 .song-chord b { font-size: 1.1rem; }
@@ -540,3 +551,49 @@ select, input[type="text"] {
 .song-help ol { padding-left: 1.4em; }
 
 .tabs { grid-template-columns: repeat(4, 1fr); }
+
+/* ---------- 全弦チューナー ---------- */
+.tuner-mode { align-self: center; }
+.tuner-all[hidden], .tuner[hidden] { display: none; }
+.tuner-all { display: flex; flex-direction: column; gap: 8px; }
+#tuner-all-rows { display: flex; flex-direction: column; gap: 6px; }
+.string-row { display: grid; grid-template-columns: 52px 1fr 96px; align-items: center; gap: 10px; background: var(--surface); border-radius: 10px; padding: 8px 10px; }
+.string-row.missing { opacity: 0.5; }
+.string-name { display: flex; flex-direction: column; font-weight: 800; font-size: 1.2rem; line-height: 1.1; }
+.string-name small { color: var(--muted); font-weight: 400; font-size: 0.7rem; }
+.mini-meter { position: relative; height: 18px; border-radius: 9px; background: var(--surface-2); }
+.mini-meter::before { content: ""; position: absolute; left: 50%; top: 2px; bottom: 2px; width: 2px; margin-left: -1px; background: var(--line); }
+.mini-needle { position: absolute; top: 2px; bottom: 2px; width: 6px; margin-left: -3px; border-radius: 3px; left: calc(50% + (50% - 6px) * var(--cents, 0) / 50); background: var(--accent); transition: left 120ms ease-out; }
+.string-row.in-tune .mini-needle { background: var(--good); box-shadow: 0 0 8px var(--good); }
+.string-row.missing .mini-needle { display: none; }
+.string-cents { font-size: 0.85rem; text-align: right; color: var(--muted); }
+.string-row.in-tune .string-cents { color: var(--good); font-weight: 700; }
+
+/* ---------- 押さえ方チェック ---------- */
+.shape-check { display: flex; flex-direction: column; gap: 8px; }
+.check-button { min-height: 46px; font-weight: 700; }
+.check-button.active { border-color: var(--accent); color: var(--accent); }
+.check-results[hidden] { display: none; }
+.check-results { background: var(--surface); border-radius: 12px; padding: 10px 12px; }
+.check-row { display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px; }
+.check-mark { display: flex; flex-direction: column; align-items: center; font-size: 1.4rem; font-weight: 800; }
+.check-mark small { color: var(--muted); font-size: 0.7rem; font-weight: 400; }
+.check-mark.ok { color: var(--good); }
+.check-mark.missing, .check-mark.wrong, .check-mark.muted-ringing { color: var(--error); }
+.check-mark.unsure, .check-mark.muted { color: var(--muted); }
+.check-summary { margin: 8px 0 0; font-size: 0.9rem; }
+.check-summary.good { color: var(--good); font-weight: 700; }
+.check-summary.bad { color: var(--error); }
+
+/* ---------- 練習（速さ・くり返し・キーとカポ） ---------- */
+.practice-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.practice-row .speed { display: flex; align-items: center; gap: 6px; font-size: 0.85rem; color: var(--muted); }
+.practice-row .speed select { width: auto; padding: 8px; }
+.practice-row .secondary-button { min-height: 40px; }
+.practice-row .secondary-button.active { border-color: var(--accent); color: var(--accent); font-weight: 700; }
+.practice-row .secondary-button:disabled { opacity: 0.4; }
+.song-key[hidden] { display: none; }
+.song-key { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; background: var(--surface); border-radius: 12px; padding: 10px 12px; font-size: 0.9rem; }
+.song-key b { font-size: 1.1rem; color: var(--accent); }
+
+#mic-to-fret { min-height: 42px; }

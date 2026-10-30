@@ -1,6 +1,7 @@
 // マイクの音を聞き取り、12音の強さ（クロマ）とベース音を求める
 
 import { frequencyToMidi } from './chord-engine.js';
+import { LiveChordTracker } from './live.js';
 
 const MIN_FREQ = 60;      // Drop D の6弦(73Hz)より少し下
 const MAX_FREQ = 4000;    // 倍音も使うので高めまで見る
@@ -206,11 +207,11 @@ async function openMicrophone(fftSize) {
 }
 
 /**
- * マイクを使い始め、フレームごとに onFrame({ chroma, bass, level, state }) を呼ぶ。
+ * マイクを使い始め、フレームごとに onFrame({ chroma, candidates, level, state }) を呼ぶ（candidates：コードの候補）。
  * state は 'calibrating'（周りの雑音を覚えている途中）/ 'quiet'（弾いていない）/ 'playing'。
  * 戻り値の stop() で止める。
  */
-export async function startListening(onFrame, { smoothing = 0.2, calibrationSeconds = 1 } = {}) {
+export async function startListening(onFrame, { calibrationSeconds = 1 } = {}) {
   // 大きいほど近い音（低音弦や、電源の雑音と重なる音）を見分けやすい
   const mic = await openMicrophone(32768);
   const { ctx, analyser } = mic;
@@ -222,7 +223,7 @@ export async function startListening(onFrame, { smoothing = 0.2, calibrationSeco
   const noise = new NoiseProfile();
   let noiseLevel = 0;
   let smoothChroma = new Array(12).fill(0);
-  let smoothBass = new Array(12).fill(0);
+  const tracker = new LiveChordTracker(ctx.sampleRate, analyser.fftSize);
   const startedAt = performance.now();
   let last = startedAt;
   let wasPlaying = false;
@@ -234,7 +235,6 @@ export async function startListening(onFrame, { smoothing = 0.2, calibrationSeco
     const dt = (now - last) / 1000;
     if (dt < 1 / 30) return; // 1秒に30回で十分
     last = now;
-    const alpha = 1 - Math.exp(-dt / smoothing);
 
     // 直近 0.1 秒の音量
     analyser.getFloatTimeDomainData(wave);
@@ -253,7 +253,7 @@ export async function startListening(onFrame, { smoothing = 0.2, calibrationSeco
       noiseLevel += (calibrating ? 0.3 : 0.05) * (level - noiseLevel);
     }
     if (calibrating) {
-      onFrame({ chroma: smoothChroma, bass: null, level, state: 'calibrating' });
+      onFrame({ chroma: smoothChroma, candidates: [], level, state: 'calibrating' });
       return;
     }
     const loud = level > Math.max(noiseLevel * 1.8, 0.003);
@@ -262,18 +262,16 @@ export async function startListening(onFrame, { smoothing = 0.2, calibrationSeco
     else if (loudSince === null) loudSince = now;
     const playing = loud && now - loudSince >= ONSET_WAIT_MS;
 
-    const { chroma, bass } = analyzeSpectrum(noise.subtract(linear), ctx.sampleRate, analyser.fftSize);
-    // 約 smoothing 秒で追いつく指数移動平均（表示のチラつきを抑える）
-    const total = chroma.reduce((s, v) => s + v, 0) || 1;
-    // 判定を始めた瞬間は平均をとらず、すぐに新しい音に切り替える
-    const a = playing && !wasPlaying ? 1 : alpha;
+    // コードの判定（倍音対策・シンプルなコード優先・ベース音・歌の除去・慣性つき）は live.js で行う
+    const onset = playing && !wasPlaying;
     wasPlaying = playing;
-    smoothChroma = smoothChroma.map((v, i) => v + a * ((playing ? chroma[i] / total : 0) - v));
-    smoothBass = smoothBass.map((v, i) => v + a * ((playing && bass === i ? 1 : 0) - v));
-    const bassMax = Math.max(...smoothBass);
-    const smoothedBass = bassMax > 0.3 ? smoothBass.indexOf(bassMax) : null;
-
-    onFrame({ chroma: smoothChroma, bass: smoothedBass, level, state: playing ? 'playing' : 'quiet' });
+    if (!playing) {
+      onFrame({ chroma: smoothChroma, candidates: [], level, state: 'quiet' });
+      return;
+    }
+    const { candidates } = tracker.update(noise.subtract(linear), { wave, dt, onset });
+    smoothChroma = tracker.chroma;
+    onFrame({ chroma: smoothChroma, candidates, level, state: 'playing' });
   };
   rafId = requestAnimationFrame(tick);
 
@@ -354,4 +352,183 @@ export async function startTuner(onFrame) {
       mic.close();
     },
   };
+}
+
+/**
+ * 6本の弦を同時に鳴らした音から、弦ごとの音程のずれ（セント）を測る（全弦チューナー）。
+ * 各弦について、合わせたい高さの近く（±70セント）で基音の山を探し、2倍・3倍の倍音でも高さを測って平均する。
+ * ただし、別の弦の倍音と重なる倍音（例：5弦 A の3倍音と1弦 E）は、どちらの音か分からないので使わない。
+ * targets：合わせたい高さ（MIDI、6弦→1弦）。戻り値：[{ cents, found, strength }]（6弦→1弦）
+ */
+export function measureStrings(mags, sampleRate, fftSize, targets) {
+  const binHz = sampleRate / fftSize;
+  const freqOf = (m) => 440 * 2 ** ((m - 69) / 12);
+  const peakIn = (f, cents) => {
+    const lo = Math.max(1, Math.floor((f * 2 ** (-cents / 1200)) / binHz));
+    const hi = Math.min(mags.length - 2, Math.ceil((f * 2 ** (cents / 1200)) / binHz));
+    let k = -1;
+    for (let i = lo; i <= hi; i++) if (mags[i] > mags[i - 1] && mags[i] >= mags[i + 1] && (k < 0 || mags[i] > mags[k])) k = i;
+    if (k < 0) return null;
+    const a = mags[k - 1], b = mags[k], c = mags[k + 1];
+    const denom = a - 2 * b + c;
+    const offset = denom === 0 ? 0 : (0.5 * (a - c)) / denom;
+    return { freq: (k + offset) * binHz, mag: b };
+  };
+  // 別の弦の倍音（4倍まで）と 30 セント以内で重なるか
+  const overlaps = (s, f) => targets.some((m, o) => o !== s && [1, 2, 3, 4].some((h) => Math.abs(1200 * Math.log2(f / (freqOf(m) * h))) < 30));
+
+  const results = targets.map((m, s) => {
+    const target = freqOf(m);
+    const fund = peakIn(target, 70);
+    if (!fund) return { cents: null, found: false, strength: 0 };
+    const estimates = [{ f0: fund.freq, w: 2 }];
+    for (const h of [2, 3]) {
+      if (overlaps(s, target * h)) continue;
+      const p = peakIn(fund.freq * h, 25);
+      if (p) estimates.push({ f0: p.freq / h, w: 1 });
+    }
+    const f0 = estimates.reduce((a, e) => a + e.f0 * e.w, 0) / estimates.reduce((a, e) => a + e.w, 0);
+    return { cents: 1200 * Math.log2(f0 / target), found: true, strength: fund.mag };
+  });
+  // 鳴っていない弦（ほかの弦よりずっと小さい山しか無い）は「見つからない」とする
+  const strongest = Math.max(...results.map((r) => r.strength), 1e-9);
+  return results.map((r) => (r.strength < strongest * 0.04 ? { cents: null, found: false, strength: r.strength } : r));
+}
+
+/**
+ * 全弦チューナー：ジャラーンと鳴らすと、onFrame({ strings: [{ cents, found }], level }) を呼ぶ。
+ * 鳴っている間の測定を平均して、針のふらつきを抑える。
+ */
+export async function startStrumTuner(targets, onFrame) {
+  const mic = await openMicrophone(32768);
+  const { ctx, analyser } = mic;
+  const db = new Float32Array(analyser.frequencyBinCount);
+  const linear = new Float32Array(analyser.frequencyBinCount);
+  const wave = new Float32Array(analyser.fftSize);
+  const recent = Math.round(ctx.sampleRate * 0.1);
+  let averaged = targets.map(() => null);
+  let loudSince = null;
+  let rafId = 0;
+  let last = 0;
+  const tick = (now) => {
+    rafId = requestAnimationFrame(tick);
+    if (now - last < 1000 / 15) return;
+    last = now;
+    analyser.getFloatTimeDomainData(wave);
+    let sum = 0;
+    for (let i = wave.length - recent; i < wave.length; i++) sum += wave[i] * wave[i];
+    const level = Math.sqrt(sum / recent);
+    if (level < 0.004) { loudSince = null; onFrame({ strings: averaged, level }); return; }
+    if (loudSince === null) { loudSince = now; averaged = targets.map(() => null); }
+    if (now - loudSince < 300) return; // 鳴らしてすぐは、分析する範囲に前の音が多く混ざる
+    analyser.getFloatFrequencyData(db);
+    for (let i = 0; i < db.length; i++) linear[i] = Math.pow(10, db[i] / 20);
+    const measured = measureStrings(linear, ctx.sampleRate, analyser.fftSize, targets);
+    averaged = measured.map((m, i) => {
+      if (!m.found) return averaged[i];
+      const prev = averaged[i];
+      return { found: true, cents: prev ? prev.cents + 0.3 * (m.cents - prev.cents) : m.cents };
+    });
+    onFrame({ strings: averaged, level });
+  };
+  rafId = requestAnimationFrame(tick);
+  return { stop() { cancelAnimationFrame(rafId); mic.close(); } };
+}
+
+/**
+ * 押さえ方チェック：弾いた音（周波数分布）を、表示している押さえ方と比べる。
+ * expected：弦ごとの鳴るはずの音（MIDI、6弦→1弦。鳴らさない弦は null）、openStrings：開放弦の高さ
+ * 戻り値：弦ごとに { status: 'ok' | 'missing' | 'wrong' | 'unsure' | 'muted-ringing' | 'muted', detail }
+ * - 鳴るはずの音の山があれば ok。無くて、半音〜全音ずれた山があれば wrong（押さえる位置のずれ）、どちらも無ければ missing
+ * - 他の弦の倍音と重なる音（1オクターブ上など）は、倍音だけでは出ない大きさの山があるときだけ ok とする
+ * - 鳴らさない弦の開放の音が、他の弦では説明できない大きさで鳴っていたら muted-ringing
+ */
+export function checkShape(mags, sampleRate, fftSize, expected, openStrings) {
+  const binHz = sampleRate / fftSize;
+  const freqOf = (m) => 440 * 2 ** ((m - 69) / 12);
+  const peak = (m, cents = 35) => peakAt(freqOf(m), cents);
+  const peakAt = (f, cents = 35) => {
+    const lo = Math.max(1, Math.floor((f * 2 ** (-cents / 1200)) / binHz));
+    const hi = Math.min(mags.length - 2, Math.ceil((f * 2 ** (cents / 1200)) / binHz));
+    let best = 0;
+    for (let k = lo; k <= hi; k++) if (mags[k] > mags[k - 1] && mags[k] >= mags[k + 1]) best = Math.max(best, mags[k]);
+    return best;
+  };
+  const sounding = expected.filter((m) => m !== null);
+  // 他の弦の倍音（2〜4倍）と同じ高さになる音なら、その倍音だけで出るはずの強さを見積もる。
+  // 低い弦の1つ下と1つ上の倍音の強さの中間（幾何平均）を「倍音だけならこのくらい」とする
+  const HARMONIC_OF = { 12: 2, 19: 3, 24: 4 };
+  const harmonicEstimate = (m, s) => {
+    let est = 0;
+    expected.forEach((o, j) => {
+      const h = HARMONIC_OF[m - o];
+      if (j === s || o === null || !h) return;
+      const below = peakAt(freqOf(o) * (h - 1)), above = peakAt(freqOf(o) * (h + 1));
+      est = Math.max(est, Math.sqrt(below * above));
+    });
+    return est;
+  };
+  const levels = sounding.map((m) => peak(m)).filter((v) => v > 0).sort((a, b) => a - b);
+  const reference = levels[Math.floor(levels.length / 2)] || Math.max(...mags);
+
+  // 鳴らさないはずなのに鳴っている開放弦
+  const ringing = expected.map((m, s) => {
+    if (m !== null) return null;
+    const open = openStrings[s];
+    const explained = sounding.some((o) => [0, 12, 19, 24].includes(open - o));
+    return !explained && peak(open) > reference * 0.3 ? open : null;
+  });
+  // 鳴っている音（ほかの弦の音とその倍音）で説明できる高さか
+  const sources = [...sounding, ...ringing.filter((x) => x !== null)];
+  const explainedBy = (n) => sources.some((o) => [0, 12, 19, 24, 28, 31].includes(n - o));
+
+  return expected.map((m, s) => {
+    if (m === null) return ringing[s] !== null ? { status: 'muted-ringing', detail: '鳴らさない弦が鳴っています' } : { status: 'muted', detail: '' };
+    const level = peak(m);
+    const fromHarmonic = harmonicEstimate(m, s);
+    if (level >= reference * 0.12 && level >= fromHarmonic * 1.6) return { status: 'ok', detail: '' };
+    const near = [-2, -1, 1, 2]
+      .filter((d) => !explainedBy(m + d))
+      .map((d) => ({ d, level: peak(m + d) }))
+      .sort((a, b) => b.level - a.level)[0];
+    if (near && near.level >= reference * 0.25) {
+      return { status: 'wrong', detail: `${Math.abs(near.d) === 1 ? '半音' : '全音'}${near.d > 0 ? '高い' : '低い'}音が鳴っています（押さえる位置を確認）` };
+    }
+    // ほかの弦の1オクターブ上などと同じ音は、倍音と重なって確かめきれない
+    if (fromHarmonic > 0 && level >= reference * 0.12) return { status: 'unsure', detail: 'ほかの弦と同じ音なので確認できません' };
+    return { status: 'missing', detail: '鳴っていません（指が触れていないか確認）' };
+  });
+}
+
+/**
+ * 押さえ方チェックを始める。ジャラーンと弾くたびに onResult(弦ごとの結果) を呼ぶ。
+ * getExpected()：その時点の押さえ方（弦ごとの MIDI。鳴らさない弦は null）
+ */
+export async function startShapeCheck(getExpected, openStrings, onResult) {
+  const mic = await openMicrophone(32768);
+  const { ctx, analyser } = mic;
+  const db = new Float32Array(analyser.frequencyBinCount);
+  const linear = new Float32Array(analyser.frequencyBinCount);
+  const wave = new Float32Array(analyser.fftSize);
+  const recent = Math.round(ctx.sampleRate * 0.1);
+  let loudSince = null;
+  let done = false;
+  let rafId = 0;
+  const tick = (now) => {
+    rafId = requestAnimationFrame(tick);
+    analyser.getFloatTimeDomainData(wave);
+    let sum = 0;
+    for (let i = wave.length - recent; i < wave.length; i++) sum += wave[i] * wave[i];
+    const level = Math.sqrt(sum / recent);
+    if (level < 0.004) { loudSince = null; done = false; return; }
+    if (loudSince === null) loudSince = now;
+    // 弾いてから 0.35 秒後（音がそろったころ）に1回だけ調べる。次は静かになってから
+    if (done || now - loudSince < 350) return;
+    done = true;
+    analyser.getFloatFrequencyData(db);
+    for (let i = 0; i < db.length; i++) linear[i] = Math.pow(10, db[i] / 20);
+    onResult(checkShape(linear, ctx.sampleRate, analyser.fftSize, getExpected(), openStrings));
+  };
+  rafId = requestAnimationFrame(tick);
+  return { stop() { cancelAnimationFrame(rafId); mic.close(); } };
 }

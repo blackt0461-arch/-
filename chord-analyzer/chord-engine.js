@@ -52,6 +52,11 @@ export function spellNote(rootPc, degree, pc) {
   return accidental === undefined ? NOTE_NAMES[pc] : LETTERS[letterIndex] + accidental;
 }
 
+/** コードの名前・構成音・度数をまとめる（root：ルート、type：CHORD_TYPES の1つ、bass：分数コードのベース音） */
+export function describeChord(root, type, bass = null) {
+  return buildCandidate(root, type, bass);
+}
+
 function buildCandidate(root, type, bass, extras = []) {
   const pcs = type.intervals.map((i) => mod12(root + i));
   const degrees = [...type.degrees];

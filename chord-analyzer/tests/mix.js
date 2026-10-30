@@ -75,7 +75,7 @@ const PROGRESSIONS = [
  * stereo: true ならギターは左寄り、歌・ベース・ドラムは真ん中（よくあるバンドの混ぜ方）
  * stereo: false なら全部真ん中（弾き語りの動画など）
  */
-export function makeSong({ seed = 1, stereo = true, vocalGain = 0.12, withBand = true } = {}) {
+export function makeSong({ seed = 1, stereo = true, vocalGain = 0.12, withBand = true, withRhythm = true } = {}) {
   const rand = rng(seed * 7919);
   const tempo = 80 + Math.floor(rand() * 51);
   const beat = 60 / tempo;
@@ -176,8 +176,8 @@ export function makeSong({ seed = 1, stereo = true, vocalGain = 0.12, withBand =
       }
     });
     sing(center, notes, vocalGain, rand);
-    // ベース：各小節の1拍目と3拍目にルート音
-    progression.forEach((name, bar) => {
+    // ベース：各小節の1拍目と3拍目にルート音（withRhythm が false なら、ベースとドラムは無し＝1人の弾き語り）
+    if (withRhythm) progression.forEach((name, bar) => {
       const { root } = parseChordName(name);
       const midi = 28 + ((root - 4 + 12) % 12);
       [0, 2].forEach((b) => {
@@ -192,7 +192,7 @@ export function makeSong({ seed = 1, stereo = true, vocalGain = 0.12, withBand =
       });
     });
     // ドラム：バスドラ（1・3拍）、スネア（2・4拍）、ハイハット（8分）
-    for (let b = 0; b < bars * 4; b++) {
+    for (let b = 0; withRhythm && b < bars * 4; b++) {
       const at = start + b * beat;
       const hit = new Float32Array(Math.floor(MIX_RATE * 0.3));
       for (let i = 0; i < hit.length; i++) {

@@ -85,3 +85,27 @@ export function noteEnergy(mags, binHz, midi, harmonics = 4) {
   for (let h = 1; h <= harmonics; h++) sum += peakNear(mags, binHz, f0 * h, 30).mag / h ** 0.5;
   return sum;
 }
+
+/**
+ * 一番目立つ音の高さ（セント：MIDI × 100）を、倍音の合計がいちばん大きい高さとして 10 セント刻みで探す。
+ * 歌のメロディの追跡に使う（範囲は C3〜C6）。
+ */
+export function predominantPitch(mags, binHz, { fromCents = 4800, toCents = 8400 } = {}) {
+  let best = { cents: fromCents, sum: 0 };
+  for (let c = fromCents; c <= toCents; c += 10) {
+    const f0 = 440 * 2 ** ((c / 100 - 69) / 12);
+    let sum = 0;
+    for (let h = 1; h <= 6; h++) sum += peakNear(mags, binHz, f0 * h, 15).mag / h;
+    if (sum > best.sum) best = { cents: c, sum };
+  }
+  return best;
+}
+
+/** 周波数分布から、ある音（基音 f0）とその倍音を取り除く（その場で書き換える） */
+export function removeHarmonics(mags, binHz, f0, { count = 12, widthCents = 60 } = {}) {
+  for (let h = 1; h <= count; h++) {
+    const f = f0 * h;
+    const lo = Math.floor((f * 2 ** (-widthCents / 1200)) / binHz), hi = Math.ceil((f * 2 ** (widthCents / 1200)) / binHz);
+    for (let k = Math.max(0, lo); k <= hi && k < mags.length; k++) mags[k] = 0;
+  }
+}

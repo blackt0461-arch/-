@@ -56,10 +56,10 @@ export async function playNotes(midis, { strumMs = 35, seconds = 2.5 } = {}) {
 /**
  * 音の並びを、時間どおりに鳴らす（コード譜・タブ譜の再生）。
  * items: [{ t: 鳴らす時刻（秒）, midis: [MIDI…], strumMs }]
- * from 秒から鳴らし始め、onTime(今の時刻) を画面の更新用に呼ぶ。戻り値の stop() で止める。
+ * from 秒から rate 倍の速さで鳴らし始め、onTime(今の曲の時刻) を画面の更新用に呼ぶ。戻り値の stop() で止める。
  * 音は少し先（0.6秒ぶん）ずつ作って予約していくので、長い曲でも最初に待たされない。
  */
-export async function playSequence(items, { from = 0, onTime = () => {}, onEnd = () => {} } = {}) {
+export async function playSequence(items, { from = 0, rate = 1, onTime = () => {}, onEnd = () => {} } = {}) {
   ctx ??= new (window.AudioContext || window.webkitAudioContext)();
   if (ctx.state !== 'running') await ctx.resume();
   const sr = ctx.sampleRate;
@@ -71,7 +71,7 @@ export async function playSequence(items, { from = 0, onTime = () => {}, onEnd =
   let stopped = false;
 
   const schedule = () => {
-    const horizon = ctx.currentTime - startAt + from + 0.6;
+    const horizon = (ctx.currentTime - startAt) * rate + from + 0.6;
     while (next < queue.length && queue[next].t <= horizon) {
       const { t, midis, strumMs = 0 } = queue[next++];
       midis.forEach((midi, i) => {
@@ -81,7 +81,7 @@ export async function playSequence(items, { from = 0, onTime = () => {}, onEnd =
         const src = ctx.createBufferSource();
         src.buffer = buffer;
         src.connect(ctx.destination);
-        src.start(startAt + (t - from) + (i * strumMs) / 1000);
+        src.start(startAt + (t - from) / rate + (i * strumMs) / 1000);
         sources.push(src);
       });
     }
@@ -89,7 +89,7 @@ export async function playSequence(items, { from = 0, onTime = () => {}, onEnd =
   const timer = setInterval(() => {
     if (stopped) return;
     schedule();
-    const now = ctx.currentTime - startAt + from;
+    const now = (ctx.currentTime - startAt) * rate + from;
     onTime(Math.max(from, now));
     if (now > end) { stop(); onEnd(); }
   }, 100);

@@ -1,7 +1,7 @@
 // 録音（画面収録など）の音から、ギターのコード進行とタブ譜の材料を作る
 // ブラウザのワーカー（画面を固めずに裏で計算する仕組み）でも、テストでも動くように、画面の部品は使わない
 
-import { magnitudeSpectrum, peakNear, noteEnergy } from './dsp.js';
+import { magnitudeSpectrum, peakNear, noteEnergy, predominantPitch, removeHarmonics } from './dsp.js';
 import { analyzeSpectrum } from './audio.js';
 import { identifyFromChroma, CHORD_TYPES, parseChordName } from './chord-engine.js';
 import { TUNINGS, findVoicings, soundingNotes } from './fretboard.js';
@@ -282,14 +282,7 @@ export function removeVocalFrames(signal, sampleRate, { frame = 4096, fft = 1638
   const frames = [];
   for (let start = 0; start + frame <= signal.length; start += hop) {
     const mags = magnitudeSpectrum(signal, start, frame, fft);
-    // 一番目立つ音（歌の高さの範囲 C3〜C6）：倍音の合計がいちばん大きい高さを、細かく（10セント刻み）探す
-    let best = null;
-    for (let c = 4800; c <= 8400; c += 10) {
-      const f0 = 440 * 2 ** ((c / 100 - 69) / 12);
-      let sum = 0;
-      for (let h = 1; h <= 6; h++) sum += peakNear(mags, binHz, f0 * h, 15).mag / h;
-      if (!best || sum > best.sum) best = { cents: c, sum };
-    }
+    const best = predominantPitch(mags, binHz);
     frames.push({ t: (start + frame / 2) / sampleRate, mags, cents: best.cents, sum: best.sum });
   }
   // 前後0.3秒の中で高さが揺れていれば歌とみなし、その音の基音と倍音を取り除く
@@ -300,12 +293,7 @@ export function removeVocalFrames(signal, sampleRate, { frame = 4096, fft = 1638
     const values = near.map((g) => g.cents);
     const wobble = Math.max(...values) - Math.min(...values);
     if (wobble < wobbleCents) return;
-    const f0 = 440 * 2 ** ((fr.cents / 100 - 69) / 12);
-    for (let h = 1; h <= 12; h++) {
-      const f = f0 * h;
-      const lo = Math.floor((f * 2 ** (-60 / 1200)) / binHz), hi = Math.ceil((f * 2 ** (60 / 1200)) / binHz);
-      for (let k = lo; k <= hi && k < fr.mags.length; k++) fr.mags[k] = 0;
-    }
+    removeHarmonics(fr.mags, binHz, 440 * 2 ** ((fr.cents / 100 - 69) / 12));
     fr.vocal = true;
   });
   return frames;

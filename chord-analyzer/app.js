@@ -1,14 +1,15 @@
 // 画面の切り替えと、各部品のつなぎ込み
 
-import { NOTE_NAMES, identifyFromNotes, identifyFromChroma, midiToPitchClass, parseChordName, frequencyToMidi } from './chord-engine.js';
-import { startListening, startTuner } from './audio.js';
+import { NOTE_NAMES, identifyFromNotes, midiToPitchClass, parseChordName, frequencyToMidi } from './chord-engine.js';
+import { startListening, startTuner, startStrumTuner, startShapeCheck } from './audio.js';
 import { TUNINGS, parseShape, formatShape, soundingNotes, renderFretboard, findVoicings } from './fretboard.js';
 import { playNotes, playSequence } from './sound.js';
 import { formatTime, assignTab, formatTab } from './song.js';
+import { estimateKey, suggestCapo, easiestVoicing } from './practice.js';
 
 // version.json と同じ値にする（新しいバージョンを公開したら両方を上げる）
-const APP_VERSION = '1.5.0';
-const APP_FILES = ['index.html', 'style.css', 'app.js', 'chord-engine.js', 'audio.js', 'fretboard.js', 'sound.js', 'song.js', 'dsp.js', 'chart.js', 'transcribe.js', 'transcribe-worker.js', 'sw.js', 'manifest.webmanifest'];
+const APP_VERSION = '1.6.0';
+const APP_FILES = ['index.html', 'style.css', 'app.js', 'chord-engine.js', 'audio.js', 'fretboard.js', 'sound.js', 'song.js', 'dsp.js', 'chart.js', 'live.js', 'practice.js', 'transcribe.js', 'transcribe-worker.js', 'sw.js', 'manifest.webmanifest'];
 const HOLD_MS = 150;      // マイク：別のコードがこの時間続いたら表示を切り替える
 const HISTORY_SIZE = 16;  // マイク：覚えておくコードの数
 const HISTORY_STABLE_MS = 400; // マイク：この時間続いたコードを履歴に入れる
@@ -34,6 +35,7 @@ tabs.forEach(({ id, tab }) => {
       t.panel.hidden = t.id !== id;
     });
     // 別のタブに移ったらマイクを止める（電池の節約。マイクとチューナーは同時に使えない）
+    if (id !== 'fret') stopCheck();
     if (id !== 'mic') stopMic();
     if (id !== 'song') pauseSongMedia();
     if (id !== 'tuner') stopTuner();
@@ -177,6 +179,61 @@ searchResults.addEventListener('click', (e) => {
 
 updateFret();
 
+// コード名を指板タブに表示する（曲・マイクのコードから移動するとき）
+function showOnFretboard(name) {
+  const parsed = parseChordName(name);
+  if (!parsed) return;
+  const shape = easiestVoicing(parsed.root, parsed.type, parsed.bass, currentTuning(), Number(capoSelect.value));
+  if (!shape) return;
+  frets = shape;
+  shapeError.hidden = true;
+  updateFret();
+  document.getElementById('tab-fret').click();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// ---- 押さえ方チェック：表示している押さえ方で弾くと、弦ごとに正しく鳴っているか教える ----
+const checkToggle = document.getElementById('check-toggle');
+const checkStatus = document.getElementById('check-status');
+const checkResults = document.getElementById('check-results');
+let checker = null;
+const CHECK_MARKS = { ok: '✓', missing: '✗', wrong: '✗', 'muted-ringing': '✗', unsure: '？', muted: '―' };
+
+function stopCheck() {
+  checker?.stop();
+  checker = null;
+  checkToggle.textContent = '🎤 押さえ方チェック';
+  checkToggle.classList.remove('active');
+  checkStatus.textContent = '';
+}
+
+function renderCheck(results) {
+  const problems = results.map((r, s) => ({ ...r, s })).filter((r) => ['missing', 'wrong', 'muted-ringing'].includes(r.status));
+  checkResults.hidden = false;
+  checkResults.innerHTML = `
+    <div class="check-row">${results.map((r, s) => `<span class="check-mark ${r.status}"><small>${6 - s}弦</small>${CHECK_MARKS[r.status]}</span>`).join('')}</div>
+    <p class="check-summary ${problems.length ? 'bad' : 'good'}">${problems.length ? problems.map((p) => `${6 - p.s}弦：${p.detail}`).join('<br>') : 'きれいに鳴っています！'}</p>
+    ${results.some((r) => r.status === 'unsure') ? '<p class="hint">？ の弦は、ほかの弦の1オクターブ上などと同じ音なので確かめきれません。</p>' : ''}`;
+}
+
+checkToggle.addEventListener('click', async () => {
+  if (checker) { stopCheck(); return; }
+  stopMic();
+  stopTuner();
+  try {
+    checker = await startShapeCheck(
+      () => { const tuning = currentTuning(); const capo = Number(capoSelect.value); return frets.map((f, s) => (f === null ? null : tuning.strings[s] + capo + f)); },
+      currentTuning().strings.map((m) => m + Number(capoSelect.value)),
+      (results) => { renderCheck(results); checkStatus.textContent = 'もう一度弾くと、また調べます'; },
+    );
+    checkToggle.textContent = '■ チェックをやめる';
+    checkToggle.classList.add('active');
+    checkStatus.textContent = 'この押さえ方で、ジャラーンと1回弾いてください';
+  } catch {
+    checkStatus.textContent = micErrorText();
+  }
+});
+
 // ---------- マイク ----------
 const micToggle = document.getElementById('mic-toggle');
 const micStatus = document.getElementById('mic-status');
@@ -201,7 +258,7 @@ let history = [];
 try { history = JSON.parse(storage.get('history') || '[]').slice(-HISTORY_SIZE); } catch { history = []; }
 function renderHistory() {
   historyEl.innerHTML = history.length
-    ? history.map((name) => `<span class="history-chord">${escapeHtml(name)}</span>`).join('<span class="arrow">→</span>')
+    ? history.map((name) => `<button type="button" class="history-chord" data-name="${escapeHtml(name)}" title="指板で見る">${escapeHtml(name)}</button>`).join('<span class="arrow">→</span>')
     : '<span class="hint">弾いたコードがここに並びます</span>';
   historyEl.scrollLeft = historyEl.scrollWidth;
 }
@@ -211,6 +268,11 @@ function addHistory(name) {
   storage.set('history', JSON.stringify(history));
   renderHistory();
 }
+historyEl.addEventListener('click', (e) => {
+  const chip = e.target.closest('.history-chord');
+  if (chip) showOnFretboard(chip.dataset.name);
+});
+document.getElementById('mic-to-fret').addEventListener('click', () => { if (shownName) showOnFretboard(shownName); });
 document.getElementById('clear-history').addEventListener('click', () => {
   history = [];
   storage.set('history', '[]');
@@ -244,7 +306,7 @@ micToggle.addEventListener('click', async () => {
   }
   micError.hidden = true;
   try {
-    listener = await startListening(({ chroma, bass, state }) => {
+    listener = await startListening(({ chroma, candidates, state }) => {
       micStatus.textContent = state === 'calibrating' ? '周りの雑音を覚えています。1秒ほど弾かずに待ってください…'
         : state === 'quiet' && shownName === null ? 'ギターを弾いてください' : '';
       const max = Math.max(...chroma) || 1;
@@ -260,7 +322,6 @@ micToggle.addEventListener('click', async () => {
       }
       if (!wasPlaying) noteStart = now;
       wasPlaying = true;
-      const candidates = identifyFromChroma(chroma, bass, 3);
       const name = candidates[0]?.name ?? null;
       if (name !== pending.name) pending = { name, since: now };
       // 弾き始めは分析する音がそろっていく途中なので自由に更新し、
@@ -362,9 +423,10 @@ function renderAnalysis() {
   const { timeline, tabBlocks } = analysis;
   songChords.innerHTML = timeline.length
     ? timeline.map((seg, i) => `
-      <button type="button" class="song-chord" data-index="${i}">
-        <small>${formatTime(seg.start)}</small><b>${escapeHtml(seg.name)}</b><span>${voicingFor(seg.name)}</span>
-      </button>`).join('')
+      <div class="song-chord" data-index="${i}">
+        <button type="button" class="chord-seek"><small>${formatTime(seg.start)}</small><b>${escapeHtml(seg.name)}</b><span>${voicingFor(seg.name)}</span></button>
+        <button type="button" class="to-fret" aria-label="${escapeHtml(seg.name)} を指板で見る" title="指板で見る">🎸</button>
+      </div>`).join('')
     : '<p class="hint">コードが見つかりませんでした</p>';
   songTab.innerHTML = tabBlocks.length
     ? tabBlocks.map((b, i) => `<pre class="tab-block" data-index="${i}">${escapeHtml(b.text)}</pre>`).join('')
@@ -376,7 +438,7 @@ function voicingFor(name) {
   const key = `${name}|${tuningSelect.value}|${capoSelect.value}`;
   if (!voicingCache.has(key)) {
     const parsed = parseChordName(name);
-    const v = parsed && findVoicings(parsed.root, parsed.type, parsed.bass, currentTuning(), { capo: Number(capoSelect.value), limit: 1 })[0];
+    const v = parsed && easiestVoicing(parsed.root, parsed.type, parsed.bass, currentTuning(), Number(capoSelect.value));
     voicingCache.set(key, v ? formatShape(v) : '');
   }
   return voicingCache.get(key);
@@ -443,6 +505,7 @@ async function startSynth(kind) {
   const from = songMedia.currentTime >= songMedia.duration - 0.5 ? 0 : songMedia.currentTime;
   const handle = await playSequence(items, {
     from,
+    rate: Number(songSpeed.value),
     onTime: (t) => highlightNow(t),
     onEnd: () => stopSynth(),
   });
@@ -452,6 +515,60 @@ async function startSynth(kind) {
 playTabButton.addEventListener('click', () => startSynth('tab'));
 playChartButton.addEventListener('click', () => startSynth('chart'));
 songMedia.addEventListener('play', () => { if (synth) stopSynth(); });
+
+// ---- 練習：ゆっくり再生・区間くり返し・調とカポの提案 ----
+const songSpeed = document.getElementById('song-speed');
+const loopA = document.getElementById('loop-a');
+const loopB = document.getElementById('loop-b');
+const loopClear = document.getElementById('loop-clear');
+const loopStatus = document.getElementById('loop-status');
+const songKey = document.getElementById('song-key');
+let loop = { a: null, b: null };
+
+songSpeed.addEventListener('change', () => {
+  songMedia.playbackRate = Number(songSpeed.value);
+  songMedia.preservesPitch = true; // ゆっくりにしても音の高さは変えない
+  if (synth) { const kind = synth.kind; stopSynth(); startSynth(kind); }
+});
+function renderLoop() {
+  loopA.classList.toggle('active', loop.a !== null);
+  loopB.classList.toggle('active', loop.b !== null);
+  loopClear.disabled = loop.a === null && loop.b === null;
+  loopStatus.textContent = loop.a !== null && loop.b !== null
+    ? `${formatTime(loop.a)} 〜 ${formatTime(loop.b)} をくり返します`
+    : loop.a !== null ? `${formatTime(loop.a)} から。終わりの場所で B を押してください` : 'A と B を押すと、その間をくり返し再生します';
+}
+loopA.addEventListener('click', () => { loop = { a: songMedia.currentTime, b: null }; renderLoop(); });
+loopB.addEventListener('click', () => {
+  if (loop.a === null || songMedia.currentTime <= loop.a + 0.3) return;
+  loop.b = songMedia.currentTime;
+  songMedia.currentTime = loop.a;
+  songMedia.play().catch(() => {});
+  renderLoop();
+});
+loopClear.addEventListener('click', () => { loop = { a: null, b: null }; renderLoop(); });
+songMedia.addEventListener('timeupdate', () => {
+  if (loop.a !== null && loop.b !== null && songMedia.currentTime >= loop.b) songMedia.currentTime = loop.a;
+});
+
+function renderKey() {
+  const key = estimateKey(analysis.timeline);
+  const capo = suggestCapo(analysis.timeline, currentTuning());
+  if (!key) { songKey.hidden = true; return; }
+  const current = Number(capoSelect.value);
+  const capoText = !capo || capo.capo === 0 || capo.saving < 0.15
+    ? 'カポなしで弾きやすい曲です'
+    : `おすすめ：カポ${capo.capo}（${capo.shapes.join('・')} などの形で弾けます）`;
+  songKey.hidden = false;
+  songKey.innerHTML = `<span>キー：<b>${key.name}</b></span><span>${capoText}</span>${capo && capo.capo > 0 && capo.saving >= 0.15 && capo.capo !== current ? `<button type="button" id="apply-capo" class="secondary-button">カポ${capo.capo}にする</button>` : ''}`;
+  document.getElementById('apply-capo')?.addEventListener('click', () => {
+    capoSelect.value = String(capo.capo);
+    capoSelect.dispatchEvent(new Event('change'));
+    analysis.tabBlocks = buildTabBlocks(analysis.events);
+    renderAnalysis();
+    renderKey();
+  });
+}
 
 function playFrom(t) {
   songMedia.currentTime = Math.max(0, t - 0.2);
@@ -464,8 +581,11 @@ function playFrom(t) {
   songMedia.play().catch(() => {});
 }
 songChords.addEventListener('click', (e) => {
-  const button = e.target.closest('.song-chord');
-  if (button) playFrom(analysis.timeline[Number(button.dataset.index)].start);
+  const chip = e.target.closest('.song-chord');
+  if (!chip) return;
+  const seg = analysis.timeline[Number(chip.dataset.index)];
+  if (e.target.closest('.to-fret')) showOnFretboard(seg.name);
+  else playFrom(seg.start);
 });
 songTab.addEventListener('click', (e) => {
   const block = e.target.closest('.tab-block');
@@ -488,6 +608,10 @@ songFile.addEventListener('change', async () => {
     analysis = { timeline: result.timeline, tabBlocks: buildTabBlocks(result.events), events: result.events, beats: result.beats, bpm: result.bpm };
     songInfo.textContent = `${file.name}（${formatTime(duration)}）・テンポ ${Math.round(result.bpm || 0)}・${result.useSide ? '左右の差で歌を弱めて解析しました' : '歌のメロディを取り除いて解析しました'}`;
     renderAnalysis();
+    renderKey();
+    loop = { a: null, b: null };
+    renderLoop();
+    songMedia.playbackRate = Number(songSpeed.value);
     songResult.hidden = false;
     highlightNow();
   } catch (err) {
@@ -552,12 +676,54 @@ function stopTuner() {
   resetTuner();
 }
 
+// 全部まとめて：6本をジャラーンと鳴らすと、弦ごとのずれを表示する
+const tunerModeButtons = [...document.querySelectorAll('.tuner-mode [data-mode]')];
+const tunerAll = document.getElementById('tuner-all');
+const tunerAllRows = document.getElementById('tuner-all-rows');
+const tunerSingle = document.getElementById('tuner-single');
+let tunerMode = 'single';
+
+function renderAllStrings(strings = []) {
+  const tuning = currentTuning();
+  tunerAllRows.innerHTML = tuning.strings.map((m, s) => {
+    const r = strings[s];
+    const cents = r?.found ? Math.round(r.cents) : null;
+    const inTune = cents !== null && Math.abs(cents) <= IN_TUNE_CENTS;
+    const hint = cents === null ? '―' : inTune ? 'OK' : cents > 0 ? `+${cents} ゆるめる` : `${cents} しめる`;
+    return `<div class="string-row${inTune ? ' in-tune' : ''}${cents === null ? ' missing' : ''}">
+      <span class="string-name"><small>${6 - s}弦</small>${NOTE_NAMES[midiToPitchClass(m)]}</span>
+      <span class="mini-meter"><span class="mini-needle" style="--cents:${cents === null ? 0 : Math.max(-50, Math.min(50, cents))}"></span></span>
+      <span class="string-cents">${hint}</span>
+    </div>`;
+  }).join('');
+}
+
+tunerModeButtons.forEach((b) => b.addEventListener('click', () => {
+  stopTuner();
+  tunerMode = b.dataset.mode;
+  tunerModeButtons.forEach((x) => x.setAttribute('aria-checked', String(x === b)));
+  tunerAll.hidden = tunerMode !== 'all';
+  tunerSingle.hidden = tunerMode === 'all';
+  renderAllStrings();
+}));
+
 tunerToggle.addEventListener('click', async () => {
   if (tuner) {
     stopTuner();
     return;
   }
   tunerError.hidden = true;
+  if (tunerMode === 'all') {
+    try {
+      tuner = await startStrumTuner(currentTuning().strings, ({ strings }) => renderAllStrings(strings));
+      tunerToggle.textContent = 'チューナーを停止';
+      tunerToggle.classList.add('active');
+    } catch {
+      tunerError.textContent = micErrorText();
+      tunerError.hidden = false;
+    }
+    return;
+  }
   try {
     tuner = await startTuner(({ freq }) => {
       if (!freq) {
@@ -588,6 +754,7 @@ tunerToggle.addEventListener('click', async () => {
   }
 });
 resetTuner();
+renderAllStrings();
 
 // ---------- アップデートのお知らせ ----------
 const banner = document.getElementById('update-banner');
