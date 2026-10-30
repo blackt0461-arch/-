@@ -1,7 +1,7 @@
 // Chat assistant: turns Japanese requests ("明日は5時に起こして") into edits of alarms.json via Gemini.
 // The model only proposes `changes`; the page shows them and saves only after the user confirms.
 
-import { DAYS, DAY_JA, validate, resolveDay, expandTimes, todayJST, addDays, weekdayKey, defaultProfile } from './schedule.js?v=2026-10-30.1540';
+import { DAYS, DAY_JA, validate, resolveDay, expandTimes, todayJST, addDays, weekdayKey, defaultProfile } from './schedule.js?v=2026-10-30.1543';
 
 export const DEFAULT_MODEL = 'gemini-3.6-flash';
 const ORDER = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
@@ -230,6 +230,12 @@ function slotFrom(change, previous) {
 }
 
 const isMinutes = v => Number.isInteger(v) && v >= 0 && v <= 600;
+const DEFAULT_TRAVEL_MINUTES = 60;
+
+function googleMapsUrl(origin, destination) {
+  const q = new URLSearchParams({ api: '1', origin, destination, travelmode: 'transit' });
+  return `https://www.google.com/maps/dir/?${q}`;
+}
 
 // Work back from a meeting: wake = meet - buffer - travel - walk - prep. Returns the override to set.
 function planMeeting(next, c, today) {
@@ -244,7 +250,9 @@ function planMeeting(next, c, today) {
   if (c.travelSource === 'user' && isMinutes(c.travelMinutes)) { travel = c.travelMinutes; source = 'user'; }
   else if (saved) { travel = saved.minutes; source = saved.verified ? 'saved' : 'estimate'; }
   else if (isMinutes(c.travelMinutes) && c.travelMinutes > 0) { travel = c.travelMinutes; source = 'estimate'; }
-  else throw new Error(`${place} までの移動時間がわかりません。「${place}は○分」と教えてください`);
+  // The AI couldn't estimate (e.g. a place it doesn't know): use a generous placeholder so the
+  // alarm errs early, and let the user check with the links.
+  else { travel = DEFAULT_TRAVEL_MINUTES; source = 'placeholder'; }
   const prep = isMinutes(c.prepMinutes) ? c.prepMinutes : profile.prepMinutes;
   const walk = isMinutes(c.walkMinutes) ? c.walkMinutes : profile.walkMinutes;
   const buffer = isMinutes(c.bufferMinutes) ? c.bufferMinutes : profile.bufferMinutes;
@@ -261,8 +269,8 @@ function planMeeting(next, c, today) {
     meeting: { dest: String(c.mapsQuery || place).trim(), travel },
   };
   // Remember estimates (unverified) so the next request reuses the same number.
-  if (!saved || source === 'user') {
-    next.places = { ...(next.places || {}), [place]: { minutes: travel, verified: source !== 'estimate' } };
+  if ((!saved && source !== 'placeholder') || source === 'user') {
+    next.places = { ...(next.places || {}), [place]: { minutes: travel, verified: source === 'user' } };
   }
   return { date, slot, place, travel, source, prep, walk, buffer };
 }
@@ -304,10 +312,15 @@ export function applyChanges(data, changes, now = new Date()) {
       next.overrides[m.date] = m.slot;
       lines.push(`${md(m.date)} ${m.slot.time} 起床（${m.slot.note}）`);
       lines.push(`内訳：支度${m.prep}分＋駅まで${m.walk}分＋移動${m.travel}分＋余裕${m.buffer}分`);
+      if (m.source === 'placeholder') {
+        warnings.push(`${m.place} までの移動時間を見積もれなかったので、仮に${m.travel}分にしています。下のリンクで確かめて「${m.place}は○分」と教えてください。`);
+        unverified.push(m.place);
+      }
       if (m.source === 'estimate') {
         warnings.push(`${m.place} までの移動${m.travel}分は未確認の見積もりです。下のリンクで確かめて、違っていたら「${m.place}は○分」と教えてください。`);
         unverified.push(m.place);
       }
+      links.push({ label: `Googleマップで確認（${next.profile.homeStation} → ${m.place}）`, url: googleMapsUrl(next.profile.homeStation, m.slot.meeting.dest || m.place) });
       links.push({ label: `Yahoo!乗換案内で確認（${stationName(next.profile.homeStation)} → ${stationName(m.slot.meeting.dest)}）`,
         url: yahooTransitUrl(stationName(next.profile.homeStation), stationName(m.slot.meeting.dest), ...Object.values(arriveByOf(next, c))) });
     } else if (c.op.startsWith('override_')) {
