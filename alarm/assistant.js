@@ -101,7 +101,7 @@ ${upcoming.join('\n')}
 - 指示が曖昧なら、推測で変更せず changes を空にして reply で質問する。
 - 「10時に渋谷集合」「明日13時に〇〇大学」のように集合・待ち合わせ・到着時刻を言われたら meeting を使う。date は集合する日。
   - place は短い地名に揃える（「渋谷駅ハチ公前」→「渋谷」）。
-  - mapsQuery には、Googleマップで検索して1か所に決まる文字列を入れる（正式名称＋市区町村、例：「神戸市役所 神戸市中央区」）。施設名に自信がなければ、その最寄り駅名（例：「三ノ宮駅」）にする。
+  - mapsQuery には、地図アプリで検索して1か所に決まる文字列を入れる（駅なら正式な駅名、例：「三ノ宮駅」。施設なら正式名称＋市区町村）。施設名に自信がなければ、その最寄り駅名にする。
   - 覚えている移動時間にある場所なら、その分数を travelMinutes に入れ、travelSource は "saved"。
   - ユーザーが移動時間を言ったら、その値で travelSource は "user"（同時に remember_place も出す）。
   - 「マップで見たら合ってた」「その時間で大丈夫」と言われたら、その場所の今の分数で remember_place を出す（確認済みになる）。
@@ -220,8 +220,7 @@ function planMeeting(next, c, today) {
   if (!profile.homeStation) throw new Error('家の最寄り駅が未設定です（設定 → 起床時刻の計算）');
   const saved = next.places?.[place];
   let travel, source;
-  if (c.travelSource === 'maps' && isMinutes(c.travelMinutes)) { travel = c.travelMinutes; source = 'maps'; }
-  else if (c.travelSource === 'user' && isMinutes(c.travelMinutes)) { travel = c.travelMinutes; source = 'user'; }
+  if (c.travelSource === 'user' && isMinutes(c.travelMinutes)) { travel = c.travelMinutes; source = 'user'; }
   else if (saved) { travel = saved.minutes; source = saved.verified ? 'saved' : 'estimate'; }
   else if (isMinutes(c.travelMinutes) && c.travelMinutes > 0) { travel = c.travelMinutes; source = 'estimate'; }
   else throw new Error(`${place} までの移動時間がわかりません`);
@@ -238,18 +237,13 @@ function planMeeting(next, c, today) {
     extra: prev?.extra ?? 0,
     interval: prev?.interval ?? 5,
     note: `${place} ${c.meetTime.replace(/^0/, '')}集合`,
+    meeting: { dest: String(c.mapsQuery || place).trim(), travel },
   };
   // Remember estimates (unverified) so the next request reuses the same number.
-  if (!saved || source === 'user' || source === 'maps') {
-    next.places = { ...(next.places || {}), [place]: { minutes: travel, verified: source !== 'estimate' } };
+  if (!saved || source === 'user') {
+    next.places = { ...(next.places || {}), [place]: { minutes: travel, verified: source === 'user' } };
   }
-  return { date, slot, place, travel, source, prep, walk, buffer, mapsSummary: c.mapsSummary };
-}
-
-// When the traveller must be at the meeting place for `change` (meeting time minus buffer), as a Date.
-export function meetingArriveBy(data, change) {
-  const buffer = isMinutes(change.bufferMinutes) ? change.bufferMinutes : profileOf(data).bufferMinutes;
-  return new Date(new Date(`${change.date}T${change.meetTime}:00+09:00`).getTime() - buffer * 60000);
+  return { date, slot, place, travel, source, prep, walk, buffer };
 }
 
 // Apply proposed changes to a copy of `data`.
@@ -289,11 +283,7 @@ export function applyChanges(data, changes, now = new Date()) {
       next.overrides[m.date] = m.slot;
       lines.push(`${md(m.date)} ${m.slot.time} 起床（${m.slot.note}）`);
       lines.push(`内訳：支度${m.prep}分＋駅まで${m.walk}分＋移動${m.travel}分＋余裕${m.buffer}分`);
-      if (m.source === 'maps') lines.push(`✓ Googleマップで計算（${m.mapsSummary || '電車'}）`);
-      if (m.source === 'estimate') {
-        warnings.push(`${m.place} までの移動${m.travel}分は未確認です。マップで確かめて、合っていれば下のチェックを入れて保存、違っていたら「${m.place}は○分」と教えてください。`);
-        unverified.push(m.place);
-      }
+      lines.push(`前の晩の同期で、iPhoneがAppleマップの電車の時間（${next.profile.homeStation} → ${m.slot.meeting.dest}）に合わせて起床時刻を自動で補正します`);
       links.push({ label: `Googleマップで確認（${next.profile.homeStation} → ${m.place}）`, url: mapsUrl(next.profile.homeStation, m.place) });
     } else if (c.op.startsWith('override_')) {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(c.date || '')) throw new Error(`日付が不正です: ${c.date}`);

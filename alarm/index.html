@@ -164,7 +164,6 @@
       <div class="settings">
         <label>Gemini APIキー（Google AI Studio で発行）<input id="cfgGemKey" type="password" autocomplete="off"></label>
         <label>モデル<input id="cfgGemModel" autocomplete="off"></label>
-        <label>Googleマップ APIキー（任意。集合場所までの電車の時間を計算）<input id="cfgMapsKey" type="password" autocomplete="off"></label>
         <p class="sub">キーはこの端末のブラウザにだけ保存されます。話しかけた内容と今の予定がGoogleに送られます。</p>
         <div class="actions"><button class="primary" id="aiSave">保存</button></div>
       </div>
@@ -195,8 +194,7 @@
 
 <script type="module">
 import { DAYS, DAY_JA, emptyData, defaultProfile, regenerate, resolveDay, expandTimes, todayJST, addDays, weekdayKey } from './schedule.js';
-import { DEFAULT_MODEL, askGemini, applyChanges, meetingArriveBy } from './assistant.js';
-import { transitMinutes } from './maps.js';
+import { DEFAULT_MODEL, askGemini, applyChanges } from './assistant.js';
 
 const $ = id => document.getElementById(id);
 const ORDER = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
@@ -442,12 +440,7 @@ async function send(text) {
     pending.remove();
     history.push({ role: 'model', text: res.reply || '（返事なし）' });
     const m = addMsg('ai', res.reply || 'すみません、うまく理解できませんでした。');
-    if (res.changes.length) {
-      const notes = await withMapsTimes(res.changes, t => { pending.textContent = t; m.after(pending); });
-      pending.remove();
-      for (const n of notes) addMsg('ai err', n);
-      showProposal(m, res.changes);
-    }
+    if (res.changes.length) showProposal(m, res.changes);
   } catch (e) {
     pending.remove();
     history.pop();
@@ -455,28 +448,6 @@ async function send(text) {
   } finally {
     busy = false;
   }
-}
-
-// Replace AI travel estimates with Google Maps transit times where possible. Mutates `changes`.
-// Returns messages to show when a lookup fails (the AI estimate is then kept).
-async function withMapsTimes(changes, progress) {
-  const mapsKey = store.get('alarm.mapsKey');
-  const origin = (data.profile || {}).homeStation;
-  const notes = [];
-  if (!mapsKey || !origin) return notes;
-  for (const c of changes) {
-    if (c.op !== 'meeting' || c.travelSource === 'user' || !c.date || !c.meetTime || !c.place) continue;
-    progress(`Googleマップで ${origin} → ${c.mapsQuery || c.place} の経路を調べています…`);
-    try {
-      const r = await transitMinutes({ apiKey: mapsKey, origin, destination: c.mapsQuery || c.place, arriveBy: meetingArriveBy(data, c) });
-      c.travelMinutes = r.minutes;
-      c.travelSource = 'maps';
-      c.mapsSummary = r.summary;
-    } catch (e) {
-      notes.push(`Googleマップで計算できなかったので、見積もりを使います（${e.message}）`);
-    }
-  }
-  return notes;
 }
 
 function showProposal(msgEl, changes) {
@@ -587,11 +558,9 @@ for (const id of ['pfStation', 'pfPrep', 'pfWalk', 'pfBuffer']) $(id).addEventLi
 $('cfgGemKey').value = store.get('alarm.geminiKey');
 $('cfgGemModel').value = store.get('alarm.geminiModel');
 $('cfgGemModel').placeholder = DEFAULT_MODEL;
-$('cfgMapsKey').value = store.get('alarm.mapsKey');
 $('aiSave').onclick = () => {
   store.set('alarm.geminiKey', $('cfgGemKey').value.trim());
   store.set('alarm.geminiModel', $('cfgGemModel').value.trim());
-  store.set('alarm.mapsKey', $('cfgMapsKey').value.trim());
   $('aiBox').open = false;
   addMsg('ai', 'AIアシスタントの設定を保存しました。「明日は5時に起こして」のように話しかけてください。');
 };

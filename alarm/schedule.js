@@ -100,9 +100,12 @@ export function alarmsFor(data, date) {
   const { source, slot } = resolveDay(data, date);
   if (!slot) return [];
   const ja = DAY_JA[weekdayKey(date)];
+  // A meeting-based alarm carries where to go and the travel minutes its time assumed, so the
+  // Shortcut can re-check the travel time with Apple Maps and shift the alarm by the difference.
+  const trip = slot.meeting ? { dest: slot.meeting.dest, travel: slot.meeting.travel } : {};
   return expandTimes(slot).map(time => source === 'weekly'
     ? { label: `${PREFIX} ${ja} ${time}`, time, ampm: toAmPm(time), repeat: `${ja}曜日` }
-    : { label: `${PREFIX} ${ONCE} ${time}`, time, ampm: toAmPm(time), repeat: '' });
+    : { label: `${PREFIX} ${ONCE} ${time}`, time, ampm: toAmPm(time), repeat: '', ...trip });
 }
 
 // Rebuild `schedule` for today..today+HORIZON and drop overrides that are long past.
