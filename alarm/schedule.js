@@ -98,6 +98,10 @@ export function regenerate(data, now = new Date()) {
   for (const date of Object.keys(data.overrides)) if (date < cutoff) delete data.overrides[date];
   data.overrides = Object.fromEntries(Object.entries(data.overrides).sort(([a], [b]) => a.localeCompare(b)));
 
+  // `candidates` lists today's and tomorrow's alarms with their exact ring time. The Shortcut
+  // looks up today's entry and keeps the ones ringing within the next 24 hours, so same-day
+  // changes are picked up too. `scope`/`labels`/`alarms` are the older next-morning format.
+  const withAt = date => alarmsFor(data, date).map(a => ({ ...a, at: `${date}T${a.time}:00+09:00` }));
   const schedule = {};
   for (let i = 0; i <= HORIZON_DAYS; i++) {
     const date = addDays(today, i);
@@ -106,6 +110,7 @@ export function regenerate(data, now = new Date()) {
       scope: `${PREFIX} ${DAY_JA[weekdayKey(date)]} `,
       labels: alarms.map(a => a.label).join('\n'),
       alarms,
+      candidates: [...withAt(date), ...withAt(addDays(date, 1))],
     };
   }
   data.schedule = schedule;
