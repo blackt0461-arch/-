@@ -436,7 +436,7 @@ async function send(text) {
   busy = true;
   const pending = addMsg('ai pending', '考え中…');
   try {
-    const res = await askGemini({ apiKey, model: store.get('alarm.geminiModel') || DEFAULT_MODEL, data, history: history.slice(-12) });
+    const res = await askGemini({ apiKey, model: store.get('alarm.geminiModel') || DEFAULT_MODEL, data, history: history.slice(-12), onRetry: t => { pending.textContent = t; } });
     pending.remove();
     history.push({ role: 'model', text: res.reply || '（返事なし）' });
     const m = addMsg('ai', res.reply || 'すみません、うまく理解できませんでした。');

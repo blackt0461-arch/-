@@ -141,23 +141,53 @@ export const RESPONSE_SCHEMA = {
   required: ['reply', 'changes'],
 };
 
-// history: [{role: 'user'|'model', text}]
-export async function askGemini({ apiKey, model, data, history, now = new Date() }) {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model || DEFAULT_MODEL)}:generateContent`;
-  const body = {
-    systemInstruction: { parts: [{ text: buildSystemPrompt(data, now) }] },
-    contents: history.map(m => ({ role: m.role, parts: [{ text: m.text }] })),
-    generationConfig: { responseMimeType: 'application/json', responseSchema: RESPONSE_SCHEMA },
-  };
+// Tried in order when the chosen model is overloaded (503) or unavailable (404).
+export const FALLBACK_MODELS = ['gemini-3.5-flash', 'gemini-3.5-flash-lite'];
+const RETRYABLE = new Set([500, 503, 504]);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+async function callModel(model, apiKey, body) {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
     body: JSON.stringify(body),
   });
   const json = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(`Gemini ${res.status}: ${json.error?.message || res.statusText}`);
-  const text = json.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('') || '';
-  return parseReply(text);
+  if (!res.ok) {
+    const err = new Error(`Gemini ${res.status}: ${json.error?.message || res.statusText}`);
+    err.status = res.status;
+    throw err;
+  }
+  return json.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('') || '';
+}
+
+// history: [{role: 'user'|'model', text}]
+// onRetry(message) is called before each retry so the page can show progress.
+export async function askGemini({ apiKey, model, data, history, now = new Date(), onRetry = () => {} }) {
+  const body = {
+    systemInstruction: { parts: [{ text: buildSystemPrompt(data, now) }] },
+    contents: history.map(m => ({ role: m.role, parts: [{ text: m.text }] })),
+    generationConfig: { responseMimeType: 'application/json', responseSchema: RESPONSE_SCHEMA },
+  };
+  const primary = model || DEFAULT_MODEL;
+  const models = [primary, ...FALLBACK_MODELS.filter(m => m !== primary)];
+  let lastError;
+  for (const [i, m] of models.entries()) {
+    // The first model gets one retry after a short wait; busy spikes often pass quickly.
+    for (let attempt = 0; attempt < (i === 0 ? 2 : 1); attempt++) {
+      try {
+        return { ...parseReply(await callModel(m, apiKey, body)), model: m };
+      } catch (e) {
+        lastError = e;
+        if (!RETRYABLE.has(e.status) && e.status !== 404) throw e;
+        if (e.status === 404) break;
+        if (attempt === 0 && i === 0) { onRetry('混み合っているので、もう一度試しています…'); await sleep(2000); }
+      }
+    }
+    if (i + 1 < models.length) onRetry(`混み合っているので、別のモデル（${models[i + 1]}）で試しています…`);
+  }
+  throw new Error(`${lastError.message}（時間をおいて、もう一度送ってください）`);
 }
 
 export function parseReply(text) {
