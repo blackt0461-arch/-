@@ -86,7 +86,7 @@ export function alarmsFor(data, date) {
   if (!slot) return [];
   const ja = DAY_JA[weekdayKey(date)];
   return expandTimes(slot).map(time => source === 'weekly'
-    ? { label: `${PREFIX} ${ja} ${time}`, time, ampm: toAmPm(time), repeat: ja }
+    ? { label: `${PREFIX} ${ja} ${time}`, time, ampm: toAmPm(time), repeat: `${ja}曜日` }
     : { label: `${PREFIX} ${ONCE} ${time}`, time, ampm: toAmPm(time), repeat: '' });
 }
 
