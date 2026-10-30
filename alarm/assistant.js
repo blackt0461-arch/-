@@ -101,6 +101,7 @@ ${upcoming.join('\n')}
 - 指示が曖昧なら、推測で変更せず changes を空にして reply で質問する。
 - 「10時に渋谷集合」「明日13時に〇〇大学」のように集合・待ち合わせ・到着時刻を言われたら meeting を使う。date は集合する日。
   - place は短い地名に揃える（「渋谷駅ハチ公前」→「渋谷」）。
+  - mapsQuery には、Googleマップで検索して1か所に決まる文字列を入れる（正式名称＋市区町村、例：「神戸市役所 神戸市中央区」）。施設名に自信がなければ、その最寄り駅名（例：「三ノ宮駅」）にする。
   - 覚えている移動時間にある場所なら、その分数を travelMinutes に入れ、travelSource は "saved"。
   - ユーザーが移動時間を言ったら、その値で travelSource は "user"（同時に remember_place も出す）。
   - 「マップで見たら合ってた」「その時間で大丈夫」と言われたら、その場所の今の分数で remember_place を出す（確認済みになる）。
@@ -128,6 +129,7 @@ export const RESPONSE_SCHEMA = {
           interval: { type: 'INTEGER' },
           meetTime: { type: 'STRING' },
           place: { type: 'STRING' },
+          mapsQuery: { type: 'STRING' },
           travelMinutes: { type: 'INTEGER' },
           travelSource: { type: 'STRING', enum: ['saved', 'user', 'estimate'] },
           prepMinutes: { type: 'INTEGER' },

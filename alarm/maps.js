@@ -26,17 +26,21 @@ const hm = d => d.toLocaleTimeString('ja-JP', { hour: 'numeric', minute: '2-digi
 export async function transitMinutes({ apiKey, origin, destination, arriveBy }) {
   await loadMaps(apiKey);
   const { Route } = await google.maps.importLibrary('routes');
-  const { routes } = await Route.computeRoutes({
+  const { routes, geocodingResults } = await Route.computeRoutes({
     origin,
     destination,
     travelMode: 'TRANSIT',
     arrivalTime: arriveBy,
     language: 'ja',
     region: 'JP',
-    fields: ['durationMillis', 'legs'],
+    fields: ['durationMillis', 'legs', 'geocodingResults'],
   });
   const route = routes?.[0];
-  if (!route) throw new Error('経路が見つかりませんでした');
+  if (!route) {
+    const bad = (w, name) => w && w.geocoderStatus && w.geocoderStatus !== 'OK' ? `「${name}」を地図で見つけられませんでした` : null;
+    throw new Error(bad(geocodingResults?.destination, destination) || bad(geocodingResults?.origin, origin)
+      || `${hm(arriveBy)}までに着く電車の経路が見つかりませんでした`);
+  }
   const steps = route.legs?.flatMap(l => l.steps || []) || [];
   const firstIdx = steps.findIndex(s => s.transitDetails?.departureTime);
   let leave;

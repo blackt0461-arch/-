@@ -466,9 +466,9 @@ async function withMapsTimes(changes, progress) {
   if (!mapsKey || !origin) return notes;
   for (const c of changes) {
     if (c.op !== 'meeting' || c.travelSource === 'user' || !c.date || !c.meetTime || !c.place) continue;
-    progress(`Googleマップで ${origin} → ${c.place} の経路を調べています…`);
+    progress(`Googleマップで ${origin} → ${c.mapsQuery || c.place} の経路を調べています…`);
     try {
-      const r = await transitMinutes({ apiKey: mapsKey, origin, destination: c.place, arriveBy: meetingArriveBy(data, c) });
+      const r = await transitMinutes({ apiKey: mapsKey, origin, destination: c.mapsQuery || c.place, arriveBy: meetingArriveBy(data, c) });
       c.travelMinutes = r.minutes;
       c.travelSource = 'maps';
       c.mapsSummary = r.summary;
