@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "test": "node --test",
-    "bench": "FFT_SIZE=32768 node tests/accuracy-bench.js"
+    "bench": "FFT_SIZE=32768 node tests/accuracy-bench.js",
+    "bench:song": "node tests/transcribe-bench.js"
   }
 }

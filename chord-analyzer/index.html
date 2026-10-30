@@ -75,39 +75,52 @@
     </section>
 
     <section id="panel-song" class="panel" role="tabpanel" aria-labelledby="tab-song" hidden>
-      <div class="song-input">
-        <input id="song-url" type="url" inputmode="url" autocomplete="off" placeholder="YouTube のリンクを貼り付け" aria-label="YouTube のリンク">
-        <button type="button" id="song-load" class="secondary-button">読み込む</button>
-      </div>
+      <label class="file-button primary-button">
+        🎞 録画・音声ファイルを選ぶ
+        <input id="song-file" type="file" accept="video/*,audio/*" hidden>
+      </label>
+      <label class="song-mode">解析のしかた
+        <select id="song-mode">
+          <option value="auto">自動（おすすめ）</option>
+          <option value="side">歌を弱める（左右に分かれたギター向け）</option>
+          <option value="mix">そのまま（弾き語り・ギター1本の曲向け）</option>
+        </select>
+      </label>
       <p id="song-error" class="error" hidden></p>
-      <div id="song-player-wrap" class="player-wrap" hidden><div id="song-player"></div></div>
-      <button type="button" id="song-toggle" class="primary-button" disabled>🎤 解析を開始</button>
-      <p id="song-status" class="status"></p>
-      <div id="song-now" class="song-now">―</div>
-
-      <div class="song-section">
-        <h2>コード進行 <small>タップでその場面へ</small></h2>
-        <div id="song-chords" class="song-chords"><p class="hint">解析するとここにコード進行が並びます</p></div>
+      <div id="song-progress" class="progress" hidden>
+        <div class="progress-bar"><span id="song-progress-fill"></span></div>
+        <p id="song-progress-label" class="status"></p>
       </div>
 
-      <div class="song-section">
-        <h2>タブ譜 <small>自動で作ったたたき台です</small></h2>
-        <pre id="song-tab" class="tab-text"></pre>
-        <div class="song-actions">
-          <button type="button" id="song-copy" class="secondary-button">コピー</button>
-          <button type="button" id="song-clear" class="secondary-button">結果を消す</button>
+      <div id="song-result" hidden>
+        <video id="song-media" class="song-media" controls playsinline preload="metadata"></video>
+        <div id="song-now" class="song-now">―</div>
+        <p id="song-info" class="hint"></p>
+
+        <div class="song-section">
+          <h2>コード進行 <small>タップでその場面から再生</small></h2>
+          <div id="song-chords" class="song-chords"></div>
+        </div>
+
+        <div class="song-section">
+          <h2>タブ譜 <small>タップでその場面から再生</small></h2>
+          <div id="song-tab" class="tab-blocks"></div>
+          <div class="song-actions">
+            <button type="button" id="song-copy" class="secondary-button">コピー</button>
+          </div>
         </div>
       </div>
 
       <details class="song-help">
-        <summary>使い方とコツ</summary>
+        <summary>画面収録のしかたとコツ</summary>
         <ol>
-          <li>YouTube のリンクを貼って「読み込む」を押す</li>
-          <li>「解析を開始」を押し、1秒ほど静かに待つ（周りの雑音を覚えます）</li>
-          <li>動画を再生する。流れている音をマイクで聞き取って、コード進行とタブ譜を作ります</li>
+          <li><b>iPhone</b>：コントロールセンターの「画面収録」ボタン（●）を押してから YouTube で曲を流し、終わったら止める。写真アプリに保存されます</li>
+          <li><b>Android</b>：クイック設定の「スクリーンレコード」で「デバイスの音声」を選んで録画する</li>
+          <li>このアプリで「録画・音声ファイルを選ぶ」から、その録画を選ぶ</li>
         </ol>
-        <p>スピーカーの音量は大きめに。イヤホンをつけるとマイクに音が届かないので外してください。iPhone で音が小さくなるときは、パソコンなど別の機器で曲を流し、このスマホを近くに置いて「解析を開始」だけ押す方法も使えます（その場合は時間がずれるので、タップで場面に飛ぶ機能は使えません）。</p>
-        <p>歌やベースの音も混ざるため、特にタブ譜は間違いを含みます。練習用のたたき台として使ってください。</p>
+        <p>マイクは使わないので、周りの音は入りません。曲の一部（弾きたいところ）だけを録画すると、解析が早く終わります。</p>
+        <p>YouTube Premium や YouTube Music の一部の曲は、画面収録の音が無音になることがあります。録画したものは自分の練習用にとどめてください。</p>
+        <p>歌やほかの楽器も混ざっているため、タブ譜は間違いを含むことがあります。ギターが左右に分かれて聞こえる曲ほど正確になります。</p>
       </details>
     </section>
 

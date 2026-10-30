@@ -1,22 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseYouTubeId, formatTime, buildChordTimeline, detectNoteEvents, assignTab, formatTab } from '../song.js';
+import { formatTime, buildChordTimeline, assignTab, formatTab } from '../song.js';
 import { TUNINGS } from '../fretboard.js';
 
 const STANDARD = TUNINGS[0];
 
-test('YouTube のいろいろな形のリンクから動画 ID を取り出せる', () => {
-  const id = 'dQw4w9WgXcQ';
-  for (const url of [
-    `https://www.youtube.com/watch?v=${id}`,
-    `https://youtube.com/watch?feature=share&v=${id}&t=30s`,
-    `https://youtu.be/${id}?si=abc`,
-    `https://www.youtube.com/shorts/${id}`,
-    `https://m.youtube.com/watch?v=${id}`,
-    `https://music.youtube.com/watch?v=${id}&list=RD`,
-    id,
-  ]) assert.equal(parseYouTubeId(url), id, url);
-  assert.equal(parseYouTubeId('https://example.com/'), null);
+test('秒を「分:秒」で書く', () => {
   assert.equal(formatTime(65.9), '1:05');
 });
 
@@ -31,17 +20,6 @@ test('一瞬の誤判定や信頼度の低いところをならして、コー�
   const timeline = buildChordTimeline(frames);
   assert.deepEqual(timeline.map((s) => s.name), ['C', 'G', 'Am']);
   assert.ok(Math.abs(timeline[1].start - 2.0) < 0.3);
-});
-
-test('鳴り始めた音だけを拾い、同時に鳴った音は和音としてまとめる', () => {
-  // 実際は1秒に約30回判定するので、鳴り続けている音は毎回の判定に出てくる
-  const frames = [];
-  for (let t = 0; t < 1.0; t += 0.05) frames.push({ t, notes: t >= 0.5 ? [64, 67] : [64] }); // 0.5秒で 67 が加わる
-  frames.push({ t: 1.0, notes: [60] });
-  frames.push({ t: 1.05, notes: [60, 64] }); // 64 はいったん止まってから → 60 とほぼ同時に鳴った和音
-  frames[frames.length - 1].t = 1.4; // 64 が止まってから 0.25 秒以上たって鳴り直した
-  frames[frames.length - 2].t = 1.38;
-  assert.deepEqual(detectNoteEvents(frames).map((e) => e.notes), [[64], [67], [60, 64]]);
 });
 
 test('手の移動が少なく、低いフレットになるようにタブ譜を割り当てる', () => {
@@ -82,4 +60,12 @@ test('ベース音だけ違う判定（G と G/D）が交互に出ても、1つ�
   for (let t = 6; t < 7; t += 0.1) frames.push({ t, name: 'G', confidence: 90 });
   const timeline = buildChordTimeline(frames);
   assert.deepEqual(timeline.map((s) => s.name), ['C', 'G']);
+});
+
+test('録音の解析：ギターが左右に分かれた曲では、歌を弱めてタブ譜の材料を作れる', async () => {
+  const { runCase } = await import('./transcribe-bench.js');
+  const r = runCase('バンド', { stereo: true });
+  assert.equal(r.useSide, true);
+  assert.ok(r.f1 >= 0.65, `音の正解率 ${(r.f1 * 100).toFixed(0)}%`);
+  assert.ok(r.chords >= 0.7, `コードの正解率 ${(r.chords * 100).toFixed(0)}%`);
 });

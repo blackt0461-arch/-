@@ -1,12 +1,4 @@
-// 曲（YouTube など）を聞き取った結果から、コード進行とタブ譜を作る
-
-/** YouTube のリンク（watch?v=・youtu.be・shorts など）から動画 ID を取り出す。読めなければ null */
-export function parseYouTubeId(text) {
-  const t = text.trim();
-  const m = t.match(/(?:[?&]v=|youtu\.be\/|\/shorts\/|\/embed\/|\/live\/)([A-Za-z0-9_-]{11})/);
-  if (m) return m[1];
-  return /^[A-Za-z0-9_-]{11}$/.test(t) ? t : null;
-}
+// 曲を解析した結果から、コード進行とタブ譜を作る
 
 /** 秒を「1:05」の形にする */
 export function formatTime(seconds) {
@@ -72,30 +64,6 @@ export function buildChordTimeline(frames, { minDuration = 0.5, minConfidence = 
 }
 
 /**
- * 判定した音の並び（frames: [{ t, notes: [MIDI…], onset }]）から、新しく鳴り始めた音（発音）を拾う。
- * 少し前から鳴り続けている音は数えない。ほぼ同時に鳴り始めた音は1つにまとめる（和音）。
- * onset が true のフレームは「弾き直した」瞬間なので、鳴り続けている音でも新しい発音として数える。
- */
-export function detectNoteEvents(frames, { holdSeconds = 0.25, groupSeconds = 0.08, maxNotes = 3 } = {}) {
-  const sorted = [...frames].sort((a, b) => a.t - b.t);
-  const lastSeen = new Map();
-  const events = [];
-  for (const { t, notes, onset } of sorted) {
-    const fresh = notes.slice(0, maxNotes).filter((m) => onset || !(lastSeen.has(m) && t - lastSeen.get(m) <= holdSeconds));
-    notes.forEach((m) => lastSeen.set(m, t));
-    if (!fresh.length) continue;
-    const last = events[events.length - 1];
-    if (last && t - last.t <= groupSeconds) {
-      fresh.forEach((m) => { if (!last.notes.includes(m) && last.notes.length < maxNotes) last.notes.push(m); });
-    } else {
-      events.push({ t, notes: [...fresh] });
-    }
-  }
-  events.forEach((e) => e.notes.sort((a, b) => a - b));
-  return events;
-}
-
-/**
  * 音の並びを、ギターのどの弦の何フレットで弾くかに割り当てる。
  * 同じ音でも弾ける場所が何か所もあるので、「手の位置の移動が少なく、低いフレットで、
  * 和音は無理なく押さえられる」ように、曲全体でいちばん楽な組み合わせを選ぶ（動的計画法）。
@@ -106,7 +74,13 @@ export function assignTab(events, tuning, { capo = 0, maxFret = 15 } = {}) {
     .filter((p) => p.fret >= 0 && p.fret <= maxFret);
 
   // 各発音の弾き方の候補（和音は弦が重ならない組み合わせ）
-  const candidates = events.map(({ notes }) => {
+  const candidates = events.map(({ notes, positions }) => {
+    // 押さえ方が決まっている発音（ストロークをコードの形にそろえたもの）は、そのまま使う
+    if (positions) {
+      const fretted = positions.filter((p) => p.fret > 0).map((p) => p.fret);
+      const center = fretted.length ? fretted.reduce((a, b) => a + b, 0) / fretted.length : null;
+      return [{ positions, center, cost: 0 }];
+    }
     const playable = notes.filter((m) => optionsFor(m).length);
     const results = [];
     const pick = (i, used) => {
