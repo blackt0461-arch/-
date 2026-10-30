@@ -12,6 +12,8 @@ Web画面 ┘
 - `schedule.js` … 共通ロジック。Web画面と `tools/regen.mjs` の両方で使います。
 - `tools/regen.mjs` … `alarms.json` を検証し、`schedule` を作り直して、14日分を表示します。
 - `SHORTCUT.md` … iPhoneショートカットの作り方です。
+- `assistant.js` … チャット欄のAI（Gemini）。文章を変更案に変換し、ユーザーが「保存する」を押したときだけ保存します。
+- `icon.svg` / `*.png` / `manifest.webmanifest` … ホーム画面用のアイコンとWebアプリ設定です。
 
 ## alarms.json
 
