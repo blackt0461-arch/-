@@ -100,7 +100,7 @@ ${upcoming.join('\n')}
   - 覚えている移動時間にある場所なら、その分数を travelMinutes に入れ、travelSource は "saved"。
   - ユーザーが移動時間を言ったら、その値で travelSource は "user"（同時に remember_place も出す）。
   - 「マップで見たら合ってた」「その時間で大丈夫」と言われたら、その場所の今の分数で remember_place を出す（確認済みになる）。
-  - それ以外は、最寄り駅からその場所までの電車での所要時間（乗り換え・待ち時間・到着後の徒歩を含む）を見積もり、travelSource は "estimate"。迷ったら長いほうの時間にする。
+  - それ以外は、最寄り駅からその場所までの電車での所要時間（乗り換え・待ち時間・到着後の徒歩を含む）を見積もり、travelSource は "estimate"。迷ったら長いほうの時間にする。meeting では travelMinutes を必ず入れる（アプリが乗換案内や検索で確かめ、だめならこの見積もりを使う）。
   - 家の最寄り駅が未設定なら、変更せずに最寄り駅を質問する。
   - 「支度を長めに」「今日はゆっくり準備したい」はその回だけ prepMinutes を増やす（量の指定がなければ +15分）。「いつも支度40分」のような恒久的な指示は set_profile。
   - 起床時刻が深夜（0:00〜4:00）になる場合も、そのまま出してよい。
@@ -292,7 +292,7 @@ function planMeeting(next, c, today) {
   else if (c.travelSource === 'user' && isMinutes(c.travelMinutes)) { travel = c.travelMinutes; source = 'user'; }
   else if (saved) { travel = saved.minutes; source = saved.verified ? 'saved' : 'estimate'; }
   else if (isMinutes(c.travelMinutes) && c.travelMinutes > 0) { travel = c.travelMinutes; source = 'estimate'; }
-  else throw new Error(`${place} までの移動時間がわかりません`);
+  else throw new Error(`${place} までの移動時間がわかりません。「${place}は○分」と教えてください`);
   const prep = isMinutes(c.prepMinutes) ? c.prepMinutes : profile.prepMinutes;
   const walk = isMinutes(c.walkMinutes) ? c.walkMinutes : profile.walkMinutes;
   const buffer = isMinutes(c.bufferMinutes) ? c.bufferMinutes : profile.bufferMinutes;
