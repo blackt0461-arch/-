@@ -84,6 +84,9 @@
   .proposal { margin-top: 8px; padding: 8px 10px; border-radius: 10px; background: var(--card); border: 1px solid var(--line); }
   .proposal ul { margin: 0 0 8px; padding-left: 1.2em; }
   .proposal .actions { justify-content: flex-start; }
+  .proposal .warn { color: var(--danger); font-size: 14px; margin: 0 0 8px; }
+  .proposal a { display: inline-block; color: var(--accent); margin: 0 0 8px; font-size: 14px; }
+  .note { font-size: 12px; color: var(--muted); margin-left: 6px; }
   .chatbar { display: flex; gap: 8px; align-items: flex-end; padding: 10px 12px; border-top: 1px solid var(--line); }
   .chatlog:empty + .chatbar { border-top: 0; }
   .chatbar textarea {
@@ -127,6 +130,20 @@
 
   <h2>例外の日</h2>
   <div class="card" id="overrides"></div>
+
+  <h2>起床時刻の計算（集合時刻から逆算）</h2>
+  <div class="card">
+    <div class="settings" style="padding-top:14px">
+      <label>家の最寄り駅<input id="pfStation" placeholder="例：〇〇駅" autocomplete="off"></label>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
+        <label>支度（分）<input id="pfPrep" type="number" min="0" max="300" inputmode="numeric"></label>
+        <label>駅まで（分）<input id="pfWalk" type="number" min="0" max="300" inputmode="numeric"></label>
+        <label>余裕（分）<input id="pfBuffer" type="number" min="0" max="300" inputmode="numeric"></label>
+      </div>
+      <p class="sub">起床 ＝ 集合時刻 − 余裕 − 移動 − 駅まで − 支度。チャットで「10時に渋谷集合」と言うと計算します。</p>
+    </div>
+    <div id="places"></div>
+  </div>
 
   <h2>設定</h2>
   <div class="card">
@@ -176,7 +193,7 @@
 </dialog>
 
 <script type="module">
-import { DAYS, DAY_JA, emptyData, regenerate, resolveDay, expandTimes, todayJST, addDays, weekdayKey } from './schedule.js';
+import { DAYS, DAY_JA, emptyData, defaultProfile, regenerate, resolveDay, expandTimes, todayJST, addDays, weekdayKey } from './schedule.js';
 import { DEFAULT_MODEL, askGemini, applyChanges } from './assistant.js';
 
 const $ = id => document.getElementById(id);
@@ -228,6 +245,7 @@ function render() {
       <span class="sub">›</span></div>`);
     row.querySelector('.times').textContent = slot ? expandTimes(slot).join('  ') : 'なし';
     if (source === 'override') row.querySelector('.times').append(el('<span class="chip">例外</span>'));
+    if (slot?.note) { const n = el('<span class="note"></span>'); n.textContent = slot.note; row.querySelector('.times').append(n); }
     row.onclick = () => openDay(date);
     up.append(row);
   }
@@ -253,6 +271,22 @@ function render() {
     };
     chk.onchange = time.onchange = interval.onchange = extra.onchange = update;
     wk.append(row);
+  }
+
+  const pf = { ...defaultProfile(), ...(data.profile || {}) };
+  if (document.activeElement?.closest?.('.settings') == null) {
+    $('pfStation').value = pf.homeStation;
+    $('pfPrep').value = pf.prepMinutes;
+    $('pfWalk').value = pf.walkMinutes;
+    $('pfBuffer').value = pf.bufferMinutes;
+  }
+  const pl = $('places');
+  pl.innerHTML = '';
+  for (const [name, p] of Object.entries(data.places || {})) {
+    const row = el(`<div class="row"><span class="times"></span><button class="danger">削除</button></div>`);
+    row.querySelector('.times').textContent = `${name}：${p.minutes}分${p.verified ? '' : '（未確認）'}`;
+    row.querySelector('button').onclick = () => { delete data.places[name]; markDirty(); };
+    pl.append(row);
   }
 
   const ov = $('overrides');
@@ -432,6 +466,17 @@ function showProposal(msgEl, changes) {
     li.textContent = line;
     box.querySelector('ul').append(li);
   }
+  for (const w of result.warnings) {
+    const p = el('<p class="warn"></p>');
+    p.textContent = '⚠ ' + w;
+    box.querySelector('.actions').before(p);
+  }
+  for (const l of result.links) {
+    const a = el('<a target="_blank" rel="noopener"></a>');
+    a.href = l.url;
+    a.textContent = l.label + ' ↗';
+    box.querySelector('.actions').before(a);
+  }
   const [ok, cancel] = box.querySelectorAll('button');
   ok.onclick = async () => {
     disableProposals();
@@ -489,6 +534,19 @@ $('micBtn').onclick = () => {
   $('micBtn').classList.add('listening');
   rec.start();
 };
+
+const profileInput = () => {
+  const num = id => { const v = parseInt($(id).value, 10); return Number.isInteger(v) && v >= 0 && v <= 300 ? v : undefined; };
+  const pf = { ...defaultProfile(), ...(data.profile || {}) };
+  data.profile = {
+    homeStation: $('pfStation').value.trim(),
+    prepMinutes: num('pfPrep') ?? pf.prepMinutes,
+    walkMinutes: num('pfWalk') ?? pf.walkMinutes,
+    bufferMinutes: num('pfBuffer') ?? pf.bufferMinutes,
+  };
+  markDirty();
+};
+for (const id of ['pfStation', 'pfPrep', 'pfWalk', 'pfBuffer']) $(id).addEventListener('change', profileInput);
 
 $('cfgGemKey').value = store.get('alarm.geminiKey');
 $('cfgGemModel').value = store.get('alarm.geminiModel');

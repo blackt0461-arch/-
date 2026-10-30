@@ -16,10 +16,18 @@ export function emptyData() {
     timezone: 'Asia/Tokyo',
     weekly: Object.fromEntries(DAYS.map(d => [d, null])),
     overrides: {},
+    profile: defaultProfile(),
+    places: {},
     schedule: {},
     updatedAt: null,
   };
 }
+
+// Inputs for working back from a meeting time to a wake-up time.
+export function defaultProfile() {
+  return { homeStation: '', prepMinutes: 30, walkMinutes: 20, bufferMinutes: 10 };
+}
+export const PROFILE_KEYS = ['prepMinutes', 'walkMinutes', 'bufferMinutes'];
 
 // Today's date in JST as YYYY-MM-DD.
 export function todayJST(now = new Date()) {
@@ -67,6 +75,13 @@ export function validate(data) {
   for (const [date, slot] of Object.entries(data.overrides || {})) {
     if (!DATE_RE.test(date)) throw new Error(`overrides: 日付 "${date}" は YYYY-MM-DD で指定してください`);
     validateSlot(slot, `overrides.${date}`);
+  }
+  for (const k of PROFILE_KEYS) {
+    const v = data.profile?.[k];
+    if (v != null && !(Number.isInteger(v) && v >= 0 && v <= 300)) throw new Error(`profile.${k} は 0〜300 の整数（分）`);
+  }
+  for (const [place, p] of Object.entries(data.places || {})) {
+    if (!(Number.isInteger(p?.minutes) && p.minutes > 0 && p.minutes <= 600)) throw new Error(`places.${place}: minutes は 1〜600 の整数（分）`);
   }
 }
 
