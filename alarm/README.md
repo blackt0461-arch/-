@@ -14,6 +14,7 @@ Web画面 ┘
 - `SHORTCUT.md` … iPhoneショートカットの作り方です。
 - `assistant.js` … チャット欄のAI（Gemini）。文章を変更案に変換し、ユーザーが「保存する」を押したときだけ保存します。
 - `icon.svg` / `*.png` / `manifest.webmanifest` … ホーム画面用のアイコンとWebアプリ設定です。
+- `version.json` / `tools/bump.mjs` … 版の番号です。Webアプリのファイルを変更したら `node alarm/tools/bump.mjs "更新内容"` を実行してからプッシュしてください。開いているアプリに「新しい版があります」と表示されます。
 
 ## alarms.json
 
