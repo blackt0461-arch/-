@@ -218,7 +218,8 @@ function planMeeting(next, c, today) {
   if (!profile.homeStation) throw new Error('家の最寄り駅が未設定です（設定 → 起床時刻の計算）');
   const saved = next.places?.[place];
   let travel, source;
-  if (c.travelSource === 'user' && isMinutes(c.travelMinutes)) { travel = c.travelMinutes; source = 'user'; }
+  if (c.travelSource === 'maps' && isMinutes(c.travelMinutes)) { travel = c.travelMinutes; source = 'maps'; }
+  else if (c.travelSource === 'user' && isMinutes(c.travelMinutes)) { travel = c.travelMinutes; source = 'user'; }
   else if (saved) { travel = saved.minutes; source = saved.verified ? 'saved' : 'estimate'; }
   else if (isMinutes(c.travelMinutes) && c.travelMinutes > 0) { travel = c.travelMinutes; source = 'estimate'; }
   else throw new Error(`${place} までの移動時間がわかりません`);
@@ -237,8 +238,16 @@ function planMeeting(next, c, today) {
     note: `${place} ${c.meetTime.replace(/^0/, '')}集合`,
   };
   // Remember estimates (unverified) so the next request reuses the same number.
-  if (!saved || source === 'user') next.places = { ...(next.places || {}), [place]: { minutes: travel, verified: source === 'user' } };
-  return { date, slot, place, travel, source, prep, walk, buffer };
+  if (!saved || source === 'user' || source === 'maps') {
+    next.places = { ...(next.places || {}), [place]: { minutes: travel, verified: source !== 'estimate' } };
+  }
+  return { date, slot, place, travel, source, prep, walk, buffer, mapsSummary: c.mapsSummary };
+}
+
+// When the traveller must be at the meeting place for `change` (meeting time minus buffer), as a Date.
+export function meetingArriveBy(data, change) {
+  const buffer = isMinutes(change.bufferMinutes) ? change.bufferMinutes : profileOf(data).bufferMinutes;
+  return new Date(new Date(`${change.date}T${change.meetTime}:00+09:00`).getTime() - buffer * 60000);
 }
 
 // Apply proposed changes to a copy of `data`.
@@ -278,6 +287,7 @@ export function applyChanges(data, changes, now = new Date()) {
       next.overrides[m.date] = m.slot;
       lines.push(`${md(m.date)} ${m.slot.time} 起床（${m.slot.note}）`);
       lines.push(`内訳：支度${m.prep}分＋駅まで${m.walk}分＋移動${m.travel}分＋余裕${m.buffer}分`);
+      if (m.source === 'maps') lines.push(`✓ Googleマップで計算（${m.mapsSummary || '電車'}）`);
       if (m.source === 'estimate') {
         warnings.push(`${m.place} までの移動${m.travel}分は未確認です。マップで確かめて、合っていれば下のチェックを入れて保存、違っていたら「${m.place}は○分」と教えてください。`);
         unverified.push(m.place);
