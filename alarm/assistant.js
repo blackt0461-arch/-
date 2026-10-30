@@ -1,7 +1,7 @@
 // Chat assistant: turns Japanese requests ("明日は5時に起こして") into edits of alarms.json via Gemini.
 // The model only proposes `changes`; the page shows them and saves only after the user confirms.
 
-import { DAYS, DAY_JA, validate, resolveDay, expandTimes, todayJST, addDays, weekdayKey, defaultProfile } from './schedule.js?v=2026-10-30.1543';
+import { DAYS, DAY_JA, validate, resolveDay, expandTimes, todayJST, addDays, weekdayKey, defaultProfile } from './schedule.js?v=2026-10-30.1548';
 
 export const DEFAULT_MODEL = 'gemini-3.6-flash';
 const ORDER = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
@@ -102,7 +102,9 @@ ${upcoming.join('\n')}
   - 「マップで見たら合ってた」「その時間で大丈夫」と言われたら、その場所の今の分数で remember_place を出す（確認済みになる）。
   - それ以外は、最寄り駅からその場所までの電車での所要時間（乗り換え・待ち時間・到着後の徒歩を含む）を見積もり、travelSource は "estimate"。迷ったら長いほうの時間にする。meeting では travelMinutes を必ず入れる。
   - 家の最寄り駅が未設定なら、変更せずに最寄り駅を質問する。
-  - 「支度を長めに」「今日はゆっくり準備したい」はその回だけ prepMinutes を増やす（量の指定がなければ +15分）。「いつも支度40分」のような恒久的な指示は set_profile。
+  - prepMinutes / walkMinutes / bufferMinutes は、ユーザーがその回について**はっきり言ったときだけ**入れる。言っていなければ入れない（0 も入れない）。アプリが設定の値を使う。
+  - 「支度を長めに」「今日はゆっくり準備したい」はその回だけ prepMinutes を増やす（量の指定がなければ 設定の値＋15分）。
+  - set_profile は「いつも」「これから」「毎回」など、恒久的に変えたいとはっきり言われたときだけ使う。集合の指示のついでに set_profile を出さない。
   - 起床時刻が深夜（0:00〜4:00）になる場合も、そのまま出してよい。
 - reply は日本語で1〜2文。変更する場合は「11/1（日）を5:00にします」のように日付・曜日・時刻を明記する。保存はユーザーが確認ボタンで行うので「保存しました」とは言わない。`;
 }
@@ -299,8 +301,9 @@ export function applyChanges(data, changes, now = new Date()) {
       const names = { prepMinutes: '支度時間', walkMinutes: '家から駅まで', bufferMinutes: '余裕時間' };
       for (const [k, name] of Object.entries(names)) {
         if (!isMinutes(c[k])) continue;
+        if (next.profile[k] === c[k]) continue;
+        lines.push(`⚠ ${name}の設定を ${next.profile[k]}分 → ${c[k]}分 に変える（これから毎回）`);
         next.profile[k] = c[k];
-        lines.push(`${name}を ${c[k]}分 にする（これから毎回）`);
       }
     } else if (c.op === 'remember_place') {
       const place = String(c.place || '').trim();
@@ -311,7 +314,10 @@ export function applyChanges(data, changes, now = new Date()) {
       const m = planMeeting(next, c, today);
       next.overrides[m.date] = m.slot;
       lines.push(`${md(m.date)} ${m.slot.time} 起床（${m.slot.note}）`);
-      lines.push(`内訳：支度${m.prep}分＋駅まで${m.walk}分＋移動${m.travel}分＋余裕${m.buffer}分`);
+      const pf = profileOf(next);
+      const part = (name, v, usual) => `${name}${v}分${v !== usual ? `（いつもは${usual}分）` : ''}`;
+      lines.push(`内訳：${part('支度', m.prep, pf.prepMinutes)}＋${part('駅まで', m.walk, pf.walkMinutes)}＋移動${m.travel}分＋${part('余裕', m.buffer, pf.bufferMinutes)}`);
+      if (m.prep !== pf.prepMinutes || m.walk !== pf.walkMinutes || m.buffer !== pf.bufferMinutes) warnings.push('この日だけ、いつもと違う時間で計算しています。意図どおりか確かめてください。');
       if (m.source === 'placeholder') {
         warnings.push(`${m.place} までの移動時間を見積もれなかったので、仮に${m.travel}分にしています。下のリンクで確かめて「${m.place}は○分」と教えてください。`);
         unverified.push(m.place);
