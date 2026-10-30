@@ -59,6 +59,13 @@
   label.switch { display: inline-flex; align-items: center; gap: 6px; }
   .sub { font-size: 13px; color: var(--muted); }
   .grow { flex: 1; }
+  .updatebar {
+    position: fixed; left: 0; right: 0; top: 0; z-index: 10; padding: calc(10px + env(safe-area-inset-top)) 16px 10px;
+    background: var(--accent); color: var(--accent-text); display: flex; gap: 10px; align-items: center;
+  }
+  .updatebar[hidden] { display: none; }
+  .updatebar p { margin: 0; flex: 1; font-size: 14px; }
+  .updatebar button { background: var(--accent-text); color: var(--accent); font-weight: 700; flex: none; }
   .savebar {
     position: fixed; left: 0; right: 0; bottom: 0; padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
     background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(12px);
@@ -171,6 +178,7 @@
   </div>
 </main>
 
+<div class="updatebar" id="updateBar" hidden><p id="updateText"></p><button id="updateBtn">更新する</button></div>
 <div class="savebar"><button class="primary" id="saveBtn" disabled>変更なし</button></div>
 
 <dialog id="dayDialog">
@@ -193,8 +201,11 @@
 </dialog>
 
 <script type="module">
-import { DAYS, DAY_JA, emptyData, defaultProfile, regenerate, resolveDay, expandTimes, todayJST, addDays, weekdayKey } from './schedule.js';
-import { DEFAULT_MODEL, askGemini, applyChanges, lookupTransit, searchTransit, stationName, arriveByOf } from './assistant.js';
+import { DAYS, DAY_JA, emptyData, defaultProfile, regenerate, resolveDay, expandTimes, todayJST, addDays, weekdayKey } from './schedule.js?v=2026-10-30.1526';
+import { DEFAULT_MODEL, askGemini, applyChanges, lookupTransit, searchTransit, stationName, arriveByOf } from './assistant.js?v=2026-10-30.1526';
+
+// Set by tools/bump.mjs together with version.json and the ?v= on the imports above.
+const APP_VERSION = '2026-10-30.1526';
 
 const $ = id => document.getElementById(id);
 const ORDER = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
@@ -617,6 +628,38 @@ $('cfgSave').onclick = () => {
 };
 window.addEventListener('beforeunload', e => { if (dirty) e.preventDefault(); });
 document.addEventListener('visibilitychange', () => { if (!document.hidden && !dirty) load(); });
+
+// ---------- update notice ----------
+// version.json is fetched past the caches; when it differs from APP_VERSION a banner offers a
+// reload with ?v=<new>, which also busts the cached modules because their URLs change.
+async function checkUpdate() {
+  try {
+    const res = await fetch(`version.json?t=${Date.now()}`, { cache: 'no-store' });
+    if (!res.ok) return;
+    const v = await res.json();
+    if (!v.version || v.version === APP_VERSION) return;
+    $('updateText').textContent = `新しい版があります${v.notes ? '：' + v.notes : ''}`;
+    $('updateBtn').onclick = () => {
+      if (dirty && !confirm('保存していない変更があります。更新すると消えます。更新しますか？')) return;
+      dirty = false;
+      location.replace(`${location.pathname}?v=${encodeURIComponent(v.version)}`);
+    };
+    $('updateBar').hidden = false;
+  } catch {}
+}
+(async () => {
+  const params = new URLSearchParams(location.search);
+  if (params.get('v') === APP_VERSION) {
+    try {
+      const v = await (await fetch(`version.json?t=${Date.now()}`, { cache: 'no-store' })).json();
+      if (v.version === APP_VERSION) addMsg('ai', `新しい版に更新しました（${APP_VERSION}）${v.notes ? '\n' + v.notes : ''}`);
+    } catch {}
+    window.history.replaceState(null, '', location.pathname);
+  }
+  checkUpdate();
+})();
+document.addEventListener('visibilitychange', () => { if (!document.hidden) checkUpdate(); });
+setInterval(checkUpdate, 30 * 60 * 1000);
 load();
 </script>
 </body>
