@@ -66,6 +66,20 @@ test('録音の解析：ギターが左右に分かれた曲では、歌を弱�
   const { runCase } = await import('./transcribe-bench.js');
   const r = runCase('バンド', { stereo: true });
   assert.equal(r.useSide, true);
-  assert.ok(r.f1 >= 0.65, `音の正解率 ${(r.f1 * 100).toFixed(0)}%`);
-  assert.ok(r.chords >= 0.7, `コードの正解率 ${(r.chords * 100).toFixed(0)}%`);
+  assert.ok(r.f1 >= 0.7, `音の正解率 ${(r.f1 * 100).toFixed(0)}%`);
+  assert.ok(r.chords >= 0.85, `コードの正解率 ${(r.chords * 100).toFixed(0)}%`);
+});
+
+test('拍（テンポ）を見つけ、小節ごとのコード譜を作れる', async () => {
+  const { makeSong } = await import('./mix.js');
+  const { transcribe } = await import('../transcribe.js');
+  const song = makeSong({ stereo: true, seed: 3 });
+  const r = transcribe(song.channels, song.sampleRate);
+  assert.ok(Math.abs(r.bpm - song.tempo) <= 3, `テンポ ${r.bpm}（正解 ${song.tempo}）`);
+  const ok = song.chords.filter((c) => {
+    const t = (c.start + c.end) / 2;
+    const seg = r.timeline.find((s) => t >= s.start && t <= s.end + 0.2);
+    return seg && seg.name.split('/')[0] === c.name;
+  }).length;
+  assert.ok(ok >= 7, `コード譜 ${ok}/8`);
 });

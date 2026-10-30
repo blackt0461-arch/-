@@ -3,9 +3,10 @@
 
 import { magnitudeSpectrum, peakNear, noteEnergy } from './dsp.js';
 import { analyzeSpectrum } from './audio.js';
-import { identifyFromChroma, CHORD_TYPES } from './chord-engine.js';
+import { identifyFromChroma, CHORD_TYPES, parseChordName } from './chord-engine.js';
 import { TUNINGS, findVoicings, soundingNotes } from './fretboard.js';
 import { buildChordTimeline } from './song.js';
+import { estimateBeats, findDownbeatScored, decodeChords, buildChart } from './chart.js';
 
 const LOWEST = 40;  // E2（6弦の開放）
 const HIGHEST = 88; // E6（1弦24フレット）
@@ -43,10 +44,16 @@ export function chooseSignal(channels, mode = 'auto') {
  * 短い区間ごとに周波数ごとの強さを求め、前の区間より強くなった分を合計する。
  * その合計が周りより飛び抜けて大きいところが、音の鳴り始め。
  */
-export function detectOnsets(signal, sampleRate, { frame = 2048, hop = 512, minGap = 0.06 } = {}) {
+export function detectOnsets(signal, sampleRate, options = {}) {
+  return detectOnsetsDetailed(signal, sampleRate, options).map((o) => o.t);
+}
+
+/** 弾いた瞬間と、その勢い（strength：スペクトルフラックスの大きさ）を返す */
+export function detectOnsetsDetailed(signal, sampleRate, { frame = 2048, hop = 512, minGap = 0.06 } = {}) {
   const binHz = sampleRate / frame;
   const lo = Math.floor(80 / binHz), hi = Math.ceil(5000 / binHz);
   const flux = [];
+  const frames = [];
   let prev = null;
   for (let start = 0; start + frame <= signal.length; start += hop) {
     const mags = magnitudeSpectrum(signal, start, frame);
@@ -57,8 +64,21 @@ export function detectOnsets(signal, sampleRate, { frame = 2048, hop = 512, minG
       if (prev) f += Math.max(0, cur[k - lo] - prev[k - lo]);
     }
     flux.push(f);
+    frames.push(cur);
     prev = cur;
   }
+  // 広がり：弾いた直前と、その後約0.07秒の間でいちばん強くなったときを比べ、はっきり強くなった周波数の数。
+  // 1音なら倍音の位置だけ、和音（ストローク）なら多くの周波数が一斉に強くなる。音量にはあまり左右されない
+  const spread = (i) => {
+    const before = frames[Math.max(0, i - 2)];
+    let count = 0;
+    for (let k = 0; k < before.length; k++) {
+      let peak = 0;
+      for (let j = i; j < Math.min(frames.length, i + 6); j++) peak = Math.max(peak, frames[j][k]);
+      if (peak - before[k] > 1) count++;
+    }
+    return count;
+  };
   const mean = flux.reduce((a, b) => a + b, 0) / (flux.length || 1);
   const onsets = [];
   const w = 6;
@@ -69,8 +89,11 @@ export function detectOnsets(signal, sampleRate, { frame = 2048, hop = 512, minG
     if (!isPeak || flux[i] < median * 1.4 + mean * 0.4) continue;
     // フレームの真ん中あたりが鳴り始め
     const t = (i * hop + frame / 2) / sampleRate;
-    if (onsets.length && t - onsets[onsets.length - 1] < minGap) continue;
-    onsets.push(t);
+    if (onsets.length && t - onsets[onsets.length - 1].t < minGap) continue;
+    // 勢い：鳴り始めから約0.07秒の間のフラックスの合計（和音は弦が少しずつずれて鳴るので、短い区間で足し合わせる）
+    let strength = 0;
+    for (let j = i; j < Math.min(flux.length, i + 6); j++) strength += flux[j];
+    onsets.push({ t, strength, spread: spread(i) });
   }
   return onsets;
 }
@@ -96,6 +119,75 @@ function looksLikeVoice(signal, sampleRate, midi, start, length, { wobbleCents =
   const wobble = Math.max(...cents) - Math.min(...cents);
   const swelling = points[2].mag > points[0].mag * 1.15;
   return wobble > wobbleCents || (useSwell && swelling);
+}
+
+/**
+ * 弾いた瞬間に新しく鳴り始めた音を、1つずつはがすように見つける。
+ * 1. 直後の音から直前の音（少し小さくなっている分も見込む）を引き、「増えた分」だけを残す
+ * 2. 各音の候補について、基音と倍音（2倍・3倍…）の位置の「増えた分」を合計する
+ * 3. 合計がいちばん大きい音を確定し、その音の基音と倍音を全部取り除く。これを繰り返す
+ * 倍音を取り除いてから次を探すので、倍音（1オクターブ上など）を別の音と間違えにくい。
+ */
+export function peelNotes(post, pre, binHz, { maxNotes = 6, stopRatio = 0.15, decay = 0.9, riseMode = 'sub', riseRatio = 1.5, floorRatio = 0.05 } = {}) {
+  const d = new Float32Array(post.length);
+  for (let k = 0; k < post.length; k++) {
+    // 'ratio'：直前より riseRatio 倍以上強くなった周波数だけを「新しく鳴った」とみなす（鳴り続けて弱まっている音を確実に除く）
+    d[k] = riseMode === 'ratio' ? (post[k] > pre[k] * riseRatio ? post[k] - pre[k] : 0) : Math.max(0, post[k] - pre[k] * decay);
+  }
+  const loBin = Math.floor(70 / binHz), hiBin = Math.min(d.length - 1, Math.ceil(5000 / binHz));
+  let total = 0;
+  for (let k = loBin; k <= hiBin; k++) total += d[k];
+  const partialRange = (m, h) => {
+    const f = freq(m) * h * Math.sqrt(1 + 0.0001 * h * h); // 弦の硬さで、高い倍音ほど少し上にずれる
+    const c = 25 + 4 * h;
+    return [Math.max(1, Math.floor((f * 2 ** (-c / 1200)) / binHz)), Math.min(d.length - 1, Math.ceil((f * 2 ** (c / 1200)) / binHz))];
+  };
+  const amp = (m, h) => {
+    const [lo, hi] = partialRange(m, h);
+    let best = 0;
+    for (let k = lo; k <= hi; k++) if (d[k] > best) best = d[k];
+    return best;
+  };
+  // はっきりした山だけを数える基準（いちばん強い山の floorRatio 倍）。
+  // 1つ目の音を取り除いた後のごく小さな消え残りを寄せ集めて、ありもしない音をでっち上げないため
+  let peakMax = 0;
+  for (let k = loBin; k <= hiBin; k++) if (d[k] > peakMax) peakMax = d[k];
+  const floor = peakMax * floorRatio;
+  const score = (m) => {
+    let sum = 0, present = 0;
+    for (let h = 1; h <= 10; h++) {
+      if (freq(m) * h > 5000) break;
+      const a = amp(m, h);
+      if (a < floor) continue;
+      sum += a;
+      present++;
+    }
+    // 基音（または2倍音）がはっきりしない候補は、別の音の倍音の寄せ集めなので選ばない
+    if (amp(m, 1) < floor * 2 && amp(m, 2) < floor * 2) return 0;
+    return sum * Math.min(1, present / 3);
+  };
+  const found = [];
+  let first = 0;
+  while (found.length < maxNotes) {
+    let best = null, bestS = 0;
+    for (let m = LOWEST; m <= HIGHEST; m++) {
+      if (found.some((f) => f.m === m)) continue;
+      const sc = score(m);
+      if (sc > bestS) { best = m; bestS = sc; }
+    }
+    if (best === null) break;
+    if (!found.length) first = bestS;
+    else if (bestS < first * stopRatio) break;
+    const fundamental = amp(best, 1);
+    let removed = 0;
+    for (let h = 1; h <= 12; h++) {
+      const [lo, hi] = partialRange(best, h);
+      for (let k = lo - 1; k <= hi + 1; k++) if (k >= 0 && k < d.length) { if (k >= loBin && k <= hiBin) removed += d[k]; d[k] = 0; }
+    }
+    // share：増えた分全体のうち、この音（基音と倍音）が占める割合
+    found.push({ m: best, s: bestS, fundamental, share: total > 0 ? removed / total : 0 });
+  }
+  return found;
 }
 
 /**
@@ -140,11 +232,128 @@ function snapToVoicing(post, sampleRate, win, heard, tuning) {
 }
 
 /**
+ * 拍ごとの「安定した音」の周波数分布を作る。
+ * 周波数ごとに、前後約0.3秒の中央値をとる（時間方向のメディアンフィルタ）。
+ * ギターの音は鳴っている間ほぼ同じ高さで続くので残るが、歌声はビブラートで高さが揺れて
+ * 同じ周波数に居続けないので弱まる。ドラムのような一瞬の音も消える。
+ * そのうえで、拍の中の周波数分布を平均して、拍ごとにまとめる。
+ */
+export function stableBeatSpectra(signal, sampleRate, beats, period, { frame = 8192, hop = 1024, medianSeconds = 0.3 } = {}) {
+  const frames = [];
+  const times = [];
+  for (let start = 0; start + frame <= signal.length; start += hop) {
+    frames.push(magnitudeSpectrum(signal, start, frame));
+    times.push((start + frame / 2) / sampleRate);
+  }
+  const bins = Math.min(frame / 2, Math.ceil(5000 / (sampleRate / frame)));
+  const half = Math.max(1, Math.round((medianSeconds * sampleRate) / hop / 2));
+  const window = new Float32Array(half * 2 + 1);
+  const stable = frames.map(() => new Float32Array(frame / 2));
+  for (let k = 0; k < bins; k++) {
+    for (let i = 0; i < frames.length; i++) {
+      let n = 0;
+      for (let j = Math.max(0, i - half); j <= Math.min(frames.length - 1, i + half); j++) window[n++] = frames[j][k];
+      const sorted = window.subarray(0, n).sort();
+      stable[i][k] = sorted[n >> 1];
+    }
+  }
+  return beats.map((b, idx) => {
+    const end = idx + 1 < beats.length ? beats[idx + 1] : b + period;
+    const sum = new Float32Array(frame / 2);
+    let count = 0;
+    times.forEach((t, i) => {
+      if (t < b || t >= end) return;
+      for (let k = 0; k < bins; k++) sum[k] += stable[i][k];
+      count++;
+    });
+    if (count) for (let k = 0; k < bins; k++) sum[k] /= count;
+    return sum;
+  });
+}
+
+/**
+ * 歌のメロディを追いかけて、その音（基音と倍音）を周波数分布から取り除く。
+ * 短い区間ごとに「一番目立つ音」の高さを細かく測り、前後で高さが揺れている（ビブラート・なめらかな上下）なら
+ * 歌とみなす。ギターの音は高さが一定なので残る。
+ * 戻り値：区間ごとの { t, mags }（歌を取り除いた周波数分布）
+ */
+export function removeVocalFrames(signal, sampleRate, { frame = 4096, fft = 16384, hop = 2048, wobbleCents = 30 } = {}) {
+  const binHz = sampleRate / fft;
+  const frames = [];
+  for (let start = 0; start + frame <= signal.length; start += hop) {
+    const mags = magnitudeSpectrum(signal, start, frame, fft);
+    // 一番目立つ音（歌の高さの範囲 C3〜C6）：倍音の合計がいちばん大きい高さを、細かく（10セント刻み）探す
+    let best = null;
+    for (let c = 4800; c <= 8400; c += 10) {
+      const f0 = 440 * 2 ** ((c / 100 - 69) / 12);
+      let sum = 0;
+      for (let h = 1; h <= 6; h++) sum += peakNear(mags, binHz, f0 * h, 15).mag / h;
+      if (!best || sum > best.sum) best = { cents: c, sum };
+    }
+    frames.push({ t: (start + frame / 2) / sampleRate, mags, cents: best.cents, sum: best.sum });
+  }
+  // 前後0.3秒の中で高さが揺れていれば歌とみなし、その音の基音と倍音を取り除く
+  const span = Math.max(1, Math.round((0.15 * sampleRate) / hop));
+  frames.forEach((fr, i) => {
+    const near = frames.slice(Math.max(0, i - span), i + span + 1).filter((g) => Math.abs(g.cents - fr.cents) < 150);
+    if (near.length < 3) return;
+    const values = near.map((g) => g.cents);
+    const wobble = Math.max(...values) - Math.min(...values);
+    if (wobble < wobbleCents) return;
+    const f0 = 440 * 2 ** ((fr.cents / 100 - 69) / 12);
+    for (let h = 1; h <= 12; h++) {
+      const f = f0 * h;
+      const lo = Math.floor((f * 2 ** (-60 / 1200)) / binHz), hi = Math.ceil((f * 2 ** (60 / 1200)) / binHz);
+      for (let k = lo; k <= hi && k < fr.mags.length; k++) fr.mags[k] = 0;
+    }
+    fr.vocal = true;
+  });
+  return frames;
+}
+
+/**
+ * コード譜を手がかりに、弾いた瞬間ごとの音を整える。
+ * - 和音（ストローク）を弾いたらしい瞬間：その時のコードの押さえ方のうち、聞こえた音にいちばん合う形にそろえる
+ * - 1音弾き：はっきり聞こえた音（いちばん強い音の strongRatio 倍以上）だけを残す
+ * 和音かどうかは、弾いた瞬間の勢い（曲の中での比べ）と、同時に鳴り始めた音の数・割合で判断する。
+ */
+function refineWithChart(events, onsetList, timeline, tuning, { strumStrength = 1.25, strongRatio = 0.35 } = {}) {
+  const strengths = onsetList.map((o) => o.strength).sort((a, b) => a - b);
+  const median = strengths[Math.floor(strengths.length / 2)] || 1;
+  const strengthAt = (t) => onsetList.find((o) => Math.abs(o.t - t) < 0.005)?.strength ?? median;
+  return events.map((e) => {
+    const peeled = e.peeled ?? e.notes.map((m) => ({ m, s: 1, share: 1 / e.notes.length }));
+    const first = peeled[0]?.s ?? 1;
+    const strong = peeled.filter((p) => p.s >= first * strongRatio);
+    const looksStrum = strengthAt(e.t) / median >= strumStrength || (strong.length >= 3 && (peeled[0]?.share ?? 1) < 0.5);
+    const seg = timeline.find((c) => e.t >= c.start - 0.05 && e.t < c.end);
+    if (looksStrum && seg) {
+      const parsed = parseChordName(seg.name);
+      if (parsed) {
+        const voicings = findVoicings(parsed.root, parsed.type, parsed.bass, tuning, { limit: 12 });
+        let best = null;
+        for (const frets of voicings) {
+          const midis = soundingNotes(frets, tuning);
+          const score = peeled.reduce((a, p) => a + (midis.includes(p.m) ? p.s : -0.5 * p.s), 0);
+          if (!best || score > best.score) best = { score, frets, midis };
+        }
+        if (best) {
+          const positions = best.frets.map((f, s) => (f === null ? null : { string: s, fret: f })).filter(Boolean);
+          return { t: e.t, notes: best.midis, positions };
+        }
+      }
+    }
+    const notes = strong.map((p) => p.m).sort((a, b) => a - b);
+    return notes.length ? { t: e.t, notes } : { t: e.t, notes: [peeled[0].m] };
+  });
+}
+
+/**
  * 録音全体を解析する。
  * - chords: 0.1秒ごとのコードの判定（buildChordTimeline でコード進行にまとめる）
  * - events: 弾いた瞬間ごとの、新しく鳴った音（タブ譜の材料）
  */
-export function transcribe(channels, sampleRate, { mode = 'auto', voiceFilter = true, method = 'rise', riseRatio = 1.3, minStrength = 0.2, harmonicRatio = 4, tuning = TUNINGS[0], snapStrums = true, snapMin = 3, voiceOptions = { wobbleCents: 60, useSwell: false }, attackRatio = 0, chordWindow = 16384, chordMinDuration = 0.5, onProgress = () => {} } = {}) {
+export function transcribe(channels, sampleRate, { mode = 'auto', voiceFilter = true, method = 'peel', riseRatio = 1.3, minStrength = 0.2, harmonicRatio = 4, tuning = TUNINGS[0], snapStrums = true, snapMin = 3, peelOptions = {}, useChart = true, chartOptions = {}, noteWeight = null, chromaMethod = 'auto', harmonicResidual = 0.35, vocalOptions = {}, useContext = true, contextOptions = {}, dropVocalNotes = true, voiceOptions = { wobbleCents: 60, useSwell: false }, attackRatio = 0, chordWindow = 16384, chordMinDuration = 0.5, onProgress = () => {} } = {}) {
   const { guitar, mid, useSide, sideRatio } = chooseSignal(channels, mode);
   const duration = guitar.length / sampleRate;
 
@@ -157,23 +366,33 @@ export function transcribe(channels, sampleRate, { mode = 'auto', voiceFilter = 
   const loudness = [];
   for (let c = 0; c + cwin <= guitar.length; c += hopChord) loudness.push(rms(guitar.subarray(c, c + cwin)));
   const loudest = Math.max(...loudness, 1e-9);
+  const zeros = new Float32Array(cwin / 2);
   let step = 0;
   for (let c = 0; c + cwin <= guitar.length; c += hopChord, step++) {
     if (step % 20 === 0) onProgress(0.4 * (c / guitar.length), 'コードを調べています');
     if (loudness[step] < loudest * 0.05) continue; // ほぼ無音
-    const { chroma } = analyzeSpectrum(magnitudeSpectrum(guitar, c, cwin), sampleRate, cwin);
+    const frameMags = magnitudeSpectrum(guitar, c, cwin);
+    // コード用には倍音をしっかり取り除く（3度の音の3倍音が maj7 の音と同じ高さになり、C を Cmaj7 と読み違えるため）
+    let { chroma } = analyzeSpectrum(frameMags, sampleRate, cwin, { harmonicResidual });
+    if (chromaMethod === 'peel') {
+      // 倍音を完全にはがして見つけた音だけで、12音の強さを作る（倍音の消え残りでコードを読み違えないように）
+      chroma = new Array(12).fill(0);
+      peelNotes(frameMags, zeros, sampleRate / cwin, { maxNotes: 8, stopRatio: 0.1 }).forEach((n) => { chroma[n.m % 12] += n.s; });
+    }
+    const total = chroma.reduce((a, b) => a + b, 0) || 1;
     // ベース音は、サイドでは消えてしまうベースギターも含む真ん中の音から探す
     const { bass } = analyzeSpectrum(magnitudeSpectrum(useSide ? mid : guitar, c, cwin), sampleRate, cwin);
     const [top] = identifyFromChroma(chroma, bass, 1);
-    if (top) chordFrames.push({ t: (c + cwin / 2) / sampleRate, name: top.name, confidence: top.confidence });
+    if (top) chordFrames.push({ t: (c + cwin / 2) / sampleRate, name: top.name, confidence: top.confidence, chroma: chroma.map((v) => v / total), bass });
   }
 
   // 2. 弾いた瞬間を探す
   onProgress(0.4, '弾いた瞬間を探しています');
-  const onsets = detectOnsets(guitar, sampleRate);
+  const onsetList = detectOnsetsDetailed(guitar, sampleRate);
+  const onsets = onsetList.map((o) => o.t);
 
   // 3. 弾いた瞬間ごとに、直前より強くなった音（＝新しく弾いた音）を拾う
-  const events = [];
+  let events = [];
   onsets.forEach((t, i) => {
     if (i % 10 === 0) onProgress(0.5 + 0.5 * (i / onsets.length), 'タブ譜を作っています');
     const start = Math.floor((t + 0.02) * sampleRate);
@@ -188,6 +407,19 @@ export function transcribe(channels, sampleRate, { mode = 'auto', voiceFilter = 
     // 直後の音から直前の音を引いた「増えた分」だけを見る（鳴り続けている音を除くため）
     const added = new Float32Array(post.length);
     for (let k = 0; k < post.length; k++) added[k] = Math.max(0, post[k] - pre[k]);
+    if (method === 'peel') {
+      const peeled = peelNotes(post, pre, binHz, peelOptions);
+      let fresh = peeled.map((e) => e.m);
+      if (voiceFilter) fresh = fresh.filter((m) => !looksLikeVoice(guitar, sampleRate, m, start, length, voiceOptions));
+      fresh.sort((a, b) => a - b);
+      let positions = null;
+      if (snapStrums && fresh.length >= snapMin) {
+        const snapped = snapToVoicing(post, sampleRate, win, fresh, tuning);
+        if (snapped) ({ notes: fresh, positions } = snapped);
+      }
+      if (fresh.length) events.push({ t, notes: fresh, ...(positions ? { positions } : {}), peeled: peeled.map((e) => ({ m: e.m, s: e.s, share: e.share })) });
+      return;
+    }
     // method 'diff'：増えた分のスペクトルから音を探す / 'rise'：鳴っている音を探し、直前より強くなった音を選ぶ
     const source = method === 'diff' ? added : post;
     const { notes } = analyzeSpectrum(source, sampleRate, win);
@@ -228,6 +460,77 @@ export function transcribe(channels, sampleRate, { mode = 'auto', voiceFilter = 
     if (fresh.length) events.push(positions ? { t, notes: fresh, positions } : { t, notes: fresh });
   });
 
+  // 4. 拍を見つけ、拍ごとに鳴った音をまとめてコード譜にする
+  onProgress(0.97, 'コード譜にまとめています');
+  const beatChromasFor = (beats, period) => {
+    const chromas = [];
+    const basses = [];
+    beats.forEach((b, k) => {
+      const end = k + 1 < beats.length ? beats[k + 1] : b + period;
+      const inside = chordFrames.filter((f) => f.t >= b && f.t < end);
+      const chroma = new Array(12).fill(0);
+      inside.forEach((f) => f.chroma.forEach((v, i) => { chroma[i] += v; }));
+      // その拍の中で実際に弾いた音（倍音をはがして見つけた音）も、コードの手がかりとして足す
+      const played = events.filter((e) => e.t >= b - 0.03 && e.t < end - 0.03);
+      const frameTotal = chroma.reduce((a, c) => a + c, 0) || 1;
+      // 弾き語りなど歌と分けられない曲では、弾いた音に歌が混ざるので使わない
+      const w = noteWeight ?? (useSide ? 0.5 : 0);
+      played.forEach((e) => e.notes.forEach((m) => { chroma[m % 12] += (w * frameTotal) / Math.max(1, played.length * e.notes.length); }));
+      chromas.push(chroma);
+      const counts = new Map();
+      inside.forEach((f) => { if (f.bass !== null && f.bass !== undefined) counts.set(f.bass, (counts.get(f.bass) || 0) + 1); });
+      basses.push([...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null);
+    });
+    return { chromas, basses };
+  };
+  // 拍の位置は、表と裏（8分音符のずれ）を取り違えやすい。表と裏の2つの候補のうち、
+  // コードの変わり目が小節の頭にいちばんきれいにそろう位置を選ぶ
+  let grid = null;
+  let vocalFrames = null;
+  for (const [phaseShift, fitLine] of [[0, false], [0.5, false], [0, true], [0.5, true]]) {
+    const g = estimateBeats(onsetList, duration, { phaseShift, fitLine });
+    if (g.beats.length < 4) continue;
+    let { chromas, basses } = beatChromasFor(g.beats, g.period);
+    if (chromaMethod === 'devocal' || (chromaMethod === 'auto' && !useSide)) {
+      // 歌と分けられない曲：歌のメロディを取り除いた短い区間の音から、拍ごとの12音の強さを作り直す
+      vocalFrames ??= removeVocalFrames(guitar, sampleRate, vocalOptions);
+      chromas = g.beats.map((b, k) => {
+        const end = k + 1 < g.beats.length ? g.beats[k + 1] : b + g.period;
+        const chroma = new Array(12).fill(0);
+        vocalFrames.filter((f) => f.t >= b && f.t < end).forEach((f) => {
+          const c = analyzeSpectrum(f.mags, sampleRate, 16384, { harmonicResidual }).chroma;
+          const tot = c.reduce((a, v) => a + v, 0) || 1;
+          c.forEach((v, i) => { chroma[i] += v / tot; });
+        });
+        return chroma;
+      });
+    }
+    if (chromaMethod === 'stable') {
+      // 安定した音だけで、拍ごとの12音の強さを作り直す
+      chromas = stableBeatSpectra(guitar, sampleRate, g.beats, g.period).map((spec) => analyzeSpectrum(spec, sampleRate, 8192).chroma);
+    }
+    const { offset, score } = findDownbeatScored(chromas);
+    if (!grid || score > grid.score) grid = { ...g, chromas, basses, downbeat: offset, score };
+  }
+  let timeline = buildChordTimeline(chordFrames, { minDuration: chordMinDuration });
+  const bpm = grid?.bpm ?? null, beats = grid?.beats ?? [], downbeat = grid?.downbeat ?? 0;
+  if (useChart && grid) {
+    timeline = buildChart(grid.beats, decodeChords(grid.chromas, grid.downbeat, { beatBass: grid.basses, ...chartOptions }), grid.basses, grid.period)
+      .filter((seg) => seg.end - seg.start > 0);
+  }
+
+  // 5. コード譜を手がかりに、1音ずつのタブ譜を整える
+  if (useContext && grid) events = refineWithChart(events, onsetList, timeline, tuning, contextOptions);
+  // 歌と分けられない曲：歌のメロディと同じ高さ・同じころに鳴り始めた単音は、歌とみなしてタブ譜から除く
+  if (!useSide && vocalFrames && dropVocalNotes) {
+    events = events.map((e) => {
+      if (e.positions) return e;
+      const near = vocalFrames.filter((f) => f.vocal && Math.abs(f.t - e.t) < 0.2);
+      const notes = e.notes.filter((m) => !near.some((f) => Math.abs(f.cents / 100 - m) < 0.6));
+      return { ...e, notes };
+    }).filter((e) => e.notes.length);
+  }
+
   onProgress(1, '完了');
-  return { duration, useSide, sideRatio, chordFrames, timeline: buildChordTimeline(chordFrames, { minDuration: chordMinDuration }), events };
+  return { duration, useSide, sideRatio, chordFrames, timeline, events, bpm, beats, downbeat };
 }

@@ -487,6 +487,9 @@ select, input[type="text"] {
 #song-result[hidden] { display: none; }
 .song-media { width: 100%; max-height: 40vh; border-radius: 12px; background: #000; }
 
+.play-buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.play-buttons .secondary-button { min-height: 46px; font-weight: 700; font-size: 0.9rem; white-space: normal; padding: 6px 8px; min-width: 0; }
+
 .song-now { text-align: center; font-size: clamp(2.4rem, 12vw, 3.4rem); font-weight: 800; }
 
 .song-section h2 { font-size: 1rem; margin: 8px 0; }

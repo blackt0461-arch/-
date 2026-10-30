@@ -52,3 +52,54 @@ export async function playNotes(midis, { strumMs = 35, seconds = 2.5 } = {}) {
   src.connect(ctx.destination);
   src.start();
 }
+
+/**
+ * 音の並びを、時間どおりに鳴らす（コード譜・タブ譜の再生）。
+ * items: [{ t: 鳴らす時刻（秒）, midis: [MIDI…], strumMs }]
+ * from 秒から鳴らし始め、onTime(今の時刻) を画面の更新用に呼ぶ。戻り値の stop() で止める。
+ * 音は少し先（0.6秒ぶん）ずつ作って予約していくので、長い曲でも最初に待たされない。
+ */
+export async function playSequence(items, { from = 0, onTime = () => {}, onEnd = () => {} } = {}) {
+  ctx ??= new (window.AudioContext || window.webkitAudioContext)();
+  if (ctx.state !== 'running') await ctx.resume();
+  const sr = ctx.sampleRate;
+  const queue = items.filter((it) => it.t >= from - 0.01).sort((a, b) => a.t - b.t);
+  const startAt = ctx.currentTime + 0.15;
+  const end = queue.length ? queue[queue.length - 1].t + 2 : from;
+  const sources = [];
+  let next = 0;
+  let stopped = false;
+
+  const schedule = () => {
+    const horizon = ctx.currentTime - startAt + from + 0.6;
+    while (next < queue.length && queue[next].t <= horizon) {
+      const { t, midis, strumMs = 0 } = queue[next++];
+      midis.forEach((midi, i) => {
+        const note = pluck(440 * 2 ** ((midi - 69) / 12), sr, 1.8);
+        const buffer = ctx.createBuffer(1, note.length, sr);
+        buffer.getChannelData(0).set(note.map((v) => v * (0.5 / Math.sqrt(midis.length))));
+        const src = ctx.createBufferSource();
+        src.buffer = buffer;
+        src.connect(ctx.destination);
+        src.start(startAt + (t - from) + (i * strumMs) / 1000);
+        sources.push(src);
+      });
+    }
+  };
+  const timer = setInterval(() => {
+    if (stopped) return;
+    schedule();
+    const now = ctx.currentTime - startAt + from;
+    onTime(Math.max(from, now));
+    if (now > end) { stop(); onEnd(); }
+  }, 100);
+  schedule();
+
+  function stop() {
+    if (stopped) return;
+    stopped = true;
+    clearInterval(timer);
+    sources.forEach((s) => { try { s.stop(); } catch { /* もう止まっている */ } });
+  }
+  return { stop };
+}

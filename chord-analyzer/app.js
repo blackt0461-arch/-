@@ -3,12 +3,12 @@
 import { NOTE_NAMES, identifyFromNotes, identifyFromChroma, midiToPitchClass, parseChordName, frequencyToMidi } from './chord-engine.js';
 import { startListening, startTuner } from './audio.js';
 import { TUNINGS, parseShape, formatShape, soundingNotes, renderFretboard, findVoicings } from './fretboard.js';
-import { playNotes } from './sound.js';
+import { playNotes, playSequence } from './sound.js';
 import { formatTime, assignTab, formatTab } from './song.js';
 
 // version.json と同じ値にする（新しいバージョンを公開したら両方を上げる）
-const APP_VERSION = '1.4.0';
-const APP_FILES = ['index.html', 'style.css', 'app.js', 'chord-engine.js', 'audio.js', 'fretboard.js', 'sound.js', 'song.js', 'dsp.js', 'transcribe.js', 'transcribe-worker.js', 'sw.js', 'manifest.webmanifest'];
+const APP_VERSION = '1.5.0';
+const APP_FILES = ['index.html', 'style.css', 'app.js', 'chord-engine.js', 'audio.js', 'fretboard.js', 'sound.js', 'song.js', 'dsp.js', 'chart.js', 'transcribe.js', 'transcribe-worker.js', 'sw.js', 'manifest.webmanifest'];
 const HOLD_MS = 150;      // マイク：別のコードがこの時間続いたら表示を切り替える
 const HISTORY_SIZE = 16;  // マイク：覚えておくコードの数
 const HISTORY_STABLE_MS = 400; // マイク：この時間続いたコードを履歴に入れる
@@ -383,20 +383,84 @@ function voicingFor(name) {
 }
 
 // 再生に合わせて、今のコードとタブ譜の段を光らせる
-function highlightNow() {
+function highlightNow(time) {
   if (!analysis) return;
-  const t = songMedia.currentTime;
+  const t = typeof time === 'number' ? time : songMedia.currentTime;
   const index = analysis.timeline.findIndex((seg) => t >= seg.start && t <= seg.end + 0.3);
   songNow.textContent = index >= 0 ? analysis.timeline[index].name : '―';
   songChords.querySelectorAll('.song-chord').forEach((el) => el.classList.toggle('active', Number(el.dataset.index) === index));
   const blockIndex = analysis.tabBlocks.findLastIndex((b) => t >= b.t - 0.1);
   songTab.querySelectorAll('.tab-block').forEach((el) => el.classList.toggle('active', Number(el.dataset.index) === blockIndex));
 }
-songMedia.addEventListener('timeupdate', highlightNow);
-songMedia.addEventListener('seeked', highlightNow);
+songMedia.addEventListener('timeupdate', () => { if (!synth) highlightNow(); });
+songMedia.addEventListener('seeked', () => { if (!synth) highlightNow(); });
+
+// ---- コード譜・タブ譜どおりに鳴らす ----
+const playTabButton = document.getElementById('play-tab');
+const playChartButton = document.getElementById('play-chart');
+let synth = null;
+
+function stopSynth() {
+  synth?.stop();
+  synth = null;
+  playTabButton.textContent = '▶ タブ譜どおりに鳴らす';
+  playChartButton.textContent = '▶ コード譜を鳴らす';
+}
+
+// タブ譜どおり：弾いた瞬間ごとの音を、その時刻に鳴らす（和音は低い弦から少しずつずらす）
+function tabItems() {
+  const tuning = currentTuning();
+  const capo = Number(capoSelect.value);
+  return analysis.events.map((e) => ({
+    t: e.t,
+    midis: e.positions ? e.positions.map((p) => tuning.strings[p.string] + capo + p.fret).sort((a, b) => a - b) : e.notes,
+    strumMs: e.positions || e.notes.length > 2 ? 18 : 0,
+  }));
+}
+
+// コード譜：拍ごとに、そのときのコードの押さえ方をジャラーンと鳴らす
+function chartItems() {
+  const tuning = currentTuning();
+  const capo = Number(capoSelect.value);
+  const items = [];
+  const beats = analysis.beats?.length ? analysis.beats : [];
+  analysis.timeline.forEach((seg) => {
+    const shape = parseShape(voicingFor(seg.name));
+    if (!shape) return;
+    const midis = soundingNotes(shape, tuning, capo);
+    const times = beats.filter((b) => b >= seg.start - 0.02 && b < seg.end - 0.02);
+    (times.length ? times : [seg.start]).forEach((t) => items.push({ t, midis, strumMs: 22 }));
+  });
+  return items;
+}
+
+async function startSynth(kind) {
+  const wasSame = synth?.kind === kind;
+  stopSynth();
+  if (wasSame) return;
+  songMedia.pause();
+  const items = kind === 'tab' ? tabItems() : chartItems();
+  const from = songMedia.currentTime >= songMedia.duration - 0.5 ? 0 : songMedia.currentTime;
+  const handle = await playSequence(items, {
+    from,
+    onTime: (t) => highlightNow(t),
+    onEnd: () => stopSynth(),
+  });
+  synth = { ...handle, kind };
+  (kind === 'tab' ? playTabButton : playChartButton).textContent = '■ 止める';
+}
+playTabButton.addEventListener('click', () => startSynth('tab'));
+playChartButton.addEventListener('click', () => startSynth('chart'));
+songMedia.addEventListener('play', () => { if (synth) stopSynth(); });
 
 function playFrom(t) {
   songMedia.currentTime = Math.max(0, t - 0.2);
+  if (synth) {
+    const kind = synth.kind;
+    stopSynth();
+    startSynth(kind);
+    return;
+  }
   songMedia.play().catch(() => {});
 }
 songChords.addEventListener('click', (e) => {
@@ -421,8 +485,8 @@ songFile.addEventListener('change', async () => {
   try {
     const { channels, sampleRate, duration } = await decodeFile(file);
     const result = await runTranscription(channels, sampleRate, songMode.value);
-    analysis = { timeline: result.timeline, tabBlocks: buildTabBlocks(result.events) };
-    songInfo.textContent = `${file.name}（${formatTime(duration)}）・${result.useSide ? '歌を弱めて解析しました' : '左右を混ぜた音で解析しました'}`;
+    analysis = { timeline: result.timeline, tabBlocks: buildTabBlocks(result.events), events: result.events, beats: result.beats, bpm: result.bpm };
+    songInfo.textContent = `${file.name}（${formatTime(duration)}）・テンポ ${Math.round(result.bpm || 0)}・${result.useSide ? '左右の差で歌を弱めて解析しました' : '歌のメロディを取り除いて解析しました'}`;
     renderAnalysis();
     songResult.hidden = false;
     highlightNow();
@@ -449,6 +513,7 @@ document.getElementById('song-copy').addEventListener('click', async (e) => {
 
 function pauseSongMedia() {
   songMedia.pause();
+  stopSynth();
 }
 
 // ---------- チューナー ----------

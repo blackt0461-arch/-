@@ -26,19 +26,27 @@ export function runCase(label, songOpts, transcribeOpts = {}) {
   };
 }
 
+export const CONDITIONS = [
+  ['ギターだけ', { withBand: false }],
+  ['バンド・ステレオ', { stereo: true }],
+  ['弾き語り', { stereo: false }],
+  ['弾き語り・歌が大きい', { stereo: false, vocalGain: 0.25 }],
+];
+
+/** いくつもの曲で測って平均する */
+export function runBench(transcribeOpts = {}, { songs = 8, conditions = CONDITIONS } = {}) {
+  return conditions.map(([label, so]) => {
+    const rs = [];
+    for (let seed = 1; seed <= songs; seed++) rs.push(runCase(label, { ...so, seed }, transcribeOpts));
+    const avg = (k) => rs.reduce((a, r) => a + r[k], 0) / rs.length;
+    return { label, f1: avg('f1'), precision: avg('precision'), recall: avg('recall'), chords: avg('chords'), worst: Math.min(...rs.map((r) => r.chords)) };
+  });
+}
+
 if (import.meta.url === `file://${process.argv[1]}`) {
-  const cases = [
-    ['ギターだけ', { withBand: false }],
-    ['バンド・ステレオ', { stereo: true }],
-    ['バンド・ステレオ（歌フィルタなし）', { stereo: true }, { voiceFilter: false }],
-    ['バンド・ステレオ（左右分離なし）', { stereo: true }, { mode: 'mix' }],
-    ['弾き語り（全部真ん中）', { stereo: false }],
-    ['弾き語り（歌フィルタなし）', { stereo: false }, { voiceFilter: false }],
-    ['弾き語り・歌が大きい', { stereo: false, vocalGain: 0.25 }],
-  ];
-  for (const [label, so, to] of cases) {
-    const r = runCase(label, so, to);
-    const pct = (x) => `${(x * 100).toFixed(0).padStart(3)}%`;
-    console.log(`${label.padEnd(18, '　')} 音F1 ${pct(r.f1)}（適合${pct(r.precision)} 再現${pct(r.recall)}） オクターブ無視F1 ${pct(r.octaveFreeF1)}  コード ${pct(r.chords)}  左右分離:${r.useSide ? 'あり' : 'なし'}  ${r.ms}ms`);
+  const opts = JSON.parse(process.argv[2] || '{}');
+  const pct = (x) => `${(x * 100).toFixed(0).padStart(3)}%`;
+  for (const r of runBench(opts, { songs: Number(process.env.SONGS || 10) })) {
+    console.log(`${r.label.padEnd(10, '　')} 音 ${pct(r.f1)}（適合${pct(r.precision)} 再現${pct(r.recall)}）  コード譜 ${pct(r.chords)}（いちばん悪い曲 ${pct(r.worst)}）`);
   }
 }

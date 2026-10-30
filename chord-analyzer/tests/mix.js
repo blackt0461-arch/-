@@ -1,6 +1,8 @@
 // 精度テスト用：歌・ベース・ドラム入りの「曲」を合成し、ギターの正解（いつ・どの音）も返す
 
 import { rng } from './synth.js';
+import { parseChordName } from '../chord-engine.js';
+import { findVoicings } from '../fretboard.js';
 
 export const MIX_RATE = 44100;
 const TUNING = [40, 45, 50, 55, 59, 64];
@@ -53,74 +55,134 @@ function sing(out, notes, gain, rand) {
   }
 }
 
+// テスト曲のコード進行（seed ごとに選ぶ）
+const PROGRESSIONS = [
+  ['C', 'G', 'Am', 'F'],
+  ['Am', 'F', 'C', 'G'],
+  ['D', 'A', 'Bm', 'G'],
+  ['G', 'Em', 'C', 'D'],
+  ['E', 'B', 'C#m', 'A'],
+  ['F', 'C', 'Dm', 'B♭'],
+  ['Dm', 'G', 'C', 'Am'],
+  ['A', 'E', 'F#m', 'D'],
+  // 7th コードを使う曲（シンプルなコードばかりに合わせ込んでいないか確かめるため）
+  ['Cmaj7', 'Am7', 'Dm7', 'G7'],
+  ['Em7', 'A7', 'Dmaj7', 'Bm7'],
+];
+
 /**
- * 8小節の曲を作る。テンポ100（1拍0.6秒）、コードは C → G → Am → F を2回。
- * ギター：1〜4小節はアルペジオ、5〜6小節はストローク、7〜8小節は単音のリフ
+ * 8小節の曲を作る。seed ごとにテンポ（80〜130）・コード進行・弾き方（アルペジオ・ストローク・リフ）が変わる。
  * stereo: true ならギターは左寄り、歌・ベース・ドラムは真ん中（よくあるバンドの混ぜ方）
  * stereo: false なら全部真ん中（弾き語りの動画など）
  */
 export function makeSong({ seed = 1, stereo = true, vocalGain = 0.12, withBand = true } = {}) {
-  const rand = rng(seed);
-  const beat = 0.6;
+  const rand = rng(seed * 7919);
+  const tempo = 80 + Math.floor(rand() * 51);
+  const beat = 60 / tempo;
   const bars = 8;
-  const length = Math.ceil((bars * 4 * beat + 2) * MIX_RATE);
+  const start = 0.5;
+  const length = Math.ceil((start + bars * 4 * beat + 2) * MIX_RATE);
   const guitar = new Float32Array(length);
   const center = new Float32Array(length);
   const truth = [];
 
-  const shapes = { C: [null, 3, 2, 0, 1, 0], G: [3, 2, 0, 0, 0, 3], Am: [null, 0, 2, 2, 1, 0], F: [1, 3, 3, 2, 1, 1] };
-  const progression = ['C', 'G', 'Am', 'F', 'C', 'G', 'Am', 'F'];
+  const base = PROGRESSIONS[(seed - 1) % PROGRESSIONS.length];
+  const progression = [...base, ...base];
+  const shapeOf = (name) => {
+    const { root, type, bass } = parseChordName(name);
+    return findVoicings(root, type, bass, { strings: TUNING }, { limit: 6 })[0];
+  };
   const noteOf = (shape, s) => TUNING[s] + shape[s];
-  const play = (midi, at, seconds = 1.6, gain = 0.5) => addAt(guitar, pluck(freq(midi), seconds, rand), at, gain * (0.8 + rand() * 0.4));
+  // 弦ごとに音を重ねる。本物のギターと同じく、1本の弦は同時に1つの音しか鳴らせないので、
+  // 同じ弦で次の音を弾いたら前の音は止まる（短くフェードアウト）
+  const strings6 = Array.from({ length: 6 }, () => new Float32Array(length));
+  const stopString = (s, at) => {
+    const from = Math.floor(at * MIX_RATE);
+    const fade = Math.floor(0.015 * MIX_RATE);
+    const track = strings6[s];
+    for (let i = from; i < track.length; i++) track[i] *= i - from < fade ? 1 - (i - from) / fade : 0;
+  };
+  const play = (midi, at, seconds = 1.6, gain = 0.5, string = null) => {
+    // 弦の指定が無いとき（リフ）は、その音を出せるいちばん高い弦（12フレット以内）で弾く
+    const s = string ?? [5, 4, 3, 2, 1, 0].find((k) => midi - TUNING[k] >= 0 && midi - TUNING[k] <= 12) ?? 0;
+    stopString(s, at);
+    addAt(strings6[s], pluck(freq(midi), seconds, rand), at, gain * (0.8 + rand() * 0.4));
+  };
 
+  // 小節ごとの弾き方：seed ごとに並びを変える（どの曲にもアルペジオ・ストローク・リフが入る）
+  const kinds = ['arp', 'arp', 'strum', 'strum', 'riff', 'arp', 'strum', 'riff'];
+  for (let i = kinds.length - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); [kinds[i], kinds[j]] = [kinds[j], kinds[i]]; }
+
+  let prevShape = null;
   progression.forEach((name, bar) => {
-    const shape = shapes[name];
-    const t0 = 0.5 + bar * 4 * beat;
+    const shape = shapeOf(name);
+    const t0 = start + bar * 4 * beat;
+    // コードを持ち替えると、押さえる場所が変わる弦・押さえていた弦の音は止まる（開放弦のまま変わらない弦は鳴り続ける）
+    if (prevShape) shape.forEach((f, s) => { if (prevShape[s] !== f || (f !== null && f > 0 && kinds[bar - 1] === 'riff')) stopString(s, t0 - 0.02); });
+    if (kinds[bar] === 'riff') for (let s = 0; s < 6; s++) stopString(s, t0 - 0.02);
+    prevShape = shape;
     const strings = shape.map((f, s) => (f === null ? -1 : s)).filter((s) => s >= 0);
-    if (bar < 4) {
-      // アルペジオ：低い弦から高い弦へ、8分音符で
-      const order = [strings[0], strings[2], strings[3], strings[4], strings[strings.length - 1], strings[4], strings[3], strings[2]];
-      order.forEach((s, i) => {
-        const at = t0 + i * beat / 2;
-        play(noteOf(shape, s), at);
-        truth.push({ t: at, notes: [noteOf(shape, s)] });
+    const minor = /^[A-G][#♭]?m(?!aj)/.test(name);
+    if (kinds[bar] === 'arp') {
+      // アルペジオ：8分音符で、低い弦から高い弦へ（並びは小節ごとに少し変える）
+      const top = strings.length - 1;
+      const orders = [[0, 2, 3, 4, top, 4, 3, 2], [0, 1, 2, 3, 4, 3, 2, 1], [0, 2, 1, 3, 2, 4, 3, top]];
+      orders[Math.floor(rand() * orders.length)].forEach((k, i) => {
+        const s = strings[Math.min(k, top)];
+        const at = t0 + (i * beat) / 2;
+        play(noteOf(shape, s), at, 1.6, 0.5, s);
+        truth.push({ t: at, notes: [noteOf(shape, s)], kind: 'arp' });
       });
-    } else if (bar < 6) {
-      // ストローク：1拍目と3拍目に全部の弦を少しずつずらして鳴らす
-      [0, 2].forEach((b) => {
+    } else if (kinds[bar] === 'strum') {
+      // ストローク：リズムは2通り（2分音符・8分のダウンアップ）
+      const hits = rand() < 0.5 ? [0, 2] : [0, 1, 1.5, 2.5, 3];
+      hits.forEach((b, i) => {
         const at = t0 + b * beat;
-        strings.forEach((s, i) => play(noteOf(shape, s), at + i * 0.012, 1.2, 0.35));
-        truth.push({ t: at, notes: strings.map((s) => noteOf(shape, s)) });
+        const up = !Number.isInteger(b);
+        const order = up ? [...strings].reverse() : strings;
+        order.forEach((s, k) => play(noteOf(shape, s), at + k * 0.012, 1.0, 0.3, s));
+        truth.push({ t: at, notes: strings.map((s) => noteOf(shape, s)).sort((a, b) => a - b), kind: 'strum' });
       });
     } else {
-      // 単音のリフ：コードの音を中心にした8分音符のフレーズ
+      // 単音のリフ：表拍（強い拍）はコードの構成音、裏拍に経過音を挟む（実際のリフの多くはこう作られ、コードが聞き取れる）
       const root = noteOf(shape, strings[0]) + 12;
-      [0, 3, 7, 12, 10, 7, 5, 3].forEach((d, i) => {
-        const at = t0 + i * beat / 2;
-        const m = Math.min(76, root + d);
+      const { type } = parseChordName(name);
+      const iv = type.intervals;
+      const top = iv.length > 3 ? iv[3] : 12;
+      const passing = (minor ? 5 : 2);
+      const steps = [iv[0], iv[1], iv[2], top, 12, iv[2], passing, iv[1]];
+      steps.forEach((d, i) => {
+        const at = t0 + (i * beat) / 2;
+        let m = root + d;
+        while (m > 79) m -= 12;
         play(m, at, 0.8, 0.5);
-        truth.push({ t: at, notes: [m] });
+        truth.push({ t: at, notes: [m], kind: 'riff' });
       });
     }
   });
 
   if (withBand) {
-    // 歌：ゆったりした長めの音のメロディ
-    const melody = [67, 64, 62, 64, 67, 69, 67, 64, 65, 64, 62, 60, 64, 67, 72, 71, 69, 67, 65, 64];
-    let t = 0.6;
-    const notes = melody.map((midi, i) => {
-      const dur = 0.9 + (i % 3) * 0.3;
-      const n = { midi, start: t, end: t + dur - 0.05 };
-      t += dur;
-      return n;
+    // 歌：コードの音を中心にした、2拍か4拍の長めの音のメロディ
+    const notes = [];
+    progression.forEach((name, bar) => {
+      const { root, type } = parseChordName(name);
+      const tones = type.intervals.map((i) => 60 + ((root + i) % 12));
+      let b = 0;
+      while (b < 4) {
+        const len = rand() < 0.5 ? 2 : 4 - b;
+        const t = start + (bar * 4 + b) * beat;
+        notes.push({ midi: tones[Math.floor(rand() * tones.length)] + (rand() < 0.3 ? 2 : 0), start: t + 0.05, end: t + len * beat - 0.05 });
+        b += len;
+      }
     });
     sing(center, notes, vocalGain, rand);
     // ベース：各小節の1拍目と3拍目にルート音
-    const roots = { C: 36, G: 31, Am: 33, F: 29 };
     progression.forEach((name, bar) => {
+      const { root } = parseChordName(name);
+      const midi = 28 + ((root - 4 + 12) % 12);
       [0, 2].forEach((b) => {
-        const at = 0.5 + (bar * 4 + b) * beat;
-        const f = freq(roots[name]);
+        const at = start + (bar * 4 + b) * beat;
+        const f = freq(midi);
         const tone = new Float32Array(Math.floor(MIX_RATE * beat * 1.8));
         for (let i = 0; i < tone.length; i++) {
           const tt = i / MIX_RATE;
@@ -131,7 +193,7 @@ export function makeSong({ seed = 1, stereo = true, vocalGain = 0.12, withBand =
     });
     // ドラム：バスドラ（1・3拍）、スネア（2・4拍）、ハイハット（8分）
     for (let b = 0; b < bars * 4; b++) {
-      const at = 0.5 + b * beat;
+      const at = start + b * beat;
       const hit = new Float32Array(Math.floor(MIX_RATE * 0.3));
       for (let i = 0; i < hit.length; i++) {
         const tt = i / MIX_RATE;
@@ -149,13 +211,20 @@ export function makeSong({ seed = 1, stereo = true, vocalGain = 0.12, withBand =
     }
   }
 
+  strings6.forEach((track) => { for (let i = 0; i < length; i++) guitar[i] += track[i]; });
   const left = new Float32Array(length), right = new Float32Array(length);
   const [gl, gr] = stereo ? [0.85, 0.25] : [0.6, 0.6];
   for (let i = 0; i < length; i++) {
     left[i] = guitar[i] * gl + center[i] * 0.6;
     right[i] = guitar[i] * gr + center[i] * 0.6;
   }
-  return { channels: [left, right], sampleRate: MIX_RATE, truth, chords: progression.map((name, bar) => ({ name, start: 0.5 + bar * 4 * beat, end: 0.5 + (bar + 1) * 4 * beat })) };
+  return {
+    channels: [left, right],
+    sampleRate: MIX_RATE,
+    tempo,
+    truth: truth.sort((a, b) => a.t - b.t),
+    chords: progression.map((name, bar) => ({ name, kind: kinds[bar], start: start + bar * 4 * beat, end: start + (bar + 1) * 4 * beat })),
+  };
 }
 
 /** 予想した音と正解の音を照らし合わせる（時間の差 tol 秒以内・同じ高さなら正解） */

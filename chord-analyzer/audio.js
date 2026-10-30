@@ -52,7 +52,7 @@ function estimateTuningCents(peaks) {
  * 確定した音の倍音を差し引いていく。これで倍音を別の音と間違えにくくなり、
  * スマホのマイクで基音が小さく拾われる低音弦も、倍音の助けで見つけられる。
  */
-export function analyzeSpectrum(magnitudes, sampleRate, fftSize) {
+export function analyzeSpectrum(magnitudes, sampleRate, fftSize, { harmonicResidual = 0.35 } = {}) {
   const binHz = sampleRate / fftSize;
   const peaks = findPeaks(magnitudes, binHz);
   if (peaks.length === 0) return { chroma: new Array(12).fill(0), bass: null, notes: [] };
@@ -101,7 +101,7 @@ export function analyzeSpectrum(magnitudes, sampleRate, fftSize) {
     else if (bestS < first * 0.25) break;
     notes.push({ midi: best.midi, strength: bestS });
     // 確定した音の倍音を差し引く（別の弦の音が同じ周波数にあるかもしれないので少し残す）
-    best.partials.forEach((idx, i) => { if (idx >= 0) remaining[idx] *= i === 0 ? 0 : 0.35; });
+    best.partials.forEach((idx, i) => { if (idx >= 0) remaining[idx] *= i === 0 ? 0 : harmonicResidual; });
   }
 
     // ベース音：スマホのマイクでは低音弦の基音が小さくなり、上の処理で取りこぼしやすい。
