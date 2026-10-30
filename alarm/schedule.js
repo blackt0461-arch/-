@@ -114,6 +114,8 @@ export function regenerate(data, now = new Date()) {
     };
   }
   data.schedule = schedule;
+  // Flat list of every alarm from today to the horizon, for Shortcuts that filter by time only.
+  data.upcoming = Object.keys(schedule).flatMap(withAt);
   data.updatedAt = now.toISOString();
   return data;
 }
