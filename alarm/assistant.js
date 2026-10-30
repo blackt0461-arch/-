@@ -193,6 +193,26 @@ export async function askGemini({ apiKey, model, data, history, now = new Date()
   return { ...parseReply(r.text), model: r.model };
 }
 
+// Fallback when the result page can't be read: let Gemini search the web for the usual ride time.
+// Without a timetable the wait for the train is unknown, so WAIT_MINUTES is added on top.
+const WAIT_MINUTES = 5;
+export async function searchTransit({ apiKey, model, from, to, onRetry }) {
+  const body = {
+    tools: [{ google_search: {} }],
+    contents: [{ role: 'user', parts: [{ text: `Google検索で、${from}駅から${to}駅まで電車で行くときの所要時間（乗り換えを含む、乗車してから着くまで）を調べてください。
+複数の経路があれば、普段よく使われる経路の時間にしてください。見つからなければ、推測せずに {"error":"理由"} とだけ答えてください。
+答えはJSONだけで、{"minutes":数字,"summary":"路線名など短く"} の形にしてください。` }] }],
+  };
+  const r = await generate({ apiKey, model, body, onRetry });
+  const match = r.text.match(/\{[\s\S]*\}/);
+  if (!match) throw new Error('検索結果を読み取れませんでした');
+  const obj = JSON.parse(match[0]);
+  if (obj.error) throw new Error(`検索で見つかりませんでした（${obj.error}）`);
+  const ride = Number(obj.minutes);
+  if (!(Number.isInteger(ride) && ride > 0 && ride <= 480)) throw new Error('検索結果の所要時間が不正です');
+  return { minutes: ride + WAIT_MINUTES, ride, summary: String(obj.summary || '').slice(0, 40) };
+}
+
 // Station name as Yahoo!乗換案内 expects it: "JR須磨駅" -> "須磨".
 export function stationName(name) {
   return String(name || '').trim().replace(/^(JR|ＪＲ)\s*/, '').replace(/駅$/, '');
@@ -332,7 +352,8 @@ export function applyChanges(data, changes, now = new Date()) {
       next.overrides[m.date] = m.slot;
       lines.push(`${md(m.date)} ${m.slot.time} 起床（${m.slot.note}）`);
       lines.push(`内訳：支度${m.prep}分＋駅まで${m.walk}分＋移動${m.travel}分＋余裕${m.buffer}分`);
-      if (m.source === 'yahoo') lines.push(`✓ Yahoo!乗換案内で確認（${m.transit?.depart || ''}発${m.transit?.summary ? ' ' + m.transit.summary : ''}）`);
+      if (m.source === 'yahoo' && m.transit?.depart) lines.push(`✓ Yahoo!乗換案内で確認（${m.transit.depart}発${m.transit.summary ? ' ' + m.transit.summary : ''}）`);
+      if (m.source === 'yahoo' && m.transit?.ride) lines.push(`✓ 検索で確認：乗車約${m.transit.ride}分${m.transit.summary ? '（' + m.transit.summary + '）' : ''}＋待ち時間5分`);
       if (m.source === 'estimate') {
         warnings.push(`${m.place} までの移動${m.travel}分は未確認の見積もりです。下のリンクで確かめて、違っていたら「${m.place}は○分」と教えてください。`);
         unverified.push(m.place);
