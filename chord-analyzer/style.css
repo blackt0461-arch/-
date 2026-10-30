@@ -1,0 +1,306 @@
+:root {
+  --bg: #16161d;
+  --surface: #22222c;
+  --surface-2: #2d2d39;
+  --text: #f2f2f5;
+  --muted: #9a9aab;
+  --accent: #f5a623;
+  --accent-text: #1a1206;
+  --line: #4a4a5a;
+  --fret-wood: #3a2c22;
+  --string: #c9c2b4;
+  --fret-wire: #9c9c9c;
+  --nut: #e8e2d4;
+  --error: #ff6b6b;
+}
+
+* { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif;
+  padding: 0 16px calc(24px + env(safe-area-inset-bottom));
+}
+
+button { cursor: pointer; -webkit-tap-highlight-color: transparent; font: inherit; }
+
+/* ---------- アップデートのお知らせ ---------- */
+.banner {
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  bottom: calc(12px + env(safe-area-inset-bottom));
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--accent);
+  color: var(--accent-text);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  font-size: 0.9rem;
+}
+
+.banner[hidden] { display: none; }
+.banner span { flex: 1; }
+
+.banner-button {
+  border: 0;
+  border-radius: 10px;
+  padding: 8px 12px;
+  background: var(--accent-text);
+  color: var(--accent);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* ---------- ヘッダーとタブ ---------- */
+.app-header { padding-top: calc(10px + env(safe-area-inset-top)); max-width: 560px; margin: 0 auto; }
+
+h1 { font-size: 1rem; margin: 0 0 10px; text-align: center; color: var(--muted); font-weight: 600; }
+
+.tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  background: var(--surface);
+  border-radius: 12px;
+  padding: 4px;
+}
+
+.tab {
+  border: 0;
+  border-radius: 9px;
+  padding: 10px 0;
+  background: transparent;
+  color: var(--muted);
+}
+
+.tab[aria-selected="true"] { background: var(--surface-2); color: var(--text); font-weight: 700; }
+
+main { max-width: 560px; margin: 12px auto 0; }
+
+.panel { display: flex; flex-direction: column; gap: 12px; }
+.panel[hidden] { display: none; }
+
+.primary-button {
+  border: 0;
+  border-radius: 12px;
+  padding: 16px;
+  font-size: 1.1rem;
+  font-weight: 700;
+  background: var(--accent);
+  color: var(--accent-text);
+}
+
+.primary-button.active { background: var(--surface-2); color: var(--text); }
+
+.secondary-button {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0 14px;
+  min-height: 42px;
+  background: var(--surface);
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.error { color: var(--error); margin: 0; }
+.status { color: var(--muted); margin: 0; min-height: 1.4em; text-align: center; }
+
+/* ---------- 結果 ---------- */
+.result {
+  background: var(--surface);
+  border-radius: 16px;
+  padding: 14px 16px;
+  min-height: 132px;
+}
+
+/* 指板をスクロールしても結果が見えるように上に固定する */
+.result.sticky {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  box-shadow: 0 0 0 8px var(--bg);
+}
+
+.top { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+
+.chord-name {
+  font-size: clamp(2.2rem, 11vw, 3.2rem);
+  font-weight: 800;
+  line-height: 1.1;
+  word-break: break-all;
+}
+
+.chord-name.empty { color: var(--muted); text-align: center; padding-top: 24px; }
+
+.confidence { font-size: 1.2rem; color: var(--accent); font-weight: 700; }
+
+.tones { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+
+.tone {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  padding: 4px 10px;
+  background: var(--surface-2);
+  border-radius: 8px;
+}
+
+.tone b { font-size: 1.05rem; }
+.tone small { color: var(--muted); }
+
+.others { margin-top: 8px; color: var(--muted); font-size: 0.85rem; }
+.other { color: var(--text); font-weight: 700; margin-right: 10px; }
+.other small { color: var(--muted); font-weight: 400; }
+
+/* ---------- 聞こえている音 ---------- */
+.chroma {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 3px;
+  height: 90px;
+}
+
+.bar {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  background: var(--surface);
+  border-radius: 4px;
+  overflow: hidden;
+  position: relative;
+}
+
+.bar .fill {
+  width: 100%;
+  background: var(--accent);
+  opacity: 0.8;
+  transition: height 80ms linear;
+  margin-bottom: 18px;
+}
+
+.bar small { position: absolute; bottom: 2px; font-size: 0.6rem; color: var(--muted); }
+
+/* ---------- 指板の操作 ---------- */
+.toolbar { display: flex; align-items: center; gap: 8px; }
+
+.capo { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 0.9rem; }
+.capo select { width: auto; min-height: 42px; padding: 0 8px; }
+
+.segmented {
+  display: flex;
+  margin-left: auto;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 3px;
+}
+
+.segmented button {
+  border: 0;
+  border-radius: 7px;
+  padding: 0 12px;
+  min-height: 34px;
+  background: transparent;
+  color: var(--muted);
+}
+
+.segmented button[aria-checked="true"] { background: var(--surface-2); color: var(--text); font-weight: 700; }
+
+.settings { display: flex; flex-direction: column; gap: 12px; margin-top: 8px; }
+.settings label { display: flex; flex-direction: column; gap: 4px; font-size: 0.85rem; color: var(--muted); }
+
+select, input[type="text"] {
+  font: inherit;
+  font-size: 16px; /* iOS で入力時に拡大されないように */
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px;
+  width: 100%;
+}
+
+#shape-input { font-family: ui-monospace, Menlo, monospace; letter-spacing: 0.1em; }
+
+/* ---------- 指板 ---------- */
+.fretboard { --cell: min(52px, calc((100vw - 32px - 28px) / 6)); }
+
+.string-labels, .fret-row {
+  display: grid;
+  grid-template-columns: 28px repeat(6, var(--cell));
+  justify-content: center;
+}
+
+.string-labels span { text-align: center; color: var(--muted); font-size: 0.7rem; padding-bottom: 2px; }
+
+.board { display: flex; flex-direction: column; }
+
+.fret-row { position: relative; height: 44px; }
+
+.fret-row:not(.nut-row) .cell {
+  background:
+    linear-gradient(to right, transparent calc(50% - 1px), var(--string) calc(50% - 1px), var(--string) calc(50% + 1px), transparent calc(50% + 1px)),
+    var(--fret-wood);
+  border-bottom: 2px solid var(--fret-wire);
+}
+
+.nut-row .cell { border-bottom: 6px solid var(--nut); }
+
+.fret-number { display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 0.8rem; }
+
+.cell {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 1.2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cell.muted { color: var(--error); font-size: 1.4rem; }
+
+.dot, .open {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  font-weight: 700;
+  position: relative;
+  z-index: 1;
+}
+
+.dot { background: var(--accent); color: var(--accent-text); box-shadow: 0 0 0 2px var(--bg); }
+.open { border: 2px solid var(--text); }
+
+/* ポジションマーク（3・5・7・9・12・15フレット） */
+.marker-single::after, .marker-double::before, .marker-double::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  width: 12px;
+  height: 12px;
+  margin: -6px 0 0 -6px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.25);
+  pointer-events: none;
+}
+
+.marker-single::after { left: calc(50% + 14px); }
+.marker-double::before { left: calc(50% + 14px - var(--cell)); }
+.marker-double::after { left: calc(50% + 14px + var(--cell)); }
