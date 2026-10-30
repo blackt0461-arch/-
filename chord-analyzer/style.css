@@ -474,3 +474,61 @@ select, input[type="text"] {
 .toolbar select.capo { padding: 0 4px; }
 .play-button { width: 46px; padding: 0; font-size: 1.1rem; color: var(--accent); }
 .toolbar .clear { margin-left: auto; }
+
+/* ---------- 曲（YouTube）から ---------- */
+.song-input { display: flex; gap: 8px; }
+.song-input input { flex: 1; min-width: 0; font: inherit; font-size: 16px; color: var(--text); background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px; }
+
+.player-wrap { position: relative; aspect-ratio: 16 / 9; border-radius: 12px; overflow: hidden; background: #000; }
+.player-wrap[hidden] { display: none; }
+.player-wrap iframe, .player-wrap > div { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+
+.primary-button:disabled { opacity: 0.4; }
+
+.song-now { text-align: center; font-size: clamp(2.4rem, 12vw, 3.4rem); font-weight: 800; }
+
+.song-section h2 { font-size: 1rem; margin: 8px 0; }
+.song-section h2 small { color: var(--muted); font-weight: 400; font-size: 0.8rem; margin-left: 6px; }
+
+.song-chords { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.song-chord {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 72px;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+}
+
+.song-chord small { color: var(--muted); font-size: 0.7rem; }
+.song-chord b { font-size: 1.1rem; }
+.song-chord span { color: var(--muted); font-family: ui-monospace, Menlo, monospace; font-size: 0.7rem; }
+.song-chord.active { border-color: var(--accent); background: var(--surface-2); }
+.song-chord.active b { color: var(--accent); }
+
+.tab-text {
+  margin: 0;
+  padding: 12px;
+  background: var(--surface);
+  border-radius: 10px;
+  overflow-x: auto;
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 0.85rem;
+  line-height: 1.35;
+  max-height: 60vh;
+}
+
+.tab-text:empty { display: none; }
+
+.song-actions { display: flex; gap: 8px; margin-top: 8px; justify-content: flex-end; }
+.song-actions .secondary-button { padding: 0 14px; }
+
+.song-help { color: var(--muted); font-size: 0.85rem; }
+.song-help summary { cursor: pointer; color: var(--text); }
+.song-help ol { padding-left: 1.4em; }
+
+.tabs { grid-template-columns: repeat(4, 1fr); }

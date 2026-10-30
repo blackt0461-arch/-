@@ -4,10 +4,11 @@ import { NOTE_NAMES, identifyFromNotes, identifyFromChroma, midiToPitchClass, pa
 import { startListening, startTuner } from './audio.js';
 import { TUNINGS, parseShape, formatShape, soundingNotes, renderFretboard, findVoicings } from './fretboard.js';
 import { playNotes } from './sound.js';
+import { parseYouTubeId, formatTime, buildChordTimeline, detectNoteEvents, assignTab, formatTab } from './song.js';
 
 // version.json と同じ値にする（新しいバージョンを公開したら両方を上げる）
-const APP_VERSION = '1.2.0';
-const APP_FILES = ['index.html', 'style.css', 'app.js', 'chord-engine.js', 'audio.js', 'fretboard.js', 'sound.js', 'sw.js', 'manifest.webmanifest'];
+const APP_VERSION = '1.3.0';
+const APP_FILES = ['index.html', 'style.css', 'app.js', 'chord-engine.js', 'audio.js', 'fretboard.js', 'sound.js', 'song.js', 'sw.js', 'manifest.webmanifest'];
 const HOLD_MS = 150;      // マイク：別のコードがこの時間続いたら表示を切り替える
 const HISTORY_SIZE = 16;  // マイク：覚えておくコードの数
 const HISTORY_STABLE_MS = 400; // マイク：この時間続いたコードを履歴に入れる
@@ -21,7 +22,7 @@ const storage = {
 const escapeHtml = (s) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 
 // ---------- タブ ----------
-const tabs = ['fret', 'mic', 'tuner'].map((id) => ({
+const tabs = ['fret', 'mic', 'song', 'tuner'].map((id) => ({
   id,
   tab: document.getElementById(`tab-${id}`),
   panel: document.getElementById(`panel-${id}`),
@@ -34,6 +35,7 @@ tabs.forEach(({ id, tab }) => {
     });
     // 別のタブに移ったらマイクを止める（電池の節約。マイクとチューナーは同時に使えない）
     if (id !== 'mic') stopMic();
+    if (id !== 'song') stopSongListening();
     if (id !== 'tuner') stopTuner();
   });
 });
@@ -279,6 +281,229 @@ micToggle.addEventListener('click', async () => {
     micError.hidden = false;
   }
 });
+
+// ---------- 曲（YouTube）から ----------
+const songUrl = document.getElementById('song-url');
+const songError = document.getElementById('song-error');
+const songPlayerWrap = document.getElementById('song-player-wrap');
+const songToggle = document.getElementById('song-toggle');
+const songStatus = document.getElementById('song-status');
+const songNow = document.getElementById('song-now');
+const songChords = document.getElementById('song-chords');
+const songTab = document.getElementById('song-tab');
+const SONG_SAVE_MS = 5000;
+const ONSET_LOOKBACK_MS = 150; // 曲：この時間の中で音量が
+const ONSET_RATIO = 1.5;       //     これだけ大きくなったら「弾いた」とみなす
+const ONSET_SETTLE_MS = 250;   //     分析する音がそろうまで待つ時間
+
+let player = null;
+let playerPlaying = false;
+let videoId = null;
+let songListener = null;
+let songData = { chords: [], notes: [] }; // chords: [{ t, name, confidence }] / notes: [{ t, notes }]
+let timeline = [];
+let lastRender = 0;
+let lastSave = 0;
+
+// YouTube 公式の埋め込みプレーヤーを読み込む（1回だけ）
+let youTubeApi = null;
+function loadYouTubeApi() {
+  youTubeApi ??= new Promise((resolve, reject) => {
+    window.onYouTubeIframeAPIReady = () => resolve(window.YT);
+    const script = document.createElement('script');
+    script.src = 'https://www.youtube.com/iframe_api';
+    script.onerror = () => { youTubeApi = null; reject(new Error('YouTube を読み込めませんでした')); };
+    document.head.appendChild(script);
+  });
+  return youTubeApi;
+}
+
+const songKey = (id) => `song:${id}`;
+function saveSong() {
+  if (!videoId) return;
+  const round = (t) => Math.round(t * 100) / 100;
+  storage.set(songKey(videoId), JSON.stringify({
+    chords: songData.chords.map((c) => [round(c.t), c.name, c.confidence]),
+    notes: songData.notes.map((n) => (n.onset ? [round(n.t), n.notes, 1] : [round(n.t), n.notes])),
+  }));
+}
+function loadSong(id) {
+  try {
+    const saved = JSON.parse(storage.get(songKey(id)) || 'null');
+    if (saved) {
+      return {
+        chords: saved.chords.map(([t, name, confidence]) => ({ t, name, confidence })),
+        notes: saved.notes.map(([t, notes, onset]) => ({ t, notes, ...(onset ? { onset: true } : {}) })),
+      };
+    }
+  } catch { /* 壊れていたら新しく始める */ }
+  return { chords: [], notes: [] };
+}
+
+const voicingCache = new Map();
+function voicingFor(name) {
+  const key = `${name}|${tuningSelect.value}|${capoSelect.value}`;
+  if (!voicingCache.has(key)) {
+    const parsed = parseChordName(name);
+    const v = parsed && findVoicings(parsed.root, parsed.type, parsed.bass, currentTuning(), { capo: Number(capoSelect.value), limit: 1 })[0];
+    voicingCache.set(key, v ? formatShape(v) : '');
+  }
+  return voicingCache.get(key);
+}
+
+function tabText() {
+  const tuning = currentTuning();
+  const names = tuning.strings.map((m, s) => {
+    const n = NOTE_NAMES[midiToPitchClass(m)];
+    return s === 5 ? n.toLowerCase() : n;
+  });
+  const events = detectNoteEvents(songData.notes);
+  return formatTab(assignTab(events, tuning, { capo: Number(capoSelect.value) }), { stringNames: names });
+}
+
+let lastTabRender = 0;
+function renderSong({ withTab = true } = {}) {
+  timeline = buildChordTimeline(songData.chords);
+  songChords.innerHTML = timeline.length
+    ? timeline.map((seg, i) => `
+      <button type="button" class="song-chord" data-index="${i}">
+        <small>${formatTime(seg.start)}</small><b>${escapeHtml(seg.name)}</b><span>${voicingFor(seg.name)}</span>
+      </button>`).join('')
+    : '<p class="hint">解析するとここにコード進行が並びます</p>';
+  if (withTab) {
+    lastTabRender = performance.now();
+    songTab.textContent = songData.notes.length ? tabText() : '';
+  }
+  highlightCurrentChord();
+}
+
+function highlightCurrentChord() {
+  if (!player?.getCurrentTime) return;
+  const t = player.getCurrentTime();
+  const index = timeline.findIndex((seg) => t >= seg.start && t <= seg.end + 0.3);
+  songChords.querySelectorAll('.song-chord').forEach((el) => el.classList.toggle('active', Number(el.dataset.index) === index));
+}
+
+songChords.addEventListener('click', (e) => {
+  const button = e.target.closest('.song-chord');
+  if (!button || !player?.seekTo) return;
+  player.seekTo(timeline[Number(button.dataset.index)].start, true);
+  player.playVideo();
+});
+
+document.getElementById('song-load').addEventListener('click', async () => {
+  const id = parseYouTubeId(songUrl.value);
+  songError.hidden = true;
+  if (!id) {
+    songError.textContent = 'YouTube のリンクが読めませんでした（例：https://youtu.be/…）';
+    songError.hidden = false;
+    return;
+  }
+  stopSongListening();
+  videoId = id;
+  storage.set('lastVideo', songUrl.value.trim());
+  songData = loadSong(id);
+  songPlayerWrap.hidden = false;
+  try {
+    const YT = await loadYouTubeApi();
+    if (player) {
+      player.cueVideoById(id);
+    } else {
+      player = new YT.Player('song-player', {
+        videoId: id,
+        playerVars: { playsinline: 1, rel: 0 },
+        events: {
+          onStateChange: (e) => { playerPlaying = e.data === YT.PlayerState.PLAYING; },
+        },
+      });
+    }
+    songToggle.disabled = false;
+    songStatus.textContent = songData.chords.length ? '前回の結果を表示しています。続きを解析することもできます。' : '「解析を開始」を押してください';
+  } catch (err) {
+    songError.textContent = `${err.message}。電波を確認してください。`;
+    songError.hidden = false;
+  }
+  renderSong();
+});
+
+function stopSongListening() {
+  if (!songListener) return;
+  songListener.stop();
+  songListener = null;
+  songToggle.textContent = '🎤 解析を開始';
+  songToggle.classList.remove('active');
+  songStatus.textContent = '解析を止めました';
+  songNow.textContent = '―';
+  saveSong();
+  renderSong();
+}
+
+songToggle.addEventListener('click', async () => {
+  if (songListener) {
+    stopSongListening();
+    return;
+  }
+  songError.hidden = true;
+  try {
+    let levels = [];
+    let pendingOnset = null;
+    songListener = await startListening(({ chroma, bass, notes, level, state }) => {
+      if (state === 'calibrating') {
+        songStatus.textContent = '周りの雑音を覚えています。1秒ほど、動画を再生せずに待ってください…';
+        return;
+      }
+      if (!playerPlaying) {
+        songStatus.textContent = '準備OK。動画を再生してください（再生している間だけ記録します）';
+        return;
+      }
+      songStatus.textContent = '解析中…';
+      const t = player.getCurrentTime();
+      const now = performance.now();
+      if (state === 'playing') {
+        const [top] = identifyFromChroma(chroma, bass, 1);
+        if (top) {
+          songData.chords.push({ t, name: top.name, confidence: top.confidence });
+          songNow.textContent = top.name;
+        }
+        // 弾いた瞬間（音量が急に大きくなったところ）を見つけ、音がそろう少し後の音を「その瞬間の発音」として記録する
+        levels = [...levels, { now, level }].filter((l) => now - l.now <= ONSET_LOOKBACK_MS);
+        const quietest = Math.min(...levels.map((l) => l.level));
+        if (!pendingOnset && level > quietest * ONSET_RATIO) pendingOnset = { t, at: now };
+        const onset = pendingOnset && now - pendingOnset.at >= ONSET_SETTLE_MS;
+        songData.notes.push({ t: onset ? pendingOnset.t : t, notes, ...(onset ? { onset: true } : {}) });
+        if (onset) pendingOnset = null;
+      }
+      // コード進行は毎秒、タブ譜は計算が重めなので4秒ごとに描き直す
+      if (now - lastRender > 1000) { lastRender = now; renderSong({ withTab: now - lastTabRender > 4000 }); }
+      if (now - lastSave > SONG_SAVE_MS) { lastSave = now; saveSong(); }
+    });
+    songToggle.textContent = '解析を停止';
+    songToggle.classList.add('active');
+  } catch {
+    songError.textContent = micErrorText();
+    songError.hidden = false;
+  }
+});
+
+document.getElementById('song-copy').addEventListener('click', async (e) => {
+  const chords = timeline.map((seg) => `${formatTime(seg.start)} ${seg.name}`).join('\n');
+  const text = `コード進行\n${chords}\n\nタブ譜\n${songTab.textContent}`;
+  try {
+    await navigator.clipboard.writeText(text);
+    e.target.textContent = 'コピーしました';
+    setTimeout(() => { e.target.textContent = 'コピー'; }, 1500);
+  } catch { /* コピーできない環境では何もしない */ }
+});
+
+document.getElementById('song-clear').addEventListener('click', () => {
+  if (!confirm('この曲の解析結果を消しますか？')) return;
+  songData = { chords: [], notes: [] };
+  if (videoId) storage.set(songKey(videoId), '');
+  renderSong();
+});
+
+setInterval(() => { if (playerPlaying) highlightCurrentChord(); }, 300);
+songUrl.value = storage.get('lastVideo') || '';
 
 // ---------- チューナー ----------
 const tunerToggle = document.getElementById('tuner-toggle');

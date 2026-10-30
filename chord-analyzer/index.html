@@ -22,9 +22,10 @@
   <header class="app-header">
     <h1>ギターコード解析</h1>
     <nav class="tabs" role="tablist">
-      <button type="button" role="tab" class="tab" id="tab-fret" aria-controls="panel-fret" aria-selected="true">🎸 指板</button>
-      <button type="button" role="tab" class="tab" id="tab-mic" aria-controls="panel-mic" aria-selected="false">🎤 マイク</button>
-      <button type="button" role="tab" class="tab" id="tab-tuner" aria-controls="panel-tuner" aria-selected="false">🎵 チューナー</button>
+      <button type="button" role="tab" class="tab" id="tab-fret" aria-controls="panel-fret" aria-selected="true">🎸指板</button>
+      <button type="button" role="tab" class="tab" id="tab-mic" aria-controls="panel-mic" aria-selected="false">🎤マイク</button>
+      <button type="button" role="tab" class="tab" id="tab-song" aria-controls="panel-song" aria-selected="false">🎬曲</button>
+      <button type="button" role="tab" class="tab" id="tab-tuner" aria-controls="panel-tuner" aria-selected="false">🎵チューナー</button>
     </nav>
   </header>
 
@@ -71,6 +72,43 @@
         <button type="button" id="clear-history" class="secondary-button">消す</button>
       </div>
       <div id="chroma" class="chroma" aria-hidden="true"></div>
+    </section>
+
+    <section id="panel-song" class="panel" role="tabpanel" aria-labelledby="tab-song" hidden>
+      <div class="song-input">
+        <input id="song-url" type="url" inputmode="url" autocomplete="off" placeholder="YouTube のリンクを貼り付け" aria-label="YouTube のリンク">
+        <button type="button" id="song-load" class="secondary-button">読み込む</button>
+      </div>
+      <p id="song-error" class="error" hidden></p>
+      <div id="song-player-wrap" class="player-wrap" hidden><div id="song-player"></div></div>
+      <button type="button" id="song-toggle" class="primary-button" disabled>🎤 解析を開始</button>
+      <p id="song-status" class="status"></p>
+      <div id="song-now" class="song-now">―</div>
+
+      <div class="song-section">
+        <h2>コード進行 <small>タップでその場面へ</small></h2>
+        <div id="song-chords" class="song-chords"><p class="hint">解析するとここにコード進行が並びます</p></div>
+      </div>
+
+      <div class="song-section">
+        <h2>タブ譜 <small>自動で作ったたたき台です</small></h2>
+        <pre id="song-tab" class="tab-text"></pre>
+        <div class="song-actions">
+          <button type="button" id="song-copy" class="secondary-button">コピー</button>
+          <button type="button" id="song-clear" class="secondary-button">結果を消す</button>
+        </div>
+      </div>
+
+      <details class="song-help">
+        <summary>使い方とコツ</summary>
+        <ol>
+          <li>YouTube のリンクを貼って「読み込む」を押す</li>
+          <li>「解析を開始」を押し、1秒ほど静かに待つ（周りの雑音を覚えます）</li>
+          <li>動画を再生する。流れている音をマイクで聞き取って、コード進行とタブ譜を作ります</li>
+        </ol>
+        <p>スピーカーの音量は大きめに。イヤホンをつけるとマイクに音が届かないので外してください。iPhone で音が小さくなるときは、パソコンなど別の機器で曲を流し、このスマホを近くに置いて「解析を開始」だけ押す方法も使えます（その場合は時間がずれるので、タップで場面に飛ぶ機能は使えません）。</p>
+        <p>歌やベースの音も混ざるため、特にタブ譜は間違いを含みます。練習用のたたき台として使ってください。</p>
+      </details>
     </section>
 
     <section id="panel-tuner" class="panel" role="tabpanel" aria-labelledby="tab-tuner" hidden>
