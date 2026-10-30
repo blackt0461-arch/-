@@ -95,3 +95,15 @@ test('倍音を含む音の山からクロマとベース音を取り出せる�
   assert.equal(bass, pc('C'));
   assert.equal(identifyFromChroma(chroma, bass)[0].name, 'C');
 });
+
+test('雑音を覚えて差し引くと、雑音の多いマイクでもコードを判定できる', async () => {
+  const { NoiseProfile } = await import('../audio.js');
+  const { synthChord, synthNoise, spectrum, SAMPLE_RATE } = await import('./synth.js');
+  const fftSize = 16384;
+  const profile = new NoiseProfile();
+  for (let i = 0; i < 6; i++) profile.learn(spectrum(synthNoise({ seed: 50 + i, fftSize, noise: 1 })));
+  // x02010 の Am7（A2 E3 G3 C4 E4）
+  const mags = spectrum(synthChord([45, 52, 55, 60, 64], { seed: 3, fftSize, noise: 1 }));
+  const { chroma, bass } = analyzeSpectrum(profile.subtract(mags), SAMPLE_RATE, fftSize);
+  assert.equal(identifyFromChroma(chroma, bass)[0].name, 'Am7');
+});

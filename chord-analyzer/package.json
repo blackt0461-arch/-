@@ -3,6 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test"
+    "test": "node --test",
+    "bench": "FFT_SIZE=32768 node tests/accuracy-bench.js"
   }
 }

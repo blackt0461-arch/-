@@ -44,8 +44,9 @@ export function soundingNotes(frets, tuning, capo = 0) {
 /**
  * 縦向きの指板（スマホの縦画面向け）を container に描画する。
  * 左が6弦、右が1弦。いちばん上の行は開放弦（○）とミュート（×）の切り替え。
+ * labelFor(弦の番号) は、その弦で鳴っている音の表示（音名や度数）を返す。
  */
-export function renderFretboard(container, frets, onChange) {
+export function renderFretboard(container, frets, onChange, labelFor = () => '') {
   container.innerHTML = '';
   const board = document.createElement('div');
   board.className = 'board';
@@ -66,8 +67,15 @@ export function renderFretboard(container, frets, onChange) {
       const current = frets[s];
 
       if (fret === 0) {
-        cell.textContent = current === MUTED ? '×' : current === 0 ? '○' : '';
-        cell.classList.toggle('muted', current === MUTED);
+        if (current === MUTED) {
+          cell.textContent = '×';
+          cell.classList.add('muted');
+        } else if (current === 0) {
+          const open = document.createElement('span');
+          open.className = 'open';
+          open.textContent = labelFor(s);
+          cell.appendChild(open);
+        }
         cell.setAttribute('aria-label', `${6 - s}弦 ${current === MUTED ? 'ミュート' : '開放'}`);
         cell.addEventListener('click', () => {
           const next = [...frets];
@@ -78,6 +86,7 @@ export function renderFretboard(container, frets, onChange) {
         if (current === fret) {
           const dot = document.createElement('span');
           dot.className = 'dot';
+          dot.textContent = labelFor(s);
           cell.appendChild(dot);
         }
         cell.setAttribute('aria-label', `${6 - s}弦 ${fret}フレット`);
@@ -96,6 +105,6 @@ export function renderFretboard(container, frets, onChange) {
 
   const header = document.createElement('div');
   header.className = 'string-labels';
-  header.innerHTML = '<span></span>' + [6, 5, 4, 3, 2, 1].map((n) => `<span>${n}</span>`).join('');
+  header.innerHTML = '<span></span>' + [6, 5, 4, 3, 2, 1].map((n) => `<span>${n}弦</span>`).join('');
   container.append(header, board);
 }

@@ -8,39 +8,54 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
+  <div id="update-banner" class="banner" hidden role="status">
+    <span id="update-text"></span>
+    <button type="button" id="update-action" class="banner-button"></button>
+  </div>
+
   <header class="app-header">
     <h1>ギターコード解析</h1>
     <nav class="tabs" role="tablist">
-      <button type="button" role="tab" class="tab" id="tab-mic" aria-controls="panel-mic" aria-selected="true">🎤 マイク</button>
-      <button type="button" role="tab" class="tab" id="tab-fret" aria-controls="panel-fret" aria-selected="false">🎸 指板</button>
+      <button type="button" role="tab" class="tab" id="tab-fret" aria-controls="panel-fret" aria-selected="true">🎸 指板</button>
+      <button type="button" role="tab" class="tab" id="tab-mic" aria-controls="panel-mic" aria-selected="false">🎤 マイク</button>
     </nav>
   </header>
 
   <main>
-    <section id="panel-mic" class="panel" role="tabpanel" aria-labelledby="tab-mic">
-      <button type="button" id="mic-toggle" class="primary-button">マイクを開始</button>
-      <p id="mic-error" class="error" hidden></p>
-      <div id="mic-result" class="result" aria-live="polite"></div>
-      <div id="chroma" class="chroma" aria-hidden="true"></div>
-    </section>
+    <section id="panel-fret" class="panel" role="tabpanel" aria-labelledby="tab-fret">
+      <div id="fret-result" class="result sticky" aria-live="polite"></div>
 
-    <section id="panel-fret" class="panel" role="tabpanel" aria-labelledby="tab-fret" hidden>
-      <div class="controls">
+      <div class="toolbar">
+        <label class="capo">カポ
+          <select id="capo"></select>
+        </label>
+        <div class="segmented" role="radiogroup" aria-label="丸の中の表示">
+          <button type="button" role="radio" data-label="note" aria-checked="true">音名</button>
+          <button type="button" role="radio" data-label="degree" aria-checked="false">度数</button>
+        </div>
+        <button type="button" id="clear-shape" class="secondary-button">クリア</button>
+      </div>
+
+      <div id="fretboard" class="fretboard"></div>
+
+      <div class="settings">
+        <label>押さえ方を文字で入力（6弦 → 1弦）
+          <input id="shape-input" type="text" inputmode="text" autocomplete="off" autocapitalize="off" spellcheck="false"
+                 placeholder="例: x32010">
+        </label>
+        <p id="shape-error" class="error" hidden>6弦分を「x32010」や「x-10-12-12-11-10」の形で入力してください</p>
         <label>チューニング
           <select id="tuning"></select>
         </label>
-        <label>カポ
-          <select id="capo"></select>
-        </label>
       </div>
-      <div class="shape-row">
-        <input id="shape-input" type="text" inputmode="text" autocomplete="off" autocapitalize="off" spellcheck="false"
-               placeholder="例: x32010" aria-label="押さえ方（6弦から順に）">
-        <button type="button" id="clear-shape" class="secondary-button">クリア</button>
-      </div>
-      <p id="shape-error" class="error" hidden>6弦分を「x32010」や「x-10-12-12-11-10」の形で入力してください</p>
-      <div id="fret-result" class="result" aria-live="polite"></div>
-      <div id="fretboard" class="fretboard"></div>
+    </section>
+
+    <section id="panel-mic" class="panel" role="tabpanel" aria-labelledby="tab-mic" hidden>
+      <button type="button" id="mic-toggle" class="primary-button">マイクを開始</button>
+      <p id="mic-status" class="status"></p>
+      <p id="mic-error" class="error" hidden></p>
+      <div id="mic-result" class="result" aria-live="polite"></div>
+      <div id="chroma" class="chroma" aria-hidden="true"></div>
     </section>
   </main>
 

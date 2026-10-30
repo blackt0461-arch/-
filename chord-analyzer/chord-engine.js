@@ -84,6 +84,8 @@ export function identifyFromChroma(chroma, bass = null, limit = 4) {
 
       // ベース音がルートと一致する解釈を少し優遇し、構成音に無いベースは分数コードにしない
       let score = similarity - typeIndex * 0.001;
+      // パワーコード（ルート＋5度）は、3度の音が小さく拾われただけのことが多いので控えめに
+      if (type.suffix === '5') score -= 0.08;
       let candidateBass = null;
       if (bass != null) {
         if (bass === root) score += 0.03;
