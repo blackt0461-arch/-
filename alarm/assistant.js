@@ -1,7 +1,7 @@
 // Chat assistant: turns Japanese requests ("明日は5時に起こして") into edits of alarms.json via Gemini.
 // The model only proposes `changes`; the page shows them and saves only after the user confirms.
 
-import { DAYS, DAY_JA, validate, resolveDay, expandTimes, todayJST, addDays, weekdayKey, defaultProfile } from './schedule.js?v=2026-10-30.1535';
+import { DAYS, DAY_JA, validate, resolveDay, expandTimes, todayJST, addDays, weekdayKey, defaultProfile } from './schedule.js?v=2026-10-30.1540';
 
 export const DEFAULT_MODEL = 'gemini-3.6-flash';
 const ORDER = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
@@ -100,7 +100,7 @@ ${upcoming.join('\n')}
   - 覚えている移動時間にある場所なら、その分数を travelMinutes に入れ、travelSource は "saved"。
   - ユーザーが移動時間を言ったら、その値で travelSource は "user"（同時に remember_place も出す）。
   - 「マップで見たら合ってた」「その時間で大丈夫」と言われたら、その場所の今の分数で remember_place を出す（確認済みになる）。
-  - それ以外は、最寄り駅からその場所までの電車での所要時間（乗り換え・待ち時間・到着後の徒歩を含む）を見積もり、travelSource は "estimate"。迷ったら長いほうの時間にする。meeting では travelMinutes を必ず入れる（アプリが乗換案内や検索で確かめ、だめならこの見積もりを使う）。
+  - それ以外は、最寄り駅からその場所までの電車での所要時間（乗り換え・待ち時間・到着後の徒歩を含む）を見積もり、travelSource は "estimate"。迷ったら長いほうの時間にする。meeting では travelMinutes を必ず入れる。
   - 家の最寄り駅が未設定なら、変更せずに最寄り駅を質問する。
   - 「支度を長めに」「今日はゆっくり準備したい」はその回だけ prepMinutes を増やす（量の指定がなければ +15分）。「いつも支度40分」のような恒久的な指示は set_profile。
   - 起床時刻が深夜（0:00〜4:00）になる場合も、そのまま出してよい。
@@ -193,26 +193,6 @@ export async function askGemini({ apiKey, model, data, history, now = new Date()
   return { ...parseReply(r.text), model: r.model };
 }
 
-// Fallback when the result page can't be read: let Gemini search the web for the usual ride time.
-// Without a timetable the wait for the train is unknown, so WAIT_MINUTES is added on top.
-const WAIT_MINUTES = 5;
-export async function searchTransit({ apiKey, model, from, to, onRetry }) {
-  const body = {
-    tools: [{ google_search: {} }],
-    contents: [{ role: 'user', parts: [{ text: `Google検索で、${from}駅から${to}駅まで電車で行くときの所要時間（乗り換えを含む、乗車してから着くまで）を調べてください。
-複数の経路があれば、普段よく使われる経路の時間にしてください。見つからなければ、推測せずに {"error":"理由"} とだけ答えてください。
-答えはJSONだけで、{"minutes":数字,"summary":"路線名など短く"} の形にしてください。` }] }],
-  };
-  const r = await generate({ apiKey, model, body, onRetry });
-  const match = r.text.match(/\{[\s\S]*\}/);
-  if (!match) throw new Error('検索結果を読み取れませんでした');
-  const obj = JSON.parse(match[0]);
-  if (obj.error) throw new Error(`検索で見つかりませんでした（${obj.error}）`);
-  const ride = Number(obj.minutes);
-  if (!(Number.isInteger(ride) && ride > 0 && ride <= 480)) throw new Error('検索結果の所要時間が不正です');
-  return { minutes: ride + WAIT_MINUTES, ride, summary: String(obj.summary || '').slice(0, 40) };
-}
-
 // Station name as Yahoo!乗換案内 expects it: "JR須磨駅" -> "須磨".
 export function stationName(name) {
   return String(name || '').trim().replace(/^(JR|ＪＲ)\s*/, '').replace(/駅$/, '');
@@ -233,33 +213,6 @@ export function yahooTransitUrl(from, to, date, time) {
   return `https://transit.yahoo.co.jp/search/result?${q}`;
 }
 
-// Ask Gemini to read the Yahoo!乗換案内 result page (URL context tool) and report the latest
-// train that still arrives by `time`. Returns {minutes, depart, summary, url}.
-export async function lookupTransit({ apiKey, model, from, to, date, time, onRetry }) {
-  const url = yahooTransitUrl(from, to, date, time);
-  const body = {
-    tools: [{ url_context: {} }],
-    contents: [{ role: 'user', parts: [{ text: `次のページはYahoo!乗換案内の検索結果（${from}→${to}、${date} ${time}到着）です。
-${url}
-ページを読み、${time}までに${to}に着く経路のうち、${from}を出発する時刻が最も遅いものを1つ選んでください。
-ページを読めない、または経路が書かれていない場合は、推測せずに {"error":"理由"} とだけ答えてください。
-答えはJSONだけで、{"depart":"HH:MM","arrive":"HH:MM","summary":"路線名など短く"} の形にしてください。` }] }],
-  };
-  const r = await generate({ apiKey, model, body, onRetry });
-  const match = r.text.match(/\{[\s\S]*\}/);
-  if (!match) throw new Error('乗換案内の結果を読み取れませんでした');
-  const obj = JSON.parse(match[0]);
-  if (obj.error) throw new Error(`乗換案内を読めませんでした（${obj.error}）`);
-  const ok = v => /^([01]?\d|2[0-3]):[0-5]\d$/.test(v || '');
-  if (!ok(obj.depart) || !ok(obj.arrive)) throw new Error('乗換案内の時刻を読み取れませんでした');
-  const minutes = (toMinutes(time) - toMinutes(obj.depart) + 1440) % 1440;
-  const ride = (toMinutes(obj.arrive) - toMinutes(obj.depart) + 1440) % 1440;
-  const late = (toMinutes(obj.arrive) - toMinutes(time) + 1440) % 1440;
-  if (!(minutes > 0 && minutes <= 600) || ride > minutes || (late > 0 && late < 720)) {
-    throw new Error(`乗換案内の時刻が合いません（${obj.depart}発 ${obj.arrive}着）`);
-  }
-  return { minutes, depart: obj.depart, summary: String(obj.summary || '').slice(0, 40), url };
-}
 
 export function parseReply(text) {
   const match = text.match(/\{[\s\S]*\}/);
@@ -288,8 +241,7 @@ function planMeeting(next, c, today) {
   if (!profile.homeStation) throw new Error('家の最寄り駅が未設定です（設定 → 起床時刻の計算）');
   const saved = next.places?.[place];
   let travel, source;
-  if (c.travelSource === 'yahoo' && isMinutes(c.travelMinutes)) { travel = c.travelMinutes; source = 'yahoo'; }
-  else if (c.travelSource === 'user' && isMinutes(c.travelMinutes)) { travel = c.travelMinutes; source = 'user'; }
+  if (c.travelSource === 'user' && isMinutes(c.travelMinutes)) { travel = c.travelMinutes; source = 'user'; }
   else if (saved) { travel = saved.minutes; source = saved.verified ? 'saved' : 'estimate'; }
   else if (isMinutes(c.travelMinutes) && c.travelMinutes > 0) { travel = c.travelMinutes; source = 'estimate'; }
   else throw new Error(`${place} までの移動時間がわかりません。「${place}は○分」と教えてください`);
@@ -309,10 +261,10 @@ function planMeeting(next, c, today) {
     meeting: { dest: String(c.mapsQuery || place).trim(), travel },
   };
   // Remember estimates (unverified) so the next request reuses the same number.
-  if (!saved || source === 'user' || source === 'yahoo') {
+  if (!saved || source === 'user') {
     next.places = { ...(next.places || {}), [place]: { minutes: travel, verified: source !== 'estimate' } };
   }
-  return { date, slot, place, travel, source, prep, walk, buffer, transit: c.transit };
+  return { date, slot, place, travel, source, prep, walk, buffer };
 }
 
 // Apply proposed changes to a copy of `data`.
@@ -352,14 +304,12 @@ export function applyChanges(data, changes, now = new Date()) {
       next.overrides[m.date] = m.slot;
       lines.push(`${md(m.date)} ${m.slot.time} 起床（${m.slot.note}）`);
       lines.push(`内訳：支度${m.prep}分＋駅まで${m.walk}分＋移動${m.travel}分＋余裕${m.buffer}分`);
-      if (m.source === 'yahoo' && m.transit?.depart) lines.push(`✓ Yahoo!乗換案内で確認（${m.transit.depart}発${m.transit.summary ? ' ' + m.transit.summary : ''}）`);
-      if (m.source === 'yahoo' && m.transit?.ride) lines.push(`✓ 検索で確認：乗車約${m.transit.ride}分${m.transit.summary ? '（' + m.transit.summary + '）' : ''}＋待ち時間5分`);
       if (m.source === 'estimate') {
         warnings.push(`${m.place} までの移動${m.travel}分は未確認の見積もりです。下のリンクで確かめて、違っていたら「${m.place}は○分」と教えてください。`);
         unverified.push(m.place);
       }
       links.push({ label: `Yahoo!乗換案内で確認（${stationName(next.profile.homeStation)} → ${stationName(m.slot.meeting.dest)}）`,
-        url: m.transit?.url || yahooTransitUrl(stationName(next.profile.homeStation), stationName(m.slot.meeting.dest), ...Object.values(arriveByOf(next, c))) });
+        url: yahooTransitUrl(stationName(next.profile.homeStation), stationName(m.slot.meeting.dest), ...Object.values(arriveByOf(next, c))) });
     } else if (c.op.startsWith('override_')) {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(c.date || '')) throw new Error(`日付が不正です: ${c.date}`);
       if (c.date < today) throw new Error(`過去の日付は変更できません: ${c.date}`);

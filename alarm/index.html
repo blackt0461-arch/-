@@ -207,11 +207,11 @@
 </dialog>
 
 <script type="module">
-import { DAYS, DAY_JA, emptyData, defaultProfile, regenerate, resolveDay, expandTimes, todayJST, addDays, weekdayKey } from './schedule.js?v=2026-10-30.1535';
-import { DEFAULT_MODEL, askGemini, applyChanges, searchTransit, stationName } from './assistant.js?v=2026-10-30.1535';
+import { DAYS, DAY_JA, emptyData, defaultProfile, regenerate, resolveDay, expandTimes, todayJST, addDays, weekdayKey } from './schedule.js?v=2026-10-30.1540';
+import { DEFAULT_MODEL, askGemini, applyChanges } from './assistant.js?v=2026-10-30.1540';
 
 // Set by tools/bump.mjs together with version.json and the ?v= on the imports above.
-const APP_VERSION = '2026-10-30.1535';
+const APP_VERSION = '2026-10-30.1540';
 
 const $ = id => document.getElementById(id);
 const ORDER = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
@@ -457,12 +457,7 @@ async function send(text) {
     pending.remove();
     history.push({ role: 'model', text: res.reply || '（返事なし）' });
     const m = addMsg('ai', res.reply || 'すみません、うまく理解できませんでした。');
-    if (res.changes.length) {
-      const notes = await withTransitTimes(res.changes, apiKey, t => { pending.textContent = t; m.after(pending); });
-      pending.remove();
-      for (const n of notes) addMsg('ai err', n);
-      showProposal(m, res.changes);
-    }
+    if (res.changes.length) showProposal(m, res.changes);
   } catch (e) {
     pending.remove();
     history.pop();
@@ -470,32 +465,6 @@ async function send(text) {
   } finally {
     busy = false;
   }
-}
-
-// Have Gemini read Yahoo!乗換案内 for meeting changes whose travel time isn't confirmed yet.
-// Mutates `changes`; returns messages for lookups that failed (the estimate is then kept).
-async function withTransitTimes(changes, apiKey, progress) {
-  const notes = [];
-  const from = stationName((data.profile || {}).homeStation);
-  if (!from) return notes;
-  for (const c of changes) {
-    if (c.op !== 'meeting' || c.travelSource === 'user' || !c.date || !c.meetTime || !c.place) continue;
-    if (data.places?.[c.place]?.verified) continue;
-    const to = stationName(c.mapsQuery || c.place);
-    const model = store.get('alarm.geminiModel') || DEFAULT_MODEL;
-    // Reading the Yahoo!乗換案内 page (lookupTransit) was tried and Gemini can't fetch it, so go
-    // straight to a web search; each Gemini call counts against the free quota.
-    progress(`検索で ${from} → ${to} の所要時間を調べています…`);
-    try {
-      const r = await searchTransit({ apiKey, model, from, to });
-      c.travelMinutes = r.minutes;
-      c.travelSource = 'yahoo';
-      c.transit = { ride: r.ride, summary: r.summary };
-    } catch (e) {
-      notes.push(`電車の時間を確認できなかったので、見積もりを使います（${e.message}）`);
-    }
-  }
-  return notes;
 }
 
 function showProposal(msgEl, changes) {
@@ -521,7 +490,7 @@ function showProposal(msgEl, changes) {
   }
   const checks = result.unverified.map(place => {
     const label = el('<label class="switch" style="margin:0 0 8px;font-size:14px"><input type="checkbox"> <span></span></label>');
-    label.querySelector('span').textContent = `${place} までの移動時間はマップで確認した（次から確認済み）`;
+    label.querySelector('span').textContent = `${place} までの移動時間は乗換案内で確認した（次から確認済み）`;
     box.querySelector('.actions').before(label);
     return { place, input: label.querySelector('input') };
   });
