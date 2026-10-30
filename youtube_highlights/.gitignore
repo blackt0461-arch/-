@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+/data/
+/reports/
+/clips/
+/bin/
+/learn/
+/trends/
+/model.json
+report_*.html
