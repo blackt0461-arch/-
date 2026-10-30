@@ -156,21 +156,64 @@ export class NoiseProfile {
 }
 
 /**
+ * マイクを開く（コード判定とチューナーで共通）。
+ * - iPhone の Safari は、音の処理が「一時停止」で始まることがあるので、タップ直後に再開させる
+ * - 弾いている間に画面が消えてマイクが止まらないよう、画面を点けたままにする（対応ブラウザのみ）
+ */
+async function openMicrophone(fftSize) {
+  // タップの処理の中ですぐ作って再開する（await の後だと iPhone で再開できないことがある）
+  const ctx = new (window.AudioContext || window.webkitAudioContext)();
+  const resumed = ctx.resume();
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+    });
+  } catch (err) {
+    ctx.close();
+    throw err;
+  }
+  await resumed;
+  const source = ctx.createMediaStreamSource(stream);
+  const analyser = ctx.createAnalyser();
+  analyser.fftSize = fftSize;
+  analyser.smoothingTimeConstant = 0;
+  source.connect(analyser);
+
+  let wakeLock = null;
+  const keepAwake = async () => {
+    try { wakeLock = await navigator.wakeLock?.request('screen'); } catch { /* 使えなくても動作は続ける */ }
+  };
+  // アプリに戻ってきたとき：画面の点灯を取り直し、止まった音の処理を再開する
+  const onVisible = () => {
+    if (document.visibilityState !== 'visible') return;
+    keepAwake();
+    if (ctx.state !== 'running') ctx.resume();
+  };
+  keepAwake();
+  document.addEventListener('visibilitychange', onVisible);
+
+  return {
+    ctx,
+    analyser,
+    close() {
+      document.removeEventListener('visibilitychange', onVisible);
+      wakeLock?.release().catch(() => {});
+      stream.getTracks().forEach((t) => t.stop());
+      ctx.close();
+    },
+  };
+}
+
+/**
  * マイクを使い始め、フレームごとに onFrame({ chroma, bass, level, state }) を呼ぶ。
  * state は 'calibrating'（周りの雑音を覚えている途中）/ 'quiet'（弾いていない）/ 'playing'。
  * 戻り値の stop() で止める。
  */
 export async function startListening(onFrame, { smoothing = 0.2, calibrationSeconds = 1 } = {}) {
-  const stream = await navigator.mediaDevices.getUserMedia({
-    audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
-  });
-  const ctx = new (window.AudioContext || window.webkitAudioContext)();
-  const source = ctx.createMediaStreamSource(stream);
-  const analyser = ctx.createAnalyser();
   // 大きいほど近い音（低音弦や、電源の雑音と重なる音）を見分けやすい
-  analyser.fftSize = 32768;
-  analyser.smoothingTimeConstant = 0;
-  source.connect(analyser);
+  const mic = await openMicrophone(32768);
+  const { ctx, analyser } = mic;
 
   const db = new Float32Array(analyser.frequencyBinCount);
   const linear = new Float32Array(analyser.frequencyBinCount);
@@ -237,8 +280,78 @@ export async function startListening(onFrame, { smoothing = 0.2, calibrationSeco
   return {
     stop() {
       cancelAnimationFrame(rafId);
-      stream.getTracks().forEach((t) => t.stop());
-      ctx.close();
+      mic.close();
+    },
+  };
+}
+
+/**
+ * 単音の高さ（Hz）を求める（チューナー用）。YIN という方法で、波形が何サンプルごとに
+ * 繰り返しているかを調べる。倍音の多いギターの音でも、1オクターブ上と間違えにくい。
+ * 音が無い・はっきりしないときは null。
+ */
+export function detectPitch(buffer, sampleRate, { minFreq = 60, maxFreq = 1000, threshold = 0.12 } = {}) {
+  const maxLag = Math.min(Math.floor(sampleRate / minFreq), Math.floor(buffer.length / 2));
+  const minLag = Math.floor(sampleRate / maxFreq);
+  const n = buffer.length - maxLag;
+  const d = new Float32Array(maxLag + 1);
+  for (let lag = 1; lag <= maxLag; lag++) {
+    let sum = 0;
+    for (let i = 0; i < n; i++) {
+      const diff = buffer[i] - buffer[i + lag];
+      sum += diff * diff;
+    }
+    d[lag] = sum;
+  }
+  // 累積平均で正規化した差分（小さいほど、その間隔で繰り返している）
+  let running = 0;
+  const cmnd = new Float32Array(maxLag + 1);
+  cmnd[0] = 1;
+  for (let lag = 1; lag <= maxLag; lag++) {
+    running += d[lag];
+    cmnd[lag] = running === 0 ? 1 : (d[lag] * lag) / running;
+  }
+  let lag = -1;
+  for (let t = minLag; t <= maxLag; t++) {
+    if (cmnd[t] < threshold) {
+      while (t + 1 <= maxLag && cmnd[t + 1] < cmnd[t]) t++;
+      lag = t;
+      break;
+    }
+  }
+  if (lag < 0) return null;
+  // 放物線補間で、サンプルの間まで細かく求める
+  const a = cmnd[lag - 1], b = cmnd[lag], c = lag + 1 <= maxLag ? cmnd[lag + 1] : b;
+  const denom = a - 2 * b + c;
+  const shift = denom === 0 ? 0 : 0.5 * (a - c) / denom;
+  return sampleRate / (lag + shift);
+}
+
+/**
+ * チューナー：フレームごとに onFrame({ freq, level }) を呼ぶ（freq は鳴っていなければ null）。
+ */
+export async function startTuner(onFrame) {
+  const mic = await openMicrophone(4096);
+  const { ctx, analyser } = mic;
+  const wave = new Float32Array(analyser.fftSize);
+  let rafId = 0;
+  let last = 0;
+  const tick = (now) => {
+    rafId = requestAnimationFrame(tick);
+    if (now - last < 1000 / 20) return;
+    last = now;
+    analyser.getFloatTimeDomainData(wave);
+    let sum = 0;
+    for (let i = 0; i < wave.length; i++) sum += wave[i] * wave[i];
+    const level = Math.sqrt(sum / wave.length);
+    const freq = level > 0.004 ? detectPitch(wave, ctx.sampleRate) : null;
+    onFrame({ freq, level });
+  };
+  rafId = requestAnimationFrame(tick);
+  return {
+    stop() {
+      cancelAnimationFrame(rafId);
+      mic.close();
     },
   };
 }

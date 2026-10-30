@@ -107,3 +107,77 @@ test('雑音を覚えて差し引くと、雑音の多いマイクでもコー�
   const { chroma, bass } = analyzeSpectrum(profile.subtract(mags), SAMPLE_RATE, fftSize);
   assert.equal(identifyFromChroma(chroma, bass)[0].name, 'Am7');
 });
+
+test('add9・m(maj7)・9th などを判定できる', () => {
+  assert.equal(nameFromShape('x32030'), 'Cadd9');
+  assert.equal(nameFromShape('x02110'), 'Am(maj7)');
+  assert.equal(nameFromShape('x32330'), 'C9');
+  assert.equal(nameFromShape('x02030'), 'A7sus4');
+  assert.equal(nameFromShape('x00232'), 'D/A');
+});
+
+test('どれにも当てはまらない形は「近い形」として余分な音を添える', () => {
+  // C E G と F#（♯11）
+  const result = identifyFromNotes([pc('C'), pc('E'), pc('G'), pc('F#')], pc('C'));
+  assert.equal(result[0].name, 'C(+F#)');
+  assert.equal(result[0].approx, true);
+  assert.deepEqual(result[0].degrees, ['R', '3', '5', '♯11']);
+});
+
+test('構成音を度数に合わせた正しい音名で書く', async () => {
+  const { spellNote } = await import('../chord-engine.js');
+  assert.equal(spellNote(0, '♭♭7', 9), 'B♭♭');
+  assert.equal(spellNote(pc('E♭'), '3', 7), 'G');
+  assert.equal(spellNote(pc('F#'), '3', 10), 'A#');
+  const [cdim7] = identifyFromNotes([0, 3, 6, 9], 0);
+  assert.deepEqual(cdim7.notes, ['C', 'E♭', 'G♭', 'B♭♭']);
+  assert.equal(identifyFromNotes([pc('B♭'), pc('D'), pc('F')], pc('B♭'))[0].notes.join(' '), 'B♭ D F');
+});
+
+test('コード名を読み取れる（書き方のゆれにも対応）', async () => {
+  const { parseChordName } = await import('../chord-engine.js');
+  const read = (t) => { const r = parseChordName(t); return r && `${NOTE_NAMES[r.root]}${r.type.suffix}/${NOTE_NAMES[r.bass]}`; };
+  assert.equal(read('CM7'), 'Cmaj7/C');
+  assert.equal(read('F#m7-5'), 'F#m7♭5/F#');
+  assert.equal(read('D/F#'), 'D/F#');
+  assert.equal(read('Bbm'), 'B♭m/B♭');
+  assert.equal(read('C6/9'), 'C6(9)/C');
+  assert.equal(read('Am(maj7)'), 'Am(maj7)/A');
+  assert.equal(read('Hm'), null);
+});
+
+test('コード名から、定番の押さえ方を探せる', async () => {
+  const { parseChordName } = await import('../chord-engine.js');
+  const { findVoicings } = await import('../fretboard.js');
+  const first = (name, tuning = STANDARD, capo = 0) => {
+    const { root, type, bass } = parseChordName(name);
+    return findVoicings(root, type, bass, tuning, { capo }).map(formatShape);
+  };
+  assert.ok(first('C').includes('x32010'));
+  assert.ok(first('G').includes('320003'));
+  assert.ok(first('Am').includes('x02210'));
+  assert.ok(first('F').includes('133211'));
+  assert.ok(first('Bm').includes('x24432'));
+  assert.ok(first('D/F#').includes('200232'));
+  assert.ok(first('Cadd9').includes('x32030'));
+  // 見つけた押さえ方は、判定するとちゃんとそのコードになる
+  for (const name of ['C', 'Em7', 'Bm7♭5', 'Asus4', 'G/B']) {
+    for (const shape of first(name)) assert.equal(nameFromShape(shape), name, `${name} の押さえ方 ${shape}`);
+  }
+  // カポ2なら D の形は「C の形」で押さえられる
+  assert.ok(first('D', STANDARD, 2).includes('x32010'));
+});
+
+test('チューナー：倍音の多い音でも高さを正確に測れる', async () => {
+  const { detectPitch } = await import('../audio.js');
+  const sr = 48000;
+  for (const f of [73.42, 82.41, 110, 196, 329.63]) {
+    const buf = new Float32Array(4096);
+    for (let i = 0; i < buf.length; i++) {
+      for (let h = 1; h <= 8; h++) buf[i] += (Math.sin(2 * Math.PI * f * h * i / sr + h) * (h === 1 ? 0.3 : 1)) / h;
+    }
+    const cents = 1200 * Math.log2(detectPitch(buf, sr) / f);
+    assert.ok(Math.abs(cents) < 1, `${f}Hz で ${cents.toFixed(2)} セントずれた`);
+  }
+  assert.equal(detectPitch(new Float32Array(4096), sr), null);
+});
