@@ -18,7 +18,7 @@ if (isMainThread) {
   clips.forEach((c) => {
     if (c.mode !== 'comp' || ['04', '05'].includes(c.player)) return;
     const audio = path.join(gsDir, 'audio', `${c.id}_mic.wav`);
-    if (fs.existsSync(audio)) jobs.push({ kind: 'guitarset', id: c.id, audio, chords: c.chords, duration: c.duration });
+    if (fs.existsSync(audio)) jobs.push({ kind: 'guitarset', id: c.id, audio, chords: c.chords, notes: c.notes, duration: c.duration });
   });
   const conditions = [{ withBand: false }, { stereo: true }, { stereo: false }, { stereo: true, changesPerBar: 2 }, { withBand: false, changesPerBar: 4 }, { stereo: true, changesPerBar: 4 }];
   conditions.forEach((so, ci) => { for (let seed = 1; seed <= 10; seed++) jobs.push({ kind: 'synth', id: `s${ci}-${seed}`, song: { ...so, seed: 1000 + seed + 100 * ci } }); });
@@ -59,7 +59,7 @@ if (isMainThread) {
     try {
       let audio, chords;
       if (job.kind === 'guitarset') { audio = readWav(job.audio); chords = job.chords.map(([t, n], i) => ({ start: t, end: i + 1 < job.chords.length ? job.chords[i + 1][0] : job.duration, name: n })); }
-      else { const s = makeSong(job.song); audio = { channels: s.channels, sampleRate: s.sampleRate }; chords = s.chords; }
+      else { const s = makeSong(job.song); audio = { channels: s.channels, sampleRate: s.sampleRate }; chords = s.chords; job.notes = s.truth.flatMap((e) => e.notes.map((m) => ({ t: e.t, midi: m }))); }
       const r = transcribe(audio.channels, audio.sampleRate, { exportFeatures: true, fastBeats: 0 });
       const f = r.chartInfo?.features;
       if (!f) { parentPort.postMessage({ id: job.id, beats: [] }); return; }
@@ -67,7 +67,14 @@ if (isMainThread) {
       const beats = f.beats.map((b, k) => {
         const end = k + 1 < f.beats.length ? f.beats[k + 1] : b + (b - (f.beats[k - 1] ?? b - 0.5));
         const c = chords.find((x) => Math.min(end, x.end) - Math.max(b, x.start) >= 0.7 * (end - b));
-        return { chroma: f.chromas[k], attack: f.attacks[k], bass: f.basses[k], target: c ? pcs(c.name) : null, chord: c?.name ?? null, bar: ((k - f.downbeat) % 4 + 4) % 4 };
+        // 答え＝楽譜のコードの音 ＋ その拍で実際に弾き始めた音（セブンスなどの足し音を弾いていれば、それも正しい音）。
+        // 弾いていないのに残っている音（前のコードの響き・倍音）は答えに入らない
+        let target = c ? pcs(c.name) : null;
+        if (target && job.notes) {
+          const played = job.notes.filter((n) => n.t >= b - 0.05 && n.t < end - 0.05).map((n) => n.midi % 12);
+          target = [...new Set([...target, ...played])];
+        }
+        return { chroma: f.chromas[k], attack: f.attacks[k], bass: f.basses[k], target, chord: c?.name ?? null, bar: ((k - f.downbeat) % 4 + 4) % 4 };
       });
       parentPort.postMessage({ id: job.id, kind: job.kind, beats });
     } catch (e) { parentPort.postMessage({ id: job.id, error: String(e), beats: [] }); }
