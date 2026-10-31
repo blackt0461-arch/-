@@ -361,6 +361,10 @@ micToggle.addEventListener('click', async () => {
 // ---------- 曲（録画・音声ファイル）から ----------
 const songFile = document.getElementById('song-file');
 const songMode = document.getElementById('song-mode');
+const songQuality = document.getElementById('song-quality');
+// 解析の時間の選択は覚えておく（次に開いたときも同じ）
+try { const q = localStorage.getItem('songQuality'); if (q && songQuality.querySelector(`option[value="${q}"]`)) songQuality.value = q; } catch { /* 保存できない環境 */ }
+songQuality.addEventListener('change', () => { try { localStorage.setItem('songQuality', songQuality.value); } catch { /* 保存できない環境 */ } });
 const songError = document.getElementById('song-error');
 const songProgress = document.getElementById('song-progress');
 const songProgressFill = document.getElementById('song-progress-fill');
@@ -399,7 +403,7 @@ async function decodeFile(file) {
   }
 }
 
-function runTranscription(channels, sampleRate, mode) {
+function runTranscription(channels, sampleRate, mode, quality = 'normal') {
   worker?.terminate();
   worker = new Worker('transcribe-worker.js', { type: 'module' });
   return new Promise((resolve, reject) => {
@@ -415,7 +419,7 @@ function runTranscription(channels, sampleRate, mode) {
       }
     };
     worker.onerror = (e) => reject(new Error(e.message || '解析中にエラーが起きました'));
-    worker.postMessage({ channels, sampleRate, mode }, channels.map((c) => c.buffer));
+    worker.postMessage({ channels, sampleRate, mode, quality }, channels.map((c) => c.buffer));
   });
 }
 
@@ -664,12 +668,12 @@ songFile.addEventListener('change', async () => {
   songMedia.src = URL.createObjectURL(file);
   try {
     const { channels, sampleRate, duration } = await decodeFile(file);
-    const result = await runTranscription(channels, sampleRate, songMode.value);
+    const result = await runTranscription(channels, sampleRate, songMode.value, songQuality.value);
     pendingBeats = { beats: result.beats, downbeat: result.downbeat, duration: result.duration, timeline: result.timeline };
     analysis = { timeline: result.timeline, tabBlocks: buildTabBlocks(result.events), events: result.events, beats: result.beats, downbeat: result.downbeat, duration: result.duration, bpm: result.bpm, onsets: result.onsets };
     const how = result.useSide ? '左右の差で歌を弱めて解析しました'
       : result.chartInfo?.method === '歌を除く' ? '歌のメロディを取り除いて解析しました' : 'ギターの音をそのまま解析しました（歌は見つかりませんでした）';
-    songInfo.textContent = `${file.name}（${formatTime(duration)}）・テンポ ${Math.round(result.bpm || 0)}・${how}`;
+    songInfo.textContent = `${file.name}（${formatTime(duration)}）・テンポ ${Math.round(result.bpm || 0)}・${how}・解析 ${Math.round(result.seconds ?? 0)}秒（${songQuality.selectedOptions[0].textContent.split('（')[0]}）`;
     renderAnalysis();
     renderStrip(duration);
     renderKey();

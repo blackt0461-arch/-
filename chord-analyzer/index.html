@@ -99,6 +99,13 @@
           <option value="mix">そのまま（弾き語り・ギター1本の曲向け）</option>
         </select>
       </label>
+      <label class="song-mode">解析の時間
+        <select id="song-quality">
+          <option value="fast">速い（だいたいでよいとき）</option>
+          <option value="normal" selected>ふつう（おすすめ）</option>
+          <option value="careful">じっくり（時間がかかっても正確に）</option>
+        </select>
+      </label>
       <p id="song-error" class="error" hidden></p>
       <div id="song-progress" class="progress" hidden>
         <div class="progress-bar"><span id="song-progress-fill"></span></div>

@@ -745,3 +745,15 @@ export function transcribe(channels, sampleRate, options = {}) {
   onProgress(1, '完了');
   return { ...first, timeline, chartInfo };
 }
+
+/**
+ * 解析のしかたの選択肢（画面の「解析の時間」）。
+ * - fast：速い。1か所を見る区間を1つにし、解き直しもしない
+ * - normal：ふつう（おすすめ）。採点に合格した方法を全部使う
+ * - careful：じっくり。時間をかけてよい場合に、より重い方法も使う（採点に合格したものだけを足していく）
+ */
+export const ANALYSIS_PRESETS = {
+  fast: { precise: false, fastBeats: 0 },
+  normal: {},
+  careful: {},
+};
