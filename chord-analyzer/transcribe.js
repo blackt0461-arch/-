@@ -313,7 +313,7 @@ export function removeVocalFrames(signal, sampleRate, { frame = 4096, fft = 1638
  * - 1音弾き：はっきり聞こえた音（いちばん強い音の strongRatio 倍以上）だけを残す
  * 和音かどうかは、弾いた瞬間の勢い（曲の中での比べ）と、同時に鳴り始めた音の数・割合で判断する。
  */
-function refineWithChart(events, onsetList, timeline, tuning, { strumStrength = 1.25, strongRatio = 0.35 } = {}) {
+function refineWithChart(events, onsetList, timeline, tuning, { strumStrength = 0, strongRatio = 0.35, legacyStrum = false } = {}) {
   const strengths = onsetList.map((o) => o.strength).sort((a, b) => a - b);
   const median = strengths[Math.floor(strengths.length / 2)] || 1;
   const strengthAt = (t) => onsetList.find((o) => Math.abs(o.t - t) < 0.005)?.strength ?? median;
@@ -321,7 +321,11 @@ function refineWithChart(events, onsetList, timeline, tuning, { strumStrength = 
     const peeled = e.peeled ?? e.notes.map((m) => ({ m, s: 1, share: 1 / e.notes.length }));
     const first = peeled[0]?.s ?? 1;
     const strong = peeled.filter((p) => p.s >= first * strongRatio);
-    const looksStrum = strengthAt(e.t) / median >= strumStrength || (strong.length >= 3 && (peeled[0]?.share ?? 1) < 0.5);
+    // 和音（ストローク）とみなすのは、3つ以上の音がはっきり同時に鳴り始めたときだけ。
+    // 勢いだけで判断すると、ソロで強く弾いた1音をコードの押さえ方まるごとに置き換えてしまう
+    const looksStrum = legacyStrum
+      ? strengthAt(e.t) / median >= 1.25 || (strong.length >= 3 && (peeled[0]?.share ?? 1) < 0.5) // 以前の判断（比べるため）
+      : strong.length >= 3 && (peeled[0]?.share ?? 1) < 0.5 && (strumStrength === 0 || strengthAt(e.t) / median >= strumStrength);
     const seg = timeline.find((c) => e.t >= c.start - 0.05 && e.t < c.end);
     if (looksStrum && seg) {
       const parsed = parseChordName(seg.name);
@@ -562,7 +566,8 @@ export function transcribe(channels, sampleRate, { mode = 'auto', voiceFilter = 
   // 5. コード譜を手がかりに、1音ずつのタブ譜を整える
   if (useContext && grid) events = refineWithChart(events, onsetList, timeline, tuning, contextOptions);
   // 歌と分けられない曲：歌のメロディと同じ高さ・同じころに鳴り始めた単音は、歌とみなしてタブ譜から除く
-  if (!useSide && vocalFrames && dropVocalNotes) {
+  // （歌が入っていると判断した曲だけ。ソロのギターもチョーキングやビブラートで音程が揺れるので、歌の無い曲で行うとメロディを消してしまう）
+  if (!useSide && vocalFrames && dropVocalNotes && chartInfo?.method === '歌を除く') {
     events = events.map((e) => {
       if (e.positions) return e;
       const near = vocalFrames.filter((f) => f.vocal && Math.abs(f.t - e.t) < 0.2);

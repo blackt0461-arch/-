@@ -43,19 +43,34 @@ const majmin = (name) => {
   return `${p.root}:${p.type.intervals.includes(3) && !p.type.intervals.includes(4) ? 'min' : 'maj'}`;
 };
 
+// 楽譜のコードに音を足して弾いたもの（E♭ に対して E♭maj7、D に対して D7・Dadd9 など）も正解とする判定。
+// 研究用データの正解は楽譜に書かれたシンプルなコードだが、ジャズなどの奏者は音を足して弾くため
+const tonesOf = (name) => {
+  const p = name && parseChordName(name.split('/')[0]);
+  if (!p) return null;
+  const iv = p.type.suffix === 'dim' ? [0, 3, 6] : p.type.intervals;
+  return { root: p.root, tones: new Set(iv.map((i) => (p.root + i) % 12)), minor: iv.includes(3) && !iv.includes(4) };
+};
+const extends_ = (got, truth) => {
+  const g = tonesOf(got), t = tonesOf(truth);
+  if (!g || !t || g.root !== t.root || g.minor !== t.minor) return false;
+  return [...t.tones].every((x) => g.tones.has(x) || x === (t.root + 7) % 12); // 5度は省略されていてもよい
+};
+
 /** コード譜の正解率：正解のコードがある時間のうち、同じコードを示していた割合（0.05秒きざみ） */
-function chordScore(timeline, truth, duration, offset = 0) {
+function chordScore(timeline, truth, duration, offset = 0, allowExtensions = false) {
   const segs = truth.map(([t, name], i) => ({ start: t + offset, end: (i + 1 < truth.length ? truth[i + 1][0] : duration) + offset, name })).filter((s) => s.name);
-  let ok = 0, okMM = 0, n = 0;
+  let ok = 0, okStrict = 0, okMM = 0, n = 0;
   for (const s of segs) {
     for (let t = s.start; t < s.end; t += 0.05) {
       const got = timeline.find((x) => t >= x.start && t < x.end)?.name ?? null;
       n++;
-      if (same(got, s.name)) ok++;
+      if (same(got, s.name) || (allowExtensions && extends_(got, s.name))) ok++;
+      if (same(got, s.name)) okStrict++;
       if (got && majmin(got) === majmin(s.name)) okMM++;
     }
   }
-  return { chord: n ? ok / n : null, chordMajmin: n ? okMM / n : null };
+  return { chord: n ? ok / n : null, chordStrict: n ? okStrict / n : null, chordMajmin: n ? okMM / n : null };
 }
 
 /** 1音ずつの正解率（F1）：弾いた瞬間が 0.05 秒以内で、音の高さが同じなら正解 */
@@ -74,7 +89,7 @@ function noteScore(events, truthNotes, tol = 0.05) {
 parentPort.on('message', ({ job, options }) => {
   try {
     let audio, truth;
-    if (job.kind === 'guitarset') { audio = readWav(job.audio); truth = job.truth; }
+    if (job.kind === 'guitarset') { audio = readWav(job.audio); truth = job.truth; if (job.solo) truth = { ...truth, chords: null }; }
     else if (job.kind === 'real') { audio = readF32Stereo(job.audio); truth = job.truth; }
     else {
       const song = makeSong(job.song);
@@ -85,7 +100,7 @@ parentPort.on('message', ({ job, options }) => {
     const t0 = Date.now();
     const r = transcribe(audio.channels, audio.sampleRate, options);
     const duration = truth.duration ?? audio.channels[0].length / audio.sampleRate;
-    const result = { id: job.id, set: job.set, category: job.category, seconds: (Date.now() - t0) / 1000, ...chordScore(r.timeline, truth.chords, duration, job.offset ?? 0) };
+    const result = { id: job.id, set: job.set, category: job.category, seconds: (Date.now() - t0) / 1000, ...(truth.chords ? chordScore(r.timeline, truth.chords, duration, job.offset ?? 0, job.kind === 'guitarset') : {}) };
     if (truth.notes) result.notes = noteScore(r.events, truth.notes);
     if (truth.tempo) {
       const ratio = r.bpm / truth.tempo;

@@ -24,9 +24,9 @@ if (fs.existsSync(gsJson)) {
   clips.forEach((c, i) => {
     const audio = path.join(gsDir, 'audio', `${c.id}_mic.wav`);
     if (!fs.existsSync(audio)) return;
-    if (!full && i % 6 !== 0) return; // ふだんは 6 曲に 1 曲（それでも 60 曲）
+    if (!full && i % 12 !== 0 && i % 12 !== 7) return; // ふだんは 6 曲に 1 曲（伴奏とソロの両方が入るように選ぶ・60 曲）
     jobs.push({
-      kind: 'guitarset', id: c.id, audio, set: ['04', '05'].includes(c.player) ? '本番テスト' : '調整用',
+      kind: 'guitarset', id: c.id, audio, solo: c.mode === 'solo', set: ['04', '05'].includes(c.player) ? '本番テスト' : '調整用',
       category: `研究用・${c.mode === 'comp' ? '伴奏' : 'ソロ'}・${c.style}`,
       truth: { chords: c.chords, notes: c.notes, tempo: c.tempo, duration: c.duration },
     });
@@ -75,7 +75,7 @@ process.stderr.write('\n');
 
 // 集計：種類ごと・調整用／本番テストごとの平均
 const avg = (list, key) => { const v = list.map((r) => r[key]).filter((x) => typeof x === 'number'); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
-const summarize = (list) => ({ count: list.length, chord: avg(list, 'chord'), chordMajmin: avg(list, 'chordMajmin'), notes: avg(list, 'notes'), tempo: avg(list, 'tempo') });
+const summarize = (list) => ({ count: list.length, chord: avg(list, 'chord'), chordStrict: avg(list, 'chordStrict'), chordMajmin: avg(list, 'chordMajmin'), notes: avg(list, 'notes'), tempo: avg(list, 'tempo') });
 const ok = results.filter((r) => !r.error);
 const categories = [...new Set(ok.map((r) => r.category))].sort();
 const summary = {
@@ -93,7 +93,7 @@ const previous = fs.readdirSync(histDir).filter((f) => f.endsWith(full ? '-full.
 const prev = previous ? JSON.parse(fs.readFileSync(path.join(histDir, previous), 'utf8')) : null;
 const pct = (x) => (typeof x === 'number' ? `${(x * 100).toFixed(1)}%` : '  ―  ');
 const diff = (a, b) => (typeof a === 'number' && typeof b === 'number' ? `${a >= b ? '+' : ''}${((a - b) * 100).toFixed(1)}` : '');
-const row = (name, s, p) => `${name.padEnd(22, '　')} コード ${pct(s.chord).padStart(6)} ${diff(s.chord, p?.chord).padStart(6)}  （長調/短調だけ ${pct(s.chordMajmin)}）  1音ずつ ${pct(s.notes).padStart(6)} ${diff(s.notes, p?.notes).padStart(6)}  テンポ ${pct(s.tempo)}  ${s.count}曲`;
+const row = (name, s, p) => `${name.padEnd(22, '　')} コード ${pct(s.chord).padStart(6)} ${diff(s.chord, p?.chord).padStart(6)}  （厳しく ${pct(s.chordStrict)}）  1音ずつ ${pct(s.notes).padStart(6)} ${diff(s.notes, p?.notes).padStart(6)}  テンポ ${pct(s.tempo)}  ${s.count}曲`;
 console.log(`\n=== 成績表（${full ? '全部' : 'ふだん'}・${summary.minutes.toFixed(1)}分）${label ? ` ${label}` : ''} ===`);
 console.log(row('全体', summary.overall, prev?.overall));
 console.log(row('調整用', summary.tune, prev?.tune));
