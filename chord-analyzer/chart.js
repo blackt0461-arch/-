@@ -164,16 +164,23 @@ export function scoreStates(c, bass, { rootBonus = 0.1, foreignBassPenalty = 0.1
   });
 }
 
-export function decodeChords(beatChromas, downbeat, { beatBass = [], changePenalty = 0.08, offBarPenalty = 0.06, halfBarPenalty = 0.02, compress = 1, ...scoreOptions } = {}) {
+export function decodeChords(beatChromas, downbeat, { beatBass = [], changePenalty = 0.08, offBarPenalty = 0.06, halfBarPenalty = 0.02, compress = 1, extra = [], changeEvidence = null, changeBonus = 0, ...scoreOptions } = {}) {
   const n = beatChromas.length;
   if (!n) return [];
   // compress < 1 なら、音の強さの差を縮める（小さく鳴っている 7th の音などにも気づけるように）
   const emit = beatChromas.map((c, b) => scoreStates(compress === 1 ? c : c.map((v) => Math.max(0, v) ** compress), beatBass[b], scoreOptions));
+  // 別の聞き方で作った12音の強さ（弾いた瞬間の音・前の拍の残りを引いた音など）の判定も、重みをつけて足し合わせる
+  extra.forEach(({ chromas, weight }) => chromas.forEach((c, b) => {
+    if (!c) return;
+    const e = scoreStates(c, beatBass[b], scoreOptions);
+    emit[b] = emit[b].map((v, j) => v + weight * e[j]);
+  }));
   let score = emit[0].slice();
   const back = [];
   for (let b = 1; b < n; b++) {
     const pos = ((b - downbeat) % 4 + 4) % 4;
-    const cost = changePenalty + (pos === 0 ? 0 : pos === 2 ? halfBarPenalty : offBarPenalty);
+    // 前の拍に無かった音が強く鳴った拍（changeEvidence が大きい）は、コードが変わりやすくする
+    const cost = changePenalty + (pos === 0 ? 0 : pos === 2 ? halfBarPenalty : offBarPenalty) - (changeEvidence ? changeBonus * ((changeEvidence[b] ?? 0.25) - 0.25) : 0);
     let bestPrev = 0;
     for (let j = 1; j < STATES.length; j++) if (score[j] > score[bestPrev]) bestPrev = j;
     const next = new Array(STATES.length);
