@@ -4,27 +4,27 @@ import { LiveChordTracker } from '../live.js';
 import { magnitudeSpectrum } from '../dsp.js';
 import { makeSong } from './mix.js';
 
-const FFT = 32768;
+const FFT = Number(process.env.LIVE_FFT || 16384);
 const FPS = 15;
 
-export function runLive(songOpts, trackerOpts = {}) {
+export function runLive(songOpts, trackerOpts = {}, fft = FFT) {
   const song = makeSong(songOpts);
   const [l, r] = song.channels;
   const mix = new Float32Array(l.length);
   for (let i = 0; i < mix.length; i++) mix[i] = (l[i] + r[i]) / 2; // マイクには左右が混ざって届く
   const sr = song.sampleRate;
   const hop = Math.round(sr / FPS);
-  const tracker = new LiveChordTracker(sr, FFT, trackerOpts);
+  const tracker = new LiveChordTracker(sr, fft, trackerOpts);
   const shown = [];
   let playing = false;
-  for (let end = FFT; end <= mix.length; end += hop) {
+  for (let end = fft; end <= mix.length; end += hop) {
     let sum = 0;
     for (let i = end - Math.round(sr * 0.1); i < end; i++) sum += mix[i] * mix[i];
     const loud = Math.sqrt(sum / (sr * 0.1)) > 0.003;
     const onset = loud && !playing;
     playing = loud;
     if (!loud) continue;
-    const { candidates } = tracker.update(magnitudeSpectrum(mix, end - FFT, FFT), { wave: mix.subarray(end - 4096, end), dt: 1 / FPS, onset });
+    const { candidates } = tracker.update(magnitudeSpectrum(mix, end - fft, fft), { wave: mix.subarray(end - 4096, end), dt: 1 / FPS, onset });
     shown.push({ t: end / sr, name: candidates[0]?.name ?? null });
   }
   let ok = 0, n = 0, changes = 0, baseChanges = 0;

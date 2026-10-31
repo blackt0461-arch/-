@@ -212,8 +212,9 @@ async function openMicrophone(fftSize) {
  * 戻り値の stop() で止める。
  */
 export async function startListening(onFrame, { calibrationSeconds = 1 } = {}) {
-  // 大きいほど近い音（低音弦や、電源の雑音と重なる音）を見分けやすい
-  const mic = await openMicrophone(32768);
+  // 分析する長さ（約0.37秒）。長いほど近い音を見分けやすいが、コードの切り替わりへの反応が遅れる。
+  // 本物の曲（1小節 約1.8秒）での答え合わせで、この長さがいちばん良かった
+  const mic = await openMicrophone(16384);
   const { ctx, analyser } = mic;
 
   const db = new Float32Array(analyser.frequencyBinCount);

@@ -8,7 +8,7 @@ import { formatTime, assignTab, formatTab, chartPlayback } from './song.js';
 import { estimateKey, suggestCapo, easiestVoicing } from './practice.js';
 
 // version.json と同じ値にする（新しいバージョンを公開したら両方を上げる）
-const APP_VERSION = '1.6.1';
+const APP_VERSION = '1.7.0';
 const APP_FILES = ['index.html', 'style.css', 'app.js', 'chord-engine.js', 'audio.js', 'fretboard.js', 'sound.js', 'song.js', 'dsp.js', 'chart.js', 'live.js', 'practice.js', 'transcribe.js', 'transcribe-worker.js', 'sw.js', 'manifest.webmanifest'];
 const HOLD_MS = 150;      // マイク：別のコードがこの時間続いたら表示を切り替える
 const HISTORY_SIZE = 16;  // マイク：覚えておくコードの数
@@ -604,7 +604,9 @@ songFile.addEventListener('change', async () => {
     const { channels, sampleRate, duration } = await decodeFile(file);
     const result = await runTranscription(channels, sampleRate, songMode.value);
     analysis = { timeline: result.timeline, tabBlocks: buildTabBlocks(result.events), events: result.events, beats: result.beats, bpm: result.bpm, onsets: result.onsets };
-    songInfo.textContent = `${file.name}（${formatTime(duration)}）・テンポ ${Math.round(result.bpm || 0)}・${result.useSide ? '左右の差で歌を弱めて解析しました' : '歌のメロディを取り除いて解析しました'}`;
+    const how = result.useSide ? '左右の差で歌を弱めて解析しました'
+      : result.chartInfo?.method === '歌を除く' ? '歌のメロディを取り除いて解析しました' : 'ギターの音をそのまま解析しました（歌は見つかりませんでした）';
+    songInfo.textContent = `${file.name}（${formatTime(duration)}）・テンポ ${Math.round(result.bpm || 0)}・${how}`;
     renderAnalysis();
     renderKey();
     loop = { a: null, b: null };

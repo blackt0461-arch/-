@@ -1,0 +1,45 @@
+// 本物の曲での答え合わせ： node tests/real-song-eval.js 音声.f32（44.1kHz・ステレオ・32bit float） 正解.json
+// 正解.json は [[切り替わりの秒, "コード名"], …]（最後の区間は曲の終わりまで）
+import fs from 'node:fs';
+import { transcribe } from '../transcribe.js';
+import { parseChordName } from '../chord-engine.js';
+
+export function loadAudio(path, sampleRate = 44100) {
+  const buf = fs.readFileSync(path);
+  const f = new Float32Array(buf.buffer, buf.byteOffset, buf.length / 4);
+  const n = f.length / 2;
+  const left = new Float32Array(n), right = new Float32Array(n);
+  for (let i = 0; i < n; i++) { left[i] = f[2 * i]; right[i] = f[2 * i + 1]; }
+  return { channels: [left, right], sampleRate };
+}
+
+// 同じコードかどうか（A# と B♭ などの書き方の違い、分数コードのベース音は気にしない）
+const same = (a, b) => {
+  const pa = a && parseChordName(a.split('/')[0]), pb = b && parseChordName(b.split('/')[0]);
+  return Boolean(pa && pb && pa.root === pb.root && pa.type.suffix === pb.type.suffix);
+};
+
+export function evaluate(timeline, truth, duration) {
+  const segs = truth.map(([start, name], i) => ({ start, end: i + 1 < truth.length ? truth[i + 1][0] : duration, name }));
+  const at = (t) => timeline.find((s) => t >= s.start && t < s.end)?.name ?? null;
+  let ok = 0, n = 0;
+  for (let t = segs[0].start; t < segs[segs.length - 1].end; t += 0.1) {
+    const truthName = segs.find((s) => t >= s.start && t < s.end).name;
+    n++;
+    if (same(at(t), truthName)) ok++;
+  }
+  const perSeg = segs.map((s) => ({ ...s, got: at((s.start + s.end) / 2) }));
+  return { timeRatio: ok / n, segRatio: perSeg.filter((s) => same(s.got, s.name)).length / perSeg.length, perSeg };
+}
+
+if (import.meta.url === `file://${process.argv[1]}`) {
+  const [audioPath, truthPath, optsJson] = process.argv.slice(2);
+  const { channels, sampleRate } = loadAudio(audioPath);
+  const truth = JSON.parse(fs.readFileSync(truthPath, 'utf8'));
+  const t0 = Date.now();
+  const r = transcribe(channels, sampleRate, JSON.parse(optsJson || '{}'));
+  const e = evaluate(r.timeline, truth, channels[0].length / sampleRate);
+  console.log(`解析 ${((Date.now() - t0) / 1000).toFixed(1)}秒  テンポ ${r.bpm}  左右分離 ${r.useSide ? 'あり' : 'なし'}  ${JSON.stringify(r.chartInfo)}`);
+  console.log(`正しいコードを示していた時間 ${(e.timeRatio * 100).toFixed(1)}%  区間ごとの正解 ${(e.segRatio * 100).toFixed(1)}%（${e.perSeg.filter((s) => same(s.got, s.name)).length}/${e.perSeg.length}）`);
+  console.log(e.perSeg.map((s) => `${s.start.toFixed(1)} ${s.name}${same(s.got, s.name) ? '○' : `×(${s.got ?? '-'})`}`).join('  '));
+}

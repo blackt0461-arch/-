@@ -194,10 +194,11 @@ export function decodeChords(beatChromas, downbeat, { beatBass = [], changePenal
 }
 
 /**
- * 拍ごとのコードを、コード譜（区間の並び）にまとめる。ベース音がルートと違えば分数コード（C/E など）にする。
+ * 拍ごとのコードを、コード譜（区間の並び）にまとめる。ベース音がルートと違えば分数コード（C/E など）にする
+ * （allowSlash が false なら分数コードにしない。ベース音を信用できない録音のため）。
  * beatBass：拍ごとのいちばん低い音（12音のどれか、または null）
  */
-export function buildChart(beats, states, beatBass, period) {
+export function buildChart(beats, states, beatBass, period, { allowSlash = true } = {}) {
   const segments = [];
   states.forEach((st, b) => {
     const start = beats[b];
@@ -229,7 +230,7 @@ export function buildChart(beats, states, beatBass, period) {
     const counts = new Map();
     basses.filter((x) => x !== null && x !== undefined).forEach((x) => counts.set(x, (counts.get(x) || 0) + 1));
     const bass = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
-    const slash = bass !== undefined && bass !== state.root && state.template[bass] ? `/${NOTE_NAMES[bass]}` : '';
+    const slash = allowSlash && bass !== undefined && bass !== state.root && state.template[bass] ? `/${NOTE_NAMES[bass]}` : '';
     return { name: state.name + slash, root: state.root, suffix: state.type.suffix, start, end };
   });
 }

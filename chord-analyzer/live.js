@@ -14,8 +14,10 @@ import { magnitudeSpectrum, predominantPitch, removeHarmonics } from './dsp.js';
  * legacy: true にすると、以前の判定方法（比べるため）
  */
 export class LiveChordTracker {
-  constructor(sampleRate, fftSize, { legacy = false, smoothing = 0.2, inertia = 1.0, changePenalty = 0.1, removeVoice = true, wobbleCents = 30, bassSmoothing = 0.5, slashThreshold = 0.55 } = {}) {
-    Object.assign(this, { sampleRate, fftSize, legacy, smoothing, inertia, changePenalty, removeVoice, wobbleCents, bassSmoothing, slashThreshold });
+  constructor(sampleRate, fftSize, { legacy = false, smoothing = 0.2, inertia = 0.3, changePenalty = 0.03, removeVoice = true, wobbleCents = 30, bassSmoothing = 0.5, slashThreshold = 0.55, bassWeight = null } = {}) {
+    Object.assign(this, { sampleRate, fftSize, legacy, smoothing, inertia, changePenalty, removeVoice, wobbleCents, bassSmoothing, slashThreshold, bassWeight });
+    // ベース音の信用度：聞き取ったベースの音が、強く鳴っている音（上位3つ）に入っている割合（演奏しながら数える）
+    this.bassAgree = 0.5;
     this.chroma = new Array(12).fill(0);
     this.bassVotes = new Array(12).fill(0);
     this.scores = null;
@@ -45,7 +47,7 @@ export class LiveChordTracker {
       const { cents } = predominantPitch(shortMags, this.sampleRate / 16384);
       this.pitchHistory.push({ t: this.time, cents });
       this.pitchHistory = this.pitchHistory.filter((p) => this.time - p.t <= 0.3);
-      const near = this.pitchHistory.filter((p) => Math.abs(p.cents - cents) < 150).map((p) => p.cents);
+      const near = this.pitchHistory.filter((p) => Math.abs(p.cents - cents) < 50).map((p) => p.cents);
       if (near.length >= 3 && Math.max(...near) - Math.min(...near) >= this.wobbleCents) {
         spectrum = Float32Array.from(mags);
         removeHarmonics(spectrum, this.sampleRate / this.fftSize, 440 * 2 ** ((cents / 100 - 69) / 12));
@@ -67,7 +69,14 @@ export class LiveChordTracker {
 
     // コードの点数に慣性をつける：前の点数を少しずつ忘れながら、今の点数を足していく。
     // 別のコードに移るときは小さな減点（changePenalty）があるので、一瞬の誤判定では切り替わらない
-    const emit = scoreStates(this.chroma, smoothedBass);
+    if (bass !== null) {
+      const top3 = chroma.map((x, i) => [x, i]).sort((a, b) => b[0] - a[0]).slice(0, 3).map((x) => x[1]);
+      this.bassAgree += 0.02 * ((top3.includes(bass) ? 1 : 0) - this.bassAgree);
+    }
+    // 低い音の聞き取りが不安定な録音・楽器では、ベースの音を手がかりにしない（Am を F と読み違えるため）
+    const reliability = Math.max(0, Math.min(1, (this.bassAgree - 0.5) / 0.35));
+    const weight = this.bassWeight ?? 0.1 * reliability;
+    const emit = scoreStates(this.chroma, smoothedBass, { rootBonus: weight, foreignBassPenalty: weight });
     const keep = Math.exp(-dt / this.inertia);
     if (!this.scores) this.scores = emit.slice();
     else {
@@ -77,7 +86,7 @@ export class LiveChordTracker {
     const order = this.scores.map((s, j) => j).sort((a, b) => this.scores[b] - this.scores[a]).slice(0, 3);
     const candidates = order.map((j) => {
       const st = STATES[j];
-      const slash = clearBass !== null && clearBass !== st.root && st.template[clearBass] ? clearBass : null;
+      const slash = reliability >= 0.6 && clearBass !== null && clearBass !== st.root && st.template[clearBass] ? clearBass : null;
       return {
         ...describeChord(st.root, st.type, slash),
         confidence: Math.round(Math.max(0, Math.min(1, cosine(this.chroma, st.template))) * 100),

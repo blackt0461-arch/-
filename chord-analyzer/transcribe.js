@@ -6,7 +6,7 @@ import { analyzeSpectrum } from './audio.js';
 import { identifyFromChroma, CHORD_TYPES, parseChordName } from './chord-engine.js';
 import { TUNINGS, findVoicings, soundingNotes } from './fretboard.js';
 import { buildChordTimeline } from './song.js';
-import { estimateBeats, findDownbeatScored, decodeChords, buildChart } from './chart.js';
+import { estimateBeats, findDownbeatScored, decodeChords, buildChart, cosine } from './chart.js';
 
 const LOWEST = 40;  // E2（6弦の開放）
 const HIGHEST = 88; // E6（1弦24フレット）
@@ -277,7 +277,7 @@ export function stableBeatSpectra(signal, sampleRate, beats, period, { frame = 8
  * 歌とみなす。ギターの音は高さが一定なので残る。
  * 戻り値：区間ごとの { t, mags }（歌を取り除いた周波数分布）
  */
-export function removeVocalFrames(signal, sampleRate, { frame = 4096, fft = 16384, hop = 2048, wobbleCents = 30 } = {}) {
+export function removeVocalFrames(signal, sampleRate, { frame = 4096, fft = 16384, hop = 2048, wobbleCents = 30, nearCents = 50 } = {}) {
   const binHz = sampleRate / fft;
   const frames = [];
   for (let start = 0; start + frame <= signal.length; start += hop) {
@@ -288,7 +288,7 @@ export function removeVocalFrames(signal, sampleRate, { frame = 4096, fft = 1638
   // 前後0.3秒の中で高さが揺れていれば歌とみなし、その音の基音と倍音を取り除く
   const span = Math.max(1, Math.round((0.15 * sampleRate) / hop));
   frames.forEach((fr, i) => {
-    const near = frames.slice(Math.max(0, i - span), i + span + 1).filter((g) => Math.abs(g.cents - fr.cents) < 150);
+    const near = frames.slice(Math.max(0, i - span), i + span + 1).filter((g) => Math.abs(g.cents - fr.cents) < nearCents);
     if (near.length < 3) return;
     const values = near.map((g) => g.cents);
     const wobble = Math.max(...values) - Math.min(...values);
@@ -341,7 +341,7 @@ function refineWithChart(events, onsetList, timeline, tuning, { strumStrength = 
  * - chords: 0.1秒ごとのコードの判定（buildChordTimeline でコード進行にまとめる）
  * - events: 弾いた瞬間ごとの、新しく鳴った音（タブ譜の材料）
  */
-export function transcribe(channels, sampleRate, { mode = 'auto', voiceFilter = true, method = 'peel', riseRatio = 1.3, minStrength = 0.2, harmonicRatio = 4, tuning = TUNINGS[0], snapStrums = true, snapMin = 3, peelOptions = {}, useChart = true, chartOptions = {}, noteWeight = null, chromaMethod = 'auto', harmonicResidual = 0.35, vocalOptions = {}, useContext = true, contextOptions = {}, dropVocalNotes = true, voiceOptions = { wobbleCents: 60, useSwell: false }, attackRatio = 0, chordWindow = 16384, chordMinDuration = 0.5, onProgress = () => {} } = {}) {
+export function transcribe(channels, sampleRate, { mode = 'auto', voiceFilter = true, method = 'peel', riseRatio = 1.3, minStrength = 0.2, harmonicRatio = 4, tuning = TUNINGS[0], snapStrums = true, snapMin = 3, peelOptions = {}, useChart = true, chartOptions = {}, noteWeight = null, chromaMethod = 'auto', harmonicResidual = 0.35, vocalOptions = {}, vocalPresence = 0.35, useContext = true, contextOptions = {}, dropVocalNotes = true, voiceOptions = { wobbleCents: 60, useSwell: false }, attackRatio = 0, chordWindow = 16384, chordMinDuration = 0.5, onProgress = () => {} } = {}) {
   const { guitar, mid, useSide, sideRatio } = chooseSignal(channels, mode);
   const duration = guitar.length / sampleRate;
 
@@ -475,26 +475,27 @@ export function transcribe(channels, sampleRate, { mode = 'auto', voiceFilter = 
   // コードの変わり目が小節の頭にいちばんきれいにそろう位置を選ぶ
   let grid = null;
   let vocalFrames = null;
+  const devocalChromas = (g) => {
+    // 歌のメロディを取り除いた短い区間の音から、拍ごとの12音の強さを作り直す
+    vocalFrames ??= removeVocalFrames(guitar, sampleRate, vocalOptions);
+    return g.beats.map((b, k) => {
+      const end = k + 1 < g.beats.length ? g.beats[k + 1] : b + g.period;
+      const chroma = new Array(12).fill(0);
+      vocalFrames.filter((f) => f.t >= b && f.t < end).forEach((f) => {
+        const c = analyzeSpectrum(f.mags, sampleRate, 16384, { harmonicResidual }).chroma;
+        const tot = c.reduce((a, v) => a + v, 0) || 1;
+        c.forEach((v, i) => { chroma[i] += v / tot; });
+      });
+      return chroma;
+    });
+  };
+  // 拍の区切り：表裏・直線当てはめの候補から、コードの変わり目が小節の頭にいちばんきれいにそろうものを選ぶ
   for (const [phaseShift, fitLine] of [[0, false], [0.5, false], [0, true], [0.5, true]]) {
     const g = estimateBeats(onsetList, duration, { phaseShift, fitLine });
     if (g.beats.length < 4) continue;
     let { chromas, basses } = beatChromasFor(g.beats, g.period);
-    if (chromaMethod === 'devocal' || (chromaMethod === 'auto' && !useSide)) {
-      // 歌と分けられない曲：歌のメロディを取り除いた短い区間の音から、拍ごとの12音の強さを作り直す
-      vocalFrames ??= removeVocalFrames(guitar, sampleRate, vocalOptions);
-      chromas = g.beats.map((b, k) => {
-        const end = k + 1 < g.beats.length ? g.beats[k + 1] : b + g.period;
-        const chroma = new Array(12).fill(0);
-        vocalFrames.filter((f) => f.t >= b && f.t < end).forEach((f) => {
-          const c = analyzeSpectrum(f.mags, sampleRate, 16384, { harmonicResidual }).chroma;
-          const tot = c.reduce((a, v) => a + v, 0) || 1;
-          c.forEach((v, i) => { chroma[i] += v / tot; });
-        });
-        return chroma;
-      });
-    }
+    if (chromaMethod === 'devocal') chromas = devocalChromas(g);
     if (chromaMethod === 'stable') {
-      // 安定した音だけで、拍ごとの12音の強さを作り直す
       chromas = stableBeatSpectra(guitar, sampleRate, g.beats, g.period).map((spec) => analyzeSpectrum(spec, sampleRate, 8192).chroma);
     }
     const { offset, score } = findDownbeatScored(chromas);
@@ -502,9 +503,38 @@ export function transcribe(channels, sampleRate, { mode = 'auto', voiceFilter = 
   }
   let timeline = buildChordTimeline(chordFrames, { minDuration: chordMinDuration });
   const bpm = grid?.bpm ?? null, beats = grid?.beats ?? [], downbeat = grid?.downbeat ?? 0;
+  let chartInfo = null;
+  let vocalShare = null;
   if (useChart && grid) {
-    timeline = buildChart(grid.beats, decodeChords(grid.chromas, grid.downbeat, { beatBass: grid.basses, ...chartOptions }), grid.basses, grid.period)
-      .filter((seg) => seg.end - seg.start > 0);
+    // 歌を取り除くかどうか：同じ高さの周りで音程が揺れる（ビブラート）区間が多い曲だけ、歌が入っているとみなして取り除く。
+    // （歌の無い曲で取り除くと、ギターのメロディの音まで消してしまうため）
+    const variants = [{ label: 'そのまま', chromas: grid.chromas }];
+    if (chromaMethod === 'auto' && !useSide) {
+      const devocal = devocalChromas(grid);
+      vocalShare = vocalFrames.filter((f) => f.vocal).length / Math.max(1, vocalFrames.length);
+      if (vocalShare >= vocalPresence) variants[0] = { label: '歌を除く', chromas: devocal };
+    }
+    let best = null;
+    for (const v of variants) {
+      // ベース音の信用度：聞き取ったベースの音が、その拍で強く鳴っている音（上位3つ）に入っている割合。
+      // 低い音の聞き取りが不安定な録音では、ベースの音を手がかりにしない
+      let agree = 0, counted = 0;
+      v.chromas.forEach((c, k) => {
+        const bass = grid.basses[k];
+        if (bass === null || bass === undefined) return;
+        counted++;
+        const top3 = c.map((x, i) => [x, i]).sort((a, b) => b[0] - a[0]).slice(0, 3).map((x) => x[1]);
+        if (top3.includes(bass)) agree++;
+      });
+      const reliability = counted ? Math.max(0, Math.min(1, (agree / counted - 0.5) / 0.35)) : 0;
+      const weight = (chartOptions.rootBonus ?? 0.1) * reliability;
+      const states = decodeChords(v.chromas, grid.downbeat, { beatBass: grid.basses, ...chartOptions, rootBonus: weight, foreignBassPenalty: weight });
+      const fit = states.reduce((a, st, k) => a + cosine(v.chromas[k], st.template), 0) / Math.max(1, states.length);
+      if (!best || fit > best.fit) best = { ...v, states, fit, reliability };
+    }
+    chartInfo = { method: best.label, vocalShare, bassReliability: best.reliability, fit: best.fit };
+    // ベース音を信用できない録音では、分数コード（C/G など）にしない
+    timeline = buildChart(grid.beats, best.states, grid.basses, grid.period, { allowSlash: best.reliability >= 0.6 }).filter((seg) => seg.end - seg.start > 0);
   }
 
   // 5. コード譜を手がかりに、1音ずつのタブ譜を整える
@@ -520,5 +550,5 @@ export function transcribe(channels, sampleRate, { mode = 'auto', voiceFilter = 
   }
 
   onProgress(1, '完了');
-  return { duration, useSide, sideRatio, chordFrames, timeline, events, bpm, beats, downbeat, onsets: onsetList.map(({ t, strength }) => ({ t, strength })) };
+  return { duration, useSide, sideRatio, chordFrames, timeline, events, bpm, beats, downbeat, chartInfo, onsets: onsetList.map(({ t, strength }) => ({ t, strength })) };
 }
