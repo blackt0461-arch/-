@@ -164,7 +164,7 @@ function looksLikeVoice(signal, sampleRate, midi, start, length, { wobbleCents =
  * 3. 合計がいちばん大きい音を確定し、その音の基音と倍音を全部取り除く。これを繰り返す
  * 倍音を取り除いてから次を探すので、倍音（1オクターブ上など）を別の音と間違えにくい。
  */
-export function peelNotes(post, pre, binHz, { maxNotes = 6, stopRatio = 0.15, decay = 0.9, riseMode = 'sub', riseRatio = 1.5, floorRatio = 0.05, oddRatio = 0 } = {}) {
+export function peelNotes(post, pre, binHz, { maxNotes = 6, stopRatio = 0.15, decay = 0.9, riseMode = 'sub', riseRatio = 1.5, floorRatio = 0.05, oddRatio = 0.25 } = {}) {
   const d = new Float32Array(post.length);
   for (let k = 0; k < post.length; k++) {
     // 'ratio'：直前より riseRatio 倍以上強くなった周波数だけを「新しく鳴った」とみなす（鳴り続けて弱まっている音を確実に除く）
