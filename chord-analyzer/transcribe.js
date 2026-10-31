@@ -349,7 +349,7 @@ function refineWithChart(events, onsetList, timeline, tuning, { strumStrength = 
  * - chords: 0.1秒ごとのコードの判定（buildChordTimeline でコード進行にまとめる）
  * - events: 弾いた瞬間ごとの、新しく鳴った音（タブ譜の材料）
  */
-export function transcribe(channels, sampleRate, { mode = 'auto', voiceFilter = true, method = 'peel', riseRatio = 1.3, minStrength = 0.2, harmonicRatio = 4, tuning = TUNINGS[0], snapStrums = true, snapMin = 3, peelOptions = {}, useChart = true, chartOptions = {}, noteWeight = null, chromaMethod = 'auto', harmonicResidual = 0.35, vocalOptions = {}, vocalPresence = 0.35, minBeats = 1, precise = true, highWeight = 0.6, useContext = true, contextOptions = {}, dropVocalNotes = true, estimateDurations = true, stopRatio = 0.25, voiceOptions = { wobbleCents: 60, useSwell: false }, attackRatio = 0, chordWindow = 16384, chordMinDuration = 0.5, segmentChroma = 0, segmentBass = false, prevSubtract = 0, onProgress = () => {} } = {}) {
+export function transcribe(channels, sampleRate, { mode = 'auto', voiceFilter = true, method = 'peel', riseRatio = 1.3, minStrength = 0.2, harmonicRatio = 4, tuning = TUNINGS[0], snapStrums = true, snapMin = 3, peelOptions = {}, useChart = true, chartOptions = {}, noteWeight = null, chromaMethod = 'auto', harmonicResidual = 0.35, vocalOptions = {}, vocalPresence = 0.35, minBeats = 1, precise = true, highWeight = 0.6, useContext = true, contextOptions = {}, dropVocalNotes = true, estimateDurations = true, stopRatio = 0.25, voiceOptions = { wobbleCents: 60, useSwell: false }, attackRatio = 0, chordWindow = 16384, chordMinDuration = 0.5, segmentChroma = 0, segmentBass = false, prevSubtract = 0, attackChroma = 0, changeGate = 0, onProgress = () => {} } = {}) {
   const { guitar, mid, useSide, sideRatio } = chooseSignal(channels, mode, sampleRate);
   const duration = guitar.length / sampleRate;
 
@@ -534,18 +534,48 @@ export function transcribe(channels, sampleRate, { mode = 'auto', voiceFilter = 
   }
   // 拍の区切りが決まってから、区切りの中だけで聞いた音でコードを判定し直す
   if (grid && segmentChroma > 0 && chromaMethod !== 'devocal' && chromaMethod !== 'stable') ({ chromas: grid.chromas, basses: grid.basses } = beatChromasFor(grid.beats, grid.period, true));
-  // 1つ前の拍で鳴っていた音の残り（響き）を差し引く。持ち替えた直後は前のコードの音が残って、
-  // 「前のコードのまま」「前のコードの音が混ざったコード」と読み違えやすいため
-  if (grid && prevSubtract > 0) {
-    const norm = (c) => { const t = c.reduce((a, b) => a + b, 0) || 1; return c.map((v) => v / t); };
+  // 前のコードの残りへの対策（弾いた瞬間の音を手がかりにする）：
+  // 弾いた瞬間に「急に大きくなった音」＝新しく弾いた弦の音。前から響いているだけの音は大きくならない。
+  // - 新しく鳴った音が前の拍のコードの音と同じ → コードは変わっていない。そのまま
+  // - 前の拍に無かった音が強く鳴った → コードが変わった。前の拍の残りを差し引き、新しく鳴った音を重く見る
+  if (grid && (attackChroma > 0 || prevSubtract > 0)) {
+    const norm = (c) => { const t = c.reduce((x, y) => x + y, 0) || 1; return c.map((v) => v / t); };
     const orig = grid.chromas.map(norm);
-    grid.chromas = grid.chromas.map((c, k) => {
-      if (k === 0) return c;
-      const tot = c.reduce((a, b) => a + b, 0) || 1;
-      const out = orig[k].map((v, i) => Math.max(v * 0.15, v - prevSubtract * orig[k - 1][i]));
-      const t2 = out.reduce((a, b) => a + b, 0) || 1;
-      return out.map((v) => (v / t2) * tot);
+    const attacks = grid.beats.map((b, k) => {
+      const end = k + 1 < grid.beats.length ? grid.beats[k + 1] : b + grid.period;
+      const inBeat = onsetList.filter((o) => o.t >= b - 0.05 && o.t < end - 0.05);
+      if (!inBeat.length) return null;
+      const att = new Array(12).fill(0);
+      inBeat.forEach((o) => {
+        const len = Math.floor(Math.min(0.25, Math.max(0.08, end - o.t - 0.03)) * sampleRate);
+        const post = magnitudeSpectrum(guitar, Math.floor((o.t + 0.02) * sampleRate), len, win);
+        const pre = magnitudeSpectrum(guitar, Math.floor((o.t - 0.01) * sampleRate) - len, len, win);
+        const rise = new Float32Array(post.length);
+        for (let i = 0; i < post.length; i++) rise[i] = Math.max(0, post[i] - pre[i]);
+        const ch = analyzeSpectrum(rise, sampleRate, win, { harmonicResidual, highWeight }).chroma;
+        const tot = ch.reduce((x, y) => x + y, 0) || 1;
+        ch.forEach((v, i) => { att[i] += (v / tot) * o.strength; });
+      });
+      return norm(att);
     });
+    const changed = [];
+    grid.chromas = grid.chromas.map((c, k) => {
+      const att = attacks[k];
+      if (!att || k === 0) { changed.push(false); return c; }
+      if (changeGate > 0) {
+        const pm = Math.max(...orig[k - 1]);
+        const am = Math.max(...att);
+        let strong = 0, fresh = 0;
+        att.forEach((v, i) => { if (v >= am * 0.3) { strong += v; if (orig[k - 1][i] < pm * 0.4) fresh += v; } });
+        if (fresh / (strong || 1) < changeGate) { changed.push(false); return c; }
+      }
+      changed.push(true);
+      const tot = c.reduce((x, y) => x + y, 0) || 1;
+      let out = orig[k].map((v, i) => Math.max(v * 0.15, v - prevSubtract * orig[k - 1][i]));
+      out = norm(out).map((v, i) => (1 - Math.min(1, attackChroma)) * v + attackChroma * att[i]);
+      return norm(out).map((v) => v * tot);
+    });
+    if (chartOptions.debug) grid.debugChanged = changed;
   }
   let timeline = buildChordTimeline(chordFrames, { minDuration: chordMinDuration });
   const bpm = grid?.bpm ?? null, beats = grid?.beats ?? [], downbeat = grid?.downbeat ?? 0;
