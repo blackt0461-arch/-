@@ -6,6 +6,7 @@ import { analyzeSpectrum } from './audio.js';
 import { identifyFromChroma, CHORD_TYPES, parseChordName } from './chord-engine.js';
 import { TUNINGS, findVoicings, soundingNotes } from './fretboard.js';
 import { buildChordTimeline } from './song.js';
+import { chordToneProbabilities } from './learned.js';
 import { estimateBeats, findDownbeatScored, decodeChords, buildChart, cosine } from './chart.js';
 
 const LOWEST = 40;  // E2（6弦の開放）
@@ -349,7 +350,7 @@ function refineWithChart(events, onsetList, timeline, tuning, { strumStrength = 
  * - chords: 0.1秒ごとのコードの判定（buildChordTimeline でコード進行にまとめる）
  * - events: 弾いた瞬間ごとの、新しく鳴った音（タブ譜の材料）
  */
-function transcribeOnce(channels, sampleRate, { mode = 'auto', voiceFilter = true, method = 'peel', riseRatio = 1.3, minStrength = 0.2, harmonicRatio = 4, tuning = TUNINGS[0], snapStrums = true, snapMin = 3, peelOptions = {}, useChart = true, chartOptions = {}, noteWeight = null, chromaMethod = 'auto', harmonicResidual = 0.35, vocalOptions = {}, vocalPresence = 0.35, minBeats = 1, precise = true, highWeight = 0.6, useContext = true, contextOptions = {}, dropVocalNotes = true, estimateDurations = true, stopRatio = 0.25, voiceOptions = { wobbleCents: 60, useSwell: false }, attackRatio = 0, chordWindow = 16384, chordMinDuration = 0.5, segmentChroma = 0, segmentBass = false, prevSubtract = 0, attackChroma = 0, changeGate = 0, fuseAttack = 0, fuseSubtract = 0, changeBonus = 0, onProgress = () => {} } = {}) {
+function transcribeOnce(channels, sampleRate, { mode = 'auto', voiceFilter = true, method = 'peel', riseRatio = 1.3, minStrength = 0.2, harmonicRatio = 4, tuning = TUNINGS[0], snapStrums = true, snapMin = 3, peelOptions = {}, useChart = true, chartOptions = {}, noteWeight = null, chromaMethod = 'auto', harmonicResidual = 0.35, vocalOptions = {}, vocalPresence = 0.35, minBeats = 1, precise = true, highWeight = 0.6, useContext = true, contextOptions = {}, dropVocalNotes = true, estimateDurations = true, stopRatio = 0.25, voiceOptions = { wobbleCents: 60, useSwell: false }, attackRatio = 0, chordWindow = 16384, chordMinDuration = 0.5, segmentChroma = 0, segmentBass = false, prevSubtract = 0, attackChroma = 0, changeGate = 0, fuseAttack = 0, fuseSubtract = 0, changeBonus = 0, exportFeatures = false, learned = 0, onProgress = () => {} } = {}) {
   const { guitar, mid, useSide, sideRatio } = chooseSignal(channels, mode, sampleRate);
   const duration = guitar.length / sampleRate;
 
@@ -538,7 +539,7 @@ function transcribeOnce(channels, sampleRate, { mode = 'auto', voiceFilter = tru
   // 弾いた瞬間に「急に大きくなった音」＝新しく弾いた弦の音。前から響いているだけの音は大きくならない。
   // - 新しく鳴った音が前の拍のコードの音と同じ → コードは変わっていない。そのまま
   // - 前の拍に無かった音が強く鳴った → コードが変わった。前の拍の残りを差し引き、新しく鳴った音を重く見る
-  if (grid && (attackChroma > 0 || prevSubtract > 0 || fuseAttack > 0 || fuseSubtract > 0 || changeBonus > 0)) {
+  if (grid && (attackChroma > 0 || prevSubtract > 0 || fuseAttack > 0 || fuseSubtract > 0 || changeBonus > 0 || exportFeatures || learned > 0)) {
     const norm = (c) => { const t = c.reduce((x, y) => x + y, 0) || 1; return c.map((v) => v / t); };
     const orig = grid.chromas.map(norm);
     const attacks = grid.beats.map((b, k) => {
@@ -570,6 +571,18 @@ function transcribeOnce(channels, sampleRate, { mode = 'auto', voiceFilter = tru
     if (fuseAttack > 0) grid.extra.push({ chromas: attacks.map((a, k) => (a && k > 0 ? a : null)), weight: fuseAttack });
     if (fuseSubtract > 0) grid.extra.push({ chromas: orig.map((v, k) => (k ? norm(v.map((x, i) => Math.max(x * 0.15, x - 0.5 * orig[k - 1][i]))) : null)), weight: fuseSubtract });
     grid.fresh = fresh;
+    // 学習用：拍ごとの12音の強さ（ふつうに聞いた音・弾いた瞬間の音）とベース音を書き出す
+    // 学習した判定器で「コードに本当に入っている音」の確率を出し、12音の強さに混ぜる（前のコードの響きの残りを掃除する）
+    if (learned > 0) {
+      const bars = grid.beats.map((_, k) => ((k - grid.downbeat) % 4 + 4) % 4);
+      const probs = chordToneProbabilities(orig, attacks, grid.basses, bars);
+      grid.chromas = grid.chromas.map((c, k) => {
+        const tot = c.reduce((x, y) => x + y, 0) || 1;
+        const pt = probs[k].reduce((x, y) => x + y, 0) || 1;
+        return orig[k].map((v, i) => ((1 - Math.min(1, learned)) * v + (learned * probs[k][i]) / pt) * tot);
+      });
+    }
+    if (exportFeatures) grid.features = { beats: grid.beats, chromas: orig, attacks, basses: grid.basses, downbeat: grid.downbeat };
     const changed = [];
     if (attackChroma > 0 || prevSubtract > 0) grid.chromas = grid.chromas.map((c, k) => {
       const att = attacks[k];
@@ -622,7 +635,7 @@ function transcribeOnce(channels, sampleRate, { mode = 'auto', voiceFilter = tru
       const fit = states.reduce((a, st, k) => a + cosine(v.chromas[k], st.template), 0) / Math.max(1, states.length);
       if (!best || fit > best.fit) best = { ...v, states, fit, reliability };
     }
-    chartInfo = { method: best.label, vocalShare, bassReliability: best.reliability, fit: best.fit, ...(chartOptions.debug ? { debugChromas: best.chromas, debugStates: best.states.map((x) => x.name), debugBasses: grid.basses } : {}) };
+    chartInfo = { ...(grid.features ? { features: grid.features } : {}), method: best.label, vocalShare, bassReliability: best.reliability, fit: best.fit, ...(chartOptions.debug ? { debugChromas: best.chromas, debugStates: best.states.map((x) => x.name), debugBasses: grid.basses } : {}) };
     // ベース音を信用できない録音では、分数コード（C/G など）にしない
     timeline = buildChart(grid.beats, best.states, grid.basses, grid.period, { allowSlash: best.reliability >= 0.6, minBeats }).filter((seg) => seg.end - seg.start > 0);
   }
