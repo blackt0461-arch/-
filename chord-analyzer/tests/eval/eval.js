@@ -8,6 +8,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { Worker } from 'node:worker_threads';
 import { fileURLToPath } from 'node:url';
+import { parseChordName } from '../../chord-engine.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
@@ -21,6 +22,22 @@ const gsDir = process.env.GUITARSET || '/tmp/claude-0/guitarset';
 const gsJson = path.join(gsDir, 'guitarset.json');
 if (fs.existsSync(gsJson)) {
   const clips = JSON.parse(fs.readFileSync(gsJson, 'utf8'));
+  // 答え（楽譜のコード）が実際の演奏と合っているか：弾いた音（弦ごとのセンサーの記録）のうち、
+  // そのときの楽譜のコードの音（＋よく足される 7th・maj7・9th）だった割合。80% 未満の曲は、
+  // 演奏者が楽譜に無いコードを挟んで弾いているので、コードの答えとして使わない（1音ずつの採点には使う）
+  const chartMatchesPlaying = (c) => {
+    let inside = 0, total = 0;
+    c.notes.forEach((n) => {
+      const ch = c.chords.filter(([t]) => t <= n.t + 0.05).pop();
+      const p = ch && ch[1] && parseChordName(ch[1]);
+      if (!p) return;
+      const tones = new Set([...p.type.intervals, 10, 11, 2].map((i) => (p.root + i) % 12));
+      const w = Math.min(n.dur, 1);
+      total += w;
+      if (tones.has(n.midi % 12)) inside += w;
+    });
+    return total ? inside / total : 1;
+  };
   clips.forEach((c, i) => {
     const audio = path.join(gsDir, 'audio', `${c.id}_mic.wav`);
     if (!fs.existsSync(audio)) return;
@@ -28,7 +45,7 @@ if (fs.existsSync(gsJson)) {
     jobs.push({
       kind: 'guitarset', id: c.id, audio, solo: c.mode === 'solo', set: ['04', '05'].includes(c.player) ? '本番テスト' : '調整用',
       category: `研究用・${c.mode === 'comp' ? '伴奏' : 'ソロ'}・${c.style}`,
-      truth: { chords: c.chords, notes: c.notes, tempo: c.tempo, duration: c.duration },
+      truth: { chords: c.mode === 'comp' && chartMatchesPlaying(c) < 0.8 ? null : c.chords, notes: c.notes, tempo: c.tempo, duration: c.duration },
     });
   });
 }
@@ -50,6 +67,9 @@ for (const [category, so] of conditions) {
     jobs.push({ kind: 'synth', id: `${category}-${seed}`, song: { ...so, seed }, set: seed >= 7 ? '本番テスト' : '調整用', category });
   }
 }
+
+// ONLY=文字 を指定すると、種類の名前にその文字を含む曲だけを採点する（調べもの用）
+if (process.env.ONLY) { const keep = jobs.filter((j) => j.category.includes(process.env.ONLY)); jobs.length = 0; jobs.push(...keep); }
 
 // CPU の数だけ同時に採点する
 const results = [];
