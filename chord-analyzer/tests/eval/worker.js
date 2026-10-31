@@ -5,6 +5,9 @@ import { transcribe } from '../../transcribe.js';
 import { same } from '../real-song-eval.js';
 import { parseChordName } from '../../chord-engine.js';
 import { makeSong } from '../mix.js';
+import { chartPlayback } from '../../song.js';
+import { TUNINGS } from '../../fretboard.js';
+import { easiestVoicing } from '../../practice.js';
 
 /** WAV（16bit・24bit・32bit float）を読む */
 function readWav(path) {
@@ -86,6 +89,41 @@ function noteScore(events, truthNotes, tol = 0.05) {
   return precision + recall ? (2 * precision * recall) / (precision + recall) : 0;
 }
 
+/**
+ * コード譜の再生が、実際の演奏のリズムにどれだけ合っているか。
+ * 正解の音を「ほぼ同時（0.04秒以内）に弾いたかたまり」にまとめて、実際に弾いた瞬間とする。
+ * - rhythm：弾いた瞬間の一致（F1。0.05秒以内）
+ * - strumKind：一致した瞬間のうち、和音（3音以上）か1音かが合っている割合
+ * - duration：一致した瞬間のうち、鳴らす長さが実際の長さの半分〜2倍に収まっている割合
+ */
+function rhythmScore(r, truthNotes, playbackOptions = {}) {
+  const notes = [...truthNotes].sort((a, b) => a.t - b.t);
+  const strokes = [];
+  notes.forEach((n) => {
+    const last = strokes[strokes.length - 1];
+    if (last && n.t - last.t <= 0.04) { last.count++; last.dur = Math.max(last.dur, n.dur ?? 0); } else strokes.push({ t: n.t, count: 1, dur: n.dur ?? 0 });
+  });
+  const tuning = TUNINGS[0];
+  const shapeFor = (name) => { const p = parseChordName(name); return p && easiestVoicing(p.root, p.type, p.bass, tuning, 0); };
+  const items = chartPlayback(r.events, r.timeline, shapeFor, tuning, { onsets: r.onsets, ...playbackOptions });
+  const used = new Set();
+  let hit = 0, kindOk = 0, durOk = 0, durN = 0;
+  strokes.forEach((st) => {
+    const i = items.findIndex((it, k) => !used.has(k) && Math.abs(it.t - st.t) <= 0.05);
+    if (i < 0) return;
+    used.add(i);
+    hit++;
+    if ((items[i].notes.length >= 3) === (st.count >= 3)) kindOk++;
+    if (st.dur > 0) {
+      durN++;
+      const d = items[i].dur ?? 2.2; // 長さを決めていない再生は、音が自然に消えるまで（約2秒）鳴る
+      if (d >= st.dur / 2 && d <= st.dur * 2) durOk++;
+    }
+  });
+  const precision = items.length ? hit / items.length : 0, recall = strokes.length ? hit / strokes.length : 0;
+  return { rhythm: precision + recall ? (2 * precision * recall) / (precision + recall) : 0, strumKind: hit ? kindOk / hit : null, duration: durN ? durOk / durN : null };
+}
+
 parentPort.on('message', ({ job, options }) => {
   try {
     let audio, truth;
@@ -94,7 +132,7 @@ parentPort.on('message', ({ job, options }) => {
     else {
       const song = makeSong(job.song);
       audio = { channels: song.channels, sampleRate: song.sampleRate };
-      truth = { chords: song.chords.map((c) => [c.start, c.name]), notes: song.truth.flatMap((e) => e.notes.map((m) => ({ t: e.t, midi: m }))), tempo: song.tempo, duration: song.channels[0].length / song.sampleRate };
+      truth = { chords: song.chords.map((c) => [c.start, c.name]), notes: song.truth.flatMap((e) => e.notes.map((m, k) => ({ t: e.t + (e.notes.length > 1 ? k * 0.012 : 0), midi: m }))), tempo: song.tempo, duration: song.channels[0].length / song.sampleRate };
       truth.chords.push([song.chords[song.chords.length - 1].end, null]);
     }
     const t0 = Date.now();
@@ -102,6 +140,7 @@ parentPort.on('message', ({ job, options }) => {
     const duration = truth.duration ?? audio.channels[0].length / audio.sampleRate;
     const result = { id: job.id, set: job.set, category: job.category, seconds: (Date.now() - t0) / 1000, ...(truth.chords ? chordScore(r.timeline, truth.chords, duration, job.offset ?? 0, job.kind === 'guitarset') : {}) };
     if (truth.notes) result.notes = noteScore(r.events, truth.notes);
+    if (truth.notes && !job.solo) Object.assign(result, rhythmScore(r, truth.notes, options.playback));
     if (truth.tempo) {
       const ratio = r.bpm / truth.tempo;
       result.tempo = [1, 2, 0.5].some((k) => Math.abs(ratio / k - 1) <= 0.04) ? 1 : 0;

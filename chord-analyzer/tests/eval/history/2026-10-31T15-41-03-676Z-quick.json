@@ -1,0 +1,208 @@
+{
+ "date": "2026-10-31T15:41:03.676Z",
+ "label": "再生のリズムの基準",
+ "full": false,
+ "options": {},
+ "overall": {
+  "count": 82,
+  "chord": 0.7509399208342867,
+  "chordStrict": 0.6494952118436222,
+  "chordMajmin": 0.7930422090261698,
+  "notes": 0.3717954416815296,
+  "tempo": 0.7625,
+  "rhythm": 0.7982421148597035,
+  "strumKind": 0.7508916984251678,
+  "duration": 0.023427427412799785
+ },
+ "tune": {
+  "count": 54,
+  "chord": 0.7932976133721781,
+  "chordStrict": 0.7123458906719692,
+  "chordMajmin": 0.8069853088235736,
+  "notes": 0.38141074210353226,
+  "tempo": 0.7692307692307693,
+  "rhythm": 0.7882643485056408,
+  "strumKind": 0.7517706507628371,
+  "duration": 0.016910361475002206
+ },
+ "test": {
+  "count": 28,
+  "chord": 0.6709309460404929,
+  "chordStrict": 0.5307772629456333,
+  "chordMajmin": 0.7667052427421862,
+  "notes": 0.3539384551835249,
+  "tempo": 0.75,
+  "rhythm": 0.8159803661558143,
+  "strumKind": 0.749329116491533,
+  "duration": 0.03646155928839494
+ },
+ "categories": {
+  "合成・ギターだけ": {
+   "count": 5,
+   "chord": 0.8522622264366471,
+   "chordStrict": 0.8522622264366471,
+   "chordMajmin": 0.8996530375540605,
+   "notes": 0.7543327528730749,
+   "tempo": 1,
+   "rhythm": 0.9238145342738721,
+   "strumKind": 0.9346320066488134,
+   "duration": null
+  },
+  "合成・バンド": {
+   "count": 5,
+   "chord": 0.7983294808735123,
+   "chordStrict": 0.7983294808735123,
+   "chordMajmin": 0.8811783180828148,
+   "notes": 0.7309155433639468,
+   "tempo": 1,
+   "rhythm": 0.9238145342738722,
+   "strumKind": 0.9351121987256441,
+   "duration": null
+  },
+  "合成・弾き語り": {
+   "count": 5,
+   "chord": 0.7790807435915038,
+   "chordStrict": 0.7790807435915038,
+   "chordMajmin": 0.9356260880928593,
+   "notes": 0.49050972840756524,
+   "tempo": 1,
+   "rhythm": 0.776081188838869,
+   "strumKind": 0.7439579606440072,
+   "duration": null
+  },
+  "合成・歌が大きい": {
+   "count": 5,
+   "chord": 0.8002708919164364,
+   "chordStrict": 0.8002708919164364,
+   "chordMajmin": 0.9212635144355076,
+   "notes": 0.48446797932678287,
+   "tempo": 1,
+   "rhythm": 0.7916713079392506,
+   "strumKind": 0.7246129156884307,
+   "duration": null
+  },
+  "本物の曲（動画）": {
+   "count": 2,
+   "chord": 0.8772293483805333,
+   "chordStrict": 0.8772293483805333,
+   "chordMajmin": 0.8664591114277118,
+   "notes": null,
+   "tempo": null,
+   "rhythm": null,
+   "strumKind": null,
+   "duration": null
+  },
+  "研究用・ソロ・BN": {
+   "count": 6,
+   "chord": null,
+   "chordStrict": null,
+   "chordMajmin": null,
+   "notes": 0.19249330980250348,
+   "tempo": 0.3333333333333333,
+   "rhythm": null,
+   "strumKind": null,
+   "duration": null
+  },
+  "研究用・ソロ・Funk": {
+   "count": 6,
+   "chord": null,
+   "chordStrict": null,
+   "chordMajmin": null,
+   "notes": 0.18705841700696413,
+   "tempo": 0.8333333333333334,
+   "rhythm": null,
+   "strumKind": null,
+   "duration": null
+  },
+  "研究用・ソロ・Jazz": {
+   "count": 6,
+   "chord": null,
+   "chordStrict": null,
+   "chordMajmin": null,
+   "notes": 0.22779043288869225,
+   "tempo": 0.5,
+   "rhythm": null,
+   "strumKind": null,
+   "duration": null
+  },
+  "研究用・ソロ・Rock": {
+   "count": 6,
+   "chord": null,
+   "chordStrict": null,
+   "chordMajmin": null,
+   "notes": 0.19182938559124593,
+   "tempo": 0.6666666666666666,
+   "rhythm": null,
+   "strumKind": null,
+   "duration": null
+  },
+  "研究用・ソロ・SS": {
+   "count": 6,
+   "chord": null,
+   "chordStrict": null,
+   "chordMajmin": null,
+   "notes": 0.2138641769750302,
+   "tempo": 0.6666666666666666,
+   "rhythm": null,
+   "strumKind": null,
+   "duration": null
+  },
+  "研究用・伴奏・BN": {
+   "count": 6,
+   "chord": 0.7103703703703704,
+   "chordStrict": 0.3874074074074074,
+   "chordMajmin": 0.7237037037037037,
+   "notes": 0.33888690257884435,
+   "tempo": 0.8333333333333334,
+   "rhythm": 0.7316911340167153,
+   "strumKind": 0.7392983121321457,
+   "duration": 0.00808080808080808
+  },
+  "研究用・伴奏・Funk": {
+   "count": 6,
+   "chord": 0.4284313725490196,
+   "chordStrict": 0.12679738562091503,
+   "chordMajmin": 0.43137254901960786,
+   "notes": 0.27188442728717366,
+   "tempo": 0.6666666666666666,
+   "rhythm": 0.69475371536917,
+   "strumKind": 0.685442293050747,
+   "duration": 0
+  },
+  "研究用・伴奏・Jazz": {
+   "count": 6,
+   "chord": 0.6144894894894893,
+   "chordStrict": 0.40915915915915907,
+   "chordMajmin": 0.6178678678678677,
+   "notes": 0.3598789846707955,
+   "tempo": 0.8333333333333334,
+   "rhythm": 0.6995677863316757,
+   "strumKind": 0.6971706707091685,
+   "duration": 0.028671802054154996
+  },
+  "研究用・伴奏・Rock": {
+   "count": 6,
+   "chord": 0.8231981981981981,
+   "chordStrict": 0.7875375375375375,
+   "chordMajmin": 0.8322072072072072,
+   "notes": 0.5349159488994462,
+   "tempo": 0.6666666666666666,
+   "rhythm": 0.8532916388290581,
+   "strumKind": 0.6669702598939544,
+   "duration": 0.015010137541783111
+  },
+  "研究用・伴奏・SS": {
+   "count": 6,
+   "chord": 0.9476273148148149,
+   "chordStrict": 0.9340277777777777,
+   "chordMajmin": 0.9476273148148149,
+   "notes": 0.388482233410224,
+   "tempo": 0.8333333333333334,
+   "rhythm": 0.826562044846023,
+   "strumKind": 0.6866200496679687,
+   "duration": 0.06537438938725272
+  }
+ },
+ "errors": [],
+ "minutes": 3.289616666666667
+}

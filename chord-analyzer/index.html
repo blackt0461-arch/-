@@ -107,6 +107,10 @@
 
       <div id="song-result" hidden>
         <video id="song-media" class="song-media" controls playsinline preload="metadata"></video>
+        <div class="chord-strip-wrap">
+          <div id="chord-strip" class="chord-strip" role="slider" aria-label="コードの帯（タップでその時刻から再生）"></div>
+        </div>
+        <p class="hint strip-hint">帯：読み取ったコードを時間順に表示。細い目盛りは「弾いた」と判断した瞬間。タップでその時刻から再生します</p>
         <div class="practice-row">
           <label class="speed">速さ
             <select id="song-speed">

@@ -106,6 +106,12 @@ export async function playSequence(items, { from = 0, rate = 1, onTime = () => {
         src.start(at);
         sources.push(src);
         ringing.set(string, { src, gain });
+        // 実際の演奏で音を止めた（ミュートした）ところで、同じように止める
+        if (item.dur) {
+          const off = when + item.dur / rate;
+          gain.gain.setTargetAtTime(0, off, 0.02);
+          src.stop(off + 0.15);
+        }
       });
     }
   };

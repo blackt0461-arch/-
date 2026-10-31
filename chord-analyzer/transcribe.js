@@ -313,7 +313,7 @@ export function removeVocalFrames(signal, sampleRate, { frame = 4096, fft = 1638
  * - 1音弾き：はっきり聞こえた音（いちばん強い音の strongRatio 倍以上）だけを残す
  * 和音かどうかは、弾いた瞬間の勢い（曲の中での比べ）と、同時に鳴り始めた音の数・割合で判断する。
  */
-function refineWithChart(events, onsetList, timeline, tuning, { strumStrength = 0, strongRatio = 0.35, legacyStrum = false } = {}) {
+function refineWithChart(events, onsetList, timeline, tuning, { strumStrength = 1.25, strongRatio = 0.35 } = {}) {
   const strengths = onsetList.map((o) => o.strength).sort((a, b) => a - b);
   const median = strengths[Math.floor(strengths.length / 2)] || 1;
   const strengthAt = (t) => onsetList.find((o) => Math.abs(o.t - t) < 0.005)?.strength ?? median;
@@ -321,11 +321,7 @@ function refineWithChart(events, onsetList, timeline, tuning, { strumStrength = 
     const peeled = e.peeled ?? e.notes.map((m) => ({ m, s: 1, share: 1 / e.notes.length }));
     const first = peeled[0]?.s ?? 1;
     const strong = peeled.filter((p) => p.s >= first * strongRatio);
-    // 和音（ストローク）とみなすのは、3つ以上の音がはっきり同時に鳴り始めたときだけ。
-    // 勢いだけで判断すると、ソロで強く弾いた1音をコードの押さえ方まるごとに置き換えてしまう
-    const looksStrum = legacyStrum
-      ? strengthAt(e.t) / median >= 1.25 || (strong.length >= 3 && (peeled[0]?.share ?? 1) < 0.5) // 以前の判断（比べるため）
-      : strong.length >= 3 && (peeled[0]?.share ?? 1) < 0.5 && (strumStrength === 0 || strengthAt(e.t) / median >= strumStrength);
+    const looksStrum = strengthAt(e.t) / median >= strumStrength || (strong.length >= 3 && (peeled[0]?.share ?? 1) < 0.5);
     const seg = timeline.find((c) => e.t >= c.start - 0.05 && e.t < c.end);
     if (looksStrum && seg) {
       const parsed = parseChordName(seg.name);
@@ -353,7 +349,7 @@ function refineWithChart(events, onsetList, timeline, tuning, { strumStrength = 
  * - chords: 0.1秒ごとのコードの判定（buildChordTimeline でコード進行にまとめる）
  * - events: 弾いた瞬間ごとの、新しく鳴った音（タブ譜の材料）
  */
-export function transcribe(channels, sampleRate, { mode = 'auto', voiceFilter = true, method = 'peel', riseRatio = 1.3, minStrength = 0.2, harmonicRatio = 4, tuning = TUNINGS[0], snapStrums = true, snapMin = 3, peelOptions = {}, useChart = true, chartOptions = {}, noteWeight = null, chromaMethod = 'auto', harmonicResidual = 0.35, vocalOptions = {}, vocalPresence = 0.35, minBeats = 1, precise = true, highWeight = 0.6, useContext = true, contextOptions = {}, dropVocalNotes = true, voiceOptions = { wobbleCents: 60, useSwell: false }, attackRatio = 0, chordWindow = 16384, chordMinDuration = 0.5, onProgress = () => {} } = {}) {
+export function transcribe(channels, sampleRate, { mode = 'auto', voiceFilter = true, method = 'peel', riseRatio = 1.3, minStrength = 0.2, harmonicRatio = 4, tuning = TUNINGS[0], snapStrums = true, snapMin = 3, peelOptions = {}, useChart = true, chartOptions = {}, noteWeight = null, chromaMethod = 'auto', harmonicResidual = 0.35, vocalOptions = {}, vocalPresence = 0.35, minBeats = 1, precise = true, highWeight = 0.6, useContext = true, contextOptions = {}, dropVocalNotes = true, estimateDurations = true, stopRatio = 0.25, voiceOptions = { wobbleCents: 60, useSwell: false }, attackRatio = 0, chordWindow = 16384, chordMinDuration = 0.5, onProgress = () => {} } = {}) {
   const { guitar, mid, useSide, sideRatio } = chooseSignal(channels, mode, sampleRate);
   const duration = guitar.length / sampleRate;
 
@@ -574,6 +570,30 @@ export function transcribe(channels, sampleRate, { mode = 'auto', voiceFilter = 
       const notes = e.notes.filter((m) => !near.some((f) => Math.abs(f.cents / 100 - m) < 0.6));
       return { ...e, notes };
     }).filter((e) => e.notes.length);
+  }
+
+  // 6. 音の長さ：弾いた後、音量がどこまで下がったら止めた（ミュートした）とみなすかを、音量の変化から読み取る。
+  //    コード譜の再生で、実際の演奏と同じ長さで鳴らすため
+  if (estimateDurations) {
+    const hop = Math.round(sampleRate * 0.01);
+    const env = new Float32Array(Math.ceil(guitar.length / hop));
+    for (let i = 0; i < env.length; i++) {
+      let sum = 0, n = 0;
+      for (let j = i * hop; j < Math.min(guitar.length, (i + 1) * hop); j++) { sum += guitar[j] * guitar[j]; n++; }
+      env[i] = Math.sqrt(sum / Math.max(1, n));
+    }
+    const times = onsets;
+    events = events.map((e) => {
+      const start = Math.round(e.t / 0.01);
+      let peak = 0;
+      for (let i = start; i < Math.min(env.length, start + 8); i++) peak = Math.max(peak, env[i]);
+      const next = times.find((t) => t > e.t + 0.03) ?? duration;
+      let end = Math.round(next / 0.01);
+      for (let i = start + 3; i < Math.min(env.length, end); i++) {
+        if (env[i] < peak * stopRatio) { end = i; break; }
+      }
+      return { ...e, dur: Math.max(0.05, end * 0.01 - e.t) };
+    });
   }
 
   onProgress(1, '完了');

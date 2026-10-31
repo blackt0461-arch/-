@@ -161,7 +161,7 @@ export function formatTab(tabEvents, { perLine = 16, stringNames = ['E', 'A', 'D
  * shapeFor(コード名) → 押さえ方（[6弦…1弦] のフレット、鳴らさない弦は null）
  * 戻り値：[{ t, notes: [{ midi, string }], strumMs, gain, muteOthers }]
  */
-export function chartPlayback(events, timeline, shapeFor, tuning, { capo = 0, onsets = [] } = {}) {
+export function chartPlayback(events, timeline, shapeFor, tuning, { capo = 0, onsets = [], strumMin = 3 } = {}) {
   const strengths = onsets.map((o) => o.strength).sort((a, b) => a - b);
   const median = strengths[Math.floor(strengths.length / 2)] || 1;
   const gainAt = (t) => {
@@ -175,7 +175,7 @@ export function chartPlayback(events, timeline, shapeFor, tuning, { capo = 0, on
     const shape = seg && shapeFor(seg.name);
     if (!shape) return;
     const voicing = shape.map((f, s) => (f === null ? null : { midi: tuning.strings[s] + capo + f, string: s })).filter(Boolean);
-    const strum = Boolean(e.positions) || e.notes.length >= 3;
+    const strum = Boolean(e.positions) || e.notes.length >= strumMin;
     let notes;
     if (strum) {
       notes = voicing;
@@ -191,7 +191,7 @@ export function chartPlayback(events, timeline, shapeFor, tuning, { capo = 0, on
       });
       notes = [...picked.values()];
     }
-    if (notes.length) items.push({ t: e.t, notes, strumMs: strum ? 18 : 0, gain: gainAt(e.t), muteOthers: strum });
+    if (notes.length) items.push({ t: e.t, notes, strumMs: strum ? 18 : 0, gain: gainAt(e.t), muteOthers: strum, ...(e.dur ? { dur: e.dur } : {}) });
   });
   return items;
 }

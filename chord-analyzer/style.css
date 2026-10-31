@@ -616,3 +616,16 @@ select, input[type="text"] {
 .level-meter { height: 8px; border-radius: 4px; background: var(--surface-2); overflow: hidden; }
 .level-meter span { display: block; height: 100%; width: 0; background: var(--good); transition: width 80ms linear; }
 .mic-distance .hint { margin: 0; font-size: 0.78rem; }
+
+/* ---------- シークバーに合わせたコードの帯 ---------- */
+.chord-strip-wrap { margin-top: -4px; }
+.chord-strip { overflow-x: auto; background: var(--surface); border-radius: 10px; cursor: pointer; scrollbar-width: thin; }
+.strip-inner { position: relative; height: 64px; }
+.strip-seg { position: absolute; top: 16px; height: 30px; border-radius: 6px; background: var(--surface-2); display: flex; align-items: center; padding: 0 6px; overflow: hidden; white-space: nowrap; font-size: 0.85rem; }
+.strip-seg.alt { background: #34344a; }
+.strip-seg.active { background: var(--accent); color: var(--accent-text); }
+.strip-tick { position: absolute; bottom: 4px; width: 1px; height: 8px; background: var(--muted); }
+.strip-tick.strum { height: 12px; width: 2px; background: var(--text); }
+.strip-time { position: absolute; top: 1px; font-size: 0.65rem; color: var(--muted); transform: translateX(2px); }
+.strip-head { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--error); box-shadow: 0 0 6px var(--error); pointer-events: none; }
+.strip-hint { margin: 0; font-size: 0.75rem; }

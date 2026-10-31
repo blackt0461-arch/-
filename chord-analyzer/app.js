@@ -458,10 +458,46 @@ function voicingFor(name) {
   return voicingCache.get(key);
 }
 
+// ---- シークバーに合わせたコードの帯 ----
+const chordStrip = document.getElementById('chord-strip');
+const STRIP_PX_PER_SEC = 36;
+let stripDuration = 0;
+
+function renderStrip(duration) {
+  stripDuration = duration;
+  const width = Math.max(1, duration) * STRIP_PX_PER_SEC;
+  const segs = analysis.timeline.map((seg, i) => `<div class="strip-seg${i % 2 ? ' alt' : ''}" style="left:${seg.start * STRIP_PX_PER_SEC}px;width:${Math.max(2, (seg.end - seg.start) * STRIP_PX_PER_SEC - 2)}px" data-index="${i}"><b>${escapeHtml(seg.name)}</b></div>`).join('');
+  const ticks = (analysis.events ?? []).map((e) => `<span class="strip-tick${e.positions || e.notes.length > 2 ? ' strum' : ''}" style="left:${e.t * STRIP_PX_PER_SEC}px"></span>`).join('');
+  const marks = Array.from({ length: Math.floor(duration / 5) + 1 }, (_, k) => `<span class="strip-time" style="left:${k * 5 * STRIP_PX_PER_SEC}px">${formatTime(k * 5)}</span>`).join('');
+  chordStrip.innerHTML = `<div class="strip-inner" style="width:${width}px">${marks}${segs}${ticks}<span class="strip-head"></span></div>`;
+}
+
+function updateStrip(t) {
+  const head = chordStrip.querySelector('.strip-head');
+  if (!head) return;
+  const x = t * STRIP_PX_PER_SEC;
+  head.style.left = `${x}px`;
+  chordStrip.querySelectorAll('.strip-seg').forEach((el) => {
+    const seg = analysis.timeline[Number(el.dataset.index)];
+    el.classList.toggle('active', t >= seg.start && t < seg.end);
+  });
+  // 再生位置がいつも見えるように、帯をスクロールする（再生位置を左から3分の1あたりに）
+  const target = x - chordStrip.clientWidth / 3;
+  if (Math.abs(chordStrip.scrollLeft - target) > chordStrip.clientWidth / 3) chordStrip.scrollLeft = Math.max(0, target);
+}
+
+chordStrip.addEventListener('click', (e) => {
+  const inner = chordStrip.querySelector('.strip-inner');
+  if (!inner) return;
+  const x = e.clientX - inner.getBoundingClientRect().left;
+  playFrom(Math.max(0, Math.min(stripDuration, x / STRIP_PX_PER_SEC)) + 0.2);
+});
+
 // 再生に合わせて、今のコードとタブ譜の段を光らせる
 function highlightNow(time) {
   if (!analysis) return;
   const t = typeof time === 'number' ? time : songMedia.currentTime;
+  updateStrip(t);
   const index = analysis.timeline.findIndex((seg) => t >= seg.start && t <= seg.end + 0.3);
   songNow.textContent = index >= 0 ? analysis.timeline[index].name : '―';
   songChords.querySelectorAll('.song-chord').forEach((el) => el.classList.toggle('active', Number(el.dataset.index) === index));
@@ -578,6 +614,7 @@ function renderKey() {
     capoSelect.dispatchEvent(new Event('change'));
     analysis.tabBlocks = buildTabBlocks(analysis.events);
     renderAnalysis();
+    renderStrip(duration);
     renderKey();
   });
 }
@@ -622,6 +659,7 @@ songFile.addEventListener('change', async () => {
       : result.chartInfo?.method === '歌を除く' ? '歌のメロディを取り除いて解析しました' : 'ギターの音をそのまま解析しました（歌は見つかりませんでした）';
     songInfo.textContent = `${file.name}（${formatTime(duration)}）・テンポ ${Math.round(result.bpm || 0)}・${how}`;
     renderAnalysis();
+    renderStrip(duration);
     renderKey();
     loop = { a: null, b: null };
     renderLoop();
