@@ -70,7 +70,8 @@ if (isMainThread) {
         // 答え＝楽譜のコードの音 ＋ その拍で実際に弾き始めた音（セブンスなどの足し音を弾いていれば、それも正しい音）。
         // 弾いていないのに残っている音（前のコードの響き・倍音）は答えに入らない
         let target = c ? pcs(c.name) : null;
-        if (target && job.notes) {
+        // （LABEL=played のときだけ。試したところ本番テストでは楽譜のコードの音だけのほうが良かったので、ふだんは使わない）
+        if (target && job.notes && process.env.LABEL === 'played') {
           const played = job.notes.filter((n) => n.t >= b - 0.05 && n.t < end - 0.05).map((n) => n.midi % 12);
           target = [...new Set([...target, ...played])];
         }

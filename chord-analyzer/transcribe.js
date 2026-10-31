@@ -377,7 +377,7 @@ function refineWithChart(events, onsetList, timeline, tuning, { strumStrength = 
  * - chords: 0.1秒ごとのコードの判定（buildChordTimeline でコード進行にまとめる）
  * - events: 弾いた瞬間ごとの、新しく鳴った音（タブ譜の材料）
  */
-function transcribeOnce(channels, sampleRate, { mode = 'auto', voiceFilter = true, method = 'peel', riseRatio = 1.3, minStrength = 0.2, harmonicRatio = 4, tuning = TUNINGS[0], snapStrums = true, snapMin = 3, peelOptions = {}, useChart = true, chartOptions = {}, noteWeight = null, chromaMethod = 'auto', harmonicResidual = 0.35, vocalOptions = {}, vocalPresence = 0.35, minBeats = 1, precise = true, highWeight = 0.6, useContext = true, contextOptions = {}, dropVocalNotes = true, estimateDurations = true, stopRatio = 0.25, voiceOptions = { wobbleCents: 60, useSwell: false }, attackRatio = 0, chordWindow = 16384, chordMinDuration = 0.5, segmentChroma = 0, segmentBass = false, prevSubtract = 0, attackChroma = 0, changeGate = 0, fuseAttack = 0, fuseSubtract = 0, changeBonus = 0, exportFeatures = false, learned = 0, onsetOptions = {}, onProgress = () => {} } = {}) {
+function transcribeOnce(channels, sampleRate, { mode = 'auto', voiceFilter = true, method = 'peel', riseRatio = 1.3, minStrength = 0.2, harmonicRatio = 4, tuning = TUNINGS[0], snapStrums = true, snapMin = 3, peelOptions = {}, useChart = true, chartOptions = {}, noteWeight = null, chromaMethod = 'auto', harmonicResidual = 0.35, vocalOptions = {}, vocalPresence = 0.35, minBeats = 1, precise = true, highWeight = 0.6, useContext = true, contextOptions = {}, dropVocalNotes = true, estimateDurations = true, stopRatio = 0.25, voiceOptions = { wobbleCents: 60, useSwell: false }, attackRatio = 0, chordWindow = 16384, chordMinDuration = 0.5, segmentChroma = 0, segmentBass = false, prevSubtract = 0, attackChroma = 0, changeGate = 0, fuseAttack = 0, fuseSubtract = 0, changeBonus = 0, exportFeatures = false, learned = 0, learnedConfidence = false, onsetOptions = {}, onProgress = () => {} } = {}) {
   const { guitar, mid, useSide, sideRatio } = chooseSignal(channels, mode, sampleRate);
   const duration = guitar.length / sampleRate;
 
@@ -606,7 +606,10 @@ function transcribeOnce(channels, sampleRate, { mode = 'auto', voiceFilter = tru
       grid.chromas = grid.chromas.map((c, k) => {
         const tot = c.reduce((x, y) => x + y, 0) || 1;
         const pt = probs[k].reduce((x, y) => x + y, 0) || 1;
-        return orig[k].map((v, i) => ((1 - Math.min(1, learned)) * v + (learned * probs[k][i]) / pt) * tot);
+        // 判定器の自信（確率が 0 か 1 にどれだけ近いか）が低い拍では、今までの聞き方を優先する
+        const conf = learnedConfidence ? probs[k].reduce((a, q) => a + Math.abs(2 * q - 1), 0) / 12 : 1;
+        const w = Math.min(1, learned) * (learnedConfidence ? conf * conf : 1);
+        return orig[k].map((v, i) => ((1 - w) * v + (w * probs[k][i]) / pt) * tot);
       });
     }
     if (exportFeatures) grid.features = { beats: grid.beats, chromas: orig, attacks, basses: grid.basses, downbeat: grid.downbeat };
