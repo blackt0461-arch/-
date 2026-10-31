@@ -164,7 +164,7 @@ function looksLikeVoice(signal, sampleRate, midi, start, length, { wobbleCents =
  * 3. 合計がいちばん大きい音を確定し、その音の基音と倍音を全部取り除く。これを繰り返す
  * 倍音を取り除いてから次を探すので、倍音（1オクターブ上など）を別の音と間違えにくい。
  */
-export function peelNotes(post, pre, binHz, { maxNotes = 6, stopRatio = 0.15, decay = 0.9, riseMode = 'sub', riseRatio = 1.5, floorRatio = 0.05 } = {}) {
+export function peelNotes(post, pre, binHz, { maxNotes = 6, stopRatio = 0.15, decay = 0.9, riseMode = 'sub', riseRatio = 1.5, floorRatio = 0.05, oddRatio = 0 } = {}) {
   const d = new Float32Array(post.length);
   for (let k = 0; k < post.length; k++) {
     // 'ratio'：直前より riseRatio 倍以上強くなった周波数だけを「新しく鳴った」とみなす（鳴り続けて弱まっている音を確実に除く）
@@ -200,6 +200,12 @@ export function peelNotes(post, pre, binHz, { maxNotes = 6, stopRatio = 0.15, de
     }
     // 基音（または2倍音）がはっきりしない候補は、別の音の倍音の寄せ集めなので選ばない
     if (amp(m, 1) < floor * 2 && amp(m, 2) < floor * 2) return 0;
+    // 1オクターブ下の音との取り違え防止：ある音の倍音は、1オクターブ下の音の偶数番目の倍音と重なる。
+    // 本当に低い音なら奇数番目の倍音（1・3・5倍）も鳴るので、それが偶数番目に比べて弱ければ、この音ではない
+    if (oddRatio > 0) {
+      const odd = amp(m, 1) + amp(m, 3) + amp(m, 5), even = amp(m, 2) + amp(m, 4) + amp(m, 6);
+      if (odd < even * oddRatio) return 0;
+    }
     return sum * Math.min(1, present / 3);
   };
   const found = [];
@@ -377,7 +383,7 @@ function refineWithChart(events, onsetList, timeline, tuning, { strumStrength = 
  * - chords: 0.1秒ごとのコードの判定（buildChordTimeline でコード進行にまとめる）
  * - events: 弾いた瞬間ごとの、新しく鳴った音（タブ譜の材料）
  */
-function transcribeOnce(channels, sampleRate, { mode = 'auto', voiceFilter = true, method = 'peel', riseRatio = 1.3, minStrength = 0.2, harmonicRatio = 4, tuning = TUNINGS[0], snapStrums = true, snapMin = 3, peelOptions = {}, useChart = true, chartOptions = {}, noteWeight = null, chromaMethod = 'auto', harmonicResidual = 0.35, vocalOptions = {}, vocalPresence = 0.35, minBeats = 1, precise = true, highWeight = 0.6, useContext = true, contextOptions = {}, dropVocalNotes = true, estimateDurations = true, stopRatio = 0.25, voiceOptions = { wobbleCents: 60, useSwell: false }, attackRatio = 0, chordWindow = 16384, chordMinDuration = 0.5, segmentChroma = 0, segmentBass = false, prevSubtract = 0, attackChroma = 0, changeGate = 0, fuseAttack = 0, fuseSubtract = 0, changeBonus = 0, exportFeatures = false, learned = 0, learnedConfidence = false, onsetOptions = {}, onProgress = () => {} } = {}) {
+function transcribeOnce(channels, sampleRate, { mode = 'auto', voiceFilter = true, method = 'peel', riseRatio = 1.3, minStrength = 0.2, harmonicRatio = 4, tuning = TUNINGS[0], snapStrums = true, snapMin = 3, peelOptions = {}, useChart = true, chartOptions = {}, noteWeight = null, chromaMethod = 'auto', harmonicResidual = 0.35, vocalOptions = {}, vocalPresence = 0.35, minBeats = 1, precise = true, highWeight = 0.6, useContext = true, contextOptions = {}, dropVocalNotes = true, estimateDurations = true, stopRatio = 0.25, voiceOptions = { wobbleCents: 60, useSwell: false }, attackRatio = 0, chordWindow = 16384, chordMinDuration = 0.5, segmentChroma = 0, segmentBass = false, prevSubtract = 0, attackChroma = 0, changeGate = 0, fuseAttack = 0, fuseSubtract = 0, changeBonus = 0, exportFeatures = false, learned = 0, learnedConfidence = false, onsetOptions = {}, noteOnsetOptions = null, onProgress = () => {} } = {}) {
   const { guitar, mid, useSide, sideRatio } = chooseSignal(channels, mode, sampleRate);
   const duration = guitar.length / sampleRate;
 
@@ -424,8 +430,11 @@ function transcribeOnce(channels, sampleRate, { mode = 'auto', voiceFilter = tru
 
   // 2. 弾いた瞬間を探す
   onProgress(0.4, '弾いた瞬間を探しています');
+  // 拍・コード用の「弾いた瞬間」と、1音ずつのタブ譜用の「弾いた瞬間」は別の設定で探せる
+  // （細かく時刻を合わせると1音ずつは正確になるが、拍の推定が変わってコード譜が崩れることがあるため）
   const onsetList = detectOnsetsDetailed(guitar, sampleRate, onsetOptions);
-  const onsets = onsetList.map((o) => o.t);
+  const noteOnsetList = noteOnsetOptions ? detectOnsetsDetailed(guitar, sampleRate, noteOnsetOptions) : onsetList;
+  const onsets = noteOnsetList.map((o) => o.t);
 
   // 3. 弾いた瞬間ごとに、直前より強くなった音（＝新しく弾いた音）を拾う
   let events = [];
@@ -671,7 +680,7 @@ function transcribeOnce(channels, sampleRate, { mode = 'auto', voiceFilter = tru
   }
 
   // 5. コード譜を手がかりに、1音ずつのタブ譜を整える
-  if (useContext && grid) events = refineWithChart(events, onsetList, timeline, tuning, contextOptions);
+  if (useContext && grid) events = refineWithChart(events, noteOnsetList, timeline, tuning, contextOptions);
   // 歌と分けられない曲：歌のメロディと同じ高さ・同じころに鳴り始めた単音は、歌とみなしてタブ譜から除く
   // （歌が入っていると判断した曲だけ。ソロのギターもチョーキングやビブラートで音程が揺れるので、歌の無い曲で行うとメロディを消してしまう）
   if (!useSide && vocalFrames && dropVocalNotes && chartInfo?.method === '歌を除く') {
@@ -708,7 +717,7 @@ function transcribeOnce(channels, sampleRate, { mode = 'auto', voiceFilter = tru
   }
 
   onProgress(1, '完了');
-  return { duration, useSide, sideRatio, chordFrames, timeline, events, bpm, beats, downbeat, chartInfo, onsets: onsetList.map(({ t, strength }) => ({ t, strength })) };
+  return { duration, useSide, sideRatio, chordFrames, timeline, events, bpm, beats, downbeat, chartInfo, onsets: noteOnsetList.map(({ t, strength }) => ({ t, strength })) };
 }
 
 /**
