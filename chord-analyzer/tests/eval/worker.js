@@ -165,6 +165,27 @@ function rhythmScore(r, truthNotes, playbackOptions = {}) {
   return { rhythm: precision + recall ? (2 * precision * recall) / (precision + recall) : 0, strumKind: hit ? kindOk / hit : null, duration: durN ? durOk / durN : null };
 }
 
+/**
+ * 「弾いた」と判断した瞬間（帯の白い線）の正しさ。正解の音を、ほぼ同時（0.04秒以内）に弾いたかたまりにまとめて、
+ * 弾いた瞬間の正解とする。0.05秒以内に線があれば見つけられたとする（F1）。ずれは見つけたものの中央値（ミリ秒）
+ */
+function onsetScore(onsets, truthNotes, tol = 0.05) {
+  const times = [...truthNotes].map((n) => n.t).sort((a, b) => a - b);
+  const strokes = [];
+  times.forEach((t) => { if (!strokes.length || t - strokes[strokes.length - 1] > 0.04) strokes.push(t); });
+  const pred = onsets.map((o) => o.t);
+  const used = new Set();
+  const errs = [];
+  strokes.forEach((t) => {
+    let best = -1;
+    pred.forEach((p, k) => { if (!used.has(k) && Math.abs(p - t) <= tol && (best < 0 || Math.abs(p - t) < Math.abs(pred[best] - t))) best = k; });
+    if (best >= 0) { used.add(best); errs.push(Math.abs(pred[best] - t)); }
+  });
+  const precision = pred.length ? errs.length / pred.length : 0, recall = strokes.length ? errs.length / strokes.length : 0;
+  errs.sort((a, b) => a - b);
+  return { onsetF1: precision + recall ? (2 * precision * recall) / (precision + recall) : 0, onsetMs: errs.length ? errs[Math.floor(errs.length / 2)] * 1000 : null, onsetPrecision: precision, onsetRecall: recall };
+}
+
 parentPort.on('message', ({ job, options }) => {
   try {
     let audio, truth;
@@ -181,6 +202,7 @@ parentPort.on('message', ({ job, options }) => {
     const duration = truth.duration ?? audio.channels[0].length / audio.sampleRate;
     const result = { id: job.id, set: job.set, category: job.category, seconds: (Date.now() - t0) / 1000, ...(truth.chords ? chordScore(r.timeline, truth.chords, duration, job.offset ?? 0, job.kind === 'guitarset') : {}) };
     if (r.bpm && r.timeline.length) { const segs = r.timeline.filter((x) => x.end - x.start > 0); result.chordBeats = segs.reduce((a, x) => a + (x.end - x.start), 0) / segs.length / (60 / r.bpm); }
+    if (truth.notes) Object.assign(result, onsetScore(r.onsets, truth.notes));
     if (truth.notes) { result.notes = noteScore(r.events, truth.notes); const sh = shortNoteScore(r.events, truth.notes); if (sh !== null) result.shortNotes = sh; }
     if (truth.notes && !job.solo) Object.assign(result, rhythmScore(r, truth.notes, options.playback));
     if (truth.tempo) {

@@ -58,7 +58,7 @@ export function detectOnsets(signal, sampleRate, options = {}) {
 }
 
 /** 弾いた瞬間と、その勢い（strength：スペクトルフラックスの大きさ）を返す */
-export function detectOnsetsDetailed(signal, sampleRate, { frame = 2048, hop = 512, minGap = 0.06 } = {}) {
+export function detectOnsetsDetailed(signal, sampleRate, { frame = 2048, hop = 512, minGap = 0.06, superflux = false, refine = false, thresholdMedian = 1.4, thresholdMean = 0.4 } = {}) {
   const binHz = sampleRate / frame;
   const lo = Math.floor(80 / binHz), hi = Math.ceil(5000 / binHz);
   const flux = [];
@@ -67,15 +67,41 @@ export function detectOnsetsDetailed(signal, sampleRate, { frame = 2048, hop = 5
   for (let start = 0; start + frame <= signal.length; start += hop) {
     const mags = magnitudeSpectrum(signal, start, frame);
     const cur = new Float32Array(hi - lo);
+    for (let k = lo; k < hi; k++) cur[k - lo] = Math.log1p(1000 * mags[k]);
     let f = 0;
-    for (let k = lo; k < hi; k++) {
-      cur[k - lo] = Math.log1p(1000 * mags[k]);
-      if (prev) f += Math.max(0, cur[k - lo] - prev[k - lo]);
+    if (superflux) {
+      // 揺れに強い探し方：2つ前の区切りと比べ、比べる側は隣の周波数も含めた最大値にする。
+      // 歌やチョーキングで音程が少し揺れただけでは「強くなった」と数えない
+      const ref = frames.length >= 2 ? frames[frames.length - 2] : prev;
+      if (ref) for (let k = 0; k < cur.length; k++) {
+        const m = Math.max(ref[k], k > 0 ? ref[k - 1] : 0, k + 1 < ref.length ? ref[k + 1] : 0);
+        f += Math.max(0, cur[k] - m);
+      }
+    } else if (prev) {
+      for (let k = 0; k < cur.length; k++) f += Math.max(0, cur[k] - prev[k]);
     }
     flux.push(f);
     frames.push(cur);
     prev = cur;
   }
+  // 時刻の微調整：見つけた瞬間の前後を 0.002 秒きざみで見直し、高い音（弦をはじいた「カッ」という音）の強さが
+  // いちばん急に増えたところを鳴り始めとする
+  let hp = null;
+  const refineTime = (t) => {
+    if (!hp) {
+      hp = new Float32Array(signal.length);
+      for (let i = 1; i < signal.length; i++) hp[i] = 0.95 * (hp[i - 1] + signal[i] - signal[i - 1]);
+    }
+    const step = Math.round(sampleRate * 0.002), win = Math.round(sampleRate * 0.004);
+    const energy = (c) => { let e = 0; for (let i = Math.max(0, c - win); i < Math.min(hp.length, c + win); i++) e += hp[i] * hp[i]; return Math.log(e + 1e-9); };
+    const center = Math.round(t * sampleRate);
+    let best = t, bestRise = -Infinity;
+    for (let c = center - Math.round(sampleRate * 0.035); c <= center + Math.round(sampleRate * 0.025); c += step) {
+      const rise = energy(c + win) - energy(c - win);
+      if (rise > bestRise) { bestRise = rise; best = c / sampleRate; }
+    }
+    return best;
+  };
   // 広がり：弾いた直前と、その後約0.07秒の間でいちばん強くなったときを比べ、はっきり強くなった周波数の数。
   // 1音なら倍音の位置だけ、和音（ストローク）なら多くの周波数が一斉に強くなる。音量にはあまり左右されない
   const spread = (i) => {
@@ -95,9 +121,10 @@ export function detectOnsetsDetailed(signal, sampleRate, { frame = 2048, hop = 5
     const local = flux.slice(Math.max(0, i - w * 2), i + w * 2 + 1).sort((a, b) => a - b);
     const median = local[Math.floor(local.length / 2)];
     const isPeak = flux.slice(Math.max(0, i - 3), i + 4).every((v) => v <= flux[i]);
-    if (!isPeak || flux[i] < median * 1.4 + mean * 0.4) continue;
+    if (!isPeak || flux[i] < median * thresholdMedian + mean * thresholdMean) continue;
     // フレームの真ん中あたりが鳴り始め
-    const t = (i * hop + frame / 2) / sampleRate;
+    let t = (i * hop + frame / 2) / sampleRate;
+    if (refine) t = refineTime(t);
     if (onsets.length && t - onsets[onsets.length - 1].t < minGap) continue;
     // 勢い：鳴り始めから約0.07秒の間のフラックスの合計（和音は弦が少しずつずれて鳴るので、短い区間で足し合わせる）
     let strength = 0;
@@ -350,7 +377,7 @@ function refineWithChart(events, onsetList, timeline, tuning, { strumStrength = 
  * - chords: 0.1秒ごとのコードの判定（buildChordTimeline でコード進行にまとめる）
  * - events: 弾いた瞬間ごとの、新しく鳴った音（タブ譜の材料）
  */
-function transcribeOnce(channels, sampleRate, { mode = 'auto', voiceFilter = true, method = 'peel', riseRatio = 1.3, minStrength = 0.2, harmonicRatio = 4, tuning = TUNINGS[0], snapStrums = true, snapMin = 3, peelOptions = {}, useChart = true, chartOptions = {}, noteWeight = null, chromaMethod = 'auto', harmonicResidual = 0.35, vocalOptions = {}, vocalPresence = 0.35, minBeats = 1, precise = true, highWeight = 0.6, useContext = true, contextOptions = {}, dropVocalNotes = true, estimateDurations = true, stopRatio = 0.25, voiceOptions = { wobbleCents: 60, useSwell: false }, attackRatio = 0, chordWindow = 16384, chordMinDuration = 0.5, segmentChroma = 0, segmentBass = false, prevSubtract = 0, attackChroma = 0, changeGate = 0, fuseAttack = 0, fuseSubtract = 0, changeBonus = 0, exportFeatures = false, learned = 0, onProgress = () => {} } = {}) {
+function transcribeOnce(channels, sampleRate, { mode = 'auto', voiceFilter = true, method = 'peel', riseRatio = 1.3, minStrength = 0.2, harmonicRatio = 4, tuning = TUNINGS[0], snapStrums = true, snapMin = 3, peelOptions = {}, useChart = true, chartOptions = {}, noteWeight = null, chromaMethod = 'auto', harmonicResidual = 0.35, vocalOptions = {}, vocalPresence = 0.35, minBeats = 1, precise = true, highWeight = 0.6, useContext = true, contextOptions = {}, dropVocalNotes = true, estimateDurations = true, stopRatio = 0.25, voiceOptions = { wobbleCents: 60, useSwell: false }, attackRatio = 0, chordWindow = 16384, chordMinDuration = 0.5, segmentChroma = 0, segmentBass = false, prevSubtract = 0, attackChroma = 0, changeGate = 0, fuseAttack = 0, fuseSubtract = 0, changeBonus = 0, exportFeatures = false, learned = 0, onsetOptions = {}, onProgress = () => {} } = {}) {
   const { guitar, mid, useSide, sideRatio } = chooseSignal(channels, mode, sampleRate);
   const duration = guitar.length / sampleRate;
 
@@ -397,7 +424,7 @@ function transcribeOnce(channels, sampleRate, { mode = 'auto', voiceFilter = tru
 
   // 2. 弾いた瞬間を探す
   onProgress(0.4, '弾いた瞬間を探しています');
-  const onsetList = detectOnsetsDetailed(guitar, sampleRate);
+  const onsetList = detectOnsetsDetailed(guitar, sampleRate, onsetOptions);
   const onsets = onsetList.map((o) => o.t);
 
   // 3. 弾いた瞬間ごとに、直前より強くなった音（＝新しく弾いた音）を拾う
