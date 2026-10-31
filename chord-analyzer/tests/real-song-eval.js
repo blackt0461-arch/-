@@ -14,9 +14,26 @@ export function loadAudio(path, sampleRate = 44100) {
 }
 
 // 同じコードかどうか（A# と B♭ などの書き方の違い、分数コードのベース音は気にしない）
-const same = (a, b) => {
-  const pa = a && parseChordName(a.split('/')[0]), pb = b && parseChordName(b.split('/')[0]);
-  return Boolean(pa && pb && pa.root === pb.root && pa.type.suffix === pb.type.suffix);
+// dim と dim7 は同じものとして扱う（コード譜では「dim」と書いて dim7 を弾くことが多い）
+const kind = (suffix) => (suffix === 'dim7' ? 'dim' : suffix);
+// 鳴っている音の組み合わせ（分数コードのベース音も含む）。Em/D と Em7 は同じ音
+const pitchSet = (name) => {
+  const p = parseChordName(name);
+  if (!p) return null;
+  const intervals = p.type.suffix === 'dim' ? [0, 3, 6, 9] : p.type.intervals; // dim は dim7 として扱う
+  const set = new Set(intervals.map((i) => (p.root + i) % 12));
+  set.add(p.bass);
+  return [...set].sort((x, y) => x - y).join(',');
+};
+// 正解：名前（ルートと種類）が同じ、または鳴っている音の組み合わせがまったく同じ
+export const same = (a, b) => {
+  if (!a || !b) return false;
+  const pa = parseChordName(a.split('/')[0]), pb = parseChordName(b.split('/')[0]);
+  if (pa && pb && pa.root === pb.root && kind(pa.type.suffix) === kind(pb.type.suffix)) return true;
+  // 答えが分数コードでないときは、ベース音を含めずに比べる（ベース音を書いていないだけのことが多い）
+  const sa = a.includes('/') && b.includes('/') ? pitchSet(a) : pitchSet(a.split('/')[0]);
+  const sb = b.includes('/') ? pitchSet(b) : pitchSet(b.split('/')[0]);
+  return Boolean(sa && sb && (sa === sb || pitchSet(a) === pitchSet(b)));
 };
 
 export function evaluate(timeline, truth, duration) {

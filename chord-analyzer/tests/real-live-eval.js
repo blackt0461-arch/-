@@ -1,6 +1,6 @@
 // 本物の曲をマイクで聞いた場合の答え合わせ： node tests/real-live-eval.js 音声.f32 正解.json '{トラッカーの設定}'
 import fs from 'node:fs';
-import { loadAudio } from './real-song-eval.js';
+import { loadAudio, same } from './real-song-eval.js';
 import { LiveChordTracker } from '../live.js';
 import { magnitudeSpectrum } from '../dsp.js';
 import { parseChordName } from '../chord-engine.js';
@@ -10,7 +10,6 @@ export function evaluateLive(channels, sr, truth, trackerOpts = {}, { fps = 15, 
   for (let i = 0; i < mix.length; i++) mix[i] = (channels[0][i] + channels[1][i]) / 2;
   const dur = mix.length / sr;
   const segs = truth.map(([s, n], i) => ({ start: s, end: i + 1 < truth.length ? truth[i + 1][0] : dur, name: n }));
-  const same = (a, b) => { const pa = a && parseChordName(a.split('/')[0]), pb = parseChordName(b); return Boolean(pa && pb && pa.root === pb.root && pa.type.suffix === pb.type.suffix); };
   const tracker = new LiveChordTracker(sr, fft, trackerOpts);
   const hop = Math.round(sr / fps);
   const shown = [];

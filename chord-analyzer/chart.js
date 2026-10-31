@@ -164,10 +164,11 @@ export function scoreStates(c, bass, { rootBonus = 0.1, foreignBassPenalty = 0.1
   });
 }
 
-export function decodeChords(beatChromas, downbeat, { beatBass = [], changePenalty = 0.12, offBarPenalty = 0.25, halfBarPenalty = 0.08, ...scoreOptions } = {}) {
+export function decodeChords(beatChromas, downbeat, { beatBass = [], changePenalty = 0.08, offBarPenalty = 0.06, halfBarPenalty = 0.02, compress = 1, ...scoreOptions } = {}) {
   const n = beatChromas.length;
   if (!n) return [];
-  const emit = beatChromas.map((c, b) => scoreStates(c, beatBass[b], scoreOptions));
+  // compress < 1 なら、音の強さの差を縮める（小さく鳴っている 7th の音などにも気づけるように）
+  const emit = beatChromas.map((c, b) => scoreStates(compress === 1 ? c : c.map((v) => Math.max(0, v) ** compress), beatBass[b], scoreOptions));
   let score = emit[0].slice();
   const back = [];
   for (let b = 1; b < n; b++) {
@@ -198,7 +199,7 @@ export function decodeChords(beatChromas, downbeat, { beatBass = [], changePenal
  * （allowSlash が false なら分数コードにしない。ベース音を信用できない録音のため）。
  * beatBass：拍ごとのいちばん低い音（12音のどれか、または null）
  */
-export function buildChart(beats, states, beatBass, period, { allowSlash = true } = {}) {
+export function buildChart(beats, states, beatBass, period, { allowSlash = true, minBeats = 1.5 } = {}) {
   const segments = [];
   states.forEach((st, b) => {
     const start = beats[b];
@@ -206,10 +207,10 @@ export function buildChart(beats, states, beatBass, period, { allowSlash = true 
     const last = segments[segments.length - 1];
     if (last && last.state === st) { last.end = end; last.basses.push(beatBass[b]); } else segments.push({ state: st, start, end, basses: [beatBass[b]] });
   });
-  // 1.5拍より短いコードは、読みにくいうえに誤判定のことが多いので、前（最初なら次）のコードにまとめる
+  // minBeats 拍より短いコードは、誤判定のことが多いので、前（最初なら次）のコードにまとめる
   for (let i = 0; i < segments.length; i++) {
     const seg = segments[i];
-    if (segments.length < 2 || seg.end - seg.start >= period * 1.5) continue;
+    if (segments.length < 2 || seg.end - seg.start >= period * minBeats - 0.05) continue;
     const target = i > 0 ? segments[i - 1] : segments[i + 1];
     target.start = Math.min(target.start, seg.start);
     target.end = Math.max(target.end, seg.end);
@@ -230,7 +231,14 @@ export function buildChart(beats, states, beatBass, period, { allowSlash = true 
     const counts = new Map();
     basses.filter((x) => x !== null && x !== undefined).forEach((x) => counts.set(x, (counts.get(x) || 0) + 1));
     const bass = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
-    const slash = allowSlash && bass !== undefined && bass !== state.root && state.template[bass] ? `/${NOTE_NAMES[bass]}` : '';
-    return { name: state.name + slash, root: state.root, suffix: state.type.suffix, start, end };
+    // 構成音がまったく同じで、ベースの音をルートにできる別の名前があれば、そちらにする
+    // （Em6 のベースが C# なら C#m7♭5、Gdim7 のベースが A# なら A#dim7。一般的なコードの名付け方）
+    let named = state;
+    if (allowSlash && bass !== undefined && bass !== state.root && state.template[bass]) {
+      const same = STATES.find((st) => st.root === bass && st.template.every((v, i) => v === state.template[i]));
+      if (same) named = same;
+    }
+    const slash = allowSlash && bass !== undefined && bass !== named.root && named.template[bass] ? `/${NOTE_NAMES[bass]}` : '';
+    return { name: named.name + slash, root: named.root, suffix: named.type.suffix, start, end };
   });
 }

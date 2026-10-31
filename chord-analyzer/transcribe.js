@@ -26,7 +26,7 @@ function rms(x) {
  * 「左 − 右」（サイド）を取ると真ん中の音が消えてギターが残る。
  * サイドがほとんど無い曲（弾き語りなど全部が真ん中）は、普通に左右を混ぜた音を使う。
  */
-export function chooseSignal(channels, mode = 'auto') {
+export function chooseSignal(channels, mode = 'auto', sampleRate = 44100) {
   const [l, r = l] = channels;
   const mid = new Float32Array(l.length);
   const side = new Float32Array(l.length);
@@ -35,8 +35,16 @@ export function chooseSignal(channels, mode = 'auto') {
     side[i] = (l[i] - r[i]) / 2;
   }
   const sideRatio = rms(side) / (rms(mid) || 1);
-  const useSide = mode === 'side' || (mode === 'auto' && sideRatio > 0.2);
-  return { guitar: useSide ? side : mid, mid, useSide, sideRatio };
+  // 左右の差は「真ん中に歌があり、ギターが左右に振り分けられている」曲にだけ役立つ。
+  // ギター1本をマイク2本で録った曲で使うと、ギターの音そのものが削れてしまう
+  let vocalShare = null;
+  let useSide = mode === 'side';
+  if (mode === 'auto' && sideRatio > 0.2) {
+    const frames = removeVocalFrames(mid, sampleRate);
+    vocalShare = frames.filter((f) => f.vocal).length / Math.max(1, frames.length);
+    useSide = vocalShare >= 0.35;
+  }
+  return { guitar: useSide ? side : mid, mid, useSide, sideRatio, vocalShare };
 }
 
 /**
@@ -341,15 +349,15 @@ function refineWithChart(events, onsetList, timeline, tuning, { strumStrength = 
  * - chords: 0.1秒ごとのコードの判定（buildChordTimeline でコード進行にまとめる）
  * - events: 弾いた瞬間ごとの、新しく鳴った音（タブ譜の材料）
  */
-export function transcribe(channels, sampleRate, { mode = 'auto', voiceFilter = true, method = 'peel', riseRatio = 1.3, minStrength = 0.2, harmonicRatio = 4, tuning = TUNINGS[0], snapStrums = true, snapMin = 3, peelOptions = {}, useChart = true, chartOptions = {}, noteWeight = null, chromaMethod = 'auto', harmonicResidual = 0.35, vocalOptions = {}, vocalPresence = 0.35, useContext = true, contextOptions = {}, dropVocalNotes = true, voiceOptions = { wobbleCents: 60, useSwell: false }, attackRatio = 0, chordWindow = 16384, chordMinDuration = 0.5, onProgress = () => {} } = {}) {
-  const { guitar, mid, useSide, sideRatio } = chooseSignal(channels, mode);
+export function transcribe(channels, sampleRate, { mode = 'auto', voiceFilter = true, method = 'peel', riseRatio = 1.3, minStrength = 0.2, harmonicRatio = 4, tuning = TUNINGS[0], snapStrums = true, snapMin = 3, peelOptions = {}, useChart = true, chartOptions = {}, noteWeight = null, chromaMethod = 'auto', harmonicResidual = 0.35, vocalOptions = {}, vocalPresence = 0.35, minBeats = 1, precise = true, highWeight = 0.6, useContext = true, contextOptions = {}, dropVocalNotes = true, voiceOptions = { wobbleCents: 60, useSwell: false }, attackRatio = 0, chordWindow = 16384, chordMinDuration = 0.5, onProgress = () => {} } = {}) {
+  const { guitar, mid, useSide, sideRatio } = chooseSignal(channels, mode, sampleRate);
   const duration = guitar.length / sampleRate;
 
   // 1. コード：0.1秒ごとに、前後約0.37秒の音で判定する
   const chordFrames = [];
   const win = 16384;
   const cwin = chordWindow;
-  const hopChord = Math.floor(sampleRate * 0.1);
+  const hopChord = Math.floor(sampleRate * (precise ? 0.05 : 0.1));
   const binHz = sampleRate / win;
   const loudness = [];
   for (let c = 0; c + cwin <= guitar.length; c += hopChord) loudness.push(rms(guitar.subarray(c, c + cwin)));
@@ -361,7 +369,19 @@ export function transcribe(channels, sampleRate, { mode = 'auto', voiceFilter = 
     if (loudness[step] < loudest * 0.05) continue; // ほぼ無音
     const frameMags = magnitudeSpectrum(guitar, c, cwin);
     // コード用には倍音をしっかり取り除く（3度の音の3倍音が maj7 の音と同じ高さになり、C を Cmaj7 と読み違えるため）
-    let { chroma } = analyzeSpectrum(frameMags, sampleRate, cwin, { harmonicResidual });
+    let { chroma } = analyzeSpectrum(frameMags, sampleRate, cwin, { harmonicResidual, highWeight });
+    if (precise) {
+      // じっくり解析：同じ場所を、長さの違う3つの区間（短い・ふつう・長い）でも見て、12音の強さを平均する。
+      // 短い区間は音の変わり目に、長い区間は低い音の高さの聞き分けに強い
+      const center = c + cwin / 2;
+      const sum = chroma.map((v) => v / (chroma.reduce((a, b) => a + b, 0) || 1));
+      for (const w of [cwin / 2, cwin * 2]) {
+        const cc = analyzeSpectrum(magnitudeSpectrum(guitar, Math.round(center - w / 2), w), sampleRate, w, { harmonicResidual, highWeight }).chroma;
+        const tot = cc.reduce((a, b) => a + b, 0) || 1;
+        cc.forEach((v, i) => { sum[i] += v / tot; });
+      }
+      chroma = sum;
+    }
     if (chromaMethod === 'peel') {
       // 倍音を完全にはがして見つけた音だけで、12音の強さを作る（倍音の消え残りでコードを読み違えないように）
       chroma = new Array(12).fill(0);
@@ -527,14 +547,16 @@ export function transcribe(channels, sampleRate, { mode = 'auto', voiceFilter = 
         if (top3.includes(bass)) agree++;
       });
       const reliability = counted ? Math.max(0, Math.min(1, (agree / counted - 0.5) / 0.35)) : 0;
-      const weight = (chartOptions.rootBonus ?? 0.1) * reliability;
-      const states = decodeChords(v.chromas, grid.downbeat, { beatBass: grid.basses, ...chartOptions, rootBonus: weight, foreignBassPenalty: weight });
+      // ベースの音は少しだけ手がかりにする。分数コード（Em/D・D/C など）ではベースがルートと違い、
+      // コードの外の音のこともあるので、ベースがコードの外の音でも減点しない
+      const weight = (chartOptions.rootBonus ?? 0.05) * reliability;
+      const states = decodeChords(v.chromas, grid.downbeat, { beatBass: grid.basses, ...chartOptions, rootBonus: weight, foreignBassPenalty: chartOptions.foreignBassPenalty ?? 0 });
       const fit = states.reduce((a, st, k) => a + cosine(v.chromas[k], st.template), 0) / Math.max(1, states.length);
       if (!best || fit > best.fit) best = { ...v, states, fit, reliability };
     }
     chartInfo = { method: best.label, vocalShare, bassReliability: best.reliability, fit: best.fit };
     // ベース音を信用できない録音では、分数コード（C/G など）にしない
-    timeline = buildChart(grid.beats, best.states, grid.basses, grid.period, { allowSlash: best.reliability >= 0.6 }).filter((seg) => seg.end - seg.start > 0);
+    timeline = buildChart(grid.beats, best.states, grid.basses, grid.period, { allowSlash: best.reliability >= 0.6, minBeats }).filter((seg) => seg.end - seg.start > 0);
   }
 
   // 5. コード譜を手がかりに、1音ずつのタブ譜を整える

@@ -53,7 +53,7 @@ function estimateTuningCents(peaks) {
  * 確定した音の倍音を差し引いていく。これで倍音を別の音と間違えにくくなり、
  * スマホのマイクで基音が小さく拾われる低音弦も、倍音の助けで見つけられる。
  */
-export function analyzeSpectrum(magnitudes, sampleRate, fftSize, { harmonicResidual = 0.35 } = {}) {
+export function analyzeSpectrum(magnitudes, sampleRate, fftSize, { harmonicResidual = 0.35, highWeight = 1, highFrom = 64 } = {}) {
   const binHz = sampleRate / fftSize;
   const peaks = findPeaks(magnitudes, binHz);
   if (peaks.length === 0) return { chroma: new Array(12).fill(0), bass: null, notes: [] };
@@ -117,7 +117,8 @@ export function analyzeSpectrum(magnitudes, sampleRate, fftSize, { harmonicResid
   const bass = lowest ? ((lowest.midi % 12) + 12) % 12 : null;
 
   const chroma = new Array(12).fill(0);
-  notes.forEach((n) => { chroma[((n.midi % 12) + 12) % 12] += n.strength; });
+  // highWeight < 1 なら、高い音（highFrom より上：メロディが多い）を軽く扱う
+  notes.forEach((n) => { chroma[((n.midi % 12) + 12) % 12] += n.strength * (n.midi > highFrom ? highWeight : 1); });
 
   return { chroma, bass, notes: notes.map((n) => n.midi) };
 }
