@@ -681,6 +681,6 @@ export function transcribe(channels, sampleRate, options = {}) {
   const avgBeats = segs.length ? segs.reduce((a, x) => a + (x.end - x.start), 0) / segs.length / (60 / first.bpm) : Infinity;
   if (avgBeats >= fastBeats) { onProgress(1, '完了'); return first; }
   const second = transcribeOnce(channels, sampleRate, { ...options, ...fastOptions, onProgress: (p) => onProgress(0.6 + 0.4 * p, 'コードの速い切り替わりに合わせて、解析し直しています') });
-  second.chartInfo = { ...second.chartInfo, fastMode: true, firstAvgBeats: avgBeats };
-  return second;
+  // 解析し直すのはコード譜だけ。1音ずつの結果（タブ譜）は1回目のものを使う（コード譜の違いにつられて変わらないように）
+  return { ...first, timeline: second.timeline, chartInfo: { ...second.chartInfo, fastMode: true, firstAvgBeats: avgBeats } };
 }
