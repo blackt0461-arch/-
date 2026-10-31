@@ -5,6 +5,7 @@ import { startListening, startTuner, startStrumTuner, startShapeCheck, setMicDis
 import { TUNINGS, parseShape, formatShape, soundingNotes, renderFretboard, findVoicings, chordDiagramSvg } from './fretboard.js';
 import { playNotes, playSequence } from './sound.js';
 import { formatTime, assignTab, formatTab, chartPlayback } from './song.js';
+import { buildStaffRows } from './tab-staff.js';
 import { estimateKey, suggestCapo, easiestVoicing } from './practice.js';
 
 // version.json と同じ値にする（新しいバージョンを公開したら両方を上げる）
@@ -424,14 +425,13 @@ function buildTabBlocks(events) {
     const n = NOTE_NAMES[midiToPitchClass(m)];
     return s === 5 ? n.toLowerCase() : n;
   });
-  const placed = assignTab(events, tuning, { capo: Number(capoSelect.value) });
-  const blocks = [];
-  for (let i = 0; i < placed.length; i += TAB_PER_LINE) {
-    const chunk = placed.slice(i, i + TAB_PER_LINE);
-    blocks.push({ t: chunk[0].t, end: chunk[chunk.length - 1].t, text: formatTab(chunk, { perLine: TAB_PER_LINE, stringNames: names }) });
-  }
-  return blocks;
+  // 音の長さ（dur）も一緒に渡す（リズムの棒の長さに使う）
+  const placed = assignTab(events, tuning, { capo: Number(capoSelect.value) }).map((p, i) => ({ ...p, dur: events[i]?.dur }));
+  // 楽譜のような段（6本線・小節線・コード名）に分ける。コピー用に文字のタブ譜も作っておく
+  const rows = buildStaffRows(placed, { beats: pendingBeats.beats, downbeat: pendingBeats.downbeat, duration: pendingBeats.duration, timeline: pendingBeats.timeline ?? [], stringNames: names });
+  return rows.map((r) => ({ ...r, text: r.events.length ? formatTab(r.events, { perLine: 999, stringNames: names }) : '' }));
 }
+let pendingBeats = {}; // いま表示している曲の拍・小節の頭・長さ・コード進行（段に分けるのに使う）
 
 function renderAnalysis() {
   const { timeline, tabBlocks } = analysis;
@@ -443,7 +443,7 @@ function renderAnalysis() {
       </div>`).join('')
     : '<p class="hint">コードが見つかりませんでした</p>';
   songTab.innerHTML = tabBlocks.length
-    ? tabBlocks.map((b, i) => `<pre class="tab-block" data-index="${i}">${escapeHtml(b.text)}</pre>`).join('')
+    ? tabBlocks.map((b, i) => `<div class="tab-block" data-index="${i}">${b.svg}</div>`).join('')
     : '<p class="hint">ギターの音が見つかりませんでした</p>';
 }
 
@@ -502,7 +502,18 @@ function highlightNow(time) {
   songNow.textContent = index >= 0 ? analysis.timeline[index].name : '―';
   songChords.querySelectorAll('.song-chord').forEach((el) => el.classList.toggle('active', Number(el.dataset.index) === index));
   const blockIndex = analysis.tabBlocks.findLastIndex((b) => t >= b.t - 0.1);
-  songTab.querySelectorAll('.tab-block').forEach((el) => el.classList.toggle('active', Number(el.dataset.index) === blockIndex));
+  songTab.querySelectorAll('.tab-block').forEach((el) => {
+    const on = Number(el.dataset.index) === blockIndex;
+    el.classList.toggle('active', on);
+    // 今の再生位置に線を引く
+    const cursor = el.querySelector('.ts-cursor');
+    if (!cursor) return;
+    const block = analysis.tabBlocks[Number(el.dataset.index)];
+    if (on && t <= block.end + 0.1) {
+      const x = block.xAt(t);
+      cursor.setAttribute('x1', x); cursor.setAttribute('x2', x); cursor.setAttribute('visibility', 'visible');
+    } else cursor.setAttribute('visibility', 'hidden');
+  });
 }
 songMedia.addEventListener('timeupdate', () => { if (!synth) highlightNow(); });
 songMedia.addEventListener('seeked', () => { if (!synth) highlightNow(); });
@@ -654,7 +665,8 @@ songFile.addEventListener('change', async () => {
   try {
     const { channels, sampleRate, duration } = await decodeFile(file);
     const result = await runTranscription(channels, sampleRate, songMode.value);
-    analysis = { timeline: result.timeline, tabBlocks: buildTabBlocks(result.events), events: result.events, beats: result.beats, bpm: result.bpm, onsets: result.onsets };
+    pendingBeats = { beats: result.beats, downbeat: result.downbeat, duration: result.duration, timeline: result.timeline };
+    analysis = { timeline: result.timeline, tabBlocks: buildTabBlocks(result.events), events: result.events, beats: result.beats, downbeat: result.downbeat, duration: result.duration, bpm: result.bpm, onsets: result.onsets };
     const how = result.useSide ? '左右の差で歌を弱めて解析しました'
       : result.chartInfo?.method === '歌を除く' ? '歌のメロディを取り除いて解析しました' : 'ギターの音をそのまま解析しました（歌は見つかりませんでした）';
     songInfo.textContent = `${file.name}（${formatTime(duration)}）・テンポ ${Math.round(result.bpm || 0)}・${how}`;
@@ -679,7 +691,7 @@ songFile.addEventListener('change', async () => {
 document.getElementById('song-copy').addEventListener('click', async (e) => {
   if (!analysis) return;
   const chords = analysis.timeline.map((seg) => `${formatTime(seg.start)} ${seg.name}`).join('\n');
-  const text = `コード進行\n${chords}\n\nタブ譜\n${analysis.tabBlocks.map((b) => b.text).join('\n\n')}`;
+  const text = `コード進行\n${chords}\n\nタブ譜\n${analysis.tabBlocks.filter((b) => b.text).map((b) => b.text).join('\n\n')}`;
   try {
     await navigator.clipboard.writeText(text);
     e.target.textContent = 'コピーしました';
