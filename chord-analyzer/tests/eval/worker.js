@@ -180,6 +180,7 @@ parentPort.on('message', ({ job, options }) => {
     const r = transcribe(audio.channels, audio.sampleRate, options);
     const duration = truth.duration ?? audio.channels[0].length / audio.sampleRate;
     const result = { id: job.id, set: job.set, category: job.category, seconds: (Date.now() - t0) / 1000, ...(truth.chords ? chordScore(r.timeline, truth.chords, duration, job.offset ?? 0, job.kind === 'guitarset') : {}) };
+    if (r.bpm && r.timeline.length) { const segs = r.timeline.filter((x) => x.end - x.start > 0); result.chordBeats = segs.reduce((a, x) => a + (x.end - x.start), 0) / segs.length / (60 / r.bpm); }
     if (truth.notes) { result.notes = noteScore(r.events, truth.notes); const sh = shortNoteScore(r.events, truth.notes); if (sh !== null) result.shortNotes = sh; }
     if (truth.notes && !job.solo) Object.assign(result, rhythmScore(r, truth.notes, options.playback));
     if (truth.tempo) {

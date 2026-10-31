@@ -116,4 +116,5 @@ if (prev) {
   console.log(!worse.length && !drops.length ? '→ 採用してよい（コード・1音ずつとも、全体・本番テストが下がらず、大きく下がった種類も無い）'
     : `→ 採用しない（${worse.length ? `${worse.join('・')}の全体か本番テストが下がった ` : ''}${drops.length ? `大きく下がった種類：${drops.join('・')}` : ''}）`);
 }
+if (process.env.DUMP) fs.writeFileSync(process.env.DUMP, JSON.stringify(results));
 if (!args.includes('--dry')) fs.writeFileSync(path.join(histDir, `${summary.date.replace(/[:.]/g, '-')}-${full ? 'full' : 'quick'}.json`), JSON.stringify(summary, null, 1));

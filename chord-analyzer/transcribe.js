@@ -349,7 +349,7 @@ function refineWithChart(events, onsetList, timeline, tuning, { strumStrength = 
  * - chords: 0.1秒ごとのコードの判定（buildChordTimeline でコード進行にまとめる）
  * - events: 弾いた瞬間ごとの、新しく鳴った音（タブ譜の材料）
  */
-export function transcribe(channels, sampleRate, { mode = 'auto', voiceFilter = true, method = 'peel', riseRatio = 1.3, minStrength = 0.2, harmonicRatio = 4, tuning = TUNINGS[0], snapStrums = true, snapMin = 3, peelOptions = {}, useChart = true, chartOptions = {}, noteWeight = null, chromaMethod = 'auto', harmonicResidual = 0.35, vocalOptions = {}, vocalPresence = 0.35, minBeats = 1, precise = true, highWeight = 0.6, useContext = true, contextOptions = {}, dropVocalNotes = true, estimateDurations = true, stopRatio = 0.25, voiceOptions = { wobbleCents: 60, useSwell: false }, attackRatio = 0, chordWindow = 16384, chordMinDuration = 0.5, segmentChroma = 0, segmentBass = false, prevSubtract = 0, attackChroma = 0, changeGate = 0, fuseAttack = 0, fuseSubtract = 0, changeBonus = 0, onProgress = () => {} } = {}) {
+function transcribeOnce(channels, sampleRate, { mode = 'auto', voiceFilter = true, method = 'peel', riseRatio = 1.3, minStrength = 0.2, harmonicRatio = 4, tuning = TUNINGS[0], snapStrums = true, snapMin = 3, peelOptions = {}, useChart = true, chartOptions = {}, noteWeight = null, chromaMethod = 'auto', harmonicResidual = 0.35, vocalOptions = {}, vocalPresence = 0.35, minBeats = 1, precise = true, highWeight = 0.6, useContext = true, contextOptions = {}, dropVocalNotes = true, estimateDurations = true, stopRatio = 0.25, voiceOptions = { wobbleCents: 60, useSwell: false }, attackRatio = 0, chordWindow = 16384, chordMinDuration = 0.5, segmentChroma = 0, segmentBass = false, prevSubtract = 0, attackChroma = 0, changeGate = 0, fuseAttack = 0, fuseSubtract = 0, changeBonus = 0, onProgress = () => {} } = {}) {
   const { guitar, mid, useSide, sideRatio } = chooseSignal(channels, mode, sampleRate);
   const duration = guitar.length / sampleRate;
 
@@ -666,4 +666,21 @@ export function transcribe(channels, sampleRate, { mode = 'auto', voiceFilter = 
 
   onProgress(1, '完了');
   return { duration, useSide, sideRatio, chordFrames, timeline, events, bpm, beats, downbeat, chartInfo, onsets: onsetList.map(({ t, strength }) => ({ t, strength })) };
+}
+
+/**
+ * 曲を解析する。まず1回解析し、コードがとても速く変わる曲（平均 fastBeats 拍未満で変わる）だと分かったら、
+ * 「弾いた瞬間に急に大きくなった音」と「前の拍の残りを引いた音」も手がかりに加えて、解析し直す。
+ * （速い曲では前のコードの響きが残って読み違えやすいが、ゆっくりの曲でこの手がかりを使うと、かえって雑音を拾うため）
+ */
+export function transcribe(channels, sampleRate, options = {}) {
+  const { fastBeats = 0, fastOptions = { fuseAttack: 0.5, fuseSubtract: 0.5, changeBonus: 0.1 }, onProgress = () => {} } = options;
+  const first = transcribeOnce(channels, sampleRate, { ...options, onProgress: (p, m) => onProgress(fastBeats ? p * 0.6 : p, m) });
+  if (!fastBeats || !first.bpm) return first;
+  const segs = first.timeline.filter((x) => x.end - x.start > 0);
+  const avgBeats = segs.length ? segs.reduce((a, x) => a + (x.end - x.start), 0) / segs.length / (60 / first.bpm) : Infinity;
+  if (avgBeats >= fastBeats) { onProgress(1, '完了'); return first; }
+  const second = transcribeOnce(channels, sampleRate, { ...options, ...fastOptions, onProgress: (p) => onProgress(0.6 + 0.4 * p, 'コードの速い切り替わりに合わせて、解析し直しています') });
+  second.chartInfo = { ...second.chartInfo, fastMode: true, firstAvgBeats: avgBeats };
+  return second;
 }
