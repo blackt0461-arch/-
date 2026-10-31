@@ -349,7 +349,7 @@ function refineWithChart(events, onsetList, timeline, tuning, { strumStrength = 
  * - chords: 0.1秒ごとのコードの判定（buildChordTimeline でコード進行にまとめる）
  * - events: 弾いた瞬間ごとの、新しく鳴った音（タブ譜の材料）
  */
-export function transcribe(channels, sampleRate, { mode = 'auto', voiceFilter = true, method = 'peel', riseRatio = 1.3, minStrength = 0.2, harmonicRatio = 4, tuning = TUNINGS[0], snapStrums = true, snapMin = 3, peelOptions = {}, useChart = true, chartOptions = {}, noteWeight = null, chromaMethod = 'auto', harmonicResidual = 0.35, vocalOptions = {}, vocalPresence = 0.35, minBeats = 1, precise = true, highWeight = 0.6, useContext = true, contextOptions = {}, dropVocalNotes = true, estimateDurations = true, stopRatio = 0.25, voiceOptions = { wobbleCents: 60, useSwell: false }, attackRatio = 0, chordWindow = 16384, chordMinDuration = 0.5, onProgress = () => {} } = {}) {
+export function transcribe(channels, sampleRate, { mode = 'auto', voiceFilter = true, method = 'peel', riseRatio = 1.3, minStrength = 0.2, harmonicRatio = 4, tuning = TUNINGS[0], snapStrums = true, snapMin = 3, peelOptions = {}, useChart = true, chartOptions = {}, noteWeight = null, chromaMethod = 'auto', harmonicResidual = 0.35, vocalOptions = {}, vocalPresence = 0.35, minBeats = 1, precise = true, highWeight = 0.6, useContext = true, contextOptions = {}, dropVocalNotes = true, estimateDurations = true, stopRatio = 0.25, voiceOptions = { wobbleCents: 60, useSwell: false }, attackRatio = 0, chordWindow = 16384, chordMinDuration = 0.5, segmentChroma = 0, segmentBass = false, prevSubtract = 0, onProgress = () => {} } = {}) {
   const { guitar, mid, useSide, sideRatio } = chooseSignal(channels, mode, sampleRate);
   const duration = guitar.length / sampleRate;
 
@@ -470,7 +470,7 @@ export function transcribe(channels, sampleRate, { mode = 'auto', voiceFilter = 
 
   // 4. 拍を見つけ、拍ごとに鳴った音をまとめてコード譜にする
   onProgress(0.97, 'コード譜にまとめています');
-  const beatChromasFor = (beats, period) => {
+  const beatChromasFor = (beats, period, useSegment = false) => {
     const chromas = [];
     const basses = [];
     beats.forEach((b, k) => {
@@ -484,10 +484,21 @@ export function transcribe(channels, sampleRate, { mode = 'auto', voiceFilter = 
       // 弾き語りなど歌と分けられない曲では、弾いた音に歌が混ざるので使わない
       const w = noteWeight ?? (useSide ? 0.5 : 0);
       played.forEach((e) => e.notes.forEach((m) => { chroma[m % 12] += (w * frameTotal) / Math.max(1, played.length * e.notes.length); }));
+      // 区切りの中だけで聞く：拍の頭〜次の拍の頭の音だけを使う（前後のコードの音が混ざらない）。
+      // 長い区間で聞いた12音の強さは前後の拍の音を含むので、コードが速く切り替わると混ざってしまうため
+      let segBass = null;
+      if (useSegment && segmentChroma > 0 && end - b >= 0.12) {
+        const s0 = Math.floor((b + 0.03) * sampleRate), len = Math.floor((end - b - 0.04) * sampleRate);
+        const mags = magnitudeSpectrum(guitar, s0, len, 16384);
+        const a = analyzeSpectrum(mags, sampleRate, 16384, { harmonicResidual, highWeight });
+        const tot = a.chroma.reduce((x, y) => x + y, 0) || 1;
+        a.chroma.forEach((v, i) => { chroma[i] = (1 - Math.min(1, segmentChroma)) * chroma[i] + segmentChroma * (v / tot) * frameTotal; });
+        if (segmentBass) segBass = analyzeSpectrum(magnitudeSpectrum(useSide ? mid : guitar, s0, len, 16384), sampleRate, 16384).bass;
+      }
       chromas.push(chroma);
       const counts = new Map();
       inside.forEach((f) => { if (f.bass !== null && f.bass !== undefined) counts.set(f.bass, (counts.get(f.bass) || 0) + 1); });
-      basses.push([...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null);
+      basses.push(segBass ?? [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null);
     });
     return { chromas, basses };
   };
@@ -520,6 +531,21 @@ export function transcribe(channels, sampleRate, { mode = 'auto', voiceFilter = 
     }
     const { offset, score } = findDownbeatScored(chromas);
     if (!grid || score > grid.score) grid = { ...g, chromas, basses, downbeat: offset, score };
+  }
+  // 拍の区切りが決まってから、区切りの中だけで聞いた音でコードを判定し直す
+  if (grid && segmentChroma > 0 && chromaMethod !== 'devocal' && chromaMethod !== 'stable') ({ chromas: grid.chromas, basses: grid.basses } = beatChromasFor(grid.beats, grid.period, true));
+  // 1つ前の拍で鳴っていた音の残り（響き）を差し引く。持ち替えた直後は前のコードの音が残って、
+  // 「前のコードのまま」「前のコードの音が混ざったコード」と読み違えやすいため
+  if (grid && prevSubtract > 0) {
+    const norm = (c) => { const t = c.reduce((a, b) => a + b, 0) || 1; return c.map((v) => v / t); };
+    const orig = grid.chromas.map(norm);
+    grid.chromas = grid.chromas.map((c, k) => {
+      if (k === 0) return c;
+      const tot = c.reduce((a, b) => a + b, 0) || 1;
+      const out = orig[k].map((v, i) => Math.max(v * 0.15, v - prevSubtract * orig[k - 1][i]));
+      const t2 = out.reduce((a, b) => a + b, 0) || 1;
+      return out.map((v) => (v / t2) * tot);
+    });
   }
   let timeline = buildChordTimeline(chordFrames, { minDuration: chordMinDuration });
   const bpm = grid?.bpm ?? null, beats = grid?.beats ?? [], downbeat = grid?.downbeat ?? 0;
@@ -554,7 +580,7 @@ export function transcribe(channels, sampleRate, { mode = 'auto', voiceFilter = 
       const fit = states.reduce((a, st, k) => a + cosine(v.chromas[k], st.template), 0) / Math.max(1, states.length);
       if (!best || fit > best.fit) best = { ...v, states, fit, reliability };
     }
-    chartInfo = { method: best.label, vocalShare, bassReliability: best.reliability, fit: best.fit };
+    chartInfo = { method: best.label, vocalShare, bassReliability: best.reliability, fit: best.fit, ...(chartOptions.debug ? { debugChromas: best.chromas, debugStates: best.states.map((x) => x.name), debugBasses: grid.basses } : {}) };
     // ベース音を信用できない録音では、分数コード（C/G など）にしない
     timeline = buildChart(grid.beats, best.states, grid.basses, grid.period, { allowSlash: best.reliability >= 0.6, minBeats }).filter((seg) => seg.end - seg.start > 0);
   }

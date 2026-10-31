@@ -63,17 +63,44 @@ const extends_ = (got, truth) => {
 /** コード譜の正解率：正解のコードがある時間のうち、同じコードを示していた割合（0.05秒きざみ） */
 function chordScore(timeline, truth, duration, offset = 0, allowExtensions = false) {
   const segs = truth.map(([t, name], i) => ({ start: t + offset, end: (i + 1 < truth.length ? truth[i + 1][0] : duration) + offset, name })).filter((s) => s.name);
-  let ok = 0, okStrict = 0, okMM = 0, n = 0;
-  for (const s of segs) {
+  let ok = 0, okStrict = 0, okMM = 0, n = 0, wrong = 0, fromPrev = 0;
+  for (const [si, s] of segs.entries()) {
+    const prev = si > 0 && Math.abs(segs[si - 1].end - s.start) <= 0.01 ? segs[si - 1].name : null;
     for (let t = s.start; t < s.end; t += 0.05) {
       const got = timeline.find((x) => t >= x.start && t < x.end)?.name ?? null;
       n++;
+      // 間違えたとき、1つ前のコードが原因か（前のコードのまま／前のコードの音が混ざった）
+      if (!same(got, s.name) && !(allowExtensions && extends_(got, s.name))) {
+        wrong++;
+        const g = tonesOf(got), c = tonesOf(s.name), p = tonesOf(prev);
+        if (prev && g && p && (same(got, prev) || [...g.tones].some((x) => !c?.tones.has(x) && p.tones.has(x)))) fromPrev++;
+      }
       if (same(got, s.name) || (allowExtensions && extends_(got, s.name))) ok++;
       if (same(got, s.name)) okStrict++;
       if (got && majmin(got) === majmin(s.name)) okMM++;
     }
   }
-  return { chord: n ? ok / n : null, chordStrict: n ? okStrict / n : null, chordMajmin: n ? okMM / n : null };
+  // 切り替わり直後（0.5秒以内）の正解率と、切り替わりを見つけられたか（±0.2秒以内に区切りがあるか・F1）
+  let edgeOk = 0, edgeN = 0;
+  const ok_ = (got, name) => same(got, name) || (allowExtensions && extends_(got, name));
+  segs.forEach((s, i) => {
+    if (i === 0 || same(segs[i - 1].name, s.name) || Math.abs(segs[i - 1].end - s.start) > 0.01) return;
+    for (let t = s.start; t < Math.min(s.end, s.start + 0.5); t += 0.05) {
+      edgeN++;
+      if (ok_(timeline.find((x) => t >= x.start && t < x.end)?.name ?? null, s.name)) edgeOk++;
+    }
+  });
+  const truthEdges = segs.filter((s, i) => i > 0 && !same(segs[i - 1].name, s.name) && Math.abs(segs[i - 1].end - s.start) <= 0.01).map((s) => s.start);
+  const lo = segs.length ? segs[0].start : 0, hi = segs.length ? segs[segs.length - 1].end : 0;
+  const predEdges = timeline.filter((x, i) => i > 0 && x.start > lo + 0.1 && x.start < hi - 0.1 && !same(timeline[i - 1].name, x.name)).map((x) => x.start);
+  const used = new Set();
+  let edgeHit = 0;
+  truthEdges.forEach((t) => { const k = predEdges.findIndex((p, j) => !used.has(j) && Math.abs(p - t) <= 0.2); if (k >= 0) { used.add(k); edgeHit++; } });
+  const ep = predEdges.length ? edgeHit / predEdges.length : 0, er = truthEdges.length ? edgeHit / truthEdges.length : 0;
+  return {
+    chord: n ? ok / n : null, chordStrict: n ? okStrict / n : null, chordMajmin: n ? okMM / n : null,
+    chordEdge: edgeN ? edgeOk / edgeN : null, fromPrev: wrong >= 10 ? fromPrev / wrong : null, changes: truthEdges.length ? (ep + er ? (2 * ep * er) / (ep + er) : 0) : null,
+  };
 }
 
 /** 1音ずつの正解率（F1）：弾いた瞬間が 0.05 秒以内で、音の高さが同じなら正解 */
@@ -87,6 +114,20 @@ function noteScore(events, truthNotes, tol = 0.05) {
   }
   const precision = pred.length ? hit / pred.length : 0, recall = truthNotes.length ? hit / truthNotes.length : 0;
   return precision + recall ? (2 * precision * recall) / (precision + recall) : 0;
+}
+
+/**
+ * 短い音の聞き取り：次の音まで 0.25 秒未満しかない音（速いフレーズ・速い切り替わり）を、
+ * 0.05 秒以内・同じ高さで見つけられた割合（和音の中の音は除き、1音ずつ弾いた音だけで見る）
+ */
+function shortNoteScore(events, truthNotes, tol = 0.05) {
+  const notes = [...truthNotes].sort((a, b) => a.t - b.t);
+  const times = [...new Set(notes.map((n) => Math.round(n.t * 100)))].sort((a, b) => a - b).map((x) => x / 100);
+  const single = notes.filter((n) => notes.filter((m) => Math.abs(m.t - n.t) <= 0.04).length === 1);
+  const short = single.filter((n) => { const nx = times.find((t) => t > n.t + 0.04); return nx !== undefined && nx - n.t < 0.25; });
+  if (short.length < 5) return null;
+  const pred = events.flatMap((e) => e.notes.map((m) => ({ t: e.t, m })));
+  return short.filter((g) => pred.some((p) => p.m === g.midi && Math.abs(p.t - g.t) <= tol)).length / short.length;
 }
 
 /**
@@ -139,7 +180,7 @@ parentPort.on('message', ({ job, options }) => {
     const r = transcribe(audio.channels, audio.sampleRate, options);
     const duration = truth.duration ?? audio.channels[0].length / audio.sampleRate;
     const result = { id: job.id, set: job.set, category: job.category, seconds: (Date.now() - t0) / 1000, ...(truth.chords ? chordScore(r.timeline, truth.chords, duration, job.offset ?? 0, job.kind === 'guitarset') : {}) };
-    if (truth.notes) result.notes = noteScore(r.events, truth.notes);
+    if (truth.notes) { result.notes = noteScore(r.events, truth.notes); const sh = shortNoteScore(r.events, truth.notes); if (sh !== null) result.shortNotes = sh; }
     if (truth.notes && !job.solo) Object.assign(result, rhythmScore(r, truth.notes, options.playback));
     if (truth.tempo) {
       const ratio = r.bpm / truth.tempo;

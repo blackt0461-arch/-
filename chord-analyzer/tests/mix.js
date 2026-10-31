@@ -75,7 +75,7 @@ const PROGRESSIONS = [
  * stereo: true ならギターは左寄り、歌・ベース・ドラムは真ん中（よくあるバンドの混ぜ方）
  * stereo: false なら全部真ん中（弾き語りの動画など）
  */
-export function makeSong({ seed = 1, stereo = true, vocalGain = 0.12, withBand = true, withRhythm = true } = {}) {
+export function makeSong({ seed = 1, stereo = true, vocalGain = 0.12, withBand = true, withRhythm = true, changesPerBar = 1 } = {}) {
   const rand = rng(seed * 7919);
   const tempo = 80 + Math.floor(rand() * 51);
   const beat = 60 / tempo;
@@ -113,75 +113,100 @@ export function makeSong({ seed = 1, stereo = true, vocalGain = 0.12, withBand =
   const kinds = ['arp', 'arp', 'strum', 'strum', 'riff', 'arp', 'strum', 'riff'];
   for (let i = kinds.length - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); [kinds[i], kinds[j]] = [kinds[j], kinds[i]]; }
 
-  let prevShape = null;
-  progression.forEach((name, bar) => {
-    const shape = shapeOf(name);
-    const t0 = start + bar * 4 * beat;
+  // コードの区切り：1小節に changesPerBar 回切り替わる（1：1小節ごと、2：2拍ごと、4：1拍ごと）
+  const segBeats = 4 / changesPerBar;
+  const segments = [];
+  for (let bar = 0; bar < bars; bar++) {
+    for (let k = 0; k < changesPerBar; k++) {
+      const name = changesPerBar === 1 ? progression[bar] : base[(bar * changesPerBar + k) % base.length];
+      segments.push({ name, bar, start: start + (bar * 4 + k * segBeats) * beat, end: start + (bar * 4 + (k + 1) * segBeats) * beat, kind: kinds[bar] });
+    }
+  }
+  const segAt = (bar, b) => segments[bar * changesPerBar + Math.min(changesPerBar - 1, Math.floor(b / segBeats + 1e-9))];
+
+  let prevShape = null, prevKind = null;
+  segments.forEach((seg) => {
     // コードを持ち替えると、押さえる場所が変わる弦・押さえていた弦の音は止まる（開放弦のまま変わらない弦は鳴り続ける）
-    if (prevShape) shape.forEach((f, s) => { if (prevShape[s] !== f || (f !== null && f > 0 && kinds[bar - 1] === 'riff')) stopString(s, t0 - 0.02); });
-    if (kinds[bar] === 'riff') for (let s = 0; s < 6; s++) stopString(s, t0 - 0.02);
+    const shape = shapeOf(seg.name);
+    if (prevShape) shape.forEach((f, s) => { if (prevShape[s] !== f || (f !== null && f > 0 && prevKind === 'riff')) stopString(s, seg.start - 0.02); });
+    if (seg.kind === 'riff') for (let s = 0; s < 6; s++) stopString(s, seg.start - 0.02);
     prevShape = shape;
-    const strings = shape.map((f, s) => (f === null ? -1 : s)).filter((s) => s >= 0);
-    const minor = /^[A-G][#♭]?m(?!aj)/.test(name);
-    if (kinds[bar] === 'arp') {
+    prevKind = seg.kind;
+    seg.shape = shape;
+  });
+
+  for (let bar = 0; bar < bars; bar++) {
+    const t0 = start + bar * 4 * beat;
+    const kind = kinds[bar];
+    if (kind === 'arp') {
       // アルペジオ：8分音符で、低い弦から高い弦へ（並びは小節ごとに少し変える）
-      const top = strings.length - 1;
-      const orders = [[0, 2, 3, 4, top, 4, 3, 2], [0, 1, 2, 3, 4, 3, 2, 1], [0, 2, 1, 3, 2, 4, 3, top]];
-      orders[Math.floor(rand() * orders.length)].forEach((k, i) => {
-        const s = strings[Math.min(k, top)];
+      const orders = [[0, 2, 3, 4, 5, 4, 3, 2], [0, 1, 2, 3, 4, 3, 2, 1], [0, 2, 1, 3, 2, 4, 3, 5]];
+      const order = orders[Math.floor(rand() * orders.length)];
+      for (let i = 0; i < 8; i++) {
+        const seg = segAt(bar, i / 2);
+        const strings = seg.shape.map((f, s) => (f === null ? -1 : s)).filter((s) => s >= 0);
+        // 区切りの最初の音は、いちばん低い弦（ベース）から
+        const k = Math.abs(i / 2 - (seg.start - t0) / beat) < 1e-6 ? 0 : order[i];
+        const s = strings[Math.min(k, strings.length - 1)];
         const at = t0 + (i * beat) / 2;
-        play(noteOf(shape, s), at, 1.6, 0.5, s);
-        truth.push({ t: at, notes: [noteOf(shape, s)], kind: 'arp' });
-      });
-    } else if (kinds[bar] === 'strum') {
-      // ストローク：リズムは2通り（2分音符・8分のダウンアップ）
-      const hits = rand() < 0.5 ? [0, 2] : [0, 1, 1.5, 2.5, 3];
-      hits.forEach((b, i) => {
+        play(TUNING[s] + seg.shape[s], at, 1.6, 0.5, s);
+        truth.push({ t: at, notes: [TUNING[s] + seg.shape[s]], kind: 'arp' });
+      }
+    } else if (kind === 'strum') {
+      // ストローク：リズムは2通り（2分音符・8分のダウンアップ）。コードが変わる拍では必ず弾く
+      const pattern = rand() < 0.5 ? [0, 2] : [0, 1, 1.5, 2.5, 3];
+      const hits = [...new Set([...pattern, ...Array.from({ length: changesPerBar }, (_, k) => k * segBeats)])].sort((a, b) => a - b);
+      hits.forEach((b) => {
+        const seg = segAt(bar, b);
+        const strings = seg.shape.map((f, s) => (f === null ? -1 : s)).filter((s) => s >= 0);
         const at = t0 + b * beat;
         const up = !Number.isInteger(b);
         const order = up ? [...strings].reverse() : strings;
-        order.forEach((s, k) => play(noteOf(shape, s), at + k * 0.012, 1.0, 0.3, s));
-        truth.push({ t: at, notes: strings.map((s) => noteOf(shape, s)).sort((a, b) => a - b), kind: 'strum' });
+        order.forEach((s, k) => play(TUNING[s] + seg.shape[s], at + k * 0.012, 1.0, 0.3, s));
+        truth.push({ t: at, notes: strings.map((s) => TUNING[s] + seg.shape[s]).sort((a, b) => a - b), kind: 'strum' });
       });
     } else {
       // 単音のリフ：表拍（強い拍）はコードの構成音、裏拍に経過音を挟む（実際のリフの多くはこう作られ、コードが聞き取れる）
-      const root = noteOf(shape, strings[0]) + 12;
-      const { type } = parseChordName(name);
-      const iv = type.intervals;
-      const top = iv.length > 3 ? iv[3] : 12;
-      const passing = (minor ? 5 : 2);
-      const steps = [iv[0], iv[1], iv[2], top, 12, iv[2], passing, iv[1]];
-      steps.forEach((d, i) => {
+      for (let i = 0; i < 8; i++) {
+        const seg = segAt(bar, i / 2);
+        const strings = seg.shape.map((f, s) => (f === null ? -1 : s)).filter((s) => s >= 0);
+        const root = TUNING[strings[0]] + seg.shape[strings[0]] + 12;
+        const { type } = parseChordName(seg.name);
+        const minor = /^[A-G][#♭]?m(?!aj)/.test(seg.name);
+        const iv = type.intervals;
+        const steps = [iv[0], iv[1], iv[2], iv.length > 3 ? iv[3] : 12, 12, iv[2], minor ? 5 : 2, iv[1]];
+        // 区切りの最初の音はルート
+        const d = Math.abs(i / 2 - (seg.start - t0) / beat) < 1e-6 ? 0 : steps[i];
         const at = t0 + (i * beat) / 2;
         let m = root + d;
         while (m > 79) m -= 12;
         play(m, at, 0.8, 0.5);
         truth.push({ t: at, notes: [m], kind: 'riff' });
-      });
+      }
     }
-  });
+  }
 
   if (withBand) {
     // 歌：コードの音を中心にした、2拍か4拍の長めの音のメロディ
     const notes = [];
-    progression.forEach((name, bar) => {
-      const { root, type } = parseChordName(name);
-      const tones = type.intervals.map((i) => 60 + ((root + i) % 12));
+    for (let bar = 0; bar < bars; bar++) {
       let b = 0;
       while (b < 4) {
-        const len = rand() < 0.5 ? 2 : 4 - b;
+        const len = Math.min(rand() < 0.5 ? 2 : 4 - b, segBeats);
+        const { root, type } = parseChordName(segAt(bar, b).name);
+        const tones = type.intervals.map((i) => 60 + ((root + i) % 12));
         const t = start + (bar * 4 + b) * beat;
         notes.push({ midi: tones[Math.floor(rand() * tones.length)] + (rand() < 0.3 ? 2 : 0), start: t + 0.05, end: t + len * beat - 0.05 });
         b += len;
       }
-    });
+    }
     sing(center, notes, vocalGain, rand);
     // ベース：各小節の1拍目と3拍目にルート音（withRhythm が false なら、ベースとドラムは無し＝1人の弾き語り）
-    if (withRhythm) progression.forEach((name, bar) => {
-      const { root } = parseChordName(name);
+    if (withRhythm) segments.forEach((seg) => {
+      const { root } = parseChordName(seg.name);
       const midi = 28 + ((root - 4 + 12) % 12);
-      [0, 2].forEach((b) => {
-        const at = start + (bar * 4 + b) * beat;
+      (segBeats >= 4 ? [0, 2] : [0]).forEach((b) => {
+        const at = seg.start + b * beat;
         const f = freq(midi);
         const tone = new Float32Array(Math.floor(MIX_RATE * beat * 1.8));
         for (let i = 0; i < tone.length; i++) {
@@ -223,7 +248,7 @@ export function makeSong({ seed = 1, stereo = true, vocalGain = 0.12, withBand =
     sampleRate: MIX_RATE,
     tempo,
     truth: truth.sort((a, b) => a.t - b.t),
-    chords: progression.map((name, bar) => ({ name, kind: kinds[bar], start: start + bar * 4 * beat, end: start + (bar + 1) * 4 * beat })),
+    chords: segments.map(({ name, kind, start: s0, end }) => ({ name, kind, start: s0, end })),
   };
 }
 
