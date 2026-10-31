@@ -674,7 +674,7 @@ function transcribeOnce(channels, sampleRate, { mode = 'auto', voiceFilter = tru
  * （速い曲では前のコードの響きが残って読み違えやすいが、ゆっくりの曲でこの手がかりを使うと、かえって雑音を拾うため）
  */
 export function transcribe(channels, sampleRate, options = {}) {
-  const { fastBeats = 0, fastOptions = { fuseAttack: 0.5, fuseSubtract: 0.5, changeBonus: 0.1 }, onProgress = () => {} } = options;
+  const { fastBeats = 1.8, fastOptions = { fuseAttack: 0.5, fuseSubtract: 0.5, changeBonus: 0.1 }, onProgress = () => {} } = options;
   const first = transcribeOnce(channels, sampleRate, { ...options, onProgress: (p, m) => onProgress(fastBeats ? p * 0.6 : p, m) });
   if (!fastBeats || !first.bpm) return first;
   const segs = first.timeline.filter((x) => x.end - x.start > 0);
