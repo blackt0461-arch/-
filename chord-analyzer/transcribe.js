@@ -726,7 +726,7 @@ function transcribeOnce(channels, sampleRate, { mode = 'auto', voiceFilter = tru
  * （速い曲では前のコードの響きが残って読み違えやすいが、ゆっくりの曲でこの手がかりを使うと、かえって雑音を拾うため）
  */
 export function transcribe(channels, sampleRate, options = {}) {
-  const { fastBeats = 1.8, fastOptions = { fuseAttack: 0.5, fuseSubtract: 0.5, changeBonus: 0.1 }, learned = 0, onProgress = () => {} } = options;
+  const { fastBeats = 1.8, fastOptions = { fuseAttack: 0.5, fuseSubtract: 0.5, changeBonus: 0.1 }, learned = 0.4, learnedConfidence = true, onProgress = () => {} } = options;
   // 解析の回数（1回目：ふつう、2回目：学習した判定器でコード譜だけ作り直す、3回目：速い曲だけ）に合わせて進み具合を分ける
   const passes = 1 + (learned > 0 ? 1 : 0) + (fastBeats ? 0.5 : 0);
   let done = 0;
@@ -740,13 +740,13 @@ export function transcribe(channels, sampleRate, options = {}) {
   const first = run({ learned: 0 });
   let { timeline, chartInfo } = first;
   // 2回目：学習した判定器（前のコードの響きの残りなどを掃除する）を使って、コード譜だけ作り直す
-  if (learned > 0 && first.bpm) ({ timeline, chartInfo } = run({ learned }, 'コード譜を学習した判定器で見直しています'));
+  if (learned > 0 && first.bpm) ({ timeline, chartInfo } = run({ learned, learnedConfidence }, 'コード譜を学習した判定器で見直しています'));
   if (fastBeats && first.bpm) {
     const segs = timeline.filter((x) => x.end - x.start > 0);
     const avgBeats = segs.length ? segs.reduce((a, x) => a + (x.end - x.start), 0) / segs.length / (60 / first.bpm) : Infinity;
     // コードがとても速く変わる曲：弾いた瞬間に急に大きくなった音なども手がかりにして、コード譜を作り直す
     if (avgBeats < fastBeats) {
-      const second = run({ ...fastOptions, learned }, 'コードの速い切り替わりに合わせて、解析し直しています');
+      const second = run({ ...fastOptions, learned, learnedConfidence }, 'コードの速い切り替わりに合わせて、解析し直しています');
       timeline = second.timeline;
       chartInfo = { ...second.chartInfo, fastMode: true, firstAvgBeats: avgBeats };
     }
@@ -762,7 +762,7 @@ export function transcribe(channels, sampleRate, options = {}) {
  * - careful：じっくり。時間をかけてよい場合に、より重い方法も使う（採点に合格したものだけを足していく）
  */
 export const ANALYSIS_PRESETS = {
-  fast: { precise: false, fastBeats: 0 },
+  fast: { precise: false, fastBeats: 0, learned: 0 },
   normal: {},
   careful: {},
 };
