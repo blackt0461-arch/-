@@ -26,7 +26,7 @@ const D = train[0].x.length;
 console.log(`入力 ${D} 個・学習 ${train.length / 12} 拍・確認 ${valid.length / 12} 拍`);
 
 // 小さなネット：入力 → 隠れ層（H 個）→ 1 つの確率
-let seed = 7;
+let seed = Number(process.env.SEED || 7);
 const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647 - 0.5; };
 const W1 = Array.from({ length: H }, () => Array.from({ length: D }, () => rnd() * 0.3)), b1 = new Array(H).fill(0);
 const W2 = Array.from({ length: H }, () => rnd() * 0.3); let b2 = 0;
@@ -84,5 +84,5 @@ console.log(`（くらべる基準：音の強さだけで決めた場合 ${(bas
 const round = (a) => a.map((x) => Math.round(x * 1e4) / 1e4);
 // WRITE_MODEL=1 なら、学んだ重みを learned.js の MODEL に書き込む
 const model = { D, H, W1: W1.map(round), b1: round(b1), W2: round(W2), b2: Math.round(b2 * 1e4) / 1e4 };
-if (process.env.WRITE_MODEL) { const f = new URL('../../learned.js', import.meta.url); fs.writeFileSync(f, fs.readFileSync(f, 'utf8').replace(/export const MODEL = .*;\n/, () => `export const MODEL = ${JSON.stringify(model)};\n`)); }
+// （learned.js への書き込みは tests/learn/ensemble.js で行う）
 fs.writeFileSync(process.env.OUT || '/tmp/claude-0/chroma-model.json', JSON.stringify({ D, H, W1: W1.map(round), b1: round(b1), W2: round(W2), b2: Math.round(b2 * 1e4) / 1e4 }));
