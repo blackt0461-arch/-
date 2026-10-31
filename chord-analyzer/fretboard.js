@@ -217,3 +217,36 @@ export function renderFretboard(container, frets, onChange, { labelFor = () => '
 
   container.appendChild(board);
 }
+
+/**
+ * 押さえ方の小さなコード図（SVG）を作る。縦向き：左が6弦、右が1弦、上がヘッド側。
+ * 押さえるところに丸、鳴らさない弦に ×、開放弦に ○。高いポジションでは左にフレット番号を書く。
+ */
+export function chordDiagramSvg(frets, { width = 64 } = {}) {
+  if (!frets) return '';
+  const fretted = frets.filter((f) => f !== null && f > 0);
+  const maxF = fretted.length ? Math.max(...fretted) : 0;
+  const minF = fretted.length ? Math.min(...fretted) : 0;
+  const rows = 4;
+  const start = maxF <= rows ? 1 : minF; // 4フレット以内に収まれば、ナット（ヘッド側の太い線）から描く
+  const left = 12, top = 14, gapX = (width - left - 6) / 5, gapY = 13;
+  const height = top + gapY * rows + 4;
+  const x = (s) => left + gapX * s;
+  const parts = [];
+  for (let s = 0; s < 6; s++) parts.push(`<line x1="${x(s)}" y1="${top}" x2="${x(s)}" y2="${top + gapY * rows}" class="cd-line"/>`);
+  for (let r = 0; r <= rows; r++) parts.push(`<line x1="${x(0)}" y1="${top + gapY * r}" x2="${x(5)}" y2="${top + gapY * r}" class="${r === 0 && start === 1 ? 'cd-nut' : 'cd-line'}"/>`);
+  if (start > 1) parts.push(`<text x="2" y="${top + gapY * 0.5 + 4}" class="cd-fret">${start}</text>`);
+  // セーハ（同じフレットを人差し指でまとめて押さえる）
+  const atMin = frets.map((f, s) => (f === minF && minF > 0 ? s : -1)).filter((s) => s >= 0);
+  const opens = frets.filter((f) => f === 0).length;
+  if (atMin.length >= 3 && opens === 0) {
+    const y = top + gapY * (minF - start + 0.5);
+    parts.push(`<rect x="${x(atMin[0]) - 4}" y="${y - 4}" width="${x(atMin[atMin.length - 1]) - x(atMin[0]) + 8}" height="8" rx="4" class="cd-dot"/>`);
+  }
+  frets.forEach((f, s) => {
+    if (f === null) parts.push(`<text x="${x(s)}" y="${top - 4}" class="cd-mark">×</text>`);
+    else if (f === 0) parts.push(`<circle cx="${x(s)}" cy="${top - 7}" r="3" class="cd-open"/>`);
+    else parts.push(`<circle cx="${x(s)}" cy="${top + gapY * (f - start + 0.5)}" r="4.5" class="cd-dot"/>`);
+  });
+  return `<svg class="chord-diagram" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" aria-hidden="true">${parts.join('')}</svg>`;
+}

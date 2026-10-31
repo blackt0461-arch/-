@@ -158,6 +158,20 @@ export class NoiseProfile {
 }
 
 /**
+ * マイクの「聞き取る距離」。0（近く：ギターにスマホを近づける）〜 1（遠く：離して置く）。
+ * 遠くにするほど、聞こえた音を大きく増幅し（最大16倍）、「弾いている」とみなす基準も下げる。
+ */
+const micSetting = { distance: 0.3 };
+const openGains = new Set();
+export const micGain = () => 2 ** (micSetting.distance * 4); // 1〜16倍
+// 「弾いている」とみなす、周りの雑音との差（近く 1.8倍 〜 遠く 1.25倍）
+const loudRatio = () => 1.8 - micSetting.distance * 0.55;
+export function setMicDistance(value) {
+  micSetting.distance = Math.max(0, Math.min(1, value));
+  openGains.forEach((g) => { g.gain.value = micGain(); });
+}
+
+/**
  * マイクを開く（コード判定とチューナーで共通）。
  * - iPhone の Safari は、音の処理が「一時停止」で始まることがあるので、タップ直後に再開させる
  * - 弾いている間に画面が消えてマイクが止まらないよう、画面を点けたままにする（対応ブラウザのみ）
@@ -180,7 +194,11 @@ async function openMicrophone(fftSize) {
   const analyser = ctx.createAnalyser();
   analyser.fftSize = fftSize;
   analyser.smoothingTimeConstant = 0;
-  source.connect(analyser);
+  // 聞き取る距離に合わせて増幅してから分析する（遠くに置いても小さな音を拾えるように）
+  const gain = ctx.createGain();
+  gain.gain.value = micGain();
+  openGains.add(gain);
+  source.connect(gain).connect(analyser);
 
   let wakeLock = null;
   const keepAwake = async () => {
@@ -199,6 +217,7 @@ async function openMicrophone(fftSize) {
     ctx,
     analyser,
     close() {
+      openGains.delete(gain);
       document.removeEventListener('visibilitychange', onVisible);
       wakeLock?.release().catch(() => {});
       stream.getTracks().forEach((t) => t.stop());
@@ -258,7 +277,7 @@ export async function startListening(onFrame, { calibrationSeconds = 1 } = {}) {
       onFrame({ chroma: smoothChroma, candidates: [], level, state: 'calibrating' });
       return;
     }
-    const loud = level > Math.max(noiseLevel * 1.8, 0.003);
+    const loud = level > Math.max(noiseLevel * loudRatio(), 0.003);
     // 弾いた直後は分析する範囲にまだ弾く前の音が多く混ざるので、少し鳴ってから判定する
     if (!loud) loudSince = null;
     else if (loudSince === null) loudSince = now;

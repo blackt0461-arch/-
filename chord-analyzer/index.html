@@ -70,6 +70,12 @@
 
     <section id="panel-mic" class="panel" role="tabpanel" aria-labelledby="tab-mic" hidden>
       <button type="button" id="mic-toggle" class="primary-button">マイクを開始</button>
+      <div class="mic-distance">
+        <label for="mic-distance">聞き取る距離</label>
+        <div class="distance-row"><small>近く</small><input id="mic-distance" type="range" min="0" max="100" step="5"><small>遠く</small></div>
+        <div class="level-meter" aria-hidden="true"><span id="mic-level"></span></div>
+        <p class="hint">スマホをギターから離して置くときは「遠く」に。音量メーターが真ん中あたりまで動くのが目安です（チューナーと押さえ方チェックにも効きます）。</p>
+      </div>
       <p id="mic-status" class="status"></p>
       <p id="mic-error" class="error" hidden></p>
       <div id="mic-result" class="result" aria-live="polite"></div>

@@ -1,8 +1,8 @@
 // 画面の切り替えと、各部品のつなぎ込み
 
 import { NOTE_NAMES, identifyFromNotes, midiToPitchClass, parseChordName, frequencyToMidi } from './chord-engine.js';
-import { startListening, startTuner, startStrumTuner, startShapeCheck } from './audio.js';
-import { TUNINGS, parseShape, formatShape, soundingNotes, renderFretboard, findVoicings } from './fretboard.js';
+import { startListening, startTuner, startStrumTuner, startShapeCheck, setMicDistance } from './audio.js';
+import { TUNINGS, parseShape, formatShape, soundingNotes, renderFretboard, findVoicings, chordDiagramSvg } from './fretboard.js';
 import { playNotes, playSequence } from './sound.js';
 import { formatTime, assignTab, formatTab, chartPlayback } from './song.js';
 import { estimateKey, suggestCapo, easiestVoicing } from './practice.js';
@@ -234,6 +234,18 @@ checkToggle.addEventListener('click', async () => {
   }
 });
 
+// ---- 聞き取る距離（近く〜遠く）：マイク・チューナー・押さえ方チェックの全部に効く ----
+const micDistance = document.getElementById('mic-distance');
+const micLevel = document.getElementById('mic-level');
+micDistance.value = storage.get('micDistance') ?? '30';
+setMicDistance(Number(micDistance.value) / 100);
+micDistance.addEventListener('input', () => {
+  setMicDistance(Number(micDistance.value) / 100);
+  storage.set('micDistance', micDistance.value);
+});
+// 音量メーター：増幅したあとの音量（0.1 で満タン）
+const showLevel = (level) => { micLevel.style.width = `${Math.min(100, (level / 0.1) * 100)}%`; };
+
 // ---------- マイク ----------
 const micToggle = document.getElementById('mic-toggle');
 const micStatus = document.getElementById('mic-status');
@@ -293,6 +305,7 @@ function stopMic() {
   micToggle.textContent = 'マイクを開始';
   micToggle.classList.remove('active');
   micStatus.textContent = '';
+  showLevel(0);
   shownName = null;
   wasPlaying = false;
   renderResult(micResult, []);
@@ -306,7 +319,8 @@ micToggle.addEventListener('click', async () => {
   }
   micError.hidden = true;
   try {
-    listener = await startListening(({ chroma, candidates, state }) => {
+    listener = await startListening(({ chroma, candidates, state, level }) => {
+      showLevel(level);
       micStatus.textContent = state === 'calibrating' ? '周りの雑音を覚えています。1秒ほど弾かずに待ってください…'
         : state === 'quiet' && shownName === null ? 'ギターを弾いてください' : '';
       const max = Math.max(...chroma) || 1;
@@ -424,8 +438,8 @@ function renderAnalysis() {
   songChords.innerHTML = timeline.length
     ? timeline.map((seg, i) => `
       <div class="song-chord" data-index="${i}">
-        <button type="button" class="chord-seek"><small>${formatTime(seg.start)}</small><b>${escapeHtml(seg.name)}</b><span>${voicingFor(seg.name)}</span></button>
-        <button type="button" class="to-fret" aria-label="${escapeHtml(seg.name)} を指板で見る" title="指板で見る">🎸</button>
+        <button type="button" class="chord-seek"><small>${formatTime(seg.start)}</small><b>${escapeHtml(seg.name)}</b></button>
+        <button type="button" class="to-fret" aria-label="${escapeHtml(seg.name)} の押さえ方（タップで指板に大きく表示）" title="指板で大きく見る">${chordDiagramSvg(parseShape(voicingFor(seg.name)))}</button>
       </div>`).join('')
     : '<p class="hint">コードが見つかりませんでした</p>';
   songTab.innerHTML = tabBlocks.length

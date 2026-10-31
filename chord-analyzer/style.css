@@ -499,6 +499,7 @@ select, input[type="text"] {
 
 .song-chord {
   display: flex;
+  flex-direction: column;
   align-items: stretch;
   border: 1px solid var(--line);
   border-radius: 10px;
@@ -510,15 +511,23 @@ select, input[type="text"] {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  min-width: 64px;
-  padding: 6px 4px 6px 10px;
+  min-width: 76px;
+  padding: 6px 8px 0;
   border: 0;
   background: transparent;
   color: var(--text);
   text-align: left;
 }
 
-.to-fret { border: 0; border-left: 1px solid var(--line); background: transparent; padding: 0 8px; font-size: 1rem; }
+.to-fret { border: 0; background: transparent; padding: 0 6px 6px; display: flex; justify-content: center; }
+.chord-diagram { display: block; }
+.chord-diagram .cd-line { stroke: var(--muted); stroke-width: 1; }
+.chord-diagram .cd-nut { stroke: var(--text); stroke-width: 3; }
+.chord-diagram .cd-dot { fill: var(--accent); }
+.chord-diagram .cd-open { fill: none; stroke: var(--text); stroke-width: 1.2; }
+.chord-diagram .cd-mark { fill: var(--error); font-size: 9px; text-anchor: middle; }
+.chord-diagram .cd-fret { fill: var(--muted); font-size: 9px; }
+.song-chord.active .cd-line { stroke: var(--text); }
 
 .song-chord small { color: var(--muted); font-size: 0.7rem; }
 .song-chord b { font-size: 1.1rem; }
@@ -597,3 +606,13 @@ select, input[type="text"] {
 .song-key b { font-size: 1.1rem; color: var(--accent); }
 
 #mic-to-fret { min-height: 42px; }
+
+/* ---------- 聞き取る距離 ---------- */
+.mic-distance { display: flex; flex-direction: column; gap: 6px; background: var(--surface); border-radius: 12px; padding: 10px 12px; }
+.mic-distance label { font-size: 0.9rem; font-weight: 700; }
+.distance-row { display: flex; align-items: center; gap: 8px; }
+.distance-row small { color: var(--muted); white-space: nowrap; }
+.distance-row input { flex: 1; accent-color: var(--accent); }
+.level-meter { height: 8px; border-radius: 4px; background: var(--surface-2); overflow: hidden; }
+.level-meter span { display: block; height: 100%; width: 0; background: var(--good); transition: width 80ms linear; }
+.mic-distance .hint { margin: 0; font-size: 0.78rem; }
