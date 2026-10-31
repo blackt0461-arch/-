@@ -55,7 +55,9 @@ export async function playNotes(midis, { strumMs = 35, seconds = 2.5 } = {}) {
 
 /**
  * 音の並びを、時間どおりに鳴らす（コード譜・タブ譜の再生）。
- * items: [{ t: 鳴らす時刻（秒）, midis: [MIDI…], strumMs }]
+ * items: [{ t: 鳴らす時刻（秒）, notes: [{ midi, string }], strumMs, gain, muteOthers }]
+ *   （古い形の midis: [MIDI…] も使える。そのときは弦の区別なし）
+ * 本物のギターと同じく、同じ弦で次の音を弾いたら前の音は止まる。muteOthers なら、鳴らさない弦も止める（コードの持ち替え）。
  * from 秒から rate 倍の速さで鳴らし始め、onTime(今の曲の時刻) を画面の更新用に呼ぶ。戻り値の stop() で止める。
  * 音は少し先（0.6秒ぶん）ずつ作って予約していくので、長い曲でも最初に待たされない。
  */
@@ -66,23 +68,44 @@ export async function playSequence(items, { from = 0, rate = 1, onTime = () => {
   const queue = items.filter((it) => it.t >= from - 0.01).sort((a, b) => a.t - b.t);
   const startAt = ctx.currentTime + 0.15;
   const end = queue.length ? queue[queue.length - 1].t + 2 : from;
+  const master = ctx.createGain();
+  master.connect(ctx.destination);
   const sources = [];
+  const ringing = new Map(); // 弦ごとに、いま鳴っている音（止めるため）
   let next = 0;
   let stopped = false;
+
+  // 弦の音を when の時刻に、短くフェードアウトして止める（プツッという音を避ける）
+  const silence = (string, when) => {
+    const voice = ringing.get(string);
+    if (!voice) return;
+    voice.gain.gain.setTargetAtTime(0, Math.max(when, ctx.currentTime), 0.015);
+    voice.src.stop(Math.max(when, ctx.currentTime) + 0.1);
+    ringing.delete(string);
+  };
 
   const schedule = () => {
     const horizon = (ctx.currentTime - startAt) * rate + from + 0.6;
     while (next < queue.length && queue[next].t <= horizon) {
-      const { t, midis, strumMs = 0 } = queue[next++];
-      midis.forEach((midi, i) => {
-        const note = pluck(440 * 2 ** ((midi - 69) / 12), sr, 1.8);
+      const item = queue[next++];
+      const notes = item.notes ?? item.midis.map((midi, i) => ({ midi, string: `n${next}-${i}` }));
+      const when = startAt + (item.t - from) / rate;
+      if (item.muteOthers) [...ringing.keys()].forEach((s) => { if (!notes.some((n) => n.string === s)) silence(s, when); });
+      const level = (0.5 / Math.sqrt(notes.length)) * (item.gain ?? 1);
+      notes.forEach(({ midi, string }, i) => {
+        const at = when + (i * (item.strumMs ?? 0)) / 1000;
+        silence(string, at);
+        const note = pluck(440 * 2 ** ((midi - 69) / 12), sr, 2.2);
         const buffer = ctx.createBuffer(1, note.length, sr);
-        buffer.getChannelData(0).set(note.map((v) => v * (0.5 / Math.sqrt(midis.length))));
+        buffer.getChannelData(0).set(note);
         const src = ctx.createBufferSource();
         src.buffer = buffer;
-        src.connect(ctx.destination);
-        src.start(startAt + (t - from) / rate + (i * strumMs) / 1000);
+        const gain = ctx.createGain();
+        gain.gain.value = level;
+        src.connect(gain).connect(master);
+        src.start(at);
         sources.push(src);
+        ringing.set(string, { src, gain });
       });
     }
   };
@@ -99,7 +122,8 @@ export async function playSequence(items, { from = 0, rate = 1, onTime = () => {
     if (stopped) return;
     stopped = true;
     clearInterval(timer);
-    sources.forEach((s) => { try { s.stop(); } catch { /* もう止まっている */ } });
+    master.gain.setTargetAtTime(0, ctx.currentTime, 0.02);
+    sources.forEach((s) => { try { s.stop(ctx.currentTime + 0.1); } catch { /* もう止まっている */ } });
   }
   return { stop };
 }

@@ -4,11 +4,11 @@ import { NOTE_NAMES, identifyFromNotes, midiToPitchClass, parseChordName, freque
 import { startListening, startTuner, startStrumTuner, startShapeCheck } from './audio.js';
 import { TUNINGS, parseShape, formatShape, soundingNotes, renderFretboard, findVoicings } from './fretboard.js';
 import { playNotes, playSequence } from './sound.js';
-import { formatTime, assignTab, formatTab } from './song.js';
+import { formatTime, assignTab, formatTab, chartPlayback } from './song.js';
 import { estimateKey, suggestCapo, easiestVoicing } from './practice.js';
 
 // version.json と同じ値にする（新しいバージョンを公開したら両方を上げる）
-const APP_VERSION = '1.6.0';
+const APP_VERSION = '1.6.1';
 const APP_FILES = ['index.html', 'style.css', 'app.js', 'chord-engine.js', 'audio.js', 'fretboard.js', 'sound.js', 'song.js', 'dsp.js', 'chart.js', 'live.js', 'practice.js', 'transcribe.js', 'transcribe-worker.js', 'sw.js', 'manifest.webmanifest'];
 const HOLD_MS = 150;      // マイク：別のコードがこの時間続いたら表示を切り替える
 const HISTORY_SIZE = 16;  // マイク：覚えておくコードの数
@@ -473,27 +473,25 @@ function stopSynth() {
 function tabItems() {
   const tuning = currentTuning();
   const capo = Number(capoSelect.value);
-  return analysis.events.map((e) => ({
-    t: e.t,
-    midis: e.positions ? e.positions.map((p) => tuning.strings[p.string] + capo + p.fret).sort((a, b) => a - b) : e.notes,
-    strumMs: e.positions || e.notes.length > 2 ? 18 : 0,
-  }));
+  // タブ譜と同じ弦・フレットで鳴らす（同じ弦の前の音は止まる）
+  return assignTab(analysis.events, tuning, { capo }).map((e, i) => {
+    const strum = analysis.events[i].positions || e.positions.length > 2;
+    return {
+      t: e.t,
+      notes: e.positions.map((p) => ({ midi: tuning.strings[p.string] + capo + p.fret, string: p.string })).sort((a, b) => a.midi - b.midi),
+      strumMs: strum ? 18 : 0,
+      gain: 1,
+      muteOthers: Boolean(analysis.events[i].positions),
+    };
+  });
 }
 
-// コード譜：拍ごとに、そのときのコードの押さえ方をジャラーンと鳴らす
+// コード譜：実際にギターを弾いた瞬間に合わせて、そのときのコードの押さえ方で鳴らす（リズムと弾き方を再現する）
 function chartItems() {
-  const tuning = currentTuning();
-  const capo = Number(capoSelect.value);
-  const items = [];
-  const beats = analysis.beats?.length ? analysis.beats : [];
-  analysis.timeline.forEach((seg) => {
-    const shape = parseShape(voicingFor(seg.name));
-    if (!shape) return;
-    const midis = soundingNotes(shape, tuning, capo);
-    const times = beats.filter((b) => b >= seg.start - 0.02 && b < seg.end - 0.02);
-    (times.length ? times : [seg.start]).forEach((t) => items.push({ t, midis, strumMs: 22 }));
+  return chartPlayback(analysis.events, analysis.timeline, (name) => parseShape(voicingFor(name)), currentTuning(), {
+    capo: Number(capoSelect.value),
+    onsets: analysis.onsets ?? [],
   });
-  return items;
 }
 
 async function startSynth(kind) {
@@ -605,7 +603,7 @@ songFile.addEventListener('change', async () => {
   try {
     const { channels, sampleRate, duration } = await decodeFile(file);
     const result = await runTranscription(channels, sampleRate, songMode.value);
-    analysis = { timeline: result.timeline, tabBlocks: buildTabBlocks(result.events), events: result.events, beats: result.beats, bpm: result.bpm };
+    analysis = { timeline: result.timeline, tabBlocks: buildTabBlocks(result.events), events: result.events, beats: result.beats, bpm: result.bpm, onsets: result.onsets };
     songInfo.textContent = `${file.name}（${formatTime(duration)}）・テンポ ${Math.round(result.bpm || 0)}・${result.useSide ? '左右の差で歌を弱めて解析しました' : '歌のメロディを取り除いて解析しました'}`;
     renderAnalysis();
     renderKey();

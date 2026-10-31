@@ -5,6 +5,8 @@
   "scripts": {
     "test": "node --test",
     "bench": "FFT_SIZE=32768 node tests/accuracy-bench.js",
-    "bench:song": "node tests/transcribe-bench.js"
+    "bench:song": "node tests/transcribe-bench.js",
+    "bench:live": "node tests/live-bench.js",
+    "bench:playback": "node tests/playback-bench.js"
   }
 }

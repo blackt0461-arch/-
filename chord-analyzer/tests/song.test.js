@@ -164,3 +164,11 @@ test('曲の調を推定し、弾きやすいカポの位置を提案できる',
   // F のセーハがある C G Am F は、カポ5で G D Em C の形にすると楽になる
   assert.equal(suggestCapo(chart(['C', 'G', 'Am', 'F']), STANDARD).capo, 5);
 });
+
+test('コード譜の再生：拍ごとではなく、実際に弾いた瞬間に合わせて鳴らす', async () => {
+  const { runPlayback } = await import('./playback-bench.js');
+  const r = runPlayback({ stereo: true, seed: 1 });
+  assert.ok(r.now.recall >= 0.95, `弾いた瞬間の再現 ${(r.now.recall * 100).toFixed(0)}%`);
+  assert.ok(r.now.precision >= 0.95, `余計に鳴らさない ${(r.now.precision * 100).toFixed(0)}%`);
+  assert.ok(r.now.recall > r.before.recall + 0.3, `以前 ${(r.before.recall * 100).toFixed(0)}% → 今回 ${(r.now.recall * 100).toFixed(0)}%`);
+});

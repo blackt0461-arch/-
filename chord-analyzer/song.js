@@ -152,3 +152,46 @@ export function formatTab(tabEvents, { perLine = 16, stringNames = ['E', 'A', 'D
   }
   return blocks.join('\n\n');
 }
+
+/**
+ * 「コード譜を鳴らす」用の音の並びを作る。拍ごとではなく、実際にギターを弾いた瞬間（events）に合わせて鳴らす。
+ * - ジャラーンと弾いた瞬間（和音）：そのときのコードの押さえ方で、全部の弦を鳴らす（押さえ方に無い弦は止める）
+ * - 1音ずつ弾いた瞬間（アルペジオ・リフ）：そのコードの押さえ方の中で弾かれた音と同じ音の弦を鳴らす（コードの外の音はそのまま）
+ * - 弾いた強さ（onsets の strength）を音量にする
+ * shapeFor(コード名) → 押さえ方（[6弦…1弦] のフレット、鳴らさない弦は null）
+ * 戻り値：[{ t, notes: [{ midi, string }], strumMs, gain, muteOthers }]
+ */
+export function chartPlayback(events, timeline, shapeFor, tuning, { capo = 0, onsets = [] } = {}) {
+  const strengths = onsets.map((o) => o.strength).sort((a, b) => a - b);
+  const median = strengths[Math.floor(strengths.length / 2)] || 1;
+  const gainAt = (t) => {
+    const o = onsets.find((x) => Math.abs(x.t - t) < 0.01);
+    return o ? Math.max(0.6, Math.min(1.3, o.strength / median)) : 1;
+  };
+  const items = [];
+  [...events].sort((a, b) => a.t - b.t).forEach((e) => {
+    // その瞬間のコード（区間の切れ目ぴったりで弾いたときは、新しいほうのコード）
+    const seg = timeline.find((s) => e.t >= s.start - 0.05 && e.t < s.end - 0.05) ?? [...timeline].reverse().find((s) => s.start <= e.t);
+    const shape = seg && shapeFor(seg.name);
+    if (!shape) return;
+    const voicing = shape.map((f, s) => (f === null ? null : { midi: tuning.strings[s] + capo + f, string: s })).filter(Boolean);
+    const strum = Boolean(e.positions) || e.notes.length >= 3;
+    let notes;
+    if (strum) {
+      notes = voicing;
+    } else {
+      // 弾かれた音ごとに、押さえ方の中で同じ音（無ければ同じ音名）の弦を選ぶ。
+      // コードの外の音（リフの経過音など）は、聞き取った音のまま、いちばん近い高さの弦で鳴らす
+      const picked = new Map();
+      e.notes.forEach((m) => {
+        const score = (v) => (v.midi === m ? 0 : (v.midi - m) % 12 === 0 ? 1 + Math.abs(v.midi - m) / 12 : 100 + Math.abs(v.midi - m));
+        const best = [...voicing].sort((a, b) => score(a) - score(b))[0];
+        if (!best) return;
+        picked.set(best.string, score(best) >= 100 ? { midi: m, string: best.string } : best);
+      });
+      notes = [...picked.values()];
+    }
+    if (notes.length) items.push({ t: e.t, notes, strumMs: strum ? 18 : 0, gain: gainAt(e.t), muteOthers: strum });
+  });
+  return items;
+}

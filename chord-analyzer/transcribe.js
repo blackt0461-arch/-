@@ -520,5 +520,5 @@ export function transcribe(channels, sampleRate, { mode = 'auto', voiceFilter = 
   }
 
   onProgress(1, '完了');
-  return { duration, useSide, sideRatio, chordFrames, timeline, events, bpm, beats, downbeat };
+  return { duration, useSide, sideRatio, chordFrames, timeline, events, bpm, beats, downbeat, onsets: onsetList.map(({ t, strength }) => ({ t, strength })) };
 }
