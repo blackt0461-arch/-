@@ -21,7 +21,7 @@ if (isMainThread) {
     if (fs.existsSync(audio)) jobs.push({ kind: 'guitarset', id: c.id, audio, chords: c.chords, duration: c.duration });
   });
   const conditions = [{ withBand: false }, { stereo: true }, { stereo: false }, { stereo: true, changesPerBar: 2 }, { withBand: false, changesPerBar: 4 }, { stereo: true, changesPerBar: 4 }];
-  conditions.forEach((so, ci) => { for (let seed = 1; seed <= 6; seed++) jobs.push({ kind: 'synth', id: `s${ci}-${seed}`, song: { ...so, seed: seed + 100 * ci } }); });
+  conditions.forEach((so, ci) => { for (let seed = 1; seed <= 10; seed++) jobs.push({ kind: 'synth', id: `s${ci}-${seed}`, song: { ...so, seed: 1000 + seed + 100 * ci } }); });
   const rows = [];
   let next = 0, done = 0;
   await new Promise((resolve) => {

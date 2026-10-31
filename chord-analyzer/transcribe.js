@@ -714,13 +714,31 @@ function transcribeOnce(channels, sampleRate, { mode = 'auto', voiceFilter = tru
  * （速い曲では前のコードの響きが残って読み違えやすいが、ゆっくりの曲でこの手がかりを使うと、かえって雑音を拾うため）
  */
 export function transcribe(channels, sampleRate, options = {}) {
-  const { fastBeats = 1.8, fastOptions = { fuseAttack: 0.5, fuseSubtract: 0.5, changeBonus: 0.1 }, onProgress = () => {} } = options;
-  const first = transcribeOnce(channels, sampleRate, { ...options, onProgress: (p, m) => onProgress(fastBeats ? p * 0.6 : p, m) });
-  if (!fastBeats || !first.bpm) return first;
-  const segs = first.timeline.filter((x) => x.end - x.start > 0);
-  const avgBeats = segs.length ? segs.reduce((a, x) => a + (x.end - x.start), 0) / segs.length / (60 / first.bpm) : Infinity;
-  if (avgBeats >= fastBeats) { onProgress(1, '完了'); return first; }
-  const second = transcribeOnce(channels, sampleRate, { ...options, ...fastOptions, onProgress: (p) => onProgress(0.6 + 0.4 * p, 'コードの速い切り替わりに合わせて、解析し直しています') });
-  // 解析し直すのはコード譜だけ。1音ずつの結果（タブ譜）は1回目のものを使う（コード譜の違いにつられて変わらないように）
-  return { ...first, timeline: second.timeline, chartInfo: { ...second.chartInfo, fastMode: true, firstAvgBeats: avgBeats } };
+  const { fastBeats = 1.8, fastOptions = { fuseAttack: 0.5, fuseSubtract: 0.5, changeBonus: 0.1 }, learned = 0, onProgress = () => {} } = options;
+  // 解析の回数（1回目：ふつう、2回目：学習した判定器でコード譜だけ作り直す、3回目：速い曲だけ）に合わせて進み具合を分ける
+  const passes = 1 + (learned > 0 ? 1 : 0) + (fastBeats ? 0.5 : 0);
+  let done = 0;
+  const run = (opts, label) => {
+    const from = done / passes, size = 1 / passes;
+    const r = transcribeOnce(channels, sampleRate, { ...options, ...opts, onProgress: (p, m) => onProgress(from + size * p, label ?? m) });
+    done += 1;
+    return r;
+  };
+  // 1回目：ふつうに解析する（1音ずつのタブ譜は、この結果を使う）
+  const first = run({ learned: 0 });
+  let { timeline, chartInfo } = first;
+  // 2回目：学習した判定器（前のコードの響きの残りなどを掃除する）を使って、コード譜だけ作り直す
+  if (learned > 0 && first.bpm) ({ timeline, chartInfo } = run({ learned }, 'コード譜を学習した判定器で見直しています'));
+  if (fastBeats && first.bpm) {
+    const segs = timeline.filter((x) => x.end - x.start > 0);
+    const avgBeats = segs.length ? segs.reduce((a, x) => a + (x.end - x.start), 0) / segs.length / (60 / first.bpm) : Infinity;
+    // コードがとても速く変わる曲：弾いた瞬間に急に大きくなった音なども手がかりにして、コード譜を作り直す
+    if (avgBeats < fastBeats) {
+      const second = run({ ...fastOptions, learned }, 'コードの速い切り替わりに合わせて、解析し直しています');
+      timeline = second.timeline;
+      chartInfo = { ...second.chartInfo, fastMode: true, firstAvgBeats: avgBeats };
+    }
+  }
+  onProgress(1, '完了');
+  return { ...first, timeline, chartInfo };
 }

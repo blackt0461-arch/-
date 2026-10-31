@@ -17,7 +17,9 @@ rows.forEach((song, si) => {
   const chromas = b.map((x) => x.chroma), attacks = b.map((x) => x.attack), basses = b.map((x) => x.bass), bars = b.map((x) => x.bar);
   b.forEach((x, k) => {
     if (!x.target) return;
-    for (let p = 0; p < 12; p++) (si % 5 === 4 ? valid : train).push({ x: featuresFor(chromas, attacks, basses, bars, k, p), y: x.target.includes(p) ? 1 : 0, song: si, k, p });
+    // 確認用：知らない演奏者（GuitarSet の演奏者 03）と、合成曲の一部。覚えすぎ（演奏者のクセを覚える）に気づけるように
+    const isValid = song.kind === 'guitarset' ? song.id.startsWith('03_') : si % 5 === 4;
+    for (let p = 0; p < 12; p++) (isValid ? valid : train).push({ x: featuresFor(chromas, attacks, basses, bars, k, p), y: x.target.includes(p) ? 1 : 0, song: si, k, p });
   });
 });
 const D = train[0].x.length;
@@ -50,7 +52,7 @@ const evaluate = (set) => {
   set.forEach((s) => { const { p } = forward(s.x); loss -= s.y ? Math.log(p + 1e-9) : Math.log(1 - p + 1e-9); if ((p > 0.5) === (s.y === 1)) ok++; });
   return { loss: loss / set.length, acc: ok / set.length };
 };
-const epochs = Number(process.env.EPOCHS || 30), batch = 64, l2 = 1e-4;
+const epochs = Number(process.env.EPOCHS || 30), batch = 64, l2 = Number(process.env.L2 || 1e-4);
 for (let e = 0; e < epochs; e++) {
   for (let i = train.length - 1; i > 0; i--) { const j = Math.floor((rnd() + 0.5) * (i + 1)); [train[i], train[j]] = [train[j], train[i]]; }
   for (let s = 0; s < train.length; s += batch) {
@@ -72,12 +74,13 @@ for (let e = 0; e < epochs; e++) {
     step([...W1.map((w, j) => [w, gW1[j]]), [b1, gb1], [W2, gW2], [b2arr, gb2]]);
     b2 = b2arr[0];
   }
-  if (e % 5 === 4 || e === epochs - 1) { const tr = evaluate(train), va = evaluate(valid); console.log(`${e + 1}回目  学習 ${(tr.acc * 100).toFixed(1)}%  確認 ${(va.acc * 100).toFixed(1)}%（損失 ${va.loss.toFixed(3)}）`); }
+  if (e % 5 === 4 || e === epochs - 1) { const tr = evaluate(train), va = evaluate(valid.filter((x) => rows[x.song].kind === 'guitarset')); console.log(`${e + 1}回目  学習 ${(tr.acc * 100).toFixed(1)}%  確認 ${(va.acc * 100).toFixed(1)}%（損失 ${va.loss.toFixed(3)}）`); }
   lr *= 0.93;
 }
 // 比べる基準：今のやり方（音の強さが最大の 35% 以上なら「入っている」）
-let base = 0; valid.forEach((s) => { if ((s.x[0] >= 0.35) === (s.y === 1)) base++; });
-console.log(`（くらべる基準：音の強さだけで決めた場合 ${(base / valid.length * 100).toFixed(1)}%）`);
+const vg = valid.filter((x) => rows[x.song].kind === 'guitarset');
+let base = 0; vg.forEach((s) => { if ((s.x[0] >= 0.35) === (s.y === 1)) base++; });
+console.log(`（くらべる基準：音の強さだけで決めた場合 ${(base / vg.length * 100).toFixed(1)}%）`);
 const round = (a) => a.map((x) => Math.round(x * 1e4) / 1e4);
 // WRITE_MODEL=1 なら、学んだ重みを learned.js の MODEL に書き込む
 const model = { D, H, W1: W1.map(round), b1: round(b1), W2: round(W2), b2: Math.round(b2 * 1e4) / 1e4 };
