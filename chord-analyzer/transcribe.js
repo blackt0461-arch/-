@@ -876,6 +876,6 @@ export const GENRE_PRESETS = {
   singer: {},
   jazz: {},
   funk: {},
-  bossa: {},
+  bossa: { learned: 0.7 }, // 調整用で選び、知らない演奏者でコード 71.4→72.9%
 };
 export const GENRE_NAMES = { pop: 'ポップ・ロック', singer: '弾き語り', jazz: 'ジャズ', funk: 'ファンク', bossa: 'ボサノバ' };
