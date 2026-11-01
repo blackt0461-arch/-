@@ -873,7 +873,7 @@ export function songFeatures(r) {
  */
 export const GENRE_PRESETS = {
   pop: {},
-  singer: {},
+  singer: { chartOptions: { changePenalty: 0.12, offBarPenalty: 0.09 } }, // 知らない演奏者でコード 80.2→80.8%（1音ずつ -0.3）
   jazz: {},
   funk: {},
   bossa: { learned: 0.7 }, // 調整用で選び、知らない演奏者でコード 71.4→72.9%
