@@ -869,7 +869,7 @@ export function songFeatures(r) {
 /**
  * ジャンルごとの設定（画面の「ジャンル」）。研究用データのジャンル別の採点で、
  * 知らない演奏者でも良くなった設定だけをここに入れる（tests/learn/genre-search.js）。
- * auto（おまかせ）は、音の特徴からジャンルを推定して、そのジャンルの設定を使う
+ * auto（おまかせ）は標準の設定のまま（音の特徴からの推定は、知らない演奏者で 42% しか当たらず見送り）
  */
 export const GENRE_PRESETS = {
   pop: {},
