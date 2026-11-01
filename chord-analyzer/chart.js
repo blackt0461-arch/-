@@ -150,7 +150,7 @@ for (let root = 0; root < 12; root++) {
  * 12音の強さ（chroma）とベース音から、コードの候補（STATES）それぞれの点数を出す。
  * 曲の解析（拍ごと）とマイク（その瞬間ごと）の両方で使う。
  */
-export function scoreStates(c, bass, { rootBonus = 0.1, foreignBassPenalty = 0.1, tensionPenalty = 0.03, extraTonePenalty = 0.02, rarePenalty = 0.08 } = {}) {
+export function scoreStates(c, bass, { rootBonus = 0.1, foreignBassPenalty = 0.1, tensionPenalty = 0.03, extraTonePenalty = 0.02, rarePenalty = 0.08, minorBonus = 0 } = {}) {
   const total = c.reduce((a, b) => a + b, 0);
   return STATES.map((st) => {
     if (!total) return 0;
@@ -160,7 +160,9 @@ export function scoreStates(c, bass, { rootBonus = 0.1, foreignBassPenalty = 0.1
     const extra = Math.max(0, st.type.intervals.length - 3);
     // sus4・sus2・dim・aug などは実際の曲では少ないので、はっきりした証拠があるときだけ選ぶ
     const rare = RARE.has(st.type.suffix) ? rarePenalty : 0;
-    return cosine(c, st.template) + bassTerm - (st.type.tension ? tensionPenalty : 0) - extra * extraTonePenalty - rare - st.typeIndex * 0.001;
+    // マイナーの少しの後押し：ルートの倍音がメジャーの3度と同じ高さに出るため、マイナーをメジャーと読み違えやすい
+    const minor = st.type.intervals.includes(3) && !st.type.intervals.includes(4) ? minorBonus : 0;
+    return cosine(c, st.template) + bassTerm + minor - (st.type.tension ? tensionPenalty : 0) - extra * extraTonePenalty - rare - st.typeIndex * 0.001;
   });
 }
 
