@@ -568,6 +568,19 @@ function transcribeOnce(channels, sampleRate, { mode = 'auto', voiceFilter = tru
     if (fresh.length) events.push(positions ? { t, notes: fresh, positions } : { t, notes: fresh });
   });
 
+  // 指で音を変えた担当が足した音は、前後が1音ずつ弾かれている場面（ソロ・メロディ）でだけ残す。
+  // 和音が鳴っていると音の高さが1つに決まらず、高さが変わったと誤って判断しやすいため
+  if (legatoTimes.length) {
+    const plain = events.filter((e) => !e.legato);
+    events = events.filter((e) => {
+      if (!e.legato) return true;
+      if (e.notes.length !== 1) return false;
+      const before = [...plain].reverse().find((x) => x.t < e.t), after = plain.find((x) => x.t > e.t);
+      const mono = (x) => x && x.notes.length === 1 && !x.positions;
+      return mono(before) && e.t - before.t < 1 && (!after || (mono(after) && after.t - e.t < 1));
+    });
+  }
+
   // 4. 拍を見つけ、拍ごとに鳴った音をまとめてコード譜にする
   onProgress(0.97, 'コード譜にまとめています');
   const beatChromasFor = (beats, period, useSegment = false) => {
