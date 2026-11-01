@@ -362,9 +362,12 @@ micToggle.addEventListener('click', async () => {
 const songFile = document.getElementById('song-file');
 const songMode = document.getElementById('song-mode');
 const songQuality = document.getElementById('song-quality');
+const songGenre = document.getElementById('song-genre');
 // 解析の時間の選択は覚えておく（次に開いたときも同じ）
 try { const q = localStorage.getItem('songQuality'); if (q && songQuality.querySelector(`option[value="${q}"]`)) songQuality.value = q; } catch { /* 保存できない環境 */ }
 songQuality.addEventListener('change', () => { try { localStorage.setItem('songQuality', songQuality.value); } catch { /* 保存できない環境 */ } });
+try { const g = localStorage.getItem('songGenre'); if (g && songGenre.querySelector(`option[value="${g}"]`)) songGenre.value = g; } catch { /* 保存できない環境 */ }
+songGenre.addEventListener('change', () => { try { localStorage.setItem('songGenre', songGenre.value); } catch { /* 保存できない環境 */ } });
 const songError = document.getElementById('song-error');
 const songProgress = document.getElementById('song-progress');
 const songProgressFill = document.getElementById('song-progress-fill');
@@ -403,7 +406,7 @@ async function decodeFile(file) {
   }
 }
 
-function runTranscription(channels, sampleRate, mode, quality = 'normal') {
+function runTranscription(channels, sampleRate, mode, quality = 'normal', genre = 'auto') {
   worker?.terminate();
   worker = new Worker('transcribe-worker.js', { type: 'module' });
   return new Promise((resolve, reject) => {
@@ -419,7 +422,7 @@ function runTranscription(channels, sampleRate, mode, quality = 'normal') {
       }
     };
     worker.onerror = (e) => reject(new Error(e.message || '解析中にエラーが起きました'));
-    worker.postMessage({ channels, sampleRate, mode, quality }, channels.map((c) => c.buffer));
+    worker.postMessage({ channels, sampleRate, mode, quality, genre }, channels.map((c) => c.buffer));
   });
 }
 
@@ -668,7 +671,7 @@ songFile.addEventListener('change', async () => {
   songMedia.src = URL.createObjectURL(file);
   try {
     const { channels, sampleRate, duration } = await decodeFile(file);
-    const result = await runTranscription(channels, sampleRate, songMode.value, songQuality.value);
+    const result = await runTranscription(channels, sampleRate, songMode.value, songQuality.value, songGenre.value);
     pendingBeats = { beats: result.beats, downbeat: result.downbeat, duration: result.duration, timeline: result.timeline };
     analysis = { timeline: result.timeline, tabBlocks: buildTabBlocks(result.events), events: result.events, beats: result.beats, downbeat: result.downbeat, duration: result.duration, bpm: result.bpm, onsets: result.onsets };
     const how = result.useSide ? '左右の差で歌を弱めて解析しました'

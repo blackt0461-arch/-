@@ -1,7 +1,7 @@
 // 採点の作業者：1曲を解析して点数を返す（eval.js から、CPU の数だけ同時に動かす）
 import { parentPort } from 'node:worker_threads';
 import fs from 'node:fs';
-import { transcribe } from '../../transcribe.js';
+import { transcribe, songFeatures } from '../../transcribe.js';
 import { same } from '../real-song-eval.js';
 import { parseChordName } from '../../chord-engine.js';
 import { makeSong } from '../mix.js';
@@ -201,6 +201,7 @@ parentPort.on('message', ({ job, options }) => {
     const r = transcribe(audio.channels, audio.sampleRate, options);
     const duration = truth.duration ?? audio.channels[0].length / audio.sampleRate;
     const result = { id: job.id, set: job.set, category: job.category, seconds: (Date.now() - t0) / 1000, ...(truth.chords ? chordScore(r.timeline, truth.chords, duration, job.offset ?? 0, job.kind === 'guitarset') : {}) };
+    result.features = songFeatures({ ...r, duration });
     if (r.bpm && r.timeline.length) { const segs = r.timeline.filter((x) => x.end - x.start > 0); result.chordBeats = segs.reduce((a, x) => a + (x.end - x.start), 0) / segs.length / (60 / r.bpm); }
     if (truth.notes) Object.assign(result, onsetScore(r.onsets, truth.notes));
     if (truth.notes) { result.notes = noteScore(r.events, truth.notes); const sh = shortNoteScore(r.events, truth.notes); if (sh !== null) result.shortNotes = sh; }

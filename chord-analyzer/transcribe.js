@@ -829,3 +829,40 @@ export const ANALYSIS_PRESETS = {
   normal: {},
   careful: {},
 };
+
+/**
+ * ジャンルを推定するための、曲の特徴（1回目の解析結果から作る）。どれも 0〜1 くらいの大きさにそろえる
+ */
+export function songFeatures(r) {
+  const dur = Math.max(1, r.duration);
+  const ev = r.events ?? [];
+  const tl = (r.timeline ?? []).filter((s) => s.end - s.start > 0);
+  const beat = r.bpm ? 60 / r.bpm : 0.5;
+  const ext = (name) => /7|9|6|11|13|sus|add|dim|aug|♭5/.test(name.split('/')[0].replace(/^[A-G][#♭]?/, ''));
+  const tlTime = tl.reduce((a, s) => a + (s.end - s.start), 0) || 1;
+  const durs = ev.map((e) => e.dur ?? 0.3).sort((a, b) => a - b);
+  const medianDur = durs.length ? durs[Math.floor(durs.length / 2)] : 0.3;
+  return {
+    onsetRate: Math.min(1, ev.length / dur / 8), // 1秒あたりに弾いた回数（8回で 1）
+    shortness: Math.min(1, 0.1 / Math.max(0.02, medianDur)), // 音が短いほど 1 に近い
+    extended: tl.reduce((a, s) => a + (ext(s.name) ? s.end - s.start : 0), 0) / tlTime, // 足し音のあるコードの時間の割合
+    slash: tl.reduce((a, s) => a + (s.name.includes('/') ? s.end - s.start : 0), 0) / tlTime, // 分数コードの割合（ベースが動く）
+    chordBeats: Math.min(1, (tlTime / Math.max(1, tl.length) / beat) / 16), // コードが何拍ごとに変わるか（16拍で 1）
+    strumShare: ev.length ? ev.filter((e) => e.positions || e.notes.length >= 3).length / ev.length : 0, // 和音で弾いた割合
+    tempo: Math.min(1, (r.bpm ?? 100) / 200),
+  };
+}
+
+/**
+ * ジャンルごとの設定（画面の「ジャンル」）。研究用データのジャンル別の採点で、
+ * 知らない演奏者でも良くなった設定だけをここに入れる（tests/learn/genre-search.js）。
+ * auto（おまかせ）は、音の特徴からジャンルを推定して、そのジャンルの設定を使う
+ */
+export const GENRE_PRESETS = {
+  pop: {},
+  singer: {},
+  jazz: {},
+  funk: {},
+  bossa: {},
+};
+export const GENRE_NAMES = { pop: 'ポップ・ロック', singer: '弾き語り', jazz: 'ジャズ', funk: 'ファンク', bossa: 'ボサノバ' };
