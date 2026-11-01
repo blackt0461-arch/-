@@ -58,7 +58,7 @@ export function detectOnsets(signal, sampleRate, options = {}) {
 }
 
 /** 弾いた瞬間と、その勢い（strength：スペクトルフラックスの大きさ）を返す */
-export function detectOnsetsDetailed(signal, sampleRate, { frame = 2048, hop = 512, minGap = 0.06, superflux = false, refine = false, thresholdMedian = 1.4, thresholdMean = 0.4 } = {}) {
+export function detectOnsetsDetailed(signal, sampleRate, { frame = 2048, hop = 512, minGap = 0.06, superflux = false, refine = false, refineLate = 0.025, thresholdMedian = 1.4, thresholdMean = 0.4 } = {}) {
   const binHz = sampleRate / frame;
   const lo = Math.floor(80 / binHz), hi = Math.ceil(5000 / binHz);
   const flux = [];
@@ -96,7 +96,7 @@ export function detectOnsetsDetailed(signal, sampleRate, { frame = 2048, hop = 5
     const energy = (c) => { let e = 0; for (let i = Math.max(0, c - win); i < Math.min(hp.length, c + win); i++) e += hp[i] * hp[i]; return Math.log(e + 1e-9); };
     const center = Math.round(t * sampleRate);
     let best = t, bestRise = -Infinity;
-    for (let c = center - Math.round(sampleRate * 0.035); c <= center + Math.round(sampleRate * 0.025); c += step) {
+    for (let c = center - Math.round(sampleRate * 0.035); c <= center + Math.round(sampleRate * refineLate); c += step) {
       const rise = energy(c + win) - energy(c - win);
       if (rise > bestRise) { bestRise = rise; best = c / sampleRate; }
     }
@@ -132,6 +132,61 @@ export function detectOnsetsDetailed(signal, sampleRate, { frame = 2048, hop = 5
     onsets.push({ t, strength, spread: spread(i) });
   }
   return onsets;
+}
+
+/**
+ * 指で音を変えた瞬間（ハンマリング・プリング・スライド）を探す担当。弦をはじかないので音量は急に大きくならないが、
+ * 音の高さが別の高さに切り替わる。0.01 秒ごとに音の高さを追いかけ（YIN 法）、ある高さで安定したあと、
+ * 別の高さに切り替わってまた安定したところを返す。1音ずつ鳴っている場面でしか使えない（和音では高さが1つに決まらない）
+ * 戻り値：[{ t, midi }]
+ */
+export function detectPitchChanges(signal, sampleRate, { hop = 0.01, minStable = 4, minFreq = 75, maxFreq = 1100, threshold = 0.15, maxGap = 3 } = {}) {
+  // 計算を軽くするため、4 分の 1 に間引く（音の高さの判定には 11kHz あれば足りる）
+  const k = 4, sr = sampleRate / k;
+  const x = new Float32Array(Math.floor(signal.length / k));
+  for (let i = 0; i < x.length; i++) x[i] = (signal[i * k] + signal[i * k + 1] + signal[i * k + 2] + signal[i * k + 3]) / 4;
+  const win = 1024, maxLag = Math.floor(sr / minFreq), minLag = Math.floor(sr / maxFreq), n = win - maxLag;
+  const step = Math.round(hop * sr);
+  const d = new Float32Array(maxLag + 1), cm = new Float32Array(maxLag + 1);
+  const track = [];
+  for (let s0 = 0; s0 + win <= x.length; s0 += step) {
+    let energy = 0;
+    for (let i = 0; i < win; i++) energy += x[s0 + i] * x[s0 + i];
+    if (energy < 1e-6 * win) { track.push(null); continue; }
+    for (let lag = minLag; lag <= maxLag; lag++) {
+      let sum = 0;
+      for (let i = 0; i < n; i++) { const df = x[s0 + i] - x[s0 + i + lag]; sum += df * df; }
+      d[lag] = sum;
+    }
+    let running = 0;
+    for (let lag = 1; lag < minLag; lag++) { let sum = 0; for (let i = 0; i < n; i++) { const df = x[s0 + i] - x[s0 + i + lag]; sum += df * df; } running += sum; }
+    let found = -1;
+    for (let lag = minLag; lag <= maxLag; lag++) {
+      running += d[lag];
+      cm[lag] = running ? (d[lag] * lag) / running : 1;
+    }
+    for (let lag = minLag + 1; lag < maxLag; lag++) {
+      if (cm[lag] < threshold) { while (lag + 1 < maxLag && cm[lag + 1] < cm[lag]) lag++; found = lag; break; }
+    }
+    if (found < 0) { track.push(null); continue; }
+    const a = cm[found - 1], b = cm[found], c = cm[found + 1], den = a - 2 * b + c;
+    const lag = found + (den ? (0.5 * (a - c)) / den : 0);
+    track.push(Math.round(69 + 12 * Math.log2(sr / lag / 440)));
+  }
+  // 同じ高さが minStable 回以上続く「安定した区間」をつなぐ
+  const runs = [];
+  track.forEach((m, i) => {
+    const last = runs[runs.length - 1];
+    if (m !== null && last && last.m === m && i - last.end <= maxGap) last.end = i;
+    else if (m !== null) runs.push({ m, start: i, end: i });
+  });
+  const stable = runs.filter((r) => r.end - r.start + 1 >= minStable);
+  const out = [];
+  for (let i = 1; i < stable.length; i++) {
+    const a = stable[i - 1], b = stable[i];
+    if (a.m !== b.m && b.start - a.end <= maxGap + 2) out.push({ t: (b.start * step + win / 2) / sr - 0.02, midi: b.m });
+  }
+  return out;
 }
 
 /**
@@ -383,7 +438,7 @@ function refineWithChart(events, onsetList, timeline, tuning, { strumStrength = 
  * - chords: 0.1秒ごとのコードの判定（buildChordTimeline でコード進行にまとめる）
  * - events: 弾いた瞬間ごとの、新しく鳴った音（タブ譜の材料）
  */
-function transcribeOnce(channels, sampleRate, { mode = 'auto', voiceFilter = true, method = 'peel', riseRatio = 1.3, minStrength = 0.2, harmonicRatio = 4, tuning = TUNINGS[0], snapStrums = true, snapMin = 3, peelOptions = {}, useChart = true, chartOptions = {}, noteWeight = null, chromaMethod = 'auto', harmonicResidual = 0.35, vocalOptions = {}, vocalPresence = 0.35, minBeats = 1, precise = true, highWeight = 0.6, useContext = true, contextOptions = {}, dropVocalNotes = true, estimateDurations = true, stopRatio = 0.25, voiceOptions = { wobbleCents: 60, useSwell: false }, attackRatio = 0, chordWindow = 16384, chordMinDuration = 0.5, segmentChroma = 0, segmentBass = false, prevSubtract = 0, attackChroma = 0, changeGate = 0, fuseAttack = 0, fuseSubtract = 0, changeBonus = 0, exportFeatures = false, learned = 0, learnedConfidence = false, onsetOptions = {}, noteOnsetOptions = null, onProgress = () => {} } = {}) {
+function transcribeOnce(channels, sampleRate, { mode = 'auto', voiceFilter = true, method = 'peel', riseRatio = 1.3, minStrength = 0.2, harmonicRatio = 4, tuning = TUNINGS[0], snapStrums = true, snapMin = 3, peelOptions = {}, useChart = true, chartOptions = {}, noteWeight = null, chromaMethod = 'auto', harmonicResidual = 0.35, vocalOptions = {}, vocalPresence = 0.35, minBeats = 1, precise = true, highWeight = 0.6, useContext = true, contextOptions = {}, dropVocalNotes = true, estimateDurations = true, stopRatio = 0.25, voiceOptions = { wobbleCents: 60, useSwell: false }, attackRatio = 0, chordWindow = 16384, chordMinDuration = 0.5, segmentChroma = 0, segmentBass = false, prevSubtract = 0, attackChroma = 0, changeGate = 0, fuseAttack = 0, fuseSubtract = 0, changeBonus = 0, exportFeatures = false, learned = 0, learnedConfidence = false, onsetOptions = {}, noteOnsetOptions = null, legatoNotes = false, onProgress = () => {} } = {}) {
   const { guitar, mid, useSide, sideRatio } = chooseSignal(channels, mode, sampleRate);
   const duration = guitar.length / sampleRate;
 
@@ -434,7 +489,15 @@ function transcribeOnce(channels, sampleRate, { mode = 'auto', voiceFilter = tru
   // （細かく時刻を合わせると1音ずつは正確になるが、拍の推定が変わってコード譜が崩れることがあるため）
   const onsetList = detectOnsetsDetailed(guitar, sampleRate, onsetOptions);
   const noteOnsetList = noteOnsetOptions ? detectOnsetsDetailed(guitar, sampleRate, noteOnsetOptions) : onsetList;
-  const onsets = noteOnsetList.map((o) => o.t);
+  let onsets = noteOnsetList.map((o) => o.t);
+  // 指で音を変えた担当：音の高さが切り替わった瞬間のうち、ほかの担当の白い線が近くに無いものを、1音ずつの聞き取りの対象に足す
+  // （時刻だけを使い、音の高さは倍音をはがす方法で決める）
+  let legatoTimes = [];
+  if (legatoNotes) {
+    const opts = typeof legatoNotes === 'object' ? legatoNotes : { threshold: 0.35, minStable: 3, maxGap: 4 };
+    legatoTimes = detectPitchChanges(guitar, sampleRate, opts).map((c) => c.t).filter((t) => !onsets.some((o) => Math.abs(o - t) < 0.07));
+    onsets = [...onsets, ...legatoTimes].sort((x, y) => x - y);
+  }
 
   // 3. 弾いた瞬間ごとに、直前より強くなった音（＝新しく弾いた音）を拾う
   let events = [];
