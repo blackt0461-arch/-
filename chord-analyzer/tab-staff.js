@@ -82,7 +82,7 @@ export function staffRowSvg(bars, tabEvents, timeline, { stringNames = ['E', 'A'
     });
     // 棒の長さで音の長さの目安を示す（長く鳴らす音ほど長い棒。和音は太い棒）
     const len = e.dur ? Math.max(6, Math.min(16, 6 + e.dur * 10)) : 10;
-    parts.push(`<line x1="${x}" y1="${top + staffH + 4}" x2="${x}" y2="${top + staffH + 4 + len}" class="ts-stem${e.positions.length >= 3 ? ' ts-strum' : ''}"/>`);
+    parts.push(`<line x1="${x}" y1="${top + staffH + 4}" x2="${x}" y2="${top + staffH + 4 + len}" class="ts-stem${e.legato ? ' ts-legato' : e.positions.length >= 3 ? ' ts-strum' : ''}"/>`);
   });
   // 再生位置の線（最初は隠しておく）
   parts.push(`<line x1="0" y1="${top - 4}" x2="0" y2="${top + staffH + 4}" class="ts-cursor" visibility="hidden"/>`);

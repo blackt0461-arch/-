@@ -525,7 +525,7 @@ function transcribeOnce(channels, sampleRate, { mode = 'auto', voiceFilter = tru
         const snapped = snapToVoicing(post, sampleRate, win, fresh, tuning);
         if (snapped) ({ notes: fresh, positions } = snapped);
       }
-      if (fresh.length) events.push({ t, notes: fresh, ...(positions ? { positions } : {}), peeled: peeled.map((e) => ({ m: e.m, s: e.s, share: e.share })) });
+      if (fresh.length) events.push({ t, notes: fresh, ...(positions ? { positions } : {}), ...(legatoTimes.includes(t) ? { legato: true } : {}), peeled: peeled.map((e) => ({ m: e.m, s: e.s, share: e.share })) });
       return;
     }
     // method 'diff'：増えた分のスペクトルから音を探す / 'rise'：鳴っている音を探し、直前より強くなった音を選ぶ

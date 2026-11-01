@@ -626,6 +626,8 @@ select, input[type="text"] {
 .strip-seg.active { background: var(--accent); color: var(--accent-text); }
 .strip-tick { position: absolute; bottom: 4px; width: 1px; height: 8px; background: var(--muted); }
 .strip-tick.strum { height: 12px; width: 2px; background: var(--text); }
+.strip-tick.legato { height: 10px; width: 2px; background: #4fc3f7; }
+.tick-key { display: inline-block; width: 2px; height: 10px; margin: 0 3px 0 6px; vertical-align: middle; }
 .strip-time { position: absolute; top: 1px; font-size: 0.65rem; color: var(--muted); transform: translateX(2px); }
 .strip-head { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--error); box-shadow: 0 0 6px var(--error); pointer-events: none; }
 .strip-hint { margin: 0; font-size: 0.75rem; }
@@ -643,4 +645,5 @@ select, input[type="text"] {
 .ts-fret { fill: var(--text); font-size: 10px; font-weight: 600; text-anchor: middle; }
 .ts-stem { stroke: var(--muted); stroke-width: 1; }
 .ts-stem.ts-strum { stroke: var(--text); stroke-width: 2; }
+.ts-stem.ts-legato { stroke: #4fc3f7; stroke-width: 1.5; }
 .ts-cursor { stroke: #ff5a5a; stroke-width: 1.5; }

@@ -430,7 +430,7 @@ function buildTabBlocks(events) {
     return s === 5 ? n.toLowerCase() : n;
   });
   // 音の長さ（dur）も一緒に渡す（リズムの棒の長さに使う）
-  const placed = assignTab(events, tuning, { capo: Number(capoSelect.value) }).map((p, i) => ({ ...p, dur: events[i]?.dur }));
+  const placed = assignTab(events, tuning, { capo: Number(capoSelect.value) }).map((p, i) => ({ ...p, dur: events[i]?.dur, legato: events[i]?.legato }));
   // 楽譜のような段（6本線・小節線・コード名）に分ける。コピー用に文字のタブ譜も作っておく
   const rows = buildStaffRows(placed, { beats: pendingBeats.beats, downbeat: pendingBeats.downbeat, duration: pendingBeats.duration, timeline: pendingBeats.timeline ?? [], stringNames: names });
   return rows.map((r) => ({ ...r, text: r.events.length ? formatTab(r.events, { perLine: 999, stringNames: names }) : '' }));
@@ -471,7 +471,7 @@ function renderStrip(duration) {
   stripDuration = duration;
   const width = Math.max(1, duration) * STRIP_PX_PER_SEC;
   const segs = analysis.timeline.map((seg, i) => `<div class="strip-seg${i % 2 ? ' alt' : ''}" style="left:${seg.start * STRIP_PX_PER_SEC}px;width:${Math.max(2, (seg.end - seg.start) * STRIP_PX_PER_SEC - 2)}px" data-index="${i}"><b>${escapeHtml(seg.name)}</b></div>`).join('');
-  const ticks = (analysis.events ?? []).map((e) => `<span class="strip-tick${e.positions || e.notes.length > 2 ? ' strum' : ''}" style="left:${e.t * STRIP_PX_PER_SEC}px"></span>`).join('');
+  const ticks = (analysis.events ?? []).map((e) => `<span class="strip-tick${e.legato ? ' legato' : e.positions || e.notes.length > 2 ? ' strum' : ''}" style="left:${e.t * STRIP_PX_PER_SEC}px"></span>`).join('');
   const marks = Array.from({ length: Math.floor(duration / 5) + 1 }, (_, k) => `<span class="strip-time" style="left:${k * 5 * STRIP_PX_PER_SEC}px">${formatTime(k * 5)}</span>`).join('');
   chordStrip.innerHTML = `<div class="strip-inner" style="width:${width}px">${marks}${segs}${ticks}<span class="strip-head"></span></div>`;
 }
