@@ -69,6 +69,7 @@ for (const [category, so] of conditions) {
 }
 
 // ONLY=文字 を指定すると、種類の名前にその文字を含む曲だけを採点する（調べもの用）
+if (process.env.SET) { const keep = jobs.filter((j) => j.set === process.env.SET); jobs.length = 0; jobs.push(...keep); }
 if (process.env.ONLY) { const keep = jobs.filter((j) => j.category.includes(process.env.ONLY)); jobs.length = 0; jobs.push(...keep); }
 
 // CPU の数だけ同時に採点する

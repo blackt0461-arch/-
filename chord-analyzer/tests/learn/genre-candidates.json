@@ -1,0 +1,11 @@
+{
+  "今の設定": {},
+  "足し音を許す": { "chartOptions": { "tensionPenalty": 0.01, "extraTonePenalty": 0.005, "rarePenalty": 0.04 } },
+  "足し音を嫌う": { "chartOptions": { "tensionPenalty": 0.06, "extraTonePenalty": 0.04 } },
+  "変わりやすい": { "chartOptions": { "changePenalty": 0.05, "offBarPenalty": 0.03 } },
+  "変わりにくい": { "chartOptions": { "changePenalty": 0.12, "offBarPenalty": 0.09 } },
+  "判定器を強め": { "learned": 0.7 },
+  "判定器を弱め": { "learned": 0.2 },
+  "短い音向け": { "peelOptions": { "oddRatio": 0.25, "stopRatio": 0.1 } },
+  "速い曲の目安を広く": { "fastBeats": 2.5 }
+}
