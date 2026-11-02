@@ -931,7 +931,7 @@ export function estimateTuning(signal, sampleRate, { frame = 8192, frames = 60, 
  * やり方：音の高さの目盛りをずれの分だけ動かして解析し、時刻は元に戻す
  */
 export function transcribe(channels, sampleRate, options = {}) {
-  const { tuneCorrect = false, tuneMinCents = 8 } = options;
+  const { tuneCorrect = false, tuneMinCents = 20 } = options;
   if (!tuneCorrect) return transcribeInTune(channels, sampleRate, options);
   const mono = channels.length > 1 ? Float32Array.from(channels[0], (v, i) => (v + channels[1][i]) / 2) : channels[0];
   const { cents } = estimateTuning(mono, sampleRate);
