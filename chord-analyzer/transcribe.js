@@ -49,8 +49,9 @@ export function chooseSignal(channels, mode = 'auto', sampleRate = 44100, vocalR
   }
   // 左右に分かれていない曲は、歌の高さを追いかけて歌声を消した音を使う
   if (!useSide && vocalRemove && !vocalRemove.chordsOnly) {
+    // keepNotes：1音ずつの音の高さを調べるところだけは、元の音を使う（歌声を消すとギターの音も少し削れるため）
     const removed = suppressVocal(mid, sampleRate, typeof vocalRemove === 'object' ? vocalRemove : {});
-    return { guitar: removed.signal, mid, useSide, sideRatio, vocalShare: vocalShare ?? removed.vocalShare };
+    return { guitar: removed.signal, noteSignal: vocalRemove.keepNotes ? mid : removed.signal, mid, useSide, sideRatio, vocalShare: vocalShare ?? removed.vocalShare };
   }
   return { guitar: useSide ? side : mid, mid, useSide, sideRatio, vocalShare };
 }
@@ -470,6 +471,7 @@ function refineWithChart(events, onsetList, timeline, tuning, { strumStrength = 
 function transcribeOnce(channels, sampleRate, { mode = 'auto', voiceFilter = true, method = 'peel', riseRatio = 1.3, minStrength = 0.2, harmonicRatio = 4, tuning = TUNINGS[0], snapStrums = true, snapMin = 3, peelOptions = {}, useChart = true, chartOptions = {}, noteWeight = null, chromaMethod = 'auto', harmonicResidual = 0.35, vocalOptions = {}, vocalPresence = 0.35, minBeats = 1, precise = true, highWeight = 0.6, useContext = true, contextOptions = {}, dropVocalNotes = true, estimateDurations = true, stopRatio = 0.25, voiceOptions = { wobbleCents: 60, useSwell: false }, attackRatio = 0, chordWindow = 16384, chordMinDuration = 0.5, segmentChroma = 0, segmentBass = false, prevSubtract = 0, attackChroma = 0, changeGate = 0, fuseAttack = 0, fuseSubtract = 0, changeBonus = 0, exportFeatures = false, learned = 0, learnedConfidence = false, onsetOptions = {}, noteOnsetOptions = null, legatoNotes = false, synthCheck = false, strumCheck = { perNote: 0.01 }, vocalRemove = false, onProgress = () => {} } = {}) {
   const chosen = chooseSignal(channels, mode, sampleRate, vocalRemove);
   const { guitar, mid, useSide, sideRatio } = chosen;
+  const noteSignal = chosen.noteSignal ?? guitar;
   const duration = guitar.length / sampleRate;
   // コードを決めるときに聞く音（歌声を消す設定で chordsOnly のときは、歌声を消した音）
   const chordSignal = vocalRemove?.chordsOnly ? vocalRemovedFor(chosen, sampleRate, vocalRemove) ?? guitar : guitar;
@@ -542,8 +544,8 @@ function transcribeOnce(channels, sampleRate, { mode = 'auto', voiceFilter = tru
     // 直前の区間は、直後の区間と同じ長さにそろえる（長さが違うと低い音の強さを公平に比べられない）
     const prev = i > 0 ? onsets[i - 1] : 0;
     const preLength = Math.max(Math.floor(0.08 * sampleRate), Math.min(length, Math.floor((t - prev - 0.03) * sampleRate)));
-    const post = magnitudeSpectrum(guitar, start, length, win);
-    const pre = magnitudeSpectrum(guitar, Math.floor((t - 0.01) * sampleRate) - preLength, preLength, win);
+    const post = magnitudeSpectrum(noteSignal, start, length, win);
+    const pre = magnitudeSpectrum(noteSignal, Math.floor((t - 0.01) * sampleRate) - preLength, preLength, win);
 
     // 直後の音から直前の音を引いた「増えた分」だけを見る（鳴り続けている音を除くため）
     const added = new Float32Array(post.length);
