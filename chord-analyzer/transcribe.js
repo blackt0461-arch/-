@@ -48,11 +48,17 @@ export function chooseSignal(channels, mode = 'auto', sampleRate = 44100, vocalR
     useSide = vocalShare >= 0.35;
   }
   // 左右に分かれていない曲は、歌の高さを追いかけて歌声を消した音を使う
-  if (!useSide && vocalRemove) {
+  if (!useSide && vocalRemove && !vocalRemove.chordsOnly) {
     const removed = suppressVocal(mid, sampleRate, typeof vocalRemove === 'object' ? vocalRemove : {});
     return { guitar: removed.signal, mid, useSide, sideRatio, vocalShare: vocalShare ?? removed.vocalShare };
   }
   return { guitar: useSide ? side : mid, mid, useSide, sideRatio, vocalShare };
+}
+
+/** 歌声を消した音（chordsOnly のときは、コードを決めるところだけで使う） */
+function vocalRemovedFor(chosen, sampleRate, vocalRemove) {
+  if (!vocalRemove || chosen.useSide) return null;
+  return suppressVocal(chosen.mid, sampleRate, typeof vocalRemove === 'object' ? vocalRemove : {}).signal;
 }
 
 /**
@@ -462,8 +468,11 @@ function refineWithChart(events, onsetList, timeline, tuning, { strumStrength = 
  * - events: 弾いた瞬間ごとの、新しく鳴った音（タブ譜の材料）
  */
 function transcribeOnce(channels, sampleRate, { mode = 'auto', voiceFilter = true, method = 'peel', riseRatio = 1.3, minStrength = 0.2, harmonicRatio = 4, tuning = TUNINGS[0], snapStrums = true, snapMin = 3, peelOptions = {}, useChart = true, chartOptions = {}, noteWeight = null, chromaMethod = 'auto', harmonicResidual = 0.35, vocalOptions = {}, vocalPresence = 0.35, minBeats = 1, precise = true, highWeight = 0.6, useContext = true, contextOptions = {}, dropVocalNotes = true, estimateDurations = true, stopRatio = 0.25, voiceOptions = { wobbleCents: 60, useSwell: false }, attackRatio = 0, chordWindow = 16384, chordMinDuration = 0.5, segmentChroma = 0, segmentBass = false, prevSubtract = 0, attackChroma = 0, changeGate = 0, fuseAttack = 0, fuseSubtract = 0, changeBonus = 0, exportFeatures = false, learned = 0, learnedConfidence = false, onsetOptions = {}, noteOnsetOptions = null, legatoNotes = false, synthCheck = false, strumCheck = { perNote: 0.01 }, vocalRemove = false, onProgress = () => {} } = {}) {
-  const { guitar, mid, useSide, sideRatio } = chooseSignal(channels, mode, sampleRate, vocalRemove);
+  const chosen = chooseSignal(channels, mode, sampleRate, vocalRemove);
+  const { guitar, mid, useSide, sideRatio } = chosen;
   const duration = guitar.length / sampleRate;
+  // コードを決めるときに聞く音（歌声を消す設定で chordsOnly のときは、歌声を消した音）
+  const chordSignal = vocalRemove?.chordsOnly ? vocalRemovedFor(chosen, sampleRate, vocalRemove) ?? guitar : guitar;
 
   // 1. コード：0.1秒ごとに、前後約0.37秒の音で判定する
   const chordFrames = [];
@@ -472,14 +481,14 @@ function transcribeOnce(channels, sampleRate, { mode = 'auto', voiceFilter = tru
   const hopChord = Math.floor(sampleRate * (precise ? 0.05 : 0.1));
   const binHz = sampleRate / win;
   const loudness = [];
-  for (let c = 0; c + cwin <= guitar.length; c += hopChord) loudness.push(rms(guitar.subarray(c, c + cwin)));
+  for (let c = 0; c + cwin <= chordSignal.length; c += hopChord) loudness.push(rms(chordSignal.subarray(c, c + cwin)));
   const loudest = Math.max(...loudness, 1e-9);
   const zeros = new Float32Array(cwin / 2);
   let step = 0;
-  for (let c = 0; c + cwin <= guitar.length; c += hopChord, step++) {
-    if (step % 20 === 0) onProgress(0.4 * (c / guitar.length), 'コードを調べています');
+  for (let c = 0; c + cwin <= chordSignal.length; c += hopChord, step++) {
+    if (step % 20 === 0) onProgress(0.4 * (c / chordSignal.length), 'コードを調べています');
     if (loudness[step] < loudest * 0.05) continue; // ほぼ無音
-    const frameMags = magnitudeSpectrum(guitar, c, cwin);
+    const frameMags = magnitudeSpectrum(chordSignal, c, cwin);
     // コード用には倍音をしっかり取り除く（3度の音の3倍音が maj7 の音と同じ高さになり、C を Cmaj7 と読み違えるため）
     let { chroma } = analyzeSpectrum(frameMags, sampleRate, cwin, { harmonicResidual, highWeight });
     if (precise) {
@@ -488,7 +497,7 @@ function transcribeOnce(channels, sampleRate, { mode = 'auto', voiceFilter = tru
       const center = c + cwin / 2;
       const sum = chroma.map((v) => v / (chroma.reduce((a, b) => a + b, 0) || 1));
       for (const w of [cwin / 2, cwin * 2]) {
-        const cc = analyzeSpectrum(magnitudeSpectrum(guitar, Math.round(center - w / 2), w), sampleRate, w, { harmonicResidual, highWeight }).chroma;
+        const cc = analyzeSpectrum(magnitudeSpectrum(chordSignal, Math.round(center - w / 2), w), sampleRate, w, { harmonicResidual, highWeight }).chroma;
         const tot = cc.reduce((a, b) => a + b, 0) || 1;
         cc.forEach((v, i) => { sum[i] += v / tot; });
       }
