@@ -403,7 +403,7 @@ export function removeVocalFrames(signal, sampleRate, { frame = 4096, fft = 1638
  * - 1音弾き：はっきり聞こえた音（いちばん強い音の strongRatio 倍以上）だけを残す
  * 和音かどうかは、弾いた瞬間の勢い（曲の中での比べ）と、同時に鳴り始めた音の数・割合で判断する。
  */
-function refineWithChart(events, onsetList, timeline, tuning, { strumStrength = 1.25, strongRatio = 0.35 } = {}) {
+function refineWithChart(events, onsetList, timeline, tuning, { strumStrength = 1.25, strongRatio = 0.35, strumMinNotes = 0 } = {}) {
   const strengths = onsetList.map((o) => o.strength).sort((a, b) => a - b);
   const median = strengths[Math.floor(strengths.length / 2)] || 1;
   const strengthAt = (t) => onsetList.find((o) => Math.abs(o.t - t) < 0.005)?.strength ?? median;
@@ -411,7 +411,7 @@ function refineWithChart(events, onsetList, timeline, tuning, { strumStrength = 
     const peeled = e.peeled ?? e.notes.map((m) => ({ m, s: 1, share: 1 / e.notes.length }));
     const first = peeled[0]?.s ?? 1;
     const strong = peeled.filter((p) => p.s >= first * strongRatio);
-    const looksStrum = strengthAt(e.t) / median >= strumStrength || (strong.length >= 3 && (peeled[0]?.share ?? 1) < 0.5);
+    const looksStrum = (strengthAt(e.t) / median >= strumStrength && strong.length >= strumMinNotes) || (strong.length >= 3 && (peeled[0]?.share ?? 1) < 0.5);
     const seg = timeline.find((c) => e.t >= c.start - 0.05 && e.t < c.end);
     if (looksStrum && seg) {
       const parsed = parseChordName(seg.name);
