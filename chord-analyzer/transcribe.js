@@ -9,6 +9,7 @@ import { buildChordTimeline } from './song.js';
 import { chordToneProbabilities } from './learned.js';
 import { estimateBeats, findDownbeatScored, decodeChords, buildChart, cosine } from './chart.js';
 
+import { suppressVocal } from './vocal-remove.js';
 import { riseSpectrum, learnProfile, checkBySynthesis, compareBySynthesis } from './synth-check.js';
 const LOWEST = 40;  // E2（6弦の開放）
 const HIGHEST = 88; // E6（1弦24フレット）
@@ -28,7 +29,7 @@ function rms(x) {
  * 「左 − 右」（サイド）を取ると真ん中の音が消えてギターが残る。
  * サイドがほとんど無い曲（弾き語りなど全部が真ん中）は、普通に左右を混ぜた音を使う。
  */
-export function chooseSignal(channels, mode = 'auto', sampleRate = 44100) {
+export function chooseSignal(channels, mode = 'auto', sampleRate = 44100, vocalRemove = false) {
   const [l, r = l] = channels;
   const mid = new Float32Array(l.length);
   const side = new Float32Array(l.length);
@@ -45,6 +46,11 @@ export function chooseSignal(channels, mode = 'auto', sampleRate = 44100) {
     const frames = removeVocalFrames(mid, sampleRate);
     vocalShare = frames.filter((f) => f.vocal).length / Math.max(1, frames.length);
     useSide = vocalShare >= 0.35;
+  }
+  // 左右に分かれていない曲は、歌の高さを追いかけて歌声を消した音を使う
+  if (!useSide && vocalRemove) {
+    const removed = suppressVocal(mid, sampleRate, typeof vocalRemove === 'object' ? vocalRemove : {});
+    return { guitar: removed.signal, mid, useSide, sideRatio, vocalShare: vocalShare ?? removed.vocalShare };
   }
   return { guitar: useSide ? side : mid, mid, useSide, sideRatio, vocalShare };
 }
@@ -455,8 +461,8 @@ function refineWithChart(events, onsetList, timeline, tuning, { strumStrength = 
  * - chords: 0.1秒ごとのコードの判定（buildChordTimeline でコード進行にまとめる）
  * - events: 弾いた瞬間ごとの、新しく鳴った音（タブ譜の材料）
  */
-function transcribeOnce(channels, sampleRate, { mode = 'auto', voiceFilter = true, method = 'peel', riseRatio = 1.3, minStrength = 0.2, harmonicRatio = 4, tuning = TUNINGS[0], snapStrums = true, snapMin = 3, peelOptions = {}, useChart = true, chartOptions = {}, noteWeight = null, chromaMethod = 'auto', harmonicResidual = 0.35, vocalOptions = {}, vocalPresence = 0.35, minBeats = 1, precise = true, highWeight = 0.6, useContext = true, contextOptions = {}, dropVocalNotes = true, estimateDurations = true, stopRatio = 0.25, voiceOptions = { wobbleCents: 60, useSwell: false }, attackRatio = 0, chordWindow = 16384, chordMinDuration = 0.5, segmentChroma = 0, segmentBass = false, prevSubtract = 0, attackChroma = 0, changeGate = 0, fuseAttack = 0, fuseSubtract = 0, changeBonus = 0, exportFeatures = false, learned = 0, learnedConfidence = false, onsetOptions = {}, noteOnsetOptions = null, legatoNotes = false, synthCheck = false, strumCheck = { perNote: 0.01 }, onProgress = () => {} } = {}) {
-  const { guitar, mid, useSide, sideRatio } = chooseSignal(channels, mode, sampleRate);
+function transcribeOnce(channels, sampleRate, { mode = 'auto', voiceFilter = true, method = 'peel', riseRatio = 1.3, minStrength = 0.2, harmonicRatio = 4, tuning = TUNINGS[0], snapStrums = true, snapMin = 3, peelOptions = {}, useChart = true, chartOptions = {}, noteWeight = null, chromaMethod = 'auto', harmonicResidual = 0.35, vocalOptions = {}, vocalPresence = 0.35, minBeats = 1, precise = true, highWeight = 0.6, useContext = true, contextOptions = {}, dropVocalNotes = true, estimateDurations = true, stopRatio = 0.25, voiceOptions = { wobbleCents: 60, useSwell: false }, attackRatio = 0, chordWindow = 16384, chordMinDuration = 0.5, segmentChroma = 0, segmentBass = false, prevSubtract = 0, attackChroma = 0, changeGate = 0, fuseAttack = 0, fuseSubtract = 0, changeBonus = 0, exportFeatures = false, learned = 0, learnedConfidence = false, onsetOptions = {}, noteOnsetOptions = null, legatoNotes = false, synthCheck = false, strumCheck = { perNote: 0.01 }, vocalRemove = false, onProgress = () => {} } = {}) {
+  const { guitar, mid, useSide, sideRatio } = chooseSignal(channels, mode, sampleRate, vocalRemove);
   const duration = guitar.length / sampleRate;
 
   // 1. コード：0.1秒ごとに、前後約0.37秒の音で判定する
