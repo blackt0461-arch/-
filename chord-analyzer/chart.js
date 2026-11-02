@@ -166,7 +166,40 @@ export function scoreStates(c, bass, { rootBonus = 0.1, foreignBassPenalty = 0.1
   });
 }
 
-export function decodeChords(beatChromas, downbeat, { beatBass = [], changePenalty = 0.08, offBarPenalty = 0.06, halfBarPenalty = 0.02, compress = 1, extra = [], changeEvidence = null, changeBonus = 0, ...scoreOptions } = {}) {
+// 長調・短調で、よく使われる音の重み（Krumhansl のキーの目安。主音・5度・3度ほど大きい）
+const MAJOR_PROFILE = [6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88];
+const MINOR_PROFILE = [6.33, 2.68, 3.52, 5.38, 2.6, 3.53, 2.54, 4.75, 3.98, 2.69, 3.34, 3.17];
+const MAJOR_SCALE = [0, 2, 4, 5, 7, 9, 11];
+
+/**
+ * 曲のキーを決める（耳コピのコツ：まずキーを決めると、出てくるコードの候補がしぼれる）。
+ * 曲全体の12音の強さと、24のキー（長調12・短調12）の目安を比べて、いちばん合うものを選ぶ。
+ * 戻り値：{ tonic, minor, scale（そのキーの音階の7音。短調は同じ音を使う長調の音階）, fit }
+ */
+export function estimateKey(beatChromas) {
+  const total = new Array(12).fill(0);
+  beatChromas.forEach((c) => { const sum = c.reduce((a, b) => a + Math.max(0, b), 0) || 1; c.forEach((v, i) => { total[i] += Math.max(0, v) / sum; }); });
+  let best = null;
+  for (let tonic = 0; tonic < 12; tonic++) {
+    for (const minor of [false, true]) {
+      const prof = minor ? MINOR_PROFILE : MAJOR_PROFILE;
+      const rotated = total.map((_, i) => prof[(i - tonic + 12) % 12]);
+      const fit = pearson(total, rotated);
+      if (!best || fit > best.fit) best = { tonic, minor, fit };
+    }
+  }
+  const majorTonic = best.minor ? (best.tonic + 3) % 12 : best.tonic;
+  return { ...best, scale: new Set(MAJOR_SCALE.map((i) => (majorTonic + i) % 12)) };
+}
+
+function pearson(a, b) {
+  const n = a.length, ma = a.reduce((x, y) => x + y, 0) / n, mb = b.reduce((x, y) => x + y, 0) / n;
+  let num = 0, da = 0, db = 0;
+  for (let i = 0; i < n; i++) { num += (a[i] - ma) * (b[i] - mb); da += (a[i] - ma) ** 2; db += (b[i] - mb) ** 2; }
+  return da && db ? num / Math.sqrt(da * db) : 0;
+}
+
+export function decodeChords(beatChromas, downbeat, { beatBass = [], changePenalty = 0.08, offBarPenalty = 0.06, halfBarPenalty = 0.02, compress = 1, extra = [], changeEvidence = null, changeBonus = 0, keyWeight = 0, keyWindow = 0, ...scoreOptions } = {}) {
   const n = beatChromas.length;
   if (!n) return [];
   // compress < 1 なら、音の強さの差を縮める（小さく鳴っている 7th の音などにも気づけるように）
@@ -177,6 +210,15 @@ export function decodeChords(beatChromas, downbeat, { beatBass = [], changePenal
     const e = scoreStates(c, beatBass[b], scoreOptions);
     emit[b] = emit[b].map((v, j) => v + weight * e[j]);
   }));
+  // キーに合うコード（構成音がそのキーの音階に入っている）を少し優先する。キーの外の音1つにつき keyWeight 下げる。
+  // keyWindow 拍を指定すると、その範囲ごとにキーを決め直す（途中で転調する曲のため）
+  if (keyWeight > 0) {
+    const whole = keyWindow ? null : estimateKey(beatChromas);
+    for (let b = 0; b < n; b++) {
+      const key = whole ?? estimateKey(beatChromas.slice(Math.max(0, b - keyWindow), b + keyWindow + 1));
+      emit[b] = emit[b].map((v, j) => v - keyWeight * STATES[j].type.intervals.filter((i) => !key.scale.has((STATES[j].root + i) % 12)).length);
+    }
+  }
   let score = emit[0].slice();
   const back = [];
   for (let b = 1; b < n; b++) {
