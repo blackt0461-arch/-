@@ -51,6 +51,8 @@ export function chooseSignal(channels, mode = 'auto', sampleRate = 44100, vocalR
   if (!useSide && vocalRemove && !vocalRemove.chordsOnly) {
     // keepNotes：1音ずつの音の高さを調べるところだけは、元の音を使う（歌声を消すとギターの音も少し削れるため）
     const removed = suppressVocal(mid, sampleRate, typeof vocalRemove === 'object' ? vocalRemove : {});
+    // notesOnly：コード・拍は元の音で決め、1音ずつ（弾いた瞬間と音の高さ）だけ歌声を消した音で探す
+    if (vocalRemove.notesOnly) return { guitar: mid, noteSignal: vocalRemove.keepNotes ? mid : removed.signal, noteOnsetSignal: removed.signal, mid, useSide, sideRatio, vocalShare: vocalShare ?? removed.vocalShare };
     return { guitar: removed.signal, noteSignal: vocalRemove.keepNotes ? mid : removed.signal, mid, useSide, sideRatio, vocalShare: vocalShare ?? removed.vocalShare };
   }
   return { guitar: useSide ? side : mid, mid, useSide, sideRatio, vocalShare };
@@ -522,7 +524,7 @@ function transcribeOnce(channels, sampleRate, { mode = 'auto', voiceFilter = tru
   // 拍・コード用の「弾いた瞬間」と、1音ずつのタブ譜用の「弾いた瞬間」は別の設定で探せる
   // （細かく時刻を合わせると1音ずつは正確になるが、拍の推定が変わってコード譜が崩れることがあるため）
   const onsetList = detectOnsetsDetailed(guitar, sampleRate, onsetOptions);
-  const noteOnsetList = noteOnsetOptions ? detectOnsetsDetailed(guitar, sampleRate, noteOnsetOptions) : onsetList;
+  const noteOnsetList = chosen.noteOnsetSignal ? detectOnsetsDetailed(chosen.noteOnsetSignal, sampleRate, noteOnsetOptions ?? onsetOptions) : noteOnsetOptions ? detectOnsetsDetailed(guitar, sampleRate, noteOnsetOptions) : onsetList;
   let onsets = noteOnsetList.map((o) => o.t);
   // 指で音を変えた担当：音の高さが切り替わった瞬間のうち、ほかの担当の白い線が近くに無いものを、1音ずつの聞き取りの対象に足す
   // （時刻だけを使い、音の高さは倍音をはがす方法で決める）
