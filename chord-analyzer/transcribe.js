@@ -433,7 +433,12 @@ function refineWithChart(events, onsetList, timeline, tuning, { strumStrength = 
           if (!best || score > best.score) best = { score, frets, midis };
         }
         // 試し弾きで確かめる：押さえ方の全部の音を鳴らした案が、聞こえた音だけの案より元の音に近いときだけ和音にする
-        if (best && strumJudge && !strumJudge(e, best.midis, strong.map((p) => p.m))) best = null;
+        if (best && strumJudge && !strumJudge(e, best.midis, strong.map((p) => p.m))) {
+          // 和音ではなかった：はっきり聞こえた音に、押さえ方の音のうち実際に少しでも聞こえていた音を足す
+          const heardAll = new Set(peeled.map((p) => p.m));
+          const keep = [...new Set([...strong.map((p) => p.m), ...best.midis.filter((m) => heardAll.has(m))])].sort((a, b) => a - b);
+          return { t: e.t, notes: keep };
+        }
         if (best) {
           const positions = best.frets.map((f, s) => (f === null ? null : { string: s, fret: f })).filter(Boolean);
           return { t: e.t, notes: best.midis, positions };
