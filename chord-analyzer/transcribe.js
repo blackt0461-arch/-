@@ -579,7 +579,15 @@ function transcribeOnce(channels, sampleRate, { mode = 'auto', voiceFilter = tru
     const opts = typeof synthCheck === 'object' ? synthCheck : {};
     const samples = [...synthRises].filter(([e]) => e.notes.length === 1 && e.peeled?.[0]?.m === e.notes[0] && e.peeled[0].share >= (opts.minShare ?? 0.5)).map(([e, d]) => ({ d, m: e.notes[0] }));
     const profile = learnProfile(samples, binHz);
-    if (profile) synthRises.forEach((d, e) => { e.notes = checkBySynthesis(d, binHz, e.notes, profile, opts); });
+    if (profile) synthRises.forEach((d, e) => {
+      const before = e.notes;
+      const after = checkBySynthesis(d, binHz, before, profile, opts);
+      const removed = before.filter((m) => !after.includes(m)), added = after.filter((m) => !before.includes(m));
+      if (!removed.length) return;
+      e.notes = after;
+      // あとでコード譜を見て音を整えるときにも、選び直した音が使われるようにする
+      e.peeled = e.peeled?.map((p) => { const i = removed.indexOf(p.m); return i >= 0 ? { ...p, m: added[i] } : p; });
+    });
   }
 
   // 指で音を変えた担当が足した音は、前後が1音ずつ弾かれている場面（ソロ・メロディ）でだけ残す。
