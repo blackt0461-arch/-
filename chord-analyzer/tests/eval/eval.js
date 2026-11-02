@@ -50,6 +50,18 @@ if (fs.existsSync(gsJson)) {
   });
 }
 
+// 1b. 音の高さがずれた曲（古い録音・チューニングのずれ）：研究用の伴奏を、わざと ±20〜45 セントずらして採点する
+if (fs.existsSync(gsJson)) {
+  const clips = JSON.parse(fs.readFileSync(gsJson, 'utf8'));
+  const cents = [35, -30, 45, -40, 25, -20];
+  clips.filter((c) => c.mode === 'comp').forEach((c, i) => {
+    const audio = path.join(gsDir, 'audio', `${c.id}_mic.wav`);
+    if (!fs.existsSync(audio) || i % (full ? 6 : 15) !== 3) return;
+    const detune = cents[Math.floor(i / (full ? 6 : 15)) % cents.length];
+    jobs.push({ kind: 'guitarset', id: `${c.id}-ずれ${detune}`, audio, detune, solo: false, set: ['04', '05'].includes(c.player) ? '本番テスト' : '調整用', category: '研究用・音の高さがずれた曲', truth: { chords: c.chords, notes: c.notes, tempo: c.tempo, duration: c.duration } });
+  });
+}
+
 // 2. 本物の曲（あなたの画面収録。手元にあるときだけ）：動画の表示は演奏より 0.2 秒早いので、その分ずらして採点する
 for (const dir of ['/tmp/claude-0/realsong', '/tmp/claude-0/realsong2']) {
   const audio = path.join(dir, 'audio.f32'), truthPath = path.join(dir, 'truth.json');

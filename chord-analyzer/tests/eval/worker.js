@@ -197,6 +197,13 @@ parentPort.on('message', ({ job, options }) => {
       truth = { chords: song.chords.map((c) => [c.start, c.name]), notes: song.truth.flatMap((e) => e.notes.map((m, k) => ({ t: e.t + (e.notes.length > 1 ? k * 0.012 : 0), midi: m }))), tempo: song.tempo, duration: song.channels[0].length / song.sampleRate };
       truth.chords.push([song.chords[song.chords.length - 1].end, null]);
     }
+    // 音の高さがずれた曲：音を少し速く（遅く）読み直して、全体の高さを detune セントずらす（そのぶん時刻も縮む）
+    if (job.detune) {
+      const s = 2 ** (job.detune / 1200);
+      audio = { ...audio, channels: audio.channels.map((x) => { const n = Math.floor((x.length - 1) / s), y = new Float32Array(n); for (let i = 0; i < n; i++) { const p = i * s, k = Math.floor(p), f = p - k; y[i] = x[k] * (1 - f) + x[k + 1] * f; } return y; }) };
+      const ts = (t) => t / s;
+      truth = { ...truth, chords: truth.chords?.map(([t, n]) => [ts(t), n]), notes: truth.notes?.map((g) => ({ ...g, t: ts(g.t), ...(g.dur != null ? { dur: ts(g.dur) } : {}) })), tempo: truth.tempo ? truth.tempo * s : truth.tempo, duration: truth.duration ? ts(truth.duration) : truth.duration };
+    }
     const t0 = Date.now();
     const r = transcribe(audio.channels, audio.sampleRate, options);
     const duration = truth.duration ?? audio.channels[0].length / audio.sampleRate;

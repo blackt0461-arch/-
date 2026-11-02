@@ -864,7 +864,7 @@ function transcribeOnce(channels, sampleRate, { mode = 'auto', voiceFilter = tru
  * 「弾いた瞬間に急に大きくなった音」と「前の拍の残りを引いた音」も手がかりに加えて、解析し直す。
  * （速い曲では前のコードの響きが残って読み違えやすいが、ゆっくりの曲でこの手がかりを使うと、かえって雑音を拾うため）
  */
-export function transcribe(channels, sampleRate, options = {}) {
+function transcribeInTune(channels, sampleRate, options = {}) {
   const { fastBeats = 1.8, fastOptions = { fuseAttack: 0.5, fuseSubtract: 0.5, changeBonus: 0.1 }, learned = 0.4, learnedConfidence = true, onProgress = () => {} } = options;
   // 解析の回数（1回目：ふつう、2回目：学習した判定器でコード譜だけ作り直す、3回目：速い曲だけ）に合わせて進み具合を分ける
   const passes = 1 + (learned > 0 ? 1 : 0) + (fastBeats ? 0.5 : 0);
@@ -892,6 +892,71 @@ export function transcribe(channels, sampleRate, options = {}) {
   }
   onProgress(1, '完了');
   return { ...first, timeline, chartInfo };
+}
+
+/**
+ * 曲全体の音の高さが、ふつうの基準（ラ＝440Hz）から何セントずれているかを測る（-50〜+50。100セント＝半音）。
+ * 古い録音・アナログ機材・ずらしたチューニングの曲は、全体が少し高かったり低かったりする。
+ * 曲のあちこちの、はっきりした音の山の高さを集めて、半音の目盛りからのずれの平均を取る
+ */
+export function estimateTuning(signal, sampleRate, { frame = 8192, frames = 60, minHz = 80, maxHz = 1000 } = {}) {
+  const binHz = sampleRate / frame;
+  const step = Math.max(frame, Math.floor((signal.length - frame) / frames));
+  let sx = 0, sy = 0;
+  for (let start = 0; start + frame <= signal.length; start += step) {
+    const mag = magnitudeSpectrum(signal, start, frame);
+    const lo = Math.max(2, Math.floor(minHz / binHz)), hi = Math.min(mag.length - 2, Math.ceil(maxHz / binHz));
+    let top = 0;
+    for (let k = lo; k <= hi; k++) if (mag[k] > top) top = mag[k];
+    if (!(top > 0)) continue;
+    for (let k = lo; k <= hi; k++) {
+      const m = mag[k];
+      if (m < top * 0.1 || m < mag[k - 1] || m < mag[k + 1] || m < mag[k - 2] || m < mag[k + 2]) continue;
+      // 山の本当の位置を、両どなりとの比べで細かく求める
+      const a = Math.log(mag[k - 1] + 1e-12), b = Math.log(m + 1e-12), c = Math.log(mag[k + 1] + 1e-12);
+      const shift = (a - c) / (2 * (a - 2 * b + c) || 1e-12);
+      const f = (k + Math.max(-0.5, Math.min(0.5, shift))) * binHz;
+      const dev = 1200 * Math.log2(f / 440);
+      const angle = (2 * Math.PI * dev) / 100;
+      const w = m / top;
+      sx += w * Math.cos(angle); sy += w * Math.sin(angle);
+    }
+  }
+  if (!sx && !sy) return { cents: 0, strength: 0 };
+  return { cents: (Math.atan2(sy, sx) * 100) / (2 * Math.PI), strength: Math.hypot(sx, sy) };
+}
+
+/**
+ * 曲を解析する。曲全体の音の高さが基準からずれているときは、そのずれに合わせて聞く（tuneCorrect）。
+ * やり方：音の高さの目盛りをずれの分だけ動かして解析し、時刻は元に戻す
+ */
+export function transcribe(channels, sampleRate, options = {}) {
+  const { tuneCorrect = false, tuneMinCents = 8 } = options;
+  if (!tuneCorrect) return transcribeInTune(channels, sampleRate, options);
+  const mono = channels.length > 1 ? Float32Array.from(channels[0], (v, i) => (v + channels[1][i]) / 2) : channels[0];
+  const { cents } = estimateTuning(mono, sampleRate);
+  if (Math.abs(cents) < tuneMinCents) return { ...transcribeInTune(channels, sampleRate, options), tuningCents: cents };
+  // 音の高さが c セント高い曲は、1秒の長さを少し短いとみなして解析すると、ちょうど基準の高さに聞こえる
+  const r = 2 ** (-cents / 1200);
+  const res = transcribeInTune(channels, sampleRate * r, options);
+  const fix = (t) => (typeof t === 'number' ? t * r : t);
+  const fixObj = (o) => {
+    if (!o || typeof o !== 'object') return o;
+    const out = { ...o };
+    for (const k of ['t', 'start', 'end', 'dur']) if (k in out) out[k] = fix(out[k]);
+    return out;
+  };
+  return {
+    ...res,
+    tuningCents: cents,
+    duration: fix(res.duration),
+    bpm: res.bpm ? res.bpm / r : res.bpm,
+    beats: res.beats?.map(fix),
+    timeline: res.timeline?.map(fixObj),
+    events: res.events?.map(fixObj),
+    chordFrames: res.chordFrames?.map(fixObj),
+    onsets: res.onsets?.map(fixObj),
+  };
 }
 
 /**
