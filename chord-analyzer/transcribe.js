@@ -433,7 +433,7 @@ function refineWithChart(events, onsetList, timeline, tuning, { strumStrength = 
           if (!best || score > best.score) best = { score, frets, midis };
         }
         // 試し弾きで確かめる：押さえ方の全部の音を鳴らした案が、聞こえた音だけの案より元の音に近いときだけ和音にする
-        if (best && strumJudge && !strumJudge(e, best.midis, strong.map((p) => p.m))) {
+        if (best && strumJudge && strengthAt(e.t) / median < (strumJudge.keepStrength ?? Infinity) && !strumJudge(e, best.midis, strong.map((p) => p.m))) {
           // 和音ではなかった：はっきり聞こえた音に、押さえ方の音のうち実際に少しでも聞こえていた音を足す
           const heardAll = new Set(peeled.map((p) => p.m));
           const keep = [...new Set([...strong.map((p) => p.m), ...best.midis.filter((m) => heardAll.has(m))])].sort((a, b) => a - b);
@@ -815,6 +815,8 @@ function transcribeOnce(channels, sampleRate, { mode = 'auto', voiceFilter = tru
         const perNote = typeof strumCheck === 'object' ? strumCheck.perNote ?? 0.02 : 0.02;
         return chordErr < heardErr * (1 - margin) - perNote * chordNotes.filter((m) => !heard.includes(m)).length;
       };
+      // とても強く弾いた瞬間は、試し弾きで比べずに和音とみなす
+      strumJudge.keepStrength = typeof strumCheck === 'object' ? strumCheck.keepStrength ?? Infinity : Infinity;
     }
     events = refineWithChart(events, noteOnsetList, timeline, tuning, { ...contextOptions, strumJudge });
   }
