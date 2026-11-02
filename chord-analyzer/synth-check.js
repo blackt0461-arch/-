@@ -127,3 +127,16 @@ export function checkBySynthesis(d, binHz, notes, profile, { steps = [12, -12, 1
   }
   return current.sort((a, b) => a - b);
 }
+
+/**
+ * いくつかの候補（音の組）を試し弾きして、それぞれのずれ（小さいほど似ている）を返す
+ * 例：1音だけ弾いた案と、コードの押さえ方の全部の音を弾いた案を比べる
+ */
+export function compareBySynthesis(d, binHz, options, profile, { stiffness = 0.0001 } = {}) {
+  const s = new Float32Array(d.length);
+  for (let k = 0; k < d.length; k++) s[k] = Math.sqrt(d[k]);
+  const sqrtProfile = profile.map((v) => Math.sqrt(v));
+  const lo = Math.floor(70 / binHz), hi = Math.min(d.length - 1, Math.ceil(5000 / binHz));
+  const cache = new Map();
+  return options.map((notes) => mismatch(s, notes, sqrtProfile, binHz, lo, hi, stiffness, cache));
+}

@@ -9,7 +9,7 @@ import { buildChordTimeline } from './song.js';
 import { chordToneProbabilities } from './learned.js';
 import { estimateBeats, findDownbeatScored, decodeChords, buildChart, cosine } from './chart.js';
 
-import { riseSpectrum, learnProfile, checkBySynthesis } from './synth-check.js';
+import { riseSpectrum, learnProfile, checkBySynthesis, compareBySynthesis } from './synth-check.js';
 const LOWEST = 40;  // E2（6弦の開放）
 const HIGHEST = 88; // E6（1弦24フレット）
 const freq = (m) => 440 * 2 ** ((m - 69) / 12);
@@ -403,7 +403,16 @@ export function removeVocalFrames(signal, sampleRate, { frame = 4096, fft = 1638
  * - 1音弾き：はっきり聞こえた音（いちばん強い音の strongRatio 倍以上）だけを残す
  * 和音かどうかは、弾いた瞬間の勢い（曲の中での比べ）と、同時に鳴り始めた音の数・割合で判断する。
  */
-function refineWithChart(events, onsetList, timeline, tuning, { strumStrength = 1.25, strongRatio = 0.35, strumMinNotes = 0 } = {}) {
+function refineWithChart(events, onsetList, timeline, tuning, { strumStrength = 1.25, strongRatio = 0.35, strumMinNotes = 0, soloShare = 0, soloWindow = 3, strumJudge = null } = {}) {
+  // まわりの弾き方を見る：近くで和音（3音以上）を弾いた割合が soloShare より少ない場面は「1音ずつ弾く場面」とみなし、
+  // 強く弾いただけでは和音と決めつけない（ソロの1音に、コードの押さえ方の音を足してしまわないため）
+  const strongCounts = events.map((e) => { const pl = e.peeled ?? []; const f = pl[0]?.s ?? 1; return pl.filter((p) => p.s >= f * strongRatio).length; });
+  const soloLike = (t) => {
+    if (!(soloShare > 0)) return false;
+    let n = 0, chords = 0;
+    events.forEach((x, i) => { if (Math.abs(x.t - t) <= soloWindow) { n++; if (strongCounts[i] >= 3) chords++; } });
+    return n > 0 && chords / n < soloShare;
+  };
   const strengths = onsetList.map((o) => o.strength).sort((a, b) => a - b);
   const median = strengths[Math.floor(strengths.length / 2)] || 1;
   const strengthAt = (t) => onsetList.find((o) => Math.abs(o.t - t) < 0.005)?.strength ?? median;
@@ -411,7 +420,7 @@ function refineWithChart(events, onsetList, timeline, tuning, { strumStrength = 
     const peeled = e.peeled ?? e.notes.map((m) => ({ m, s: 1, share: 1 / e.notes.length }));
     const first = peeled[0]?.s ?? 1;
     const strong = peeled.filter((p) => p.s >= first * strongRatio);
-    const looksStrum = (strengthAt(e.t) / median >= strumStrength && strong.length >= strumMinNotes) || (strong.length >= 3 && (peeled[0]?.share ?? 1) < 0.5);
+    const looksStrum = (strengthAt(e.t) / median >= strumStrength && strong.length >= (soloLike(e.t) ? 3 : strumMinNotes)) || (strong.length >= 3 && (peeled[0]?.share ?? 1) < 0.5);
     const seg = timeline.find((c) => e.t >= c.start - 0.05 && e.t < c.end);
     if (looksStrum && seg) {
       const parsed = parseChordName(seg.name);
@@ -423,6 +432,8 @@ function refineWithChart(events, onsetList, timeline, tuning, { strumStrength = 
           const score = peeled.reduce((a, p) => a + (midis.includes(p.m) ? p.s : -0.5 * p.s), 0);
           if (!best || score > best.score) best = { score, frets, midis };
         }
+        // 試し弾きで確かめる：押さえ方の全部の音を鳴らした案が、聞こえた音だけの案より元の音に近いときだけ和音にする
+        if (best && strumJudge && !strumJudge(e, best.midis, strong.map((p) => p.m))) best = null;
         if (best) {
           const positions = best.frets.map((f, s) => (f === null ? null : { string: s, fret: f })).filter(Boolean);
           return { t: e.t, notes: best.midis, positions };
@@ -439,7 +450,7 @@ function refineWithChart(events, onsetList, timeline, tuning, { strumStrength = 
  * - chords: 0.1秒ごとのコードの判定（buildChordTimeline でコード進行にまとめる）
  * - events: 弾いた瞬間ごとの、新しく鳴った音（タブ譜の材料）
  */
-function transcribeOnce(channels, sampleRate, { mode = 'auto', voiceFilter = true, method = 'peel', riseRatio = 1.3, minStrength = 0.2, harmonicRatio = 4, tuning = TUNINGS[0], snapStrums = true, snapMin = 3, peelOptions = {}, useChart = true, chartOptions = {}, noteWeight = null, chromaMethod = 'auto', harmonicResidual = 0.35, vocalOptions = {}, vocalPresence = 0.35, minBeats = 1, precise = true, highWeight = 0.6, useContext = true, contextOptions = {}, dropVocalNotes = true, estimateDurations = true, stopRatio = 0.25, voiceOptions = { wobbleCents: 60, useSwell: false }, attackRatio = 0, chordWindow = 16384, chordMinDuration = 0.5, segmentChroma = 0, segmentBass = false, prevSubtract = 0, attackChroma = 0, changeGate = 0, fuseAttack = 0, fuseSubtract = 0, changeBonus = 0, exportFeatures = false, learned = 0, learnedConfidence = false, onsetOptions = {}, noteOnsetOptions = null, legatoNotes = false, synthCheck = false, onProgress = () => {} } = {}) {
+function transcribeOnce(channels, sampleRate, { mode = 'auto', voiceFilter = true, method = 'peel', riseRatio = 1.3, minStrength = 0.2, harmonicRatio = 4, tuning = TUNINGS[0], snapStrums = true, snapMin = 3, peelOptions = {}, useChart = true, chartOptions = {}, noteWeight = null, chromaMethod = 'auto', harmonicResidual = 0.35, vocalOptions = {}, vocalPresence = 0.35, minBeats = 1, precise = true, highWeight = 0.6, useContext = true, contextOptions = {}, dropVocalNotes = true, estimateDurations = true, stopRatio = 0.25, voiceOptions = { wobbleCents: 60, useSwell: false }, attackRatio = 0, chordWindow = 16384, chordMinDuration = 0.5, segmentChroma = 0, segmentBass = false, prevSubtract = 0, attackChroma = 0, changeGate = 0, fuseAttack = 0, fuseSubtract = 0, changeBonus = 0, exportFeatures = false, learned = 0, learnedConfidence = false, onsetOptions = {}, noteOnsetOptions = null, legatoNotes = false, synthCheck = false, strumCheck = false, onProgress = () => {} } = {}) {
   const { guitar, mid, useSide, sideRatio } = chooseSignal(channels, mode, sampleRate);
   const duration = guitar.length / sampleRate;
 
@@ -529,7 +540,7 @@ function transcribeOnce(channels, sampleRate, { mode = 'auto', voiceFilter = tru
       }
       if (fresh.length) {
         const ev = { t, notes: fresh, ...(positions ? { positions } : {}), ...(legatoTimes.includes(t) ? { legato: true } : {}), peeled: peeled.map((e) => ({ m: e.m, s: e.s, share: e.share })) };
-        if (synthCheck && !positions && fresh.length <= 2) synthRises.set(ev, riseSpectrum(post, pre));
+        if ((synthCheck && !positions && fresh.length <= 2) || strumCheck) synthRises.set(ev, riseSpectrum(post, pre));
         events.push(ev);
       }
       return;
@@ -575,10 +586,16 @@ function transcribeOnce(channels, sampleRate, { mode = 'auto', voiceFilter = tru
   });
 
   // 試し弾きで確かめる：曲の中のはっきりした1音から音色を覚え、迷いやすい1〜2音の答えを、候補を鳴らして比べ直す
-  if (synthCheck && synthRises.size) {
+  let synthProfile = null;
+  if ((synthCheck || strumCheck) && synthRises.size) {
     const opts = typeof synthCheck === 'object' ? synthCheck : {};
     const samples = [...synthRises].filter(([e]) => e.notes.length === 1 && e.peeled?.[0]?.m === e.notes[0] && e.peeled[0].share >= (opts.minShare ?? 0.5)).map(([e, d]) => ({ d, m: e.notes[0] }));
     const profile = learnProfile(samples, binHz);
+    synthProfile = profile;
+  }
+  if (synthCheck && synthProfile) {
+    const opts = typeof synthCheck === 'object' ? synthCheck : {};
+    const profile = synthProfile;
     if (profile) synthRises.forEach((d, e) => {
       const before = e.notes;
       const after = checkBySynthesis(d, binHz, before, profile, opts);
@@ -778,7 +795,24 @@ function transcribeOnce(channels, sampleRate, { mode = 'auto', voiceFilter = tru
   }
 
   // 5. コード譜を手がかりに、1音ずつのタブ譜を整える
-  if (useContext && grid) events = refineWithChart(events, noteOnsetList, timeline, tuning, contextOptions);
+  if (useContext && grid) {
+    let strumJudge = null;
+    if (strumCheck && synthProfile) {
+      // 和音か迷ったときに、押さえ方の全部の音を鳴らした案と、聞こえた音だけの案を試し弾きして比べる
+      const margin = typeof strumCheck === 'object' ? strumCheck.margin ?? 0 : 0;
+      const riseAt = new Map([...synthRises].map(([e, d]) => [e.t, d]));
+      strumJudge = (e, chordNotes, heard) => {
+        const d = riseAt.get(e.t);
+        if (!d || !heard.length) return true;
+        const [chordErr, heardErr] = compareBySynthesis(d, binHz, [chordNotes, heard], synthProfile);
+        if (globalThis.__strumLog) globalThis.__strumLog.push({ t: e.t, chordErr, heardErr, extra: chordNotes.filter((m) => !heard.includes(m)).length });
+        // 音を足すほど合わせやすくなるので、足した音1つにつき perNote だけ良くならないと和音にしない
+        const perNote = typeof strumCheck === 'object' ? strumCheck.perNote ?? 0.02 : 0.02;
+        return chordErr < heardErr * (1 - margin) - perNote * chordNotes.filter((m) => !heard.includes(m)).length;
+      };
+    }
+    events = refineWithChart(events, noteOnsetList, timeline, tuning, { ...contextOptions, strumJudge });
+  }
   // 歌と分けられない曲：歌のメロディと同じ高さ・同じころに鳴り始めた単音は、歌とみなしてタブ譜から除く
   // （歌が入っていると判断した曲だけ。ソロのギターもチョーキングやビブラートで音程が揺れるので、歌の無い曲で行うとメロディを消してしまう）
   if (!useSide && vocalFrames && dropVocalNotes && chartInfo?.method === '歌を除く') {
