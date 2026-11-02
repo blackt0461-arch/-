@@ -9,6 +9,7 @@ import { buildChordTimeline } from './song.js';
 import { chordToneProbabilities } from './learned.js';
 import { estimateBeats, findDownbeatScored, decodeChords, buildChart, cosine } from './chart.js';
 
+import { riseSpectrum, learnProfile, checkBySynthesis } from './synth-check.js';
 const LOWEST = 40;  // E2（6弦の開放）
 const HIGHEST = 88; // E6（1弦24フレット）
 const freq = (m) => 440 * 2 ** ((m - 69) / 12);
@@ -438,7 +439,7 @@ function refineWithChart(events, onsetList, timeline, tuning, { strumStrength = 
  * - chords: 0.1秒ごとのコードの判定（buildChordTimeline でコード進行にまとめる）
  * - events: 弾いた瞬間ごとの、新しく鳴った音（タブ譜の材料）
  */
-function transcribeOnce(channels, sampleRate, { mode = 'auto', voiceFilter = true, method = 'peel', riseRatio = 1.3, minStrength = 0.2, harmonicRatio = 4, tuning = TUNINGS[0], snapStrums = true, snapMin = 3, peelOptions = {}, useChart = true, chartOptions = {}, noteWeight = null, chromaMethod = 'auto', harmonicResidual = 0.35, vocalOptions = {}, vocalPresence = 0.35, minBeats = 1, precise = true, highWeight = 0.6, useContext = true, contextOptions = {}, dropVocalNotes = true, estimateDurations = true, stopRatio = 0.25, voiceOptions = { wobbleCents: 60, useSwell: false }, attackRatio = 0, chordWindow = 16384, chordMinDuration = 0.5, segmentChroma = 0, segmentBass = false, prevSubtract = 0, attackChroma = 0, changeGate = 0, fuseAttack = 0, fuseSubtract = 0, changeBonus = 0, exportFeatures = false, learned = 0, learnedConfidence = false, onsetOptions = {}, noteOnsetOptions = null, legatoNotes = false, onProgress = () => {} } = {}) {
+function transcribeOnce(channels, sampleRate, { mode = 'auto', voiceFilter = true, method = 'peel', riseRatio = 1.3, minStrength = 0.2, harmonicRatio = 4, tuning = TUNINGS[0], snapStrums = true, snapMin = 3, peelOptions = {}, useChart = true, chartOptions = {}, noteWeight = null, chromaMethod = 'auto', harmonicResidual = 0.35, vocalOptions = {}, vocalPresence = 0.35, minBeats = 1, precise = true, highWeight = 0.6, useContext = true, contextOptions = {}, dropVocalNotes = true, estimateDurations = true, stopRatio = 0.25, voiceOptions = { wobbleCents: 60, useSwell: false }, attackRatio = 0, chordWindow = 16384, chordMinDuration = 0.5, segmentChroma = 0, segmentBass = false, prevSubtract = 0, attackChroma = 0, changeGate = 0, fuseAttack = 0, fuseSubtract = 0, changeBonus = 0, exportFeatures = false, learned = 0, learnedConfidence = false, onsetOptions = {}, noteOnsetOptions = null, legatoNotes = false, synthCheck = false, onProgress = () => {} } = {}) {
   const { guitar, mid, useSide, sideRatio } = chooseSignal(channels, mode, sampleRate);
   const duration = guitar.length / sampleRate;
 
@@ -501,6 +502,7 @@ function transcribeOnce(channels, sampleRate, { mode = 'auto', voiceFilter = tru
 
   // 3. 弾いた瞬間ごとに、直前より強くなった音（＝新しく弾いた音）を拾う
   let events = [];
+  const synthRises = new Map(); // 試し弾きで確かめる音の、弾いた瞬間に増えた分
   onsets.forEach((t, i) => {
     if (i % 10 === 0) onProgress(0.5 + 0.5 * (i / onsets.length), 'タブ譜を作っています');
     const start = Math.floor((t + 0.02) * sampleRate);
@@ -525,7 +527,11 @@ function transcribeOnce(channels, sampleRate, { mode = 'auto', voiceFilter = tru
         const snapped = snapToVoicing(post, sampleRate, win, fresh, tuning);
         if (snapped) ({ notes: fresh, positions } = snapped);
       }
-      if (fresh.length) events.push({ t, notes: fresh, ...(positions ? { positions } : {}), ...(legatoTimes.includes(t) ? { legato: true } : {}), peeled: peeled.map((e) => ({ m: e.m, s: e.s, share: e.share })) });
+      if (fresh.length) {
+        const ev = { t, notes: fresh, ...(positions ? { positions } : {}), ...(legatoTimes.includes(t) ? { legato: true } : {}), peeled: peeled.map((e) => ({ m: e.m, s: e.s, share: e.share })) };
+        if (synthCheck && !positions && fresh.length <= 2) synthRises.set(ev, riseSpectrum(post, pre));
+        events.push(ev);
+      }
       return;
     }
     // method 'diff'：増えた分のスペクトルから音を探す / 'rise'：鳴っている音を探し、直前より強くなった音を選ぶ
@@ -567,6 +573,14 @@ function transcribeOnce(channels, sampleRate, { mode = 'auto', voiceFilter = tru
     }
     if (fresh.length) events.push(positions ? { t, notes: fresh, positions } : { t, notes: fresh });
   });
+
+  // 試し弾きで確かめる：曲の中のはっきりした1音から音色を覚え、迷いやすい1〜2音の答えを、候補を鳴らして比べ直す
+  if (synthCheck && synthRises.size) {
+    const opts = typeof synthCheck === 'object' ? synthCheck : {};
+    const samples = [...synthRises].filter(([e]) => e.notes.length === 1 && e.peeled?.[0]?.m === e.notes[0] && e.peeled[0].share >= (opts.minShare ?? 0.5)).map(([e, d]) => ({ d, m: e.notes[0] }));
+    const profile = learnProfile(samples, binHz);
+    if (profile) synthRises.forEach((d, e) => { e.notes = checkBySynthesis(d, binHz, e.notes, profile, opts); });
+  }
 
   // 指で音を変えた担当が足した音は、前後が1音ずつ弾かれている場面（ソロ・メロディ）でだけ残す。
   // 和音が鳴っていると音の高さが1つに決まらず、高さが変わったと誤って判断しやすいため
