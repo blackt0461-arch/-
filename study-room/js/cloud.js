@@ -10,6 +10,10 @@ const MESSAGES = {
   password_short: 'パスワードは4文字以上にしてください',
   bad_login: 'ユーザー名かパスワードがちがいます',
   bad_token: 'ログインが切れました。もう一度ログインしてください',
+  no_user: 'そのユーザー名の人は見つかりませんでした',
+  self: '自分にはフレンド申請できません',
+  not_friend: 'フレンドになっている人の部屋だけ見られます',
+  not_admin: '管理者だけが見られます',
 };
 
 export class CloudError extends Error {

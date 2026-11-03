@@ -8,24 +8,36 @@ function blank() {
   return {
     version: 1,
     streak: { count: 0, last: null, total: 0 },
+    profile: blankProfile(),
     subjects: {},
     house: blankHouse(),
   };
 }
+// 経験値とランク
+function blankProfile() {
+  return { xp: 0, solved: 0, correct: 0, perfect: 0 };
+}
 // 家はどの科目でも共通（どの科目を解いても同じ家が育つ）
+// 家具は「買う → 持ち物に入る → 部屋に置く」。置ける数はランクで決まる
 function blankHouse() {
   return {
+    v: 2,
     gauge: 0,
-    unlocks: 0,     // これまでに解放した数（ゲージの大きさに使う）
-    rooms: [],      // [{ id, dir, items: { kindId: variantIndex }, specials: [index] }]
-    current: 0,     // いま見ている部屋
+    unlocks: 0,       // これまでに買った数（ゲージの大きさに使う）
+    tickets: 0,       // ゲージなしで1つ買える券（前の版で選んだ家具の分を返したもの）
+    inventory: {},    // 持っている家具 { itemId: 個数 }
+    rooms: [],        // [{ id, style, surf: { wall, floor, door, window, curtain }, placed: [配置] }]
+    current: 0,       // いま見ている部屋
+    nextUid: 1,
     specialsGiven: 0,
-    pendingSpecials: 0, // まだ置いていない特別な家具
+    pendingSpecials: 0, // まだ受け取っていない特別な家具
   };
 }
+// 配置：{ uid, item, x, z, y, rot, wall }  wall = '+x' '-x' '-z' '+z'（壁に掛ける物）
 function blankSubject() {
   return {
     srs: {},        // 問題ID → { stage, due, wrongs, rights, mastered, seen }
+    units: {},      // 分野 → { solved, correct, perfect }
     session: null,  // 途中のセット（アプリを閉じても続きから）
   };
 }
@@ -54,6 +66,21 @@ function migrate(s) {
   }
   for (const x of Object.values(s.subjects || {})) {
     for (const k of ['gauge', 'unlocks', 'rooms', 'current', 'specialsGiven', 'pendingSpecials']) delete x[k];
+    x.units = x.units || {};
+  }
+  s.profile = s.profile || blankProfile();
+  // 家のしくみ v2（持ち物と自由配置）。前の版で選んだ家具の数だけ「1つ買える券」を返す
+  const h = s.house;
+  if (h && h.v !== 2) {
+    const old = h;
+    s.house = blankHouse();
+    s.house.gauge = old.gauge || 0;
+    s.house.tickets = old.unlocks || 0;
+    s.house.specialsGiven = 0;
+    s.house.pendingSpecials = (old.specialsGiven || 0) + (old.pendingSpecials || 0);
+    const STYLE = { natural: 'natural', industrial: 'industrial', retro: 'retro', music: 'retro', manga: 'natural', game: 'industrial' };
+    s.house.rooms = (old.rooms || []).map(r => ({ id: r.id, style: STYLE[r.dir] || null, surf: null, placed: [] }));
+    s.house.current = Math.min(old.current || 0, Math.max(0, s.house.rooms.length - 1));
   }
   return s;
 }
@@ -163,6 +190,50 @@ export function recordResult(sub, id, perfect, wasReview) {
   }
   return { mastered: false };
 }
+
+// --- 経験値・ランク ---
+// 正解のほうが多く入る。やり直し（確認）は入らない
+export const XP = { perfect: 12, ok: 8, wrong: 4 };
+// ランク L から L+1 に必要な経験値（だんだん増える）
+export function xpToNext(rank) { return 30 + (rank - 1) * 20; }
+export function rankInfo(xp = state.profile?.xp || 0) {
+  let rank = 1, rest = xp;
+  while (rest >= xpToNext(rank)) { rest -= xpToNext(rank); rank++; }
+  return { rank, into: rest, need: xpToNext(rank), xp };
+}
+// 1つの部屋に置ける家具の数
+export function capacity(rank = rankInfo().rank) { return 6 + (rank - 1) * 2; }
+// 1問の結果を記録（分野ごとの数・経験値）。戻り値 { gained, rankUp, rank }
+export function addAnswer(sub, unit, kind) {
+  const p = state.profile || (state.profile = blankProfile());
+  const before = rankInfo(p.xp).rank;
+  const gained = XP[kind] || 0;
+  p.xp += gained;
+  p.solved += 1;
+  if (kind !== 'wrong') p.correct += 1;
+  if (kind === 'perfect') p.perfect += 1;
+  const u = (sub.units || (sub.units = {}))[unit] || (sub.units[unit] = { solved: 0, correct: 0, perfect: 0 });
+  u.solved += 1;
+  if (kind !== 'wrong') u.correct += 1;
+  if (kind === 'perfect') u.perfect += 1;
+  const after = rankInfo(p.xp).rank;
+  return { gained, rankUp: after > before, rank: after };
+}
+export function profile() { return state.profile || (state.profile = blankProfile()); }
+
+// --- 持ち物・配置 ---
+export function own(itemId, n = 1) {
+  const inv = house().inventory;
+  inv[itemId] = (inv[itemId] || 0) + n;
+}
+export function owned(itemId) { return house().inventory[itemId] || 0; }
+// 部屋に置いている数（持ち物の個数より多くは置けない）
+export function placedCount(itemId) {
+  let n = 0;
+  for (const r of house().rooms) for (const p of r.placed || []) if (p.item === itemId) n++;
+  return n;
+}
+export function newUid() { const h = house(); return h.nextUid++; }
 
 // --- ゲージ ---
 export function gaugeMax(sub) {

@@ -1,9 +1,9 @@
-# catalog.js に書いた Poly Haven の素材IDから、ダウンロード先をまとめて js/assets.js を作り直す。
+# catalog.js・exterior.js・items.js に書いた Poly Haven の素材IDから、ダウンロード先をまとめて js/assets.js を作り直す。
 # 使い方: python3 study-room/tools/resolve_assets.py
 import json,re,urllib.request,sys
 import os
 here=os.path.join(os.path.dirname(os.path.abspath(__file__)),'..','js')
-src=open(os.path.join(here,'catalog.js')).read()+open(os.path.join(here,'exterior.js')).read()
+src=''.join(open(os.path.join(here,f)).read() for f in ('catalog.js','exterior.js','items.js'))
 models=sorted(set(re.findall(r"model: '([^']+)'",src))|set(re.findall(r"placeModel\(g, '([^']+)'",src))|set(re.findall(r"'(shrub_0\d)'",src)))
 texs=sorted(set(re.findall(r"tex: '([^']+)'",src))|set(re.findall(r"texturedMaterial\('([^']+)'",src)))
 def get(u): return json.load(urllib.request.urlopen(urllib.request.Request(u,headers={'User-Agent':'study-room-builder/1.0'}),timeout=30))
