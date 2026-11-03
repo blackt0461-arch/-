@@ -114,6 +114,13 @@ export function dayKey(d = new Date()) {
   const t = new Date(d.getTime() - DAY_START_HOUR * 3600e3);
   return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
 }
+// その週の月曜日（朝6時区切りの日付で）を返す
+export function weekKey(d = new Date()) {
+  const [y, m, dd] = dayKey(d).split('-').map(Number);
+  const t = new Date(y, m - 1, dd);
+  const back = (t.getDay() + 6) % 7; // 月曜=0
+  return addDays(dayKey(d), -back);
+}
 function addDays(key, n) {
   const [y, m, d] = key.split('-').map(Number);
   const t = new Date(y, m - 1, d + n);
@@ -216,10 +223,36 @@ export function addAnswer(sub, unit, kind) {
   u.solved += 1;
   if (kind !== 'wrong') u.correct += 1;
   if (kind === 'perfect') u.perfect += 1;
+  // 週ごとの解いた数（ランキング用。月曜の朝6時で区切る）
+  const wk = weekKey();
+  if (!p.week || p.week.key !== wk) p.week = { key: wk, solved: 0, correct: 0 };
+  p.week.solved += 1;
+  if (kind !== 'wrong') p.week.correct += 1;
   const after = rankInfo(p.xp).rank;
   return { gained, rankUp: after > before, rank: after };
 }
 export function profile() { return state.profile || (state.profile = blankProfile()); }
+
+// --- ログインボーナス（30日で1周。5日ごとにレアチケット、30日目は★4以上確定チケット） ---
+export function loginBonusDay(n) {
+  if (n === 30) return { kind: 'ticket4', label: '★4以上確定チケット' };
+  if (n % 5 === 0) return { kind: 'ticket', label: 'レアチケット' };
+  return { kind: 'gauge', amount: 8, label: 'ゲージ +8' };
+}
+// 今日まだもらっていなければもらう。戻り値 { day, reward } か null
+export function claimLoginBonus() {
+  const lb = state.loginBonus || (state.loginBonus = { count: 0, last: null });
+  const today = dayKey();
+  if (lb.last === today) return null;
+  lb.count = (lb.count % 30) + 1;
+  lb.last = today;
+  const reward = loginBonusDay(lb.count);
+  const h = house();
+  if (reward.kind === 'ticket') h.rareTickets = (h.rareTickets || 0) + 1;
+  if (reward.kind === 'ticket4') h.rareTickets4 = (h.rareTickets4 || 0) + 1;
+  if (reward.kind === 'gauge') h.gauge += reward.amount;
+  return { day: lb.count, reward };
+}
 
 // --- 持ち物・配置 ---
 export function own(itemId, n = 1) {

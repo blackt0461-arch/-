@@ -186,6 +186,7 @@ async function enterHouse() {
   showHome();
   await room3d.show(curDef(), curRoom());
   receiveSpecials();
+  showLoginBonus();
   if (added.length > 1) toast(`新しい部屋「${added.map(r => r.name).join('・')}」が開きました`, 3000);
   if (!curRoom().style) askStyle();
 }
@@ -509,6 +510,26 @@ async function putIntoRoom(item, justBought) {
   return true;
 }
 
+// ログインボーナス：その日はじめて開いたとき、30日のカレンダーを出してスタンプ
+function showLoginBonus() {
+  const got = S.claimLoginBonus();
+  if (!got) return;
+  S.save();
+  const cells = Array.from({ length: 30 }, (_, i) => {
+    const n = i + 1, r = S.loginBonusDay(n);
+    const cls = [n < got.day ? 'done' : '', n === got.day ? 'today' : '', r.kind !== 'gauge' ? 'big ' + r.kind : ''].join(' ');
+    const ic = r.kind === 'ticket4' ? icon('trophy') : r.kind === 'ticket' ? icon('star') : icon('gift');
+    return `<div class="lb-cell ${cls}"><small>${n}</small>${ic}${n <= got.day ? `<i class="stamp">${icon('check')}</i>` : ''}</div>`;
+  }).join('');
+  const el = sheet(`
+    <div class="sh-head"><span class="sh-ic gold">${icon('gift')}</span><div><h3>ログインボーナス ${got.day}日目</h3><p>5日ごとにレアチケット、30日目は★4以上確定チケット</p></div></div>
+    <div class="lb-grid">${cells}</div>
+    <div class="lb-get">${icon(got.reward.kind === 'gauge' ? 'gift' : got.reward.kind === 'ticket4' ? 'trophy' : 'star')}<b>${got.reward.label}</b>をもらいました</div>
+    <button class="btn gold big ok">${icon('check')}受けとる</button>`, 'lb-sheet');
+  app.querySelector('.tabbar')?.classList.add('hide');
+  el.querySelector('.ok').onclick = () => { el.remove(); showHome(); };
+}
+
 // 克服のごほうび（特別な家具）を持ち物に入れる
 function receiveSpecials() {
   const hs = HS();
@@ -744,11 +765,12 @@ function showMenu() {
     </section>
     <nav class="menu-list">
       <button data-m="records">${icon('chart')}<span>記録<small>分野ごとの成績・連続日数</small></span>${icon('chevronRight')}</button>
+      <button data-m="ranking">${icon('trophy')}<span>週間ランキング<small>今週解いた問題の数（月曜の朝6時で区切り）</small></span>${icon('chevronRight')}</button>
       <button data-m="friends">${icon('users')}<span>フレンド<small>申請・フレンドの部屋を見に行く</small></span>${friendBadge ? `<i class="badge">${friendBadge}</i>` : ''}${icon('chevronRight')}</button>
       <button data-m="settings">${icon('gear')}<span>設定<small>画質・データ・ログアウト</small></span>${icon('chevronRight')}</button>
       ${isAdmin() ? `<button data-m="admin">${icon('shield')}<span>管理者<small>みんなの記録と部屋</small></span>${icon('chevronRight')}</button>` : ''}
     </nav>`);
-  el.querySelectorAll('.menu-list button').forEach(b => b.onclick = () => ({ records: showRecords, friends: showFriends, settings: showSettings, admin: showAdmin })[b.dataset.m]());
+  el.querySelectorAll('.menu-list button').forEach(b => b.onclick = () => ({ records: showRecords, ranking: showRanking, friends: showFriends, settings: showSettings, admin: showAdmin })[b.dataset.m]());
   paintSync();
 }
 
@@ -787,6 +809,30 @@ function showRecords() {
       return `<li><span class="unit">${p.unit}</span><span class="tx">${esc(p.text)}</span>${badge}</li>`;
     }).join('')}</ul>`);
   el.querySelector('.back').onclick = showMenu;
+}
+
+// =========================== 週間ランキング ===========================
+async function showRanking() {
+  const wk = S.weekKey();
+  const [y, mo, d] = wk.split('-').map(Number);
+  const end = new Date(y, mo - 1, d + 6);
+  const el = screenWithTabs('ranking', `<button class="icon back">${icon('back')}</button><h2>週間ランキング</h2><span></span>`, 'menu', `
+    <p class="rk-term">${mo}/${d}（月）〜 ${end.getMonth() + 1}/${end.getDate()}（日）に解いた問題の数</p>
+    <div class="rk-me"></div>
+    <div class="rk-list"><p class="empty">読み込み中…</p></div>`);
+  el.querySelector('.back').onclick = showMenu;
+  // 自分の最新の数をネットに送ってから見る
+  try { await Sync.push(); } catch (e) { /* なし */ }
+  let r;
+  try { r = await rpc('sr_weekly_ranking', { p_token: Auth.currentUser().token, p_week: wk }); }
+  catch (e) { el.querySelector('.rk-list').innerHTML = `<p class="empty">${esc(e.message)}</p>`; return; }
+  const mine = S.profile().week?.key === wk ? S.profile().week.solved : 0;
+  el.querySelector('.rk-me').innerHTML = `<div class="rk-mecard"><span class="rk-pos">${r.me ? r.me.pos + '<small>位</small>' : '—'}</span>
+    <div><b>あなた</b><small>${r.total || 0}人中 ・ 今週 ${mine}問</small></div>${icon('pencil')}</div>`;
+  const medal = (p) => p <= 3 ? `<span class="medal m${p}">${p}</span>` : `<span class="rk-n">${p}</span>`;
+  el.querySelector('.rk-list').innerHTML = (r.top || []).length ? r.top.map(x => `
+    <div class="rk-row ${x.me ? 'me' : ''}">${medal(x.pos)}<b>${esc(x.username)}</b><span>${x.solved}問<small>正解 ${x.correct}</small></span></div>`).join('')
+    : '<p class="empty">今週はまだだれも解いていません。いちばん乗りしよう！</p>';
 }
 
 // =========================== 図鑑 ===========================

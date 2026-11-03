@@ -263,3 +263,36 @@ h3.sec { font-size: 14px; color: var(--muted); margin: 18px 4px 8px; font-weight
 .genregrid.three .g-ic { width: 52px; height: 52px; font-size: 28px; border-radius: 16px; }
 .genregrid.three b { font-size: 14px; }
 .g-new { font-style: normal; font-size: 10px; font-weight: 700; color: #3a2400; background: linear-gradient(180deg, var(--gold1), var(--gold2)); padding: 2px 7px; border-radius: 99px; margin-top: 2px; }
+
+/* ログインボーナス */
+.lb-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; margin-bottom: 14px; }
+.lb-cell { position: relative; aspect-ratio: 1; border-radius: 12px; border: 1px solid var(--card-line); background: var(--card); display: grid; place-items: center; align-content: center; gap: 1px; font-size: 18px; color: var(--muted); }
+.lb-cell small { font-size: 10px; font-weight: 700; }
+.lb-cell.big { color: var(--gold1); background: linear-gradient(180deg, rgba(120,90,50,.6), rgba(40,32,24,.9)); }
+.lb-cell.ticket4 { color: #f6d6ff; background: linear-gradient(180deg, rgba(120,80,160,.7), rgba(40,26,50,.95)); }
+.lb-cell.done { opacity: .55; }
+.lb-cell .stamp { position: absolute; inset: 0; display: grid; place-items: center; font-style: normal; font-size: 26px; color: #ff6b5a; background: rgba(0,0,0,.25); border-radius: inherit; }
+.lb-cell.today { box-shadow: 0 0 0 2px var(--gold2), 0 0 18px rgba(240,180,76,.5); opacity: 1; }
+.lb-cell.today .stamp { animation: stamp .5s .3s cubic-bezier(.3,1.6,.5,1) both; }
+@keyframes stamp { from { transform: scale(2.2); opacity: 0; } to { transform: none; opacity: 1; } }
+.lb-get { display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 16px; margin-bottom: 12px; color: var(--text); }
+.lb-get .ic { color: var(--gold1); font-size: 22px; }
+
+/* 週間ランキング */
+.rk-term { color: var(--muted); font-size: 13px; margin: 0 4px 12px; }
+.rk-mecard { display: flex; align-items: center; gap: 14px; padding: 14px; border-radius: 18px; margin-bottom: 14px; background: linear-gradient(135deg, rgba(120,90,50,.55), rgba(40,32,24,.9)); border: 1px solid var(--card-line); }
+.rk-mecard > div { flex: 1; display: grid; }
+.rk-mecard small { color: var(--muted); font-size: 12px; }
+.rk-mecard > .ic { font-size: 22px; color: var(--gold1); }
+.rk-pos { font-size: 30px; font-weight: 800; color: var(--gold1); min-width: 56px; text-align: center; }
+.rk-pos small { font-size: 13px; margin-left: 2px; }
+.rk-row { display: flex; align-items: center; gap: 12px; padding: 11px 14px; border-radius: 14px; border: 1px solid var(--card-line); background: var(--card); margin-bottom: 8px; }
+.rk-row b { flex: 1; font-size: 15px; }
+.rk-row span:last-child { display: grid; text-align: right; font-weight: 800; }
+.rk-row small { font-size: 11px; color: var(--ok); font-weight: 500; }
+.rk-row.me { box-shadow: 0 0 0 2px var(--gold2); }
+.rk-n { width: 30px; text-align: center; font-weight: 800; color: var(--muted); }
+.medal { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; font-weight: 900; color: #3a2400; }
+.medal.m1 { background: linear-gradient(180deg, #ffe9a0, #e7b23c); box-shadow: 0 0 12px rgba(240,190,70,.6); }
+.medal.m2 { background: linear-gradient(180deg, #f2f2f2, #a9a9a9); }
+.medal.m3 { background: linear-gradient(180deg, #f1c49b, #b8763f); }
