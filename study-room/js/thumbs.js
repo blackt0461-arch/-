@@ -1,3 +1,4 @@
+import { skinThumbURL } from './skins.js';
 // 家具のサムネイル（小さな絵）
 // - Poly Haven のモデル（色を変えていない物）→ Poly Haven の CDN の画像をそのまま使う
 // - 自作家具・色を変えたモデル・質感・単色・カーテン → 小さな 3D 画面で描いて dataURL にする
@@ -152,6 +153,8 @@ const esc = (s) => String(s).replace(/[&"<>]/g, (c) => ({ '&': '&amp;', '"': '&q
 
 export function thumbHTML(item) {
   if (!item) return '';
+  // 着せ替えは、色で描いた小さなスマホの絵
+  if (item.src?.skin) return `<img class="thumb skin-thumb" src="${skinThumbURL(item.src.skin)}" alt="${esc(item.name || '')}" draggable="false">`;
   const url = thumbURL(item);
   const alt = esc(item.name || '');
   if (url) return `<img class="thumb" src="${url}" alt="${alt}" loading="lazy" decoding="async" draggable="false">`;

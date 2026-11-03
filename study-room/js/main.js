@@ -12,6 +12,7 @@ import { loadModel } from './loaders.js';
 import { validProblems, SYMBOLS } from './problems.js';
 import { SUBJECT_PROBLEMS } from './subjects/index.js';
 import { playPullFX } from './pullfx.js';
+import { SKINS, skinById, skinItemId, skinThumbURL } from './skins.js';
 import * as S from './store.js';
 import * as Auth from './auth.js';
 import * as DL from './download.js';
@@ -153,6 +154,35 @@ function goTab(t) {
   if (t === 'social') return halfSocial();
   if (t === 'menu') return showMenu();
 }
+// =========================== 着せ替え ===========================
+function ownsSkin(id) { return id === 'a' || S.owned(skinItemId(id)) > 0; }
+function applySkin() {
+  const want = S.profile().skin || 'a';
+  const id = ownsSkin(want) ? want : 'a';
+  if (id === 'a') delete document.documentElement.dataset.skin; else document.documentElement.dataset.skin = id;
+}
+function showSkins() {
+  const cur = S.profile().skin && ownsSkin(S.profile().skin) ? S.profile().skin : 'a';
+  const have = SKINS.filter(x => ownsSkin(x.id)).length;
+  const el = screenWithTabs('skins', `<button class="icon back">${icon('back')}</button><h2>着せ替え</h2><span class="sk-count"><b>${have}</b> / ${SKINS.length}</span>`, 'menu', `
+    <p class="note">画面の見た目を変えられます。★4・★5の着せ替えは、レアガチャで手に入ります（バンドの5つはバンドシリーズ限定）。</p>
+    <div class="skin-grid">${SKINS.map(x => {
+      const own = ownsSkin(x.id);
+      return `<button class="skin-card ${x.id === cur ? 'on' : ''} ${own ? '' : 'locked'}" data-s="${x.id}">
+        <img src="${skinThumbURL(x.id)}" alt="">
+        <span class="sk-t"><b>${esc(x.name)}</b><i>${x.rarity ? '★'.repeat(x.rarity) + (x.series ? '・バンド限定' : '') : '基本'}</i><small>${esc(x.desc)}</small></span>
+        <em>${x.id === cur ? '使っている' : own ? '使う' : '未入手'}</em></button>`;
+    }).join('')}</div>`);
+  el.querySelector('.back').onclick = showMenu;
+  el.querySelectorAll('.skin-card').forEach(b => b.onclick = () => {
+    const id = b.dataset.s;
+    if (!ownsSkin(id)) return toast('レアガチャで手に入ります', 2000);
+    S.profile().skin = id; S.save(); applySkin(); vibrate(15);
+    toast(`「${skinById(id).name}」にしました`, 1600);
+    showSkins();
+  });
+}
+
 // 下から半分だけの画面（大きなボタンが並ぶ）
 function halfSheet(title, items) {
   if (!app.querySelector('.home')) showHome();
@@ -406,6 +436,7 @@ function remainCapacity(room = curRoom()) {
 let notesChecked = false;
 function showHome() {
   S.setUnlimited(isAdmin());
+  applySkin();
   if (isAdmin()) adminTopUp();
   if (visiting) return showVisit();
   room3d?.setActive(true);
@@ -876,7 +907,7 @@ function onSelectItem(uid) {
 function showInventory() {
   const inv = HS().inventory;
   const ids = S.isUnlimited() ? [...new Set([...ITEMS, ...G.GACHA_ITEMS].map(i => i.id))] : Object.keys(inv);
-  const list = ids.map(itemById).filter(it => it && it.place !== 'surface' && S.owned(it.id) > S.placedCount(it.id));
+  const list = ids.map(itemById).filter(it => it && it.place !== 'surface' && it.place !== 'skin' && S.owned(it.id) > S.placedCount(it.id));
   const el = sheet(`
     <div class="sh-head"><span class="sh-ic">${icon('box')}</span><div><h3>持ち物</h3><p>タップすると部屋に置きます（あと ${Math.max(0, remainCapacity())} 個置けます）</p></div></div>
     ${list.length ? `<div class="invgrid">${list.map(it => `
@@ -968,7 +999,7 @@ function photoMode() {
 
 // =========================== 更新のお知らせ ===========================
 // このプログラムの版（version.json と同じにする。公開のたびに上げる）
-const APP_VERSION = '2.6.0';
+const APP_VERSION = '2.7.0';
 // 新しい版が出たら、みんな同じタイミングでそろうように強制で再起動する。
 // 開いた時・画面に戻った時・1分ごとに version.json を見る
 async function latestVersion() {
@@ -1112,13 +1143,14 @@ function showMenu() {
         <small>次のLvまで ${rk.need - rk.into} XP ・ 置ける家具 ${S.capacity()}個</small></div>
     </section>
     <nav class="menu-list">
+      <button data-m="skins">${icon('palette')}<span>着せ替え<small>画面の見た目を変える（ガチャで集める）</small></span>${icon('chevronRight')}</button>
       <button data-m="records">${icon('chart')}<span>記録<small>分野ごとの成績・連続日数</small></span>${icon('chevronRight')}</button>
       <button data-m="feedback">${icon('chat')}<span>要望・バグ報告<small>管理者に送る</small></span>${icon('chevronRight')}</button>
       <button data-m="news">${icon('bell')}<span>お知らせ<small>アップデートや運営からのお知らせ</small></span>${newsBadge ? `<i class="badge">${newsBadge}</i>` : ''}${icon('chevronRight')}</button>
       <button data-m="settings">${icon('gear')}<span>設定<small>画質・データ・ログアウト</small></span>${icon('chevronRight')}</button>
       ${isAdmin() ? `<button data-m="admin">${icon('shield')}<span>管理者<small>みんなの記録と部屋</small></span>${icon('chevronRight')}</button>` : ''}
     </nav>`);
-  el.querySelectorAll('.menu-list button').forEach(b => b.onclick = () => ({ records: showRecords, feedback: () => showFeedback(), bag: () => showBag(), news: showNews, ranking: showRanking, friends: showFriends, settings: showSettings, admin: showAdmin })[b.dataset.m]());
+  el.querySelectorAll('.menu-list button').forEach(b => b.onclick = () => ({ skins: () => showSkins(), records: showRecords, feedback: () => showFeedback(), bag: () => showBag(), news: showNews, ranking: showRanking, friends: showFriends, settings: showSettings, admin: showAdmin })[b.dataset.m]());
   paintSync();
 }
 
@@ -1253,7 +1285,7 @@ function showBag(tab = 'furniture', genre = '') {
   if (isAdmin()) adminTopUp();
   const hs = HS();
   const ids = S.isUnlimited() ? [...new Set([...ITEMS, ...G.GACHA_ITEMS].map(i => i.id))] : Object.keys(hs.inventory);
-  const owned = ids.map(itemById).filter(it => it && S.owned(it.id) > 0 && it.place !== 'surface' && (!genre || it.genre === genre));
+  const owned = ids.map(itemById).filter(it => it && S.owned(it.id) > 0 && it.place !== 'surface' && it.place !== 'skin' && (!genre || it.genre === genre));
   const surf = ids.map(itemById).filter(it => it && it.place === 'surface');
   const items = [
     ['ticket', hs.rareTickets || 0, ticketSVG('ticket', 'mini'), 'ガチャを1回引ける'],
