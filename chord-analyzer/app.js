@@ -1,6 +1,6 @@
 // 画面の切り替えと、各部品のつなぎ込み
 
-import { NOTE_NAMES, identifyFromNotes, midiToPitchClass, parseChordName, frequencyToMidi } from './chord-engine.js';
+import { NOTE_NAMES, identifyFromNotes, midiToPitchClass, parseChordName, frequencyToMidi, describeChord } from './chord-engine.js';
 import { startListening, startTuner, startStrumTuner, startShapeCheck, setMicDistance } from './audio.js';
 import { TUNINGS, parseShape, formatShape, soundingNotes, renderFretboard, findVoicings, chordDiagramSvg } from './fretboard.js';
 import { playNotes, playSequence } from './sound.js';
@@ -10,7 +10,7 @@ import { aiReady, downloadAI, deleteAI, AI_TOTAL } from './ai-loader.js';
 import { estimateKey, suggestCapo, easiestVoicing } from './practice.js';
 
 // version.json と同じ値にする（新しいバージョンを公開したら両方を上げる）
-const APP_VERSION = '1.15.0';
+const APP_VERSION = '1.15.1';
 const APP_FILES = ['index.html', 'style.css', 'app.js', 'chord-engine.js', 'audio.js', 'fretboard.js', 'sound.js', 'song.js', 'dsp.js', 'chart.js', 'live.js', 'practice.js', 'transcribe.js', 'transcribe-worker.js', 'tab-staff.js', 'learned.js', 'synth-check.js', 'vocal-remove.js', 'ai-vocal.js', 'ai-loader.js', 'ai-pitch.js', 'models/basic-pitch.onnx', 'sw.js', 'manifest.webmanifest'];
 const HOLD_MS = 150;      // マイク：別のコードがこの時間続いたら表示を切り替える
 const HISTORY_SIZE = 16;  // マイク：覚えておくコードの数
@@ -141,7 +141,13 @@ labelButtons.forEach((b) => b.addEventListener('click', () => {
   updateFret();
 }));
 tuningSelect.addEventListener('change', () => { updateFret(); updateSearch(); });
-capoSelect.addEventListener('change', () => { updateFret(); updateSearch(); });
+let songViewReady = () => false; // 曲の画面の準備ができたら、下（曲の解析のところ）で差しかえる
+capoSelect.addEventListener('change', () => {
+  updateFret();
+  updateSearch();
+  // 曲の解析結果を表示中なら、コード名とタブ譜をカポに合わせて作り直す
+  if (songViewReady()) refreshSongView();
+});
 leftyInput.addEventListener('change', () => updateFret());
 wideQuery.addEventListener('change', () => updateFret());
 
@@ -429,6 +435,7 @@ const songTab = document.getElementById('song-tab');
 const TAB_PER_LINE = 12;
 
 let analysis = null; // { timeline, tabBlocks: [{ t, text }] }
+songViewReady = () => !!analysis;
 let worker = null;
 
 function showSongError(message) {
@@ -483,18 +490,27 @@ function buildTabBlocks(events) {
   // 音の長さ（dur）も一緒に渡す（リズムの棒の長さに使う）
   const placed = assignTab(events, tuning, { capo: Number(capoSelect.value) }).map((p, i) => ({ ...p, dur: events[i]?.dur, legato: events[i]?.legato }));
   // 楽譜のような段（6本線・小節線・コード名）に分ける。コピー用に文字のタブ譜も作っておく
-  const rows = buildStaffRows(placed, { beats: pendingBeats.beats, downbeat: pendingBeats.downbeat, duration: pendingBeats.duration, timeline: pendingBeats.timeline ?? [], stringNames: names });
+  const rows = buildStaffRows(placed, { beats: pendingBeats.beats, downbeat: pendingBeats.downbeat, duration: pendingBeats.duration, timeline: (pendingBeats.timeline ?? []).map((seg) => ({ ...seg, name: shapeName(seg.name) })), stringNames: names });
   return rows.map((r) => ({ ...r, text: r.events.length ? formatTab(r.events, { perLine: 999, stringNames: names }) : '' }));
 }
 let pendingBeats = {}; // いま表示している曲の拍・小節の頭・長さ・コード進行（段に分けるのに使う）
+
+// カポをつけているときは、コード名を「押さえ方の名前」で出す（カポ3で B♭ の音 → G の形で押さえる）。
+// 解析で分かるのは実際に鳴っている音なので、カポの数だけ下げた名前にする。名前が読めないときはそのまま
+function shapeName(name) {
+  const capo = Number(capoSelect.value);
+  const p = capo > 0 && parseChordName(name);
+  if (!p) return name;
+  return describeChord((p.root - capo + 120) % 12, p.type, (p.bass - capo + 120) % 12).name;
+}
 
 function renderAnalysis() {
   const { timeline, tabBlocks } = analysis;
   songChords.innerHTML = timeline.length
     ? timeline.map((seg, i) => `
       <div class="song-chord" data-index="${i}">
-        <button type="button" class="chord-seek"><small>${formatTime(seg.start)}</small><b>${escapeHtml(seg.name)}</b></button>
-        <button type="button" class="to-fret" aria-label="${escapeHtml(seg.name)} の押さえ方（タップで指板に大きく表示）" title="指板で大きく見る">${chordDiagramSvg(parseShape(voicingFor(seg.name)))}</button>
+        <button type="button" class="chord-seek"><small>${formatTime(seg.start)}</small><b>${escapeHtml(shapeName(seg.name))}</b>${shapeName(seg.name) !== seg.name ? `<small class="real-name">実際の音 ${escapeHtml(seg.name)}</small>` : ''}</button>
+        <button type="button" class="to-fret" aria-label="${escapeHtml(shapeName(seg.name))} の押さえ方（タップで指板に大きく表示）" title="指板で大きく見る">${chordDiagramSvg(parseShape(voicingFor(seg.name)))}</button>
       </div>`).join('')
     : '<p class="hint">コードが見つかりませんでした</p>';
   songTab.innerHTML = tabBlocks.length
@@ -521,7 +537,7 @@ let stripDuration = 0;
 function renderStrip(duration) {
   stripDuration = duration;
   const width = Math.max(1, duration) * STRIP_PX_PER_SEC;
-  const segs = analysis.timeline.map((seg, i) => `<div class="strip-seg${i % 2 ? ' alt' : ''}" style="left:${seg.start * STRIP_PX_PER_SEC}px;width:${Math.max(2, (seg.end - seg.start) * STRIP_PX_PER_SEC - 2)}px" data-index="${i}"><b>${escapeHtml(seg.name)}</b></div>`).join('');
+  const segs = analysis.timeline.map((seg, i) => `<div class="strip-seg${i % 2 ? ' alt' : ''}" style="left:${seg.start * STRIP_PX_PER_SEC}px;width:${Math.max(2, (seg.end - seg.start) * STRIP_PX_PER_SEC - 2)}px" data-index="${i}"><b>${escapeHtml(shapeName(seg.name))}</b></div>`).join('');
   const ticks = (analysis.events ?? []).map((e) => `<span class="strip-tick${e.legato ? ' legato' : e.positions || e.notes.length > 2 ? ' strum' : ''}" style="left:${e.t * STRIP_PX_PER_SEC}px"></span>`).join('');
   const marks = Array.from({ length: Math.floor(duration / 5) + 1 }, (_, k) => `<span class="strip-time" style="left:${k * 5 * STRIP_PX_PER_SEC}px">${formatTime(k * 5)}</span>`).join('');
   chordStrip.innerHTML = `<div class="strip-inner" style="width:${width}px">${marks}${segs}${ticks}<span class="strip-head"></span></div>`;
@@ -554,7 +570,7 @@ function highlightNow(time) {
   const t = typeof time === 'number' ? time : songMedia.currentTime;
   updateStrip(t);
   const index = analysis.timeline.findIndex((seg) => t >= seg.start && t <= seg.end + 0.3);
-  songNow.textContent = index >= 0 ? analysis.timeline[index].name : '―';
+  songNow.textContent = index >= 0 ? shapeName(analysis.timeline[index].name) : '―';
   songChords.querySelectorAll('.song-chord').forEach((el) => el.classList.toggle('active', Number(el.dataset.index) === index));
   const blockIndex = analysis.tabBlocks.findLastIndex((b) => t >= b.t - 0.1);
   songTab.querySelectorAll('.tab-block').forEach((el) => {
@@ -665,6 +681,14 @@ songMedia.addEventListener('timeupdate', () => {
   if (loop.a !== null && loop.b !== null && songMedia.currentTime >= loop.b) songMedia.currentTime = loop.a;
 });
 
+function refreshSongView() {
+  analysis.tabBlocks = buildTabBlocks(analysis.events);
+  renderAnalysis();
+  renderStrip(analysis.duration);
+  renderKey();
+  highlightNow();
+}
+
 function renderKey() {
   const key = estimateKey(analysis.timeline);
   const capo = suggestCapo(analysis.timeline, currentTuning());
@@ -678,10 +702,6 @@ function renderKey() {
   document.getElementById('apply-capo')?.addEventListener('click', () => {
     capoSelect.value = String(capo.capo);
     capoSelect.dispatchEvent(new Event('change'));
-    analysis.tabBlocks = buildTabBlocks(analysis.events);
-    renderAnalysis();
-    renderStrip(duration);
-    renderKey();
   });
 }
 
@@ -748,7 +768,8 @@ songFile.addEventListener('change', async () => {
 
 document.getElementById('song-copy').addEventListener('click', async (e) => {
   if (!analysis) return;
-  const chords = analysis.timeline.map((seg) => `${formatTime(seg.start)} ${seg.name}`).join('\n');
+  const capo = Number(capoSelect.value);
+  const chords = (capo > 0 ? `カポ${capo}（コード名は押さえ方の形）\n` : '') + analysis.timeline.map((seg) => `${formatTime(seg.start)} ${shapeName(seg.name)}${capo > 0 ? `（実際の音 ${seg.name}）` : ''}`).join('\n');
   const text = `コード進行\n${chords}\n\nタブ譜\n${analysis.tabBlocks.filter((b) => b.text).map((b) => b.text).join('\n\n')}`;
   try {
     await navigator.clipboard.writeText(text);
