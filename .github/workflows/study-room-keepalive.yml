@@ -1,0 +1,28 @@
+name: へやづくり勉強 Supabase を起こしておく
+
+# Supabase の無料プランは、1週間ほど使われないと休止する。
+# 2日おきに軽く呼びかけて、妹さんがしばらく遊ばなくても止まらないようにする。
+# （ここに書いている URL と Publishable key は公開してよい値。秘密のキーは使わない）
+on:
+  schedule:
+    - cron: '23 3 */2 * *'   # 2日おき 日本時間 12:23
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: 呼びかける
+        run: |
+          code=$(curl -s -o /tmp/out.json -w '%{http_code}' -X POST \
+            "https://ytvocegvtlgrnxupmbnf.supabase.co/rest/v1/rpc/sr_load" \
+            -H "apikey: sb_publishable_dRcpHiDz_wRt_SZz4P98TA_oNfDqqy7" \
+            -H "Content-Type: application/json" \
+            -d '{"p_token":"keepalive"}')
+          cat /tmp/out.json; echo
+          # 合い鍵がないので bad_token が返れば、データベースが動いている証拠
+          grep -q bad_token /tmp/out.json || { echo "応答がおかしい (HTTP $code)"; exit 1; }

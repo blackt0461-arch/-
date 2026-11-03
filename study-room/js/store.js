@@ -1,4 +1,4 @@
-// 記録の保存（いまは端末の中にユーザーごと。あとでネット上に切り替える）
+// 記録の保存。端末の中（すぐ読める控え）とネット上（sync.js が送る）の両方に置く。
 let KEY = null;
 const DAY_START_HOUR = 6; // 1日の区切りは朝6時
 export const REVIEW_GAPS = [1, 3, 7]; // 正解するごとに 1日後 → 3日後 → 7日後
@@ -58,11 +58,23 @@ function migrate(s) {
   return s;
 }
 export function house() { return state.house || (state.house = blankHouse()); }
-export function replaceState(s) { state = migrate(s); save(); }
+// ネットから受け取った記録に置きかえる（ネットへは送り返さない）
+export function replaceState(s) {
+  state = migrate(s);
+  writeLocal();
+}
+function writeLocal() {
+  if (!KEY) return;
+  try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { /* 保存できない環境 */ }
+}
+let onSave = null;
+export function setSaveHook(fn) { onSave = fn; }
 
 export function save() {
   if (!KEY) return;
-  try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { /* 保存できない環境 */ }
+  state.savedAt = Date.now();
+  writeLocal();
+  onSave && onSave();
 }
 export function getState() { return state; }
 export function subject(id) {
