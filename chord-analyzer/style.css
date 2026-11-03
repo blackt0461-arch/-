@@ -719,3 +719,8 @@ select, input[type="text"] {
 .chord-edit .song-actions { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
 .chord-edit .song-actions .secondary-button { min-height: 46px; }
 #chord-edit-ok { background: var(--accent); color: var(--accent-text); border-color: var(--accent); font-weight: 700; }
+
+/* コードの画面のいちばん上：マイクで弾いて調べる（使っていないときはボタンだけ） */
+.mic-card { padding: 10px; gap: 8px; }
+.mic-card:not(.listening) #mic-result, .mic-card:not(.listening) #mic-to-fret, .mic-card:not(.listening) #mic-status { display: none; }
+.mic-card:not(.listening) .history-row { display: none; }

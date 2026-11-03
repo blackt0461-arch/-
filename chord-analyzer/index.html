@@ -30,6 +30,26 @@
 
   <main>
     <section id="panel-fret" class="panel fret-panel" role="tabpanel" aria-labelledby="tab-fret" hidden>
+      <div id="panel-mic" class="card mic-card">
+        <button type="button" id="mic-toggle" class="primary-button">🎤 弾いて調べる（マイクを開始）</button>
+        <p id="mic-status" class="status"></p>
+        <p id="mic-error" class="error" hidden></p>
+        <div id="mic-result" class="result" aria-live="polite"></div>
+        <button type="button" id="mic-to-fret" class="secondary-button">⬆ 今のコードを指板に出す</button>
+        <div class="history-row">
+          <div id="history" class="history"></div>
+          <button type="button" id="clear-history" class="secondary-button">消す</button>
+        </div>
+        <details class="mini-help"><summary>⚙️ 聞き取る距離・音の強さ</summary>
+        <div class="mic-distance">
+          <label for="mic-distance">聞き取る距離</label>
+          <div class="distance-row"><small>近く</small><input id="mic-distance" type="range" min="0" max="100" step="5"><small>遠く</small></div>
+          <div class="level-meter" aria-hidden="true"><span id="mic-level"></span></div>
+          <p class="hint">スマホをギターから離して置くときは「遠く」に。音量メーターが真ん中あたりまで動くのが目安です（チューナーと押さえ方チェックにも効きます）。</p>
+        </div>
+          <div id="chroma" class="chroma" aria-hidden="true"></div>
+        </details>
+      </div>
       <div id="fret-result" class="result sticky" aria-live="polite"></div>
 
       <div class="toolbar">
@@ -44,26 +64,6 @@
 
       <div id="fretboard" class="fretboard"></div>
 
-      <div id="panel-mic" class="card mic-card">
-        <h2 class="card-title">🎤 弾いて調べる</h2>
-        <p class="hint">ギターを弾くと、鳴っているコードを聞き取ります。</p>
-        <button type="button" id="mic-toggle" class="primary-button">マイクを開始</button>
-        <div class="mic-distance">
-          <label for="mic-distance">聞き取る距離</label>
-          <div class="distance-row"><small>近く</small><input id="mic-distance" type="range" min="0" max="100" step="5"><small>遠く</small></div>
-          <div class="level-meter" aria-hidden="true"><span id="mic-level"></span></div>
-          <p class="hint">スマホをギターから離して置くときは「遠く」に。音量メーターが真ん中あたりまで動くのが目安です（チューナーと押さえ方チェックにも効きます）。</p>
-        </div>
-        <p id="mic-status" class="status"></p>
-        <p id="mic-error" class="error" hidden></p>
-        <div id="mic-result" class="result" aria-live="polite"></div>
-        <button type="button" id="mic-to-fret" class="secondary-button">⬆ 今のコードを指板に出す</button>
-        <div class="history-row">
-          <div id="history" class="history"></div>
-          <button type="button" id="clear-history" class="secondary-button">消す</button>
-        </div>
-        <div id="chroma" class="chroma" aria-hidden="true"></div>
-      </div>
 
       <div class="shape-check">
         <button type="button" id="check-toggle" class="secondary-button check-button">🎤 押さえ方チェック</button>
