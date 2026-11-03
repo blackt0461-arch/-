@@ -1,9 +1,11 @@
 # catalog.js に書いた Poly Haven の素材IDから、ダウンロード先をまとめて js/assets.js を作り直す。
 # 使い方: python3 study-room/tools/resolve_assets.py
 import json,re,urllib.request,sys
-src=open('/home/user/-/study-room/js/catalog.js').read()
-models=sorted(set(re.findall(r"model: '([^']+)'",src)))
-texs=sorted(set(re.findall(r"tex: '([^']+)'",src)))
+import os
+here=os.path.join(os.path.dirname(os.path.abspath(__file__)),'..','js')
+src=open(os.path.join(here,'catalog.js')).read()+open(os.path.join(here,'exterior.js')).read()
+models=sorted(set(re.findall(r"model: '([^']+)'",src))|set(re.findall(r"placeModel\(g, '([^']+)'",src))|set(re.findall(r"'(shrub_0\d)'",src)))
+texs=sorted(set(re.findall(r"tex: '([^']+)'",src))|set(re.findall(r"texturedMaterial\('([^']+)'",src)))
 def get(u): return json.load(urllib.request.urlopen(urllib.request.Request(u,headers={'User-Agent':'study-room-builder/1.0'}),timeout=30))
 out={'models':{},'textures':{}}; bad=[]
 for m in models:
@@ -22,4 +24,4 @@ for t in texs:
   except Exception as e: bad.append(('tex',t,str(e)))
 print('BAD',bad)
 print({k:v['mb'] for k,v in out['models'].items()})
-open('/home/user/-/study-room/js/assets.js','w').write('// Poly Haven の素材の場所（scratch の resolve.py で自動生成）\nexport const ASSETS = '+json.dumps(out,ensure_ascii=False,indent=0)+';\n')
+open(os.path.join(here,'assets.js'),'w').write('// Poly Haven の素材の場所（scratch の resolve.py で自動生成）\nexport const ASSETS = '+json.dumps(out,ensure_ascii=False,indent=0)+';\n')
