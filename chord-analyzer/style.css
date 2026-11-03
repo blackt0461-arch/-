@@ -34,8 +34,8 @@ button { cursor: pointer; -webkit-tap-highlight-color: transparent; font: inheri
   position: fixed;
   left: 12px;
   right: 12px;
-  bottom: calc(12px + env(safe-area-inset-bottom));
-  z-index: 10;
+  top: calc(10px + env(safe-area-inset-top));
+  z-index: 40;
   display: flex;
   align-items: center;
   gap: 12px;
