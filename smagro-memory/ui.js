@@ -281,8 +281,6 @@ document.addEventListener('click', ev => {
     case 'mpin': S.memPin[b.dataset.id] = !S.memPin[b.dataset.id]; invalidate(); save(); render(); memSheet(b.dataset.id); return;
     case 'close': $('#sheet').hidden = true; return;
     case 'scan': Scan.start(b.dataset.k); return;
-    case 'scankey': Scan.saveKey(b.dataset.k); return;
-    case 'scanreset': Scan.resetKey(b.dataset.k); return;
     case 'scanapply': Scan.apply(); return;
     case 'pip': Pip.open(i); return;
     case 'pipgo': Pip.go(); return;

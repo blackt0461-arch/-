@@ -21,15 +21,17 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: 道具を入れる
+        run: pip install pillow numpy
       - name: データを集める
         run: python smagro-memory/tools/update.py
       - name: 変わっていたら保存する
         run: |
-          if git diff --quiet -- smagro-memory/data.json smagro-memory/tools/cache.json; then
+          if git diff --quiet -- smagro-memory/data.json smagro-memory/feats.json smagro-memory/tools/cache.json; then
             echo "変化なし"; exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898+github-actions[bot]@users.noreply.github.com"
-          git add smagro-memory/data.json smagro-memory/tools/cache.json
+          git add smagro-memory/data.json smagro-memory/feats.json smagro-memory/tools/cache.json
           git commit -m "スマグロ: データを自動更新"
           git push
