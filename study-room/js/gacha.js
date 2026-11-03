@@ -118,27 +118,28 @@ add(5, [
 // ───────── 限定：バンドシリーズ（★5 と ★4。12ジャンルすべてに1つ以上） ─────────
 // （g5-neon-rock / g5-amp-stack / g5-neon-guitar / g5-stud-sofa は、もとロックシリーズ。id はそのまま）
 add(5, [
-  ['g5-drum-kit', 'スパークルレッドのドラムセット', 'hobby', 'ir', { gacha: 'drumKit' }, 1.8],
-  ['g5-stage-truss', 'ステージのトラス照明', 'light', 'i', { gacha: 'stageTruss' }, 2.5, { ...CE, light: '#ff6a5a' }],
-  ['g5-amp-stack', '真空管アンプのスタック', 'hobby', 'ir', { gacha: 'ampStack' }, 1.9, { light: '#ff9a4a' }],
-  ['g5-neon-guitar', 'ネオン台のエレキギター', 'hobby', 'i', { gacha: 'guitarStand' }, 1.4, { light: '#ff2e88' }],
-  ['g5-neon-rock', 'ROCK のネオンサイン', 'wallart', 'i', { gacha: 'neonRock' }, 1.2, { ...W, light: '#ff5aa8' }],
-  ['g5-stud-sofa', '鋲打ちの黒革ソファ', 'sofa', 'i', { gacha: 'studSofa' }, 2.0],
+  ['g5-drum-kit', '赤いドラムセット', 'hobby', 'ir', { gacha: 'drumKit' }, 1.8],
+  ['g5-stage-truss', '銀色のステージ照明', 'light', 'i', { gacha: 'stageTruss' }, 2.5, { ...CE, light: '#ff6a5a' }],
+  ['g5-amp-stack', '黒いアンプ', 'hobby', 'ir', { gacha: 'ampStack' }, 1.9, { light: '#ff9a4a' }],
+  ['g5-neon-guitar', '赤いギター', 'hobby', 'i', { gacha: 'guitarStand' }, 1.4, { light: '#ff2e88' }],
+  ['g5-neon-rock', 'ピンクのネオンサイン', 'wallart', 'i', { gacha: 'neonRock' }, 1.2, { ...W, light: '#ff5aa8' }],
+  ['g5-stud-sofa', '黒い革のソファ', 'sofa', 'i', { gacha: 'studSofa' }, 2.0],
 ], { series: 'band' });
 add(4, [
-  ['g4-band-mic', 'ヴィンテージのスタンドマイク', 'hobby', 'ir', { gacha: 'micStand' }, 1.6],
-  ['g4-band-keys', '2段のキーボードとシンセ', 'hobby', 'im', { gacha: 'keyboardRig' }, 1.3, { light: '#4adfff' }],
-  ['g4-band-spot', '三脚のステージスポットライト', 'light', 'i', { gacha: 'spotLamp' }, 1.6, { light: '#ffd29a' }],
-  ['g4-band-throne', 'ドラムスローンのスツール', 'chair', 'i', { gacha: 'drumThrone' }, 0.55],
-  ['g4-band-case', 'フライトケースのテーブル', 'table', 'i', { gacha: 'flightCase' }, 0.95],
-  ['g4-band-shelf', 'アンプ型のレコード棚', 'storage', 'ir', { gacha: 'ampShelf' }, 1.05],
-  ['g4-band-planter', 'バスドラムの鉢植え', 'plant', 'in', { gacha: 'kickPlanter' }, 1.4],
-  ['g4-band-pedals', '光るエフェクターボード', 'decor', 'i', { gacha: 'pedalboard' }, 0.65],
-  ['g4-band-posters', 'ライブポスターとセットリスト', 'wallart', 'ir', { gacha: 'posterWall' }, 1.2, W],
-  ['g4-band-rug', 'ドラム用のステージラグ', 'textile', 'ri', { gacha: 'rug', pattern: 'stage', w: 2.3, d: 1.9 }, 2.3, RUG],
-  ['g4-band-wall', 'ライブハウスのレンガの壁', 'interior', 'i', { tex: 'red_brick_03', rep: 2, tint: '#8f7d7a' }, 6, SF('wall')],
-  ['g4-band-floor', '黒いステージの床', 'interior', 'i', { tex: 'black_painted_planks', rep: 3 }, 6, SF('floor')],
-  ['g4-band-door', '赤いライブハウスのドア', 'fixture', 'ir', { proc: { type: 'door', style: 'panel4', color: '#8a1420', handle: 'chrome' } }, 2.1, SF('door')],
+  ['g4-band-mic', '銀色のマイク', 'hobby', 'ir', { gacha: 'micStand' }, 1.6],
+  ['g4-band-guitars', '黄色いギターと黒いベース', 'hobby', 'ir', { gacha: 'guitarRack' }, 1.4],
+  ['g4-band-keys', '赤いキーボード', 'hobby', 'im', { gacha: 'keyboardRig' }, 1.3, { light: '#4adfff' }],
+  ['g4-band-spot', '黒いスポットライト', 'light', 'i', { gacha: 'spotLamp' }, 1.6, { light: '#ffd29a' }],
+  ['g4-band-throne', '黒い丸いす', 'chair', 'i', { gacha: 'drumThrone' }, 0.55],
+  ['g4-band-case', '黒いケースのテーブル', 'table', 'i', { gacha: 'flightCase' }, 0.95],
+  ['g4-band-shelf', '黒いレコード棚', 'storage', 'ir', { gacha: 'ampShelf' }, 1.05],
+  ['g4-band-planter', '赤いドラムの鉢植え', 'plant', 'in', { gacha: 'kickPlanter' }, 1.4],
+  ['g4-band-pedals', 'カラフルなエフェクター', 'decor', 'i', { gacha: 'pedalboard' }, 0.65],
+  ['g4-band-posters', 'カラフルなポスター', 'wallart', 'ir', { gacha: 'posterWall' }, 1.2, W],
+  ['g4-band-rug', '赤いラグ', 'textile', 'ri', { gacha: 'rug', pattern: 'stage', w: 2.3, d: 1.9 }, 2.3, RUG],
+  ['g4-band-wall', '暗い赤レンガの壁', 'interior', 'i', { tex: 'red_brick_03', rep: 2, tint: '#8f7d7a' }, 6, SF('wall')],
+  ['g4-band-floor', '黒い板の床', 'interior', 'i', { tex: 'black_painted_planks', rep: 3 }, 6, SF('floor')],
+  ['g4-band-door', '赤いドア', 'fixture', 'ir', { proc: { type: 'door', style: 'panel4', color: '#8a1420', handle: 'chrome' } }, 2.1, SF('door')],
 ], { series: 'band' });
 
 // ───────── ★5 限定：お休み中のシリーズ ─────────

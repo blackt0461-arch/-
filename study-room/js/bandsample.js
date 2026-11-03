@@ -35,5 +35,6 @@ export const BAND_SAMPLE = {
     { uid: 'bs-case', item: 'g4-band-case', x: -1.7, z: -0.3, rot: Math.PI / 2 },
     // 手前の壁
     { uid: 'bs-planter', item: 'g4-band-planter', x: -0.6, z: 2.1, rot: 0 },
+    { uid: 'bs-guitars', item: 'g4-band-guitars', x: 0.85, z: 2.2, rot: Math.PI },
   ],
 };

@@ -1715,8 +1715,8 @@ function guitarStand(s) {
   for (const sx of [-1, 1]) { rod(g, V3(sx * 0.12, 0.04, 0.12), V3(0, 0.62, -0.06), 0.008, CHROME()); rod(g, V3(sx * 0.12, 0.04, -0.12), V3(0, 0.62, -0.06), 0.008, CHROME()); }
   tube(g, [V3(-0.14, 0.32, 0.1), V3(0, 0.26, 0.14), V3(0.14, 0.32, 0.1)], 0.01, paintG('#1a1a1a', 0.7), 16, 6);
   rod(g, V3(0, 0.62, -0.06), V3(0, 1.0, -0.12), 0.007, CHROME());
-  if (PROC) {
-    const gt = PROC({ type: 'guitar', style: 'electric', color: s.color || '#b0101c' });
+  {
+    const gt = guitarModel('single');
     const bb = new THREE.Box3().setFromObject(gt), sz = bb.getSize(V3());
     gt.position.set(-(bb.min.x + bb.max.x) / 2, 0.24 - bb.min.y, -(bb.min.z + bb.max.z) / 2 + 0.06);
     const pivot = new THREE.Group(); pivot.rotation.x = -0.14; pivot.add(gt); g.add(pivot);
@@ -1827,15 +1827,12 @@ function cymbal(g, r, x, y, z, tx = 0, tz = 0) {
   mk(g, C(0.012, 0.012, 0.02, 10), paintG('#7a1220', 0.9), x, y + 0.035, z, tx, 0, tz).castShadow = false;
   return c;
 }
-// バスドラの前の皮のロゴ
+// バスドラの前の皮（文字なし。赤と金の輪と穴）
 function kickLogo() {
   return texMat('kicklogo', 512, 512, (ctx, w, h) => {
     ctx.fillStyle = '#0d0c0d'; ctx.fillRect(0, 0, w, h);
     ctx.strokeStyle = '#d4202c'; ctx.lineWidth = 26; ctx.beginPath(); ctx.arc(w / 2, h / 2, w * 0.42, 0, TAU); ctx.stroke();
     ctx.strokeStyle = '#d4a94a'; ctx.lineWidth = 5; ctx.beginPath(); ctx.arc(w / 2, h / 2, w * 0.375, 0, TAU); ctx.stroke();
-    ctx.fillStyle = '#f4efe6'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.font = FONT(92); ctx.fillText('ROOMIN', w / 2, h * 0.47);
-    ctx.font = FONT(30, 700); ctx.fillStyle = '#d4a94a'; ctx.fillText('★ LIVE ★', w / 2, h * 0.6);
     ctx.fillStyle = '#000'; ctx.beginPath(); ctx.arc(w * 0.66, h * 0.73, 34, 0, TAU); ctx.fill();
     ctx.strokeStyle = '#888'; ctx.lineWidth = 4; ctx.stroke();
   }, { roughness: 0.6 });
@@ -1893,6 +1890,216 @@ function drumKit(s) {
   const stick = cm('stick', () => phys({ color: '#e0c08a', roughness: 0.45, clearcoat: 0.6 }));
   rod(g, V3(snx - 0.17, sny + 0.09, snz - 0.07), V3(snx + 0.2, sny + 0.075, snz + 0.08), 0.0065, stick, 0.004);
   rod(g, V3(snx - 0.1, sny + 0.085, snz + 0.12), V3(snx + 0.17, sny + 0.09, snz - 0.15), 0.0065, stick, 0.004);
+  return g;
+}
+
+// ---------------- エレキギター・ベース（定番の形と色に寄せた、ロゴなしの一般的なモデル） ----------------
+// 'single' = シングルカット（厚いボディ・チェリーサンバースト・金のパーツ・2ハムバッカー）
+// 'double' = ダブルカット（両側のホーン・3トーンサンバースト・白いピックガード・3シングルコイル）
+// 'bass'   = エレキベース（黒いボディ・べっこう柄のピックガード・長いネック）
+// 原点はボディの下はし、正面 +Z、ネックは +Y
+const GT_SHAPES = {
+  single: [[0, 0], [0.12, 0.015], [0.16, 0.07], [0.165, 0.15], [0.14, 0.23], [0.113, 0.28], [0.127, 0.33], [0.124, 0.378], [0.1, 0.398], [0.07, 0.385], [0.048, 0.36], [0.036, 0.4], [0.034, 0.43], [0, 0.437], [-0.034, 0.438], [-0.08, 0.441], [-0.122, 0.41], [-0.14, 0.355], [-0.12, 0.29], [-0.143, 0.23], [-0.165, 0.15], [-0.16, 0.07], [-0.12, 0.015]],
+  double: [[0, 0], [0.11, 0.01], [0.155, 0.06], [0.162, 0.13], [0.135, 0.2], [0.115, 0.25], [0.135, 0.31], [0.132, 0.37], [0.112, 0.418], [0.088, 0.42], [0.065, 0.385], [0.042, 0.352], [0.0, 0.362], [-0.045, 0.352], [-0.068, 0.39], [-0.092, 0.448], [-0.118, 0.455], [-0.138, 0.41], [-0.137, 0.33], [-0.117, 0.255], [-0.14, 0.19], [-0.16, 0.12], [-0.152, 0.05], [-0.105, 0.008]],
+  guard: [[0.0, 0.372], [0.045, 0.352], [0.072, 0.33], [0.1, 0.28], [0.115, 0.22], [0.12, 0.14], [0.1, 0.075], [0.062, 0.06], [0.03, 0.09], [-0.02, 0.118], [-0.075, 0.13], [-0.1, 0.17], [-0.106, 0.25], [-0.088, 0.31], [-0.05, 0.345]],
+  lpguard: [[0.046, 0.352], [0.07, 0.35], [0.094, 0.335], [0.1, 0.31], [0.085, 0.285], [0.055, 0.28], [0.046, 0.31]],
+};
+function gShape(kind, k = 1) {
+  const pts = GT_SHAPES[kind].map(([x, y]) => V2(x * k, y * k));
+  const sh = new THREE.Shape(); sh.moveTo(pts[0].x, pts[0].y); sh.splineThru([...pts.slice(1), pts[0]]);
+  return sh;
+}
+function planarUV(g) {
+  g.computeBoundingBox();
+  const b = g.boundingBox, p = g.attributes.position, uv = new Float32Array(p.count * 2);
+  const w = b.max.x - b.min.x || 1, h = b.max.y - b.min.y || 1;
+  for (let i = 0; i < p.count; i++) { uv[i * 2] = (p.getX(i) - b.min.x) / w; uv[i * 2 + 1] = (p.getY(i) - b.min.y) / h; }
+  g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+  return g;
+}
+function gtGeo(kind, k, depth, bev) {
+  return cg(`gtb${kind}${r4(k)},${r4(depth)},${r4(bev)}`, () => {
+    const g = new THREE.ExtrudeGeometry(gShape(kind, k), { depth, bevelEnabled: bev > 0, bevelThickness: bev, bevelSize: bev * 0.8, bevelSegments: 3, curveSegments: 40 });
+    g.translate(0, 0, -depth / 2);
+    return planarUV(g);
+  });
+}
+function polyGeo(key, pts, depth, bev = 0.001) {
+  return cg('pg' + key + r4(depth), () => {
+    const sh = new THREE.Shape(); pts.forEach(([x, y], i) => i ? sh.lineTo(x, y) : sh.moveTo(x, y));
+    const g = new THREE.ExtrudeGeometry(sh, { depth, bevelEnabled: bev > 0, bevelThickness: bev, bevelSize: bev, bevelSegments: 1, curveSegments: 12 });
+    g.translate(0, 0, -depth / 2);
+    return planarUV(g);
+  });
+}
+// サンバーストの塗装（真ん中が明るく、ふちへ赤・黒）
+function burstTex(kind) {
+  return canvasTex('burst' + kind, 512, 512, (ctx, w, h) => {
+    const cols = kind === 'cherry'
+      ? [[0, '#f6c060'], [0.38, '#eaa040'], [0.6, '#c43a1c'], [0.8, '#8a0c14'], [1, '#3a0408']]
+      : [[0, '#f8d058'], [0.4, '#eba634'], [0.6, '#b8381a'], [0.76, '#4a160a'], [1, '#140604']];
+    ctx.save(); ctx.translate(w * 0.5, h * 0.66); ctx.scale(1, 1.3);
+    const gr = ctx.createRadialGradient(0, 0, 0, 0, 0, w * 0.56); cols.forEach(([s, c]) => gr.addColorStop(s, c));
+    ctx.fillStyle = gr; ctx.fillRect(-w, -h, w * 2, h * 2); ctx.restore();
+    // 木目（シングルカットは虎杢）
+    const im = ctx.getImageData(0, 0, w, h), d = im.data;
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const u = x / w, v = y / h, i = (y * w + x) * 4;
+      let f = 1 + (fbm(u * 3, v * 40, 3, 40, 3, 4) - 0.5) * 0.12;
+      if (kind === 'cherry') f *= 1 + 0.07 * Math.sin((v * 38 + fbm(u * 3, v * 4, 3, 4, 3, 9) * 9 + u * 2) * TAU) * fbm(u * 5, v * 2, 5, 2, 2, 3);
+      d[i] = clamp(d[i] * f, 0, 255); d[i + 1] = clamp(d[i + 1] * f, 0, 255); d[i + 2] = clamp(d[i + 2] * f, 0, 255);
+    }
+    ctx.putImageData(im, 0, 0);
+  });
+}
+const burst = kind => cm('burstm' + kind, () => phys({ color: '#ffffff', map: burstTex(kind), roughness: 0.3, clearcoat: 1, clearcoatRoughness: 0.04 }));
+function tortoiseTex() {
+  return canvasTex('tortoise', 256, 256, (ctx, w, h) => pixels(ctx, w, h, (u, v, o) => {
+    const n = fbm(u * 6, v * 6, 6, 6, 5, 21), m = fbm(u * 14, v * 14, 14, 14, 3, 5);
+    const c = mixRGB([24, 8, 4], [178, 82, 26], clamp((n - 0.45) * 3 + (m - 0.5) * 0.6, 0, 1));
+    o[0] = c[0]; o[1] = c[1]; o[2] = c[2];
+  }), { rep: 1 });
+}
+const TORTOISE = () => cm('tortoisem', () => phys({ color: '#ffffff', map: tortoiseTex(), roughness: 0.25, clearcoat: 1 }));
+const GTGOLD = () => cm('gtgold', () => phys({ color: '#e6c27a', metalness: 1, roughness: 0.22 }));
+function guitarModel(kind) {
+  const g = new THREE.Group();
+  const lp = kind === 'single', bass = kind === 'bass';
+  const k = bass ? 1.12 : 1;
+  const metal = lp ? GTGOLD() : CHROME();
+  let zf;
+  if (lp) {
+    const mah = lacquer('#3a160c', 0.25);
+    mk(g, gtGeo('single', 1, 0.038, 0.004), [mah, mah], 0, 0, -0.006);
+    mk(g, gtGeo('single', 1, 0.01, 0.007), [burst('cherry'), lacquer('#efe2c0', 0.3)], 0, 0, 0.02);
+    zf = 0.033;
+  } else {
+    const blk = lacquer('#0b0b0c', 0.15);
+    mk(g, gtGeo('double', k, 0.04, 0.007), bass ? [blk, blk] : [burst('three'), lacquer('#160804', 0.2)], 0, 0, 0);
+    zf = 0.027;
+  }
+  // ネック・指板・フレット・ヘッド
+  const yJ = (lp ? 0.43 : 0.36) * k, len = bass ? 0.6 : lp ? 0.4 : 0.43, yN = yJ + len;
+  const yB = lp ? 0.335 : bass ? 0.33 : 0.3;
+  const w0 = bass ? 0.042 : 0.043, w1 = bass ? 0.062 : 0.056;
+  const neckM = lp ? lacquer('#4a1c0e', 0.3) : bass ? lacquer('#c99a5a', 0.35) : lacquer('#d8a868', 0.3);
+  const boardM = lp || bass ? paintG('#2a1610', 0.55) : lacquer('#e2b878', 0.3);
+  const tz = zf + 0.004;
+  mk(g, polyGeo('neck' + kind, [[-w1 / 2, yJ - 0.06], [w1 / 2, yJ - 0.06], [w0 / 2, yN], [-w0 / 2, yN]], 0.02, 0.003), neckM, 0, 0, tz - 0.012);
+  mk(g, polyGeo('board' + kind, [[-w1 / 2, yB], [w1 / 2, yB], [w0 / 2, yN], [-w0 / 2, yN]], 0.006, 0.0008), boardM, 0, 0, tz + 0.001);
+  const fz = tz + 0.0045, frets = new Bag(), dots = new Bag();
+  const SC = (yN - yB) / (1 - Math.pow(2, -(bass ? 20 : 22) / 12));
+  const wAt = y => w0 + (w1 - w0) * (yN - y) / (yN - yB);
+  for (let i = 1; i <= (bass ? 20 : 22); i++) {
+    const y = yN - SC * (1 - Math.pow(2, -i / 12));
+    frets.add(B(wAt(y) - 0.002, 0.0018, 0.002, 0), 0, y, fz);
+    if ([3, 5, 7, 9, 12, 15, 17, 19, 21].includes(i)) {
+      const yp = yN - SC * (1 - Math.pow(2, -(i - 0.5) / 12));
+      if (lp) dots.add(B(wAt(yp) * 0.7, 0.012, 0.001, 0), 0, yp, fz - 0.0005);
+      else if (i === 12) for (const sx of [-1, 1]) dots.add(C(0.003, 0.003, 0.001, 10), sx * 0.012, yp, fz - 0.0005, PI / 2);
+      else dots.add(C(0.003, 0.003, 0.001, 10), 0, yp, fz - 0.0005, PI / 2);
+    }
+  }
+  frets.add(B(w0, 0.004, 0.004, 0.001), 0, yN, fz + 0.0005);
+  frets.mesh(g, SILVER());
+  dots.mesh(g, lp ? paintG('#f1e6cc', 0.3) : bass ? paintG('#f1ece0', 0.4) : paintG('#111', 0.5));
+  // ヘッド（ロゴなし）
+  const hy = yN + 0.002, headM = lp ? lacquer('#0b0b0c', 0.18) : neckM;
+  const hz = tz - 0.006;
+  if (lp) {
+    mk(g, polyGeo('head3', [[-0.026, 0], [0.026, 0], [0.045, 0.15], [0.034, 0.18], [0, 0.172], [-0.034, 0.18], [-0.045, 0.15]], 0.016, 0.002), headM, 0, hy, hz);
+    const pegs = new Bag(), btn = new Bag();
+    for (const sx of [-1, 1]) for (let i = 0; i < 3; i++) {
+      const y = hy + 0.05 + i * 0.045, x = sx * (0.024 + i * 0.006);
+      pegs.add(C(0.0045, 0.0045, 0.014, 10), x, y, hz + 0.014, PI / 2);
+      pegs.add(C(0.003, 0.003, 0.03, 8), sx * 0.05, y, hz - 0.012, 0, 0, PI / 2);
+      btn.add(B(0.012, 0.016, 0.006, 0.002), sx * 0.068, y, hz - 0.012);
+    }
+    pegs.mesh(g, metal); btn.mesh(g, paintG('#efe4c8', 0.3));
+  } else {
+    const n = bass ? 4 : 6, step = bass ? 0.05 : 0.026, L = 0.04 + n * step;
+    mk(g, polyGeo('head' + n, [[-0.022, 0], [0.022, 0], [0.026, 0.05], [0.022, L - 0.02], [0.0, L], [-0.03, L + 0.005], [-0.052, L - 0.01], [-0.048, L * 0.6], [-0.04, 0.05]], 0.015, 0.002), headM, 0, hy, hz);
+    const pegs = new Bag(), btn = new Bag();
+    for (let i = 0; i < n; i++) {
+      const y = hy + 0.04 + i * step, x = -0.026 + (i / (n - 1)) * 0.012;
+      pegs.add(C(bass ? 0.006 : 0.0045, bass ? 0.006 : 0.0045, 0.014, 10), x, y, hz + 0.013, PI / 2);
+      pegs.add(C(0.003, 0.003, 0.03, 8), x - 0.035, y, hz - 0.012, 0, 0, PI / 2);
+      btn.add(bass ? B(0.006, 0.026, 0.02, 0.003) : B(0.006, 0.016, 0.012, 0.002), x - 0.052, y, hz - 0.012);
+    }
+    pegs.mesh(g, metal); btn.mesh(g, metal);
+  }
+  // ピックアップ・ブリッジ・つまみ
+  const pz = zf + 0.003;
+  let yBr, yTail = 0;
+  if (lp) {
+    const ring = paintG('#efe2c0', 0.35);
+    for (const y of [0.3, 0.2]) { mk(g, B(0.088, 0.052, 0.006, 0.006), ring, 0, y, pz); mk(g, B(0.072, 0.04, 0.012, 0.005), metal, 0, y, pz + 0.006); }
+    mk(g, polyGeo('lpguard', GT_SHAPES.lpguard, 0.002, 0), paintG('#efe2c0', 0.3), 0, 0, pz + 0.012);
+    yBr = 0.155; yTail = 0.115;
+    mk(g, B(0.082, 0.01, 0.012, 0.003), metal, 0, yBr, pz + 0.008);
+    mk(g, B(0.09, 0.012, 0.014, 0.005), metal, 0, yTail, pz + 0.008);
+    const kn = new Bag();
+    for (const [x, y] of [[0.065, 0.14], [0.11, 0.115], [0.06, 0.085], [0.105, 0.06]]) kn.add(LA([[0.001, 0], [0.012, 0], [0.011, 0.012], [0.009, 0.016], [0.001, 0.017]], 16), x, y, pz, PI / 2);
+    kn.mesh(g, metal);
+    mk(g, C(0.006, 0.006, 0.006, 12), CHROME(), -0.105, 0.39, pz, PI / 2);
+    rod(g, V3(-0.105, 0.39, pz), V3(-0.105, 0.39, pz + 0.025), 0.0018, CHROME());
+    mk(g, S(0.004, 8, 6), paintG('#efe2c0', 0.3), -0.105, 0.39, pz + 0.026);
+  } else if (!bass) {
+    mk(g, polyGeo('sguard', GT_SHAPES.guard.map(([x, y]) => [x * 0.92, 0.03 + y * 0.92]), 0.003, 0), paintG('#f4f2ec', 0.35), 0, 0, pz);
+    const pk = paintG('#f4f2ec', 0.4);
+    mk(g, B(0.072, 0.018, 0.012, 0.008), pk, 0, 0.29, pz + 0.006);
+    mk(g, B(0.072, 0.018, 0.012, 0.008), pk, 0, 0.225, pz + 0.006, 0, 0, 0.04);
+    mk(g, B(0.072, 0.018, 0.012, 0.008), pk, 0, 0.16, pz + 0.006, 0, 0, 0.14);
+    yBr = 0.115;
+    mk(g, B(0.075, 0.045, 0.004, 0.002), CHROME(), 0, yBr - 0.01, pz + 0.003);
+    const sd = new Bag(); for (let i = 0; i < 6; i++) sd.add(B(0.009, 0.014, 0.008, 0.002), -0.028 + i * 0.0112, yBr, pz + 0.008); sd.mesh(g, CHROME());
+    const kn = new Bag();
+    for (const [x, y] of [[0.055, 0.15], [0.075, 0.115], [0.09, 0.08]]) kn.add(LA([[0.001, 0], [0.011, 0], [0.01, 0.015], [0.001, 0.016]], 16), x, y, pz + 0.002, PI / 2);
+    kn.mesh(g, paintG('#f4f2ec', 0.35));
+    mk(g, B(0.004, 0.012, 0.012, 0.002), paintG('#f4f2ec', 0.35), 0.06, 0.2, pz + 0.006, 0, 0, -0.6);
+    mk(g, C(0.012, 0.012, 0.006, 16), CHROME(), 0.12, 0.08, zf - 0.002, PI / 2);
+  } else {
+    mk(g, polyGeo('bguard', GT_SHAPES.guard.map(([x, y]) => [x * k, y * k]), 0.003, 0), TORTOISE(), 0, 0, pz);
+    const pk = paintG('#0d0d0d', 0.45);
+    mk(g, B(0.045, 0.022, 0.014, 0.006), pk, -0.014, 0.265, pz + 0.007);
+    mk(g, B(0.045, 0.022, 0.014, 0.006), pk, 0.014, 0.24, pz + 0.007);
+    yBr = 0.105;
+    mk(g, B(0.08, 0.06, 0.008, 0.003), CHROME(), 0, yBr - 0.015, pz + 0.003);
+    mk(g, B(0.05, 0.11, 0.003, 0.02), CHROME(), 0.085, 0.14, pz + 0.004, 0, 0, 0.5);
+    for (const [x, y] of [[0.07, 0.17], [0.1, 0.11]]) mk(g, C(0.012, 0.012, 0.016, 16), CHROME(), x, y, pz + 0.01, PI / 2);
+  }
+  // 弦
+  const n = bass ? 4 : 6, sb = new Bag(), sz = fz + 0.003;
+  const yS = lp ? yTail : yBr;
+  for (let i = 0; i < n; i++) {
+    const t = i / (n - 1) - 0.5;
+    sb.rod(V3(t * (bass ? 0.056 : 0.05), yS, sz), V3(t * (w0 - 0.008), yN, sz), bass ? 0.0011 : 0.0006, 4);
+    if (!lp) sb.rod(V3(t * (w0 - 0.008), yN, sz), V3(-0.026 + (i / (n - 1)) * 0.012, hy + 0.04 + i * (bass ? 0.05 : 0.026), hz + 0.02), bass ? 0.0011 : 0.0006, 4);
+  }
+  sb.mesh(g, SILVER());
+  return g;
+}
+// ギターとベースのスタンド（2本立て）
+function guitarRack(s) {
+  const g = new THREE.Group();
+  const M = MATTE_BLACK(), foam = paintG('#1e1e1e', 0.95);
+  for (const sx of [-1, 1]) {
+    rod(g, V3(sx * 0.4, 0.02, -0.25), V3(sx * 0.4, 0.02, 0.2), 0.014, M);
+    rod(g, V3(sx * 0.4, 0.02, -0.2), V3(sx * 0.4, 1.02, -0.2), 0.014, M);
+    for (const z of [-0.25, 0.2]) mk(g, C(0.02, 0.02, 0.012, 10), foam, sx * 0.4, 0.006, z);
+  }
+  rod(g, V3(-0.4, 0.2, 0.08), V3(0.4, 0.2, 0.08), 0.016, M);
+  rod(g, V3(-0.4, 0.2, 0.08), V3(-0.4, 0.2, -0.2), 0.012, M); rod(g, V3(0.4, 0.2, 0.08), V3(0.4, 0.2, -0.2), 0.012, M);
+  rod(g, V3(-0.4, 1.0, -0.2), V3(0.4, 1.0, -0.2), 0.012, M);
+  const put = (kind, x) => {
+    const gt = guitarModel(kind);
+    const pv = new THREE.Group(); pv.position.set(x, 0.18, 0.12); pv.rotation.x = -0.3; pv.add(gt); g.add(pv);
+    // 下の受け（U 字）と上のネック受け
+    tube(g, [V3(x - 0.07, 0.24, 0.16), V3(x - 0.06, 0.2, 0.12), V3(x + 0.06, 0.2, 0.12), V3(x + 0.07, 0.24, 0.16)], 0.012, foam, 16, 6);
+    tube(g, [V3(x - 0.04, 1.03, -0.18), V3(x - 0.03, 0.995, -0.2), V3(x + 0.03, 0.995, -0.2), V3(x + 0.04, 1.03, -0.18)], 0.008, foam, 16, 6);
+  };
+  put('double', -0.2);
+  put('bass', 0.2);
   return g;
 }
 
@@ -3505,7 +3712,7 @@ const BUILDERS = {
   starPendant: [starPendant, 'ceiling'], planetarium: [planetarium, 'floor'], moonSofa: [moonSofa, 'floor'], constellation: [constellation, 'wall'], moonTable: [moonTable, 'floor'],
   // 限定：バンド（★5 ＋ ★4）
   neonRock: [neonRock, 'wall'], ampStack: [ampStack, 'floor'], guitarStand: [guitarStand, 'floor'], studSofa: [studSofa, 'floor'],
-  drumKit: [drumKit, 'floor'], stageTruss: [stageTruss, 'ceiling'], micStand: [micStand, 'floor'], keyboardRig: [keyboardRig, 'floor'],
+  drumKit: [drumKit, 'floor'], guitarRack: [guitarRack, 'floor'], stageTruss: [stageTruss, 'ceiling'], micStand: [micStand, 'floor'], keyboardRig: [keyboardRig, 'floor'],
   spotLamp: [spotLamp, 'floor'], drumThrone: [drumThrone, 'floor'], flightCase: [flightCase, 'floor'], ampShelf: [ampShelf, 'floor'],
   kickPlanter: [kickPlanter, 'floor'], pedalboard: [pedalboard, 'floor'], posterWall: [posterWall, 'wall'],
   // ★5 限定：ゴシック
