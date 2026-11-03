@@ -1,4 +1,5 @@
 :root {
+  --tab-h: 68px;
   --bg: #16130f;
   --panel: rgba(24, 20, 16, 0.82);
   --panel2: rgba(255, 255, 255, 0.08);
@@ -82,8 +83,7 @@ input { font: inherit; }
 .rooms button.on { background: var(--accent); color: #2a1706; font-weight: 700; }
 .hint { position: absolute; left: 50%; top: 42%; transform: translateX(-50%); background: rgba(0,0,0,.35); padding: 6px 12px; border-radius: 999px; font-size: 12px; color: #fff; pointer-events: none; animation: fadeout 4s forwards; }
 @keyframes fadeout { 0%, 70% { opacity: 1; } 100% { opacity: 0; } }
-.dock { position: absolute; left: 0; right: 0; bottom: 0; padding: 14px 14px calc(var(--safe-b) + 14px); display: grid; gap: 10px;
-  background: linear-gradient(180deg, rgba(22,19,15,0), rgba(22,19,15,.75) 30%, rgba(22,19,15,.92)); }
+.dock { position: absolute; left: 0; right: 0; bottom: calc(var(--tab-h) + var(--safe-b)); padding: 10px 14px 10px; display: grid; gap: 8px; }
 .dock .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .home .testfill { margin: -4px auto 0; font-size: 12px; padding: 4px; }
 .mini { text-align: center; font-size: 12px; color: var(--muted); }
@@ -208,3 +208,47 @@ input { font: inherit; }
 .sheet.news { background: #1f1a15; z-index: 5; box-shadow: 0 -10px 40px rgba(0,0,0,.5); }
 .who .sync { font-size: 11px; margin-left: 6px; opacity: .8; }
 .who .sync[data-s="offline"] { color: var(--accent2); }
+
+/* 下のアイコン列 */
+.tabbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 4; height: calc(var(--tab-h) + var(--safe-b)); padding: 0 6px var(--safe-b);
+  display: grid; grid-template-columns: repeat(5, 1fr); align-items: end;
+  background: rgba(20,17,13,.88); border-top: 1px solid var(--line); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); }
+.tabbar button { background: none; border: 0; color: var(--muted); display: grid; justify-items: center; gap: 3px; padding: 8px 0 10px; }
+.tabbar .ti { position: relative; width: 26px; height: 26px; }
+.tabbar svg { width: 26px; height: 26px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.tabbar .tl { font-size: 10.5px; font-weight: 600; letter-spacing: .02em; }
+.tabbar button.on { color: var(--accent2); }
+.tabbar button.center .ti { width: 58px; height: 58px; margin-top: -26px; border-radius: 50%; display: grid; place-items: center;
+  background: linear-gradient(180deg, #f3b874, #d98a3f); color: #2a1706; box-shadow: 0 6px 18px rgba(217,140,67,.45), 0 0 0 4px rgba(20,17,13,.9); }
+.tabbar button.center svg { width: 28px; height: 28px; stroke-width: 2; }
+.tabbar button.center .tl { color: var(--accent2); }
+.tabbar .dot { position: absolute; top: 2px; right: 4px; width: 10px; height: 10px; border-radius: 50%; background: #ff6b5a; box-shadow: 0 0 0 2px #1c1712; }
+.tabbar button:not(.center) .dot { top: -2px; right: -4px; }
+.screen.with-tabs { padding-bottom: calc(var(--tab-h) + var(--safe-b) + 24px); }
+.home .hint { top: 38%; }
+
+/* 「解く」の科目えらび */
+.subjects-sheet { z-index: 6; padding-bottom: calc(var(--safe-b) + 18px); }
+.subjects-sheet .grid { grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.subjects-sheet .subject { padding: 12px 4px; border-radius: 16px; }
+.subjects-sheet .subject .ic { font-size: 26px; }
+.subjects-sheet .subject .nm { font-size: 12px; }
+.subjects-sheet .subject .meta { font-size: 10px; }
+
+/* 設定 */
+.settings .group { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; margin-bottom: 14px; overflow: hidden; }
+.settings .row-item { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 14px 16px; width: 100%; background: none; border: 0; text-align: left; font-size: 15px; }
+.settings .row-item + .row-item { border-top: 1px solid var(--line); }
+.settings .row-item.col { display: grid; gap: 8px; }
+.settings .row-item small { color: var(--muted); font-size: 12px; }
+.settings .lbl { font-weight: 600; }
+.settings .val { color: var(--muted); font-size: 14px; }
+.settings .danger { color: var(--ng); }
+.settings .seg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; background: rgba(255,255,255,.06); padding: 4px; border-radius: 12px; }
+.settings .seg button { border: 0; background: none; padding: 8px; border-radius: 9px; font-size: 14px; color: var(--muted); }
+.settings .seg button.on { background: var(--accent); color: #2a1706; font-weight: 700; }
+.settings .ver { text-align: center; color: var(--muted); font-size: 12px; }
+.sheet { z-index: 5; }
+/* 下から出る画面があるあいだは、アイコン列を隠す */
+#app:has(.sheet) .tabbar { display: none; }
+.sheet { z-index: 6; }
