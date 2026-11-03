@@ -156,23 +156,53 @@ const Scan = (() => {
     return { id: refs[i1].id, score: best[i1], margin: best[i1] - (i2 >= 0 ? best[i2] : 0) };
   }
 
+  // iPhone では、画面に置いていない 写真えらびは「えらんだあと」が 届かないことがあるので、画面の中に 置いたままにする
+  let inp = null, curKind = 'mem';
+  function picker() {
+    if (inp) return inp;
+    inp = document.createElement('input');
+    inp.type = 'file'; inp.accept = 'image/*'; inp.multiple = true; inp.id = 'scanfile';
+    inp.style.cssText = 'position:fixed;left:-9999px;top:0;width:1px;height:1px;opacity:0';
+    inp.addEventListener('change', () => {
+      const files = inp.files ? [...inp.files] : [];
+      if (files.length) run(curKind, files).catch(showError);
+    });
+    document.body.appendChild(inp);
+    return inp;
+  }
   function start(kind) {
-    const inp = document.createElement('input');
-    inp.type = 'file'; inp.accept = 'image/*'; inp.multiple = true;
-    inp.onchange = () => { if (inp.files && inp.files.length) run(kind, [...inp.files]); };
-    inp.click();
+    curKind = kind;
+    const i = picker();
+    i.value = '';
+    i.click();
+  }
+  function showError(e) {
+    sheet(`<div class="banner" style="margin-top:8px">よみこみの とちゅうで しっぱいしました。</div>
+      <div class="note" style="margin-top:6px">この 文を スクショして 教えてください：${esc(String(e && (e.message || e)))}</div>
+      <button class="btn" style="margin-top:10px" data-act="close">とじる</button>`);
+  }
+  // 写真を 絵として ひらく（だめなら べつの方法で）
+  async function openImage(file) {
+    try { return await createImageBitmap(file); } catch (e) { }
+    const url = URL.createObjectURL(file);
+    try {
+      const img = new Image(); img.decoding = 'async'; img.src = url;
+      await img.decode();
+      return img;
+    } finally { setTimeout(() => URL.revokeObjectURL(url), 1000); }
   }
 
   async function run(kind, files) {
     sheet(`<div class="thinking" id="scanprog" style="margin-top:8px">じゅんびちゅう…</div><div class="note">スクショは この スマホの 中だけで 見くらべます（どこにも おくりません）。</div>`);
     try { await loadFeats(); } catch (e) { sheet(`<div class="banner" style="margin-top:8px">見本の データを よみこめませんでした。つうしんを たしかめてください。</div><button class="btn" data-act="close">とじる</button>`); return; }
     const k2 = kind === 'mem' ? 'm' : 'e';
-    const found = new Map(); let tilesAll = 0;
+    const found = new Map(); let tilesAll = 0, bad = 0;
     for (let fi = 0; fi < files.length; fi++) {
       setProg(`よみこみちゅう… ${fi + 1} / ${files.length}まい`);
       await new Promise(r => setTimeout(r, 20));
-      let bmp; try { bmp = await createImageBitmap(files[fi]); } catch (e) { continue; }
-      const sc = Math.min(1, 1400 / bmp.width), W = Math.round(bmp.width * sc), H = Math.round(bmp.height * sc);
+      let bmp; try { bmp = await openImage(files[fi]); } catch (e) { bad++; continue; }
+      const bw = bmp.naturalWidth || bmp.width, bh = bmp.naturalHeight || bmp.height;
+      const sc = Math.min(1, 1400 / bw), W = Math.round(bw * sc), H = Math.round(bh * sc);
       const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
       const g = cv.getContext('2d', { willReadFrequently: true }); g.drawImage(bmp, 0, 0, W, H);
       const d = g.getImageData(0, 0, W, H).data;
@@ -195,16 +225,16 @@ const Scan = (() => {
         else { f.n = Math.max(f.n, v.n); if (v.rank && (!f.rank || 'SABCD'.indexOf(v.rank) < 'SABCD'.indexOf(f.rank))) f.rank = v.rank; f.unsure = f.unsure && v.unsure; }
       }
     }
-    pending = { kind, results: [...found.values()], tilesAll };
+    pending = { kind, results: [...found.values()], tilesAll, bad, files: files.length };
     confirmView();
   }
 
   function confirmView() {
-    const { kind, results, tilesAll } = pending;
+    const { kind, results, tilesAll, bad, files } = pending;
     const isMem = kind === 'mem';
     const rows = results.sort((a, b) => a.unsure - b.unsure || a.it.n.localeCompare(b.it.n, 'ja')).map((r, i) => `<label class="line" style="align-items:center"><span class="k"><input type="checkbox" data-scanrow="${i}" checked style="width:20px;height:20px;vertical-align:middle"> ${isMem ? (r.rank || 'S') : '×' + r.n}</span><span class="v vi">${ico(r.it, 32)}<span>${esc(r.it.n)}${r.unsure ? ' <span style="color:var(--gold)">？たしかめて</span>' : ''}</span></span></label>`).join('');
     sheet(`<div class="row" style="justify-content:space-between;margin-top:6px"><h2 style="margin:0">${results.length}しゅるい 見つかりました</h2><button class="btn" data-act="close">やめる</button></div>
-      <div class="note">アイコン ${tilesAll}こ を 見くらべました。ちがうものは チェックを はずしてください。</div>
+      <div class="note">${files}まいの 写真から アイコン ${tilesAll}こ を 見くらべました。${bad ? `（${bad}まいは ひらけませんでした）` : ''}ちがうものは チェックを はずしてください。</div>
       <div class="lines" style="margin:8px 0;max-height:38vh;overflow:auto">${rows || '<div class="note">アイコンが 見つかりませんでした。ゲームの「もちもの」の一覧画面を そのまま スクショしてください。</div>'}</div>
       <label class="row note" style="margin-top:8px;gap:6px"><input type="checkbox" id="scanall" checked style="width:20px;height:20px">
         ${isMem ? 'よみとれなかった メモリは「もっていない」にする（一覧を さいごまで 撮ったとき）' : '写っていた しゅるい（武器・盾など）で、よみとれなかった そうびは 0こにする（その一覧を さいごまで 撮ったとき）'}</label>
