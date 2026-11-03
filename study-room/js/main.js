@@ -4,6 +4,7 @@ import { Room3D, moodNow } from './room3d.js';
 import { ROOMS, roomDef, STYLES, styleDef, homeOf, VILLA_MIN_ITEMS } from './rooms.js';
 import { GENRES, ITEMS, itemById, itemsOf, SPECIAL_IDS, STARTER } from './items.js';
 import { icon, GENRE_ICON, SUBJECT_ICON } from './icons.js';
+import { ticketSVG } from './tickets.js';
 import { thumbHTML, hydrateThumbs } from './thumbs.js';
 import { loadModel } from './loaders.js';
 import { validProblems, SYMBOLS } from './problems.js';
@@ -510,24 +511,37 @@ async function putIntoRoom(item, justBought) {
   return true;
 }
 
-// ログインボーナス：その日はじめて開いたとき、30日のカレンダーを出してスタンプ
+// ログインボーナス：その日はじめて開いたとき、専用の画面で30日のカレンダーにスタンプ
 function showLoginBonus() {
   const got = S.claimLoginBonus();
   if (!got) return;
   S.save();
+  const cellArt = (r) => r.kind === 'gauge' ? `<span class="lb-g">${icon('gift')}</span>` : ticketSVG(r.kind, 'mini');
   const cells = Array.from({ length: 30 }, (_, i) => {
     const n = i + 1, r = S.loginBonusDay(n);
     const cls = [n < got.day ? 'done' : '', n === got.day ? 'today' : '', r.kind !== 'gauge' ? 'big ' + r.kind : ''].join(' ');
-    const ic = r.kind === 'ticket4' ? icon('trophy') : r.kind === 'ticket' ? icon('star') : icon('gift');
-    return `<div class="lb-cell ${cls}"><small>${n}</small>${ic}${n <= got.day ? `<i class="stamp">${icon('check')}</i>` : ''}</div>`;
+    return `<div class="lb-cell ${cls}"><small>${n}</small>${cellArt(r)}${n <= got.day ? `<i class="stamp">${icon('check')}</i>` : ''}</div>`;
   }).join('');
-  const el = sheet(`
-    <div class="sh-head"><span class="sh-ic gold">${icon('gift')}</span><div><h3>ログインボーナス ${got.day}日目</h3><p>5日ごとにレアチケット、30日目は★4以上確定チケット</p></div></div>
-    <div class="lb-grid">${cells}</div>
-    <div class="lb-get">${icon(got.reward.kind === 'gauge' ? 'gift' : got.reward.kind === 'ticket4' ? 'trophy' : 'star')}<b>${got.reward.label}</b>をもらいました</div>
-    <button class="btn gold big ok">${icon('check')}受けとる</button>`, 'lb-sheet');
-  app.querySelector('.tabbar')?.classList.add('hide');
-  el.querySelector('.ok').onclick = () => { el.remove(); showHome(); };
+  const r = got.reward;
+  const next = [5, 10, 15, 20, 25, 30].find(d => d > got.day);
+  const el = h(`
+    <div class="lb-screen">
+      <div class="lb-rays"></div>
+      <div class="lb-inner">
+        <p class="lb-kicker">LOGIN BONUS</p>
+        <h2 class="lb-day"><b>${got.day}</b>日目</h2>
+        <div class="lb-reward ${r.kind}">
+          ${r.kind === 'gauge' ? `<div class="lb-gbig">${icon('gift')}<span>+${r.amount}</span></div>` : ticketSVG(r.kind, 'big')}
+          <p><b>${r.label}</b>をもらいました${r.kind === 'gauge' ? '' : '！'}</p>
+        </div>
+        <div class="lb-grid">${cells}</div>
+        <p class="lb-next">${next ? `あと${next - got.day}日で <b>${S.loginBonusDay(next).label}</b>` : '30日達成！ あしたから2周目'}</p>
+        <button class="btn gold big ok">${icon('check')}受けとる</button>
+      </div>
+    </div>`);
+  document.body.append(el);
+  requestAnimationFrame(() => el.classList.add('show'));
+  el.querySelector('.ok').onclick = () => { el.classList.remove('show'); setTimeout(() => el.remove(), 400); showHome(); };
 }
 
 // 克服のごほうび（特別な家具）を持ち物に入れる
@@ -1352,4 +1366,4 @@ if ('serviceWorker' in navigator && location.protocol === 'https:') {
   navigator.serviceWorker.register('sw.js').catch(() => {});
 }
 // テスト用
-window.__app = { get room3d() { return room3d; }, S, sub, HS, switchRoom, ensureRooms, goHome, showHome, curRoom, visitFriend, leaveVisit };
+window.__app = { get room3d() { return room3d; }, S, sub, HS, switchRoom, ensureRooms, goHome, showHome, curRoom, visitFriend, leaveVisit, showLoginBonus };

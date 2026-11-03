@@ -296,3 +296,35 @@ h3.sec { font-size: 14px; color: var(--muted); margin: 18px 4px 8px; font-weight
 .medal.m1 { background: linear-gradient(180deg, #ffe9a0, #e7b23c); box-shadow: 0 0 12px rgba(240,190,70,.6); }
 .medal.m2 { background: linear-gradient(180deg, #f2f2f2, #a9a9a9); }
 .medal.m3 { background: linear-gradient(180deg, #f1c49b, #b8763f); }
+
+/* チケット */
+.ticket-svg { display: block; width: 100%; height: auto; filter: drop-shadow(0 6px 14px rgba(0,0,0,.45)); }
+.ticket-svg .tk-shine { animation: tkshine 3.2s ease-in-out infinite; }
+@keyframes tkshine { 0%, 55% { transform: translateX(0) skewX(-20deg); } 100% { transform: translateX(320px) skewX(-20deg); } }
+.ticket-svg.mini { width: 88%; filter: drop-shadow(0 2px 4px rgba(0,0,0,.4)); }
+.ticket-svg.big { width: min(260px, 70vw); margin: 0 auto; }
+
+/* ログインボーナスの画面 */
+.lb-screen { position: fixed; inset: 0; z-index: 40; display: grid; place-items: center; padding: calc(var(--safe-t) + 16px) 16px calc(var(--safe-b) + 16px);
+  background: radial-gradient(90% 60% at 50% 25%, rgba(120,84,40,.95), rgba(20,16,12,.97) 70%); opacity: 0; transition: opacity .4s; overflow-y: auto; }
+.lb-screen.show { opacity: 1; }
+.lb-rays { position: absolute; left: 50%; top: 26%; width: 160vmax; height: 160vmax; transform: translate(-50%, -50%);
+  background: repeating-conic-gradient(from 0deg, rgba(255,226,150,.10) 0 8deg, rgba(255,226,150,0) 8deg 20deg); animation: spin 40s linear infinite; pointer-events: none; }
+.lb-inner { position: relative; width: min(440px, 100%); display: grid; gap: 12px; justify-items: center; text-align: center; }
+.lb-kicker { margin: 0; font-family: "Cormorant Garamond", serif; letter-spacing: .45em; font-size: 16px; color: var(--gold1); padding-left: .45em; }
+.lb-day { margin: -4px 0 0; font-size: 22px; }
+.lb-day b { font-size: 54px; color: #fff; text-shadow: 0 0 24px rgba(255,210,120,.7); margin-right: 4px; }
+.lb-reward { display: grid; gap: 10px; justify-items: center; animation: pop .7s .2s cubic-bezier(.3,1.5,.5,1) both; }
+.lb-reward p { margin: 0; font-size: 16px; }
+.lb-reward.ticket4 .ticket-svg { filter: drop-shadow(0 0 22px rgba(180,140,255,.7)); }
+.lb-reward.ticket .ticket-svg { filter: drop-shadow(0 0 22px rgba(240,180,76,.6)); }
+.lb-gbig { display: flex; align-items: center; gap: 10px; font-size: 44px; color: var(--gold1); }
+.lb-gbig span { font-size: 34px; font-weight: 900; color: #fff; }
+@keyframes pop { from { transform: scale(.6); opacity: 0; } to { transform: none; opacity: 1; } }
+.lb-screen .lb-grid { width: 100%; grid-template-columns: repeat(6, 1fr); }
+.lb-cell .lb-g { font-size: 16px; }
+.lb-cell.big { padding: 2px; }
+.lb-cell.big small { position: absolute; top: 3px; left: 5px; }
+.lb-next { margin: 0; color: var(--muted); font-size: 13px; }
+.lb-next b { color: var(--gold1); }
+.lb-screen .btn.big { width: 100%; }
