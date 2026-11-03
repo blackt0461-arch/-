@@ -10,7 +10,7 @@ import { aiReady, downloadAI, deleteAI, AI_TOTAL } from './ai-loader.js';
 import { estimateKey, suggestCapo, easiestVoicing } from './practice.js';
 
 // version.json と同じ値にする（新しいバージョンを公開したら両方を上げる）
-const APP_VERSION = '1.13.0';
+const APP_VERSION = '1.14.0';
 const APP_FILES = ['index.html', 'style.css', 'app.js', 'chord-engine.js', 'audio.js', 'fretboard.js', 'sound.js', 'song.js', 'dsp.js', 'chart.js', 'live.js', 'practice.js', 'transcribe.js', 'transcribe-worker.js', 'tab-staff.js', 'learned.js', 'synth-check.js', 'vocal-remove.js', 'ai-vocal.js', 'ai-loader.js', 'sw.js', 'manifest.webmanifest'];
 const HOLD_MS = 150;      // マイク：別のコードがこの時間続いたら表示を切り替える
 const HISTORY_SIZE = 16;  // マイク：覚えておくコードの数
