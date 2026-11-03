@@ -7,14 +7,30 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
-import { ROOM, WINDOW, DOOR } from './rooms.js';
+import { roomShape, ceilAt } from './rooms.js';
+import { buildFixture, segRot, segPoint, putOnWall } from './roomfix.js';
 import { itemById, STARTER } from './items.js';
 import { buildProc } from './procfurn.js';
+import { buildGacha } from './gachafurn.js';
+import { gachaSpec } from './gacha.js';
 import { loadTex, texturedMaterial, loadModel, fitMaterial, shadowAll } from './loaders.js';
 import { buildExterior } from './exterior.js';
 
-const HW = ROOM.w / 2, HD = ROOM.d / 2, H = ROOM.h;
+// 部屋の大きさ・形は部屋ごとにちがう（rooms.js の roomShape）。this.sh に入れて使う
 const WALL_T = 0.14;
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+function segOf(sh, id) { return sh.walls.find(w => w.id === id) || null; }
+// 壁 seg にある開口（窓・ドア）。{ a, w, y0, y1, door }
+function openingsOn(sh, segId) {
+  const list = sh.windows.filter(o => o.wall === segId).map(o => ({ a: o.a, w: o.w, y0: o.y0, y1: o.y1 }));
+  if (sh.door.wall === segId) list.push({ a: sh.door.a, w: sh.door.w, y0: 0, y1: sh.door.h, door: true });
+  return list.sort((p, q) => p.a - q.a);
+}
+// 壁にそった範囲 a0〜a1・高さ y0〜y1・壁から内側 d0〜d1 の箱
+function wallBox(seg, a0, a1, y0, y1, d0, d1) {
+  const p = segPoint(seg, a0, y0, d0), q = segPoint(seg, a1, y1, d1);
+  return new THREE.Box3(p.clone().min(q), p.clone().max(q));
+}
 
 // 時間帯・天気ごとの光
 // 時間帯・天気ごとの光。sky = 空の写真（Poly Haven の puresky を、太陽が窓の外に来るよう回したもの）
@@ -45,7 +61,6 @@ export function moodNow(d = new Date()) {
   if (h >= 16 && h < 19) return 'sunset';
   return 'night';
 }
-const WALL_ROT = { '-z': 0, '+z': Math.PI, '-x': Math.PI / 2, '+x': -Math.PI / 2 };
 const MAX_LIGHTS = 4;
 
 export class Room3D {
@@ -80,7 +95,8 @@ export class Room3D {
     this.sun.shadow.mapSize.set(2048, 2048);
     this.sun.shadow.bias = -0.0004;
     this.sun.shadow.normalBias = 0.03;
-    this.sun.shadow.radius = 4;
+    this.sun.shadow.radius = 5;
+    this.sun.shadow.blurSamples = 16;
     this.scene.add(this.sun, this.sun.target);
 
     this.shell = new THREE.Group();   // 壁・床・天井・窓
@@ -220,28 +236,43 @@ export class Room3D {
     this.walkTo(p);
   }
   walkTo(p) {
-    const m = 0.35;
-    p.x = Math.max(-HW + m, Math.min(HW - m, p.x));
-    p.z = Math.max(-HD + m, Math.min(HD - m, p.z));
-    // 家具の中に入らないように押し出す
-    for (const o of this.items.children) {
-      const bb = new THREE.Box3().setFromObject(o);
-      if (bb.max.y < 0.15 || bb.min.y > 1.6) continue; // ラグや天井の照明は気にしない
-      bb.expandByScalar(0.3);
-      if (p.x > bb.min.x && p.x < bb.max.x && p.z > bb.min.z && p.z < bb.max.z) {
-        const opts = [[bb.min.x - p.x, 0], [bb.max.x - p.x, 0], [0, bb.min.z - p.z], [0, bb.max.z - p.z]];
-        opts.sort((a, b) => Math.hypot(...a) - Math.hypot(...b));
-        p.x += opts[0][0]; p.z += opts[0][1];
-      }
-    }
-    p.x = Math.max(-HW + m, Math.min(HW - m, p.x));
-    p.z = Math.max(-HD + m, Math.min(HD - m, p.z));
+    this.clampWalk(p);
     const from = this.camera.position.clone();
     const to = new THREE.Vector3(p.x, 1.5, p.z);
     const dist = from.distanceTo(to);
     if (dist < 0.05) return;
     this.walk = { from, to, t: 0, dur: Math.max(0.35, dist / 1.3) };
     this.showMarker(p);
+  }
+  // 歩ける所に直す（壁・家具・備え付けの物・切り取った角・低い天井をよける）
+  clampWalk(p) {
+    const sh = this.sh, m = 0.35;
+    const inRoom = () => {
+      p.x = clamp(p.x, -sh.hw + m, sh.hw - m);
+      p.z = clamp(p.z, -sh.hd + m, sh.hd - m);
+      // 斜めの天井：頭がつかえない所まで
+      if (sh.slope) p.x = Math.min(p.x, sh.slope.start + (sh.h - 1.8) / (sh.h - sh.slope.low) * (sh.hw - sh.slope.start));
+    };
+    inRoom();
+    const boxes = [];
+    for (const o of this.items.children) {
+      const bb = new THREE.Box3().setFromObject(o);
+      if (bb.max.y < 0.15 || bb.min.y > 1.6) continue; // ラグや天井の照明は気にしない
+      boxes.push(bb);
+    }
+    for (const s of this.solids || []) if (s.block === 'all' && s.box.min.y < 1.6) boxes.push(s.box.clone());
+    for (let k = 0; k < 2; k++) {
+      for (const b0 of boxes) {
+        const bb = b0.clone().expandByScalar(0.3);
+        if (p.x > bb.min.x && p.x < bb.max.x && p.z > bb.min.z && p.z < bb.max.z) {
+          const opts = [[bb.min.x - p.x, 0], [bb.max.x - p.x, 0], [0, bb.min.z - p.z], [0, bb.max.z - p.z]];
+          opts.sort((a, b) => Math.hypot(...a) - Math.hypot(...b));
+          p.x += opts[0][0]; p.z += opts[0][1];
+        }
+      }
+      inRoom();
+    }
+    return p;
   }
   showMarker(p) {
     if (!this.marker) {
@@ -303,6 +334,8 @@ export class Room3D {
       this.marker.material.opacity = Math.max(0, this.marker.userData.life) * 0.8;
       this.marker.scale.setScalar(1 + (1 - this.marker.userData.life) * 0.6);
     }
+    // ガチャの家具の動き（炎・星・水など）
+    for (const o of this.items.children) { const f = o.children[0]?.userData.tick; if (f) f(t, dt); }
     // 新しく置いた物のアニメーション
     for (const o of this.items.children) {
       const a = o.userData.appear;
@@ -322,6 +355,7 @@ export class Room3D {
       }
       p.needsUpdate = true;
     }
+    if (this.exterior?.update) this.exterior.update(t);
     if (this.composer && this.effectsOn !== false) {
       this.grade.uniforms.uTime.value = t;
       this.composer.render(dt);
@@ -403,7 +437,13 @@ export class Room3D {
   // opts.readOnly: フレンドの部屋を見るとき（さわれない）
   async show(roomDef, st, opts = {}) {
     const token = (this.token = {});
-    if (this.roomDef !== roomDef || this.st !== st) { this.camera.position.set(0.2, 1.5, 1.2); this.walk = null; }
+    this.sh = roomShape(roomDef);
+    if (this.roomDef !== roomDef || this.st !== st) {
+      // 部屋ごとの立つ位置から、窓のほうを向いて始める
+      this.camera.position.set(this.sh.cam[0], 1.5, this.sh.cam[1]);
+      this.walk = null;
+      if (this.roomDef && this.roomDef !== roomDef) { this.yaw = 0.25; this.pitch = -0.12; this.vyaw = this.vpitch = 0; }
+    }
     this.roomDef = roomDef;
     this.st = st;
     this.readOnly = !!opts.readOnly;
@@ -433,6 +473,7 @@ export class Room3D {
   }
   async placeAll(token = this.token) {
     this.items.clear();
+    this.blobs?.clear();
     this.lamps = [];
     this.objByUid = {};
     const placed = this.st.placed || [];
@@ -449,6 +490,8 @@ export class Room3D {
     let obj = null;
     if (src.proc) {
       try { obj = buildProc(src.proc); } catch (e) { console.warn('proc', item.id, e); }
+    } else if (src.gacha) {
+      try { obj = buildGacha(gachaSpec(item)); } catch (e) { console.warn('gacha', item.id, e); }
     } else if (src.model) {
       obj = await loadModel(src.model);
       if (obj && (src.tint || src.paint)) recolor(obj, src);
@@ -458,7 +501,7 @@ export class Room3D {
     if (!obj) return null;
     shadowAll(obj);
     // 大きすぎるモデルは目安の大きさに縮める
-    if (item.size && !src.proc) {
+    if (item.size && !src.proc && !src.gacha) {
       const sz = new THREE.Box3().setFromObject(obj).getSize(new THREE.Vector3());
       const big = Math.max(sz.x, sz.y, sz.z);
       if (big > item.size * 1.3) obj.scale.multiplyScalar(item.size / big);
@@ -481,34 +524,62 @@ export class Room3D {
     this.objByUid = this.objByUid || {};
     this.objByUid[p.uid] = wrap;
     this.items.add(wrap);
+    this.updateBlob(wrap);
     return wrap;
+  }
+
+  // 家具の足もとに落ちる、やわらかい影（どの時間帯でも家具が浮いて見えないように）
+  updateBlob(wrap) {
+    if (!this.blobs) { this.blobs = new THREE.Group(); this.scene.add(this.blobs); }
+    const uid = wrap.userData.uid, item = wrap.userData.item, p = wrap.userData.p;
+    let b = this.blobs.children.find(x => x.userData.uid === uid);
+    if (item.place !== 'floor') { if (b) this.blobs.remove(b); return; }
+    if (!Room3D.blobMat) {
+      const c = document.createElement('canvas'); c.width = c.height = 128;
+      const g = c.getContext('2d'); const gr = g.createRadialGradient(64, 64, 8, 64, 64, 64);
+      gr.addColorStop(0, 'rgba(0,0,0,0.55)'); gr.addColorStop(0.55, 'rgba(0,0,0,0.28)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
+      g.fillStyle = gr; g.fillRect(0, 0, 128, 128);
+      const tex = new THREE.CanvasTexture(c);
+      Room3D.blobMat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, toneMapped: false });
+      Room3D.blobGeo = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
+    }
+    if (!b) { b = new THREE.Mesh(Room3D.blobGeo, Room3D.blobMat); b.userData.uid = uid; b.renderOrder = 1; this.blobs.add(b); }
+    const bb = new THREE.Box3().setFromObject(wrap.children[0]);
+    const sz = bb.getSize(new THREE.Vector3()), c = bb.getCenter(new THREE.Vector3());
+    b.scale.set(Math.max(0.25, sz.x * 1.3), 1, Math.max(0.25, sz.z * 1.3));
+    b.position.set(c.x, bb.min.y + 0.004, c.z);
+    b.visible = true;
   }
 
   // 配置 p に合わせて、向きと位置をそろえる。部屋からはみ出さないように直し、p も直した値にする
   mountPlaced(wrap, p) {
     const item = wrap.userData.item;
     const obj = wrap.children[0];
+    const sh = this.sh;
+    const { hw: HW, hd: HD } = sh;
     wrap.position.set(0, 0, 0);
-    if (item.place === 'wall') obj.rotation.y = WALL_ROT[p.wall || '-z'];
-    else obj.rotation.y = p.rot || 0;
+    let seg = null;
+    if (item.place === 'wall') {
+      seg = segOf(sh, p.wall || '-z') || segOf(sh, '-z');
+      p.wall = seg.id;
+      obj.rotation.y = segRot(seg);
+    } else obj.rotation.y = p.rot || 0;
     obj.position.set(0, 0, 0);
     let bb = new THREE.Box3().setFromObject(obj);
     const c = bb.getCenter(new THREE.Vector3());
     const sz = bb.getSize(new THREE.Vector3());
     const m = 0.01;
     if (item.place === 'wall') {
-      const w = p.wall || '-z';
       const along = p.a ?? 0, y = p.y ?? 1.6;
       // 壁の上で、はみ出さない範囲
-      const half = (w === '-z' || w === '+z') ? HW : HD;
-      const ext = (w === '-z' || w === '+z') ? sz.x / 2 : sz.z / 2;
-      const a2 = Math.max(-half + ext + 0.05, Math.min(half - ext - 0.05, along));
-      const y2 = Math.max(sz.y / 2 + 0.3, Math.min(H - sz.y / 2 - 0.05, y));
+      const ext = seg.axis === 'z' ? sz.x / 2 : sz.z / 2;
+      const a2 = Math.max(seg.a0 + ext + 0.05, Math.min(seg.a1 - ext - 0.05, along));
+      // 斜めの天井の下では、低いほうに合わせる
+      const top = seg.axis === 'z' ? Math.min(ceilAt(sh, a2 - ext), ceilAt(sh, a2 + ext)) : ceilAt(sh, seg.c);
+      const y2 = Math.max(sz.y / 2 + 0.3, Math.min(top - sz.y / 2 - 0.05, y));
       p.a = +a2.toFixed(3); p.y = +y2.toFixed(3);
-      if (w === '-z') obj.position.set(a2 - c.x, y2 - c.y, -HD + m - bb.min.z);
-      if (w === '+z') obj.position.set(a2 - c.x, y2 - c.y, HD - m - bb.max.z);
-      if (w === '-x') obj.position.set(-HW + m - bb.min.x, y2 - c.y, a2 - c.z);
-      if (w === '+x') obj.position.set(HW - m - bb.max.x, y2 - c.y, a2 - c.z);
+      if (seg.axis === 'z') obj.position.set(a2 - c.x, y2 - c.y, seg.n > 0 ? seg.c + m - bb.min.z : seg.c - m - bb.max.z);
+      else obj.position.set(seg.n > 0 ? seg.c + m - bb.min.x : seg.c - m - bb.max.x, y2 - c.y, a2 - c.z);
     } else {
       let x = p.x ?? 0, z = p.z ?? 0;
       x = Math.max(-HW + sz.x / 2 + m, Math.min(HW - sz.x / 2 - m, x));
@@ -519,9 +590,18 @@ export class Room3D {
       if (x + sz.x / 2 > HW - snap) x = HW - sz.x / 2 - m;
       if (z - sz.z / 2 < -HD + snap) z = -HD + sz.z / 2 + m;
       if (z + sz.z / 2 > HD - snap) z = HD - sz.z / 2 - m;
+      // L字の部屋：切り取った角に入っていたら、近いほうへ押し出す
+      const nt = sh.notch;
+      if (nt) {
+        const hx = sz.x / 2 + m, hz = sz.z / 2 + m;
+        if (x + hx > nt.x0 && x - hx < nt.x1 && z + hz > nt.z0 && z - hz < nt.z1) {
+          const px = nt.sx > 0 ? nt.x0 - hx : nt.x1 + hx, pz = nt.sz > 0 ? nt.z0 - hz : nt.z1 + hz;
+          if (Math.abs(px - x) < Math.abs(pz - z)) x = px; else z = pz;
+        }
+      }
       p.x = +x.toFixed(3); p.z = +z.toFixed(3);
       let y;
-      if (item.place === 'ceiling') y = (H - 0.005) - bb.max.y;
+      if (item.place === 'ceiling') y = (Math.min(ceilAt(sh, x - sz.x / 2), ceilAt(sh, x + sz.x / 2)) - 0.005) - bb.max.y;
       else if (item.place === 'rug') y = 0.004 - bb.min.y;
       else y = (p.on ? (p.y || 0) : 0) - bb.min.y;
       obj.position.set(x - c.x, y, z - c.z);
@@ -534,21 +614,37 @@ export class Room3D {
   static canStack(item) { return item.place === 'floor' && (item.genre === 'decor' || (item.size || 1) <= 0.7); }
   static isSupport(item) { return item.place === 'floor' && (item.genre === 'table' || item.genre === 'storage'); }
   boxOf(o) { return new THREE.Box3().setFromObject(o); }
+  // 備え付けの物・切り取った角・低い天井にかかっていないか
+  hitsShell(item, bb) {
+    const sh = this.sh;
+    if (item.place !== 'ceiling' && item.place !== 'rug' && sh.slope && bb.max.y > Math.min(ceilAt(sh, bb.min.x), ceilAt(sh, bb.max.x)) + 0.02) return true;
+    for (const s of this.solids || []) {
+      if (s.block === 'wall' && item.place !== 'wall') continue;
+      if (bb.intersectsBox(s.box)) return true;
+    }
+    return false;
+  }
   // 置き方が決まりに合っているか。合っていれば true（家具の上にのせたときは p.on / p.y を決める）
   checkPlacement(o) {
     const item = o.userData.item, p = o.userData.p;
-    if (item.place === 'rug') return true;
-    const others = this.items.children.filter(x => x !== o && x.userData.uid && x.userData.item?.place !== 'rug');
+    const sh = this.sh;
     const shrink = 0.01;
     const bb = this.boxOf(o).expandByScalar(-shrink);
+    if (this.hitsShell(item, bb)) return false;
+    if (item.place === 'rug') return true;
+    const others = this.items.children.filter(x => x !== o && x.userData.uid && x.userData.item?.place !== 'rug');
     if (item.place === 'wall' || item.place === 'ceiling') {
       // 同じ種類どうしで重ならない。壁の物はドアと窓にもかからない
       if (others.some(x => x.userData.item.place === item.place && bb.intersectsBox(this.boxOf(x)))) return false;
       if (item.place === 'wall') {
-        const openings = [
-          new THREE.Box3(new THREE.Vector3(WINDOW.x - WINDOW.w / 2 - 0.1, WINDOW.y0 - 0.1, -HD - 0.5), new THREE.Vector3(WINDOW.x + WINDOW.w / 2 + 0.1, WINDOW.y1 + 0.25, -HD + 0.5)),
-          new THREE.Box3(new THREE.Vector3(DOOR.x - DOOR.w / 2 - 0.1, 0, HD - 0.5), new THREE.Vector3(DOOR.x + DOOR.w / 2 + 0.1, DOOR.h + 0.1, HD + 0.5)),
-        ];
+        const openings = [];
+        for (const seg of sh.walls) {
+          for (const op of openingsOn(sh, seg.id)) {
+            openings.push(op.door
+              ? wallBox(seg, op.a - op.w / 2 - 0.1, op.a + op.w / 2 + 0.1, 0, op.y1 + 0.1, -0.5, 0.5)
+              : wallBox(seg, op.a - op.w / 2 - 0.1, op.a + op.w / 2 + 0.1, op.y0 - 0.1, op.y1 + 0.25, -0.5, 0.5));
+          }
+        }
         if (openings.some(b => b.intersectsBox(bb))) return false;
         // 壁の前の床の家具（高い棚など）とも重ならない
         if (others.some(x => x.userData.item.place === 'floor' && bb.intersectsBox(this.boxOf(x)))) return false;
@@ -564,7 +660,8 @@ export class Room3D {
       return bb.max.x > b.min.x && bb.min.x < b.max.x && bb.max.z > b.min.z && bb.min.z < b.max.z;
     });
     // ドアの前はふさがない
-    const doorZone = new THREE.Box3(new THREE.Vector3(DOOR.x - DOOR.w / 2, 0, HD - 0.6), new THREE.Vector3(DOOR.x + DOOR.w / 2, 2, HD + 0.2));
+    const dseg = segOf(sh, sh.door.wall);
+    const doorZone = wallBox(dseg, sh.door.a - sh.door.w / 2, sh.door.a + sh.door.w / 2, 0, 2, -0.2, 0.6);
     if (!p.on && doorZone.intersectsBox(bb)) return false;
     if (!hits.length) { if (p.on) { delete p.on; delete p.y; this.mountPlaced(o, p); } return true; }
     // 1つの家具の上に、小物がまるごとのる場合だけ OK
@@ -585,11 +682,12 @@ export class Room3D {
     const p = o.userData.p, item = o.userData.item;
     if (this.checkPlacement(o)) return true;
     const start = { ...p };
+    const walls = this.sh.walls.map(w => w.id);
     for (let r = 1; r <= 10; r++) {
       for (let k = 0; k < 12; k++) {
         const ang = k * Math.PI / 6;
         if (item.place === 'wall') {
-          for (const w of [start.wall, '-x', '+x', '+z', '-z']) {
+          for (const w of [start.wall, ...walls]) {
             Object.assign(p, start, { wall: w, a: (start.a || 0) + Math.cos(ang) * r * 0.35, y: 1.6 + Math.sin(ang) * 0.4 });
             this.mountPlaced(o, p);
             if (this.checkPlacement(o)) return true;
@@ -623,6 +721,7 @@ export class Room3D {
       const L = obj.userData.light || (typeof il === 'string' ? { color: il } : il) || {};
       const bb = new THREE.Box3().setFromObject(o);
       const l = new THREE.PointLight(L.color || '#ffd9a8', (L.intensity || 1) * 3 * this.mood.lampI, 0, 2);
+      // 照明の影は「すき間の影」とぶつかって、部屋が斜めに暗くなるので使わない（足もとの影で代わりにする）
       const center = bb.getCenter(new THREE.Vector3());
       l.position.set(center.x, o.userData.item.place === 'ceiling' ? bb.min.y - 0.05 : center.y + (L.y || 0) * 0 + 0.1, center.z);
       this.scene.add(l);
@@ -654,19 +753,22 @@ export class Room3D {
     const p = o.userData.p, item = o.userData.item;
     const ray = this.ray(cx, cy).ray;
     if (item.place === 'wall') {
-      // 4つの壁の面と交わる所
+      // 壁の面と交わる所（いちばん近い壁）
       let best = null;
-      for (const [w, n, d] of [['-z', [0, 0, 1], HD], ['+z', [0, 0, -1], HD], ['-x', [1, 0, 0], HW], ['+x', [-1, 0, 0], HW]]) {
-        const plane = new THREE.Plane(new THREE.Vector3(...n), d);
+      const sh = this.sh;
+      for (const seg of sh.walls) {
+        const n = seg.axis === 'z' ? new THREE.Vector3(0, 0, seg.n) : new THREE.Vector3(seg.n, 0, 0);
+        const plane = new THREE.Plane(n, -seg.n * seg.c);
         const hit = ray.intersectPlane(plane, new THREE.Vector3());
         if (!hit) continue;
         const dist = hit.distanceTo(ray.origin);
-        const inside = Math.abs(hit.x) <= HW + 0.01 && Math.abs(hit.z) <= HD + 0.01 && hit.y > 0 && hit.y < H;
-        if (inside && (!best || dist < best.dist)) best = { w, hit, dist };
+        const al = seg.axis === 'z' ? hit.x : hit.z;
+        const inside = al >= seg.a0 - 0.01 && al <= seg.a1 + 0.01 && hit.y > 0 && hit.y < ceilAt(sh, hit.x);
+        if (inside && (!best || dist < best.dist)) best = { w: seg.id, axis: seg.axis, hit, dist };
       }
       if (!best) return;
       p.wall = best.w;
-      p.a = (best.w === '-z' || best.w === '+z') ? best.hit.x : best.hit.z;
+      p.a = best.axis === 'z' ? best.hit.x : best.hit.z;
       p.y = best.hit.y;
     } else {
       const hit = ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), -(p.on ? p.y || 0 : 0)), new THREE.Vector3());
@@ -675,6 +777,7 @@ export class Room3D {
     }
     this.mountPlaced(o, p);
     const ok = this.checkPlacement(o);
+    this.updateBlob(o);
     this.markValid(ok);
     if (ok) {
       // のっている小物も一緒に
@@ -688,7 +791,7 @@ export class Room3D {
     if (!dx && !dz) return;
     for (const r of this.items.children) {
       const rp = r.userData.p;
-      if (rp && rp.on === uid) { rp.x += dx; rp.z += dz; this.mountPlaced(r, rp); }
+      if (rp && rp.on === uid) { rp.x += dx; rp.z += dz; this.mountPlaced(r, rp); this.updateBlob(r); }
     }
   }
   markValid(ok) {
@@ -705,6 +808,7 @@ export class Room3D {
       this.onInvalid && this.onInvalid();
     }
     this.markValid(true);
+    this.updateBlob(o);
     this.selBox && this.selBox.update();
   }
   rotateSelected(step = Math.PI / 4) {
@@ -724,6 +828,8 @@ export class Room3D {
   removeObject(uid) {
     const o = this.objByUid?.[uid];
     if (o) this.items.remove(o);
+    const b = this.blobs?.children.find(x => x.userData.uid === uid);
+    if (b) this.blobs.remove(b);
     delete this.objByUid[uid];
     if (this.selected === uid) this.select(null);
     this.updateLights();
@@ -740,27 +846,38 @@ export class Room3D {
 
   // 新しく買った物を置く場所の候補（見ている方向の、空いていそうな所）
   suggestPlacement(item) {
+    const sh = this.sh;
     const cam = this.camera.position;
     const fwd = new THREE.Vector3(-Math.sin(this.yaw), 0, -Math.cos(this.yaw));
     if (item.place === 'wall') {
-      // 見ている方向の壁
-      const w = Math.abs(fwd.x) > Math.abs(fwd.z) ? (fwd.x > 0 ? '+x' : '-x') : (fwd.z > 0 ? '+z' : '-z');
-      const along = (w === '-z' || w === '+z') ? cam.x + fwd.x * 1.5 : cam.z + fwd.z * 1.5;
-      return { wall: w, a: along, y: 1.6 };
+      // 見ている方向の壁（目の前でいちばん近い壁）
+      let best = null;
+      for (const seg of sh.walls) {
+        const pc = seg.axis === 'z' ? cam.z : cam.x, fd = seg.axis === 'z' ? fwd.z : fwd.x;
+        if (Math.abs(fd) < 1e-3) continue;
+        const t = (seg.c - pc) / fd;
+        if (t <= 0.05) continue;
+        const al = seg.axis === 'z' ? cam.x + fwd.x * t : cam.z + fwd.z * t;
+        if (al < seg.a0 - 0.01 || al > seg.a1 + 0.01) continue;
+        if (!best || t < best.t) best = { t, seg, al };
+      }
+      if (!best) return { wall: '-z', a: 0, y: 1.6 };
+      const al = clamp(best.al, best.seg.a0 + 0.3, best.seg.a1 - 0.3);
+      return { wall: best.seg.id, a: al, y: Math.min(1.6, ceilAt(sh, best.seg.axis === 'z' ? al : best.seg.c) - 0.6) };
     }
     const base = { x: cam.x + fwd.x * 1.6, z: cam.z + fwd.z * 1.6, rot: Math.round(Math.atan2(-fwd.x, -fwd.z) / (Math.PI / 4)) * (Math.PI / 4) };
-    // ほかの家具と重なっていたら、少しずつずらす
-    const taken = this.items.children.map(o => new THREE.Box3().setFromObject(o));
-    for (let r = 0; r < 6; r++) {
+    // ほかの家具・備え付けの物と重なっていたら、少しずつずらす
+    const taken = [...this.items.children.map(o => new THREE.Box3().setFromObject(o)), ...(this.solids || []).filter(s => s.block === 'all').map(s => s.box)];
+    for (let r = 0; r < 8; r++) {
       for (let k = 0; k < 8; k++) {
         const ang = k * Math.PI / 4;
         const x = base.x + Math.cos(ang) * r * 0.5, z = base.z + Math.sin(ang) * r * 0.5;
-        if (Math.abs(x) > HW - 0.3 || Math.abs(z) > HD - 0.3) continue;
+        if (Math.abs(x) > sh.hw - 0.3 || Math.abs(z) > sh.hd - 0.3) continue;
         const pt = new THREE.Vector3(x, 0.3, z);
         if (!taken.some(b => b.clone().expandByScalar(0.15).containsPoint(pt))) return { ...base, x, z };
       }
     }
-    return base;
+    return { ...base, x: clamp(base.x, -sh.hw + 0.5, sh.hw - 0.5), z: clamp(base.z, -sh.hd + 0.5, sh.hd - 0.5) };
   }
 
   // 写真：画面の文字を消した状態で、今の部屋を1枚
@@ -797,16 +914,21 @@ export class Room3D {
   }
 
   async buildShell() {
+    const sh = this.sh;
+    const { w: RW, d: RD, h: H, hw: HW, hd: HD } = sh;
     const ps = this.previewSurf;
     const wallI = this.surfItem('wall'), floorI = this.surfItem('floor');
     const wallSrc = ps?.wall || wallI?.src, floorSrc = ps?.floor || floorI?.src;
     const plainWall = new THREE.MeshStandardMaterial({ color: '#e8e2d8', roughness: 0.95 });
     const plainFloor = new THREE.MeshStandardMaterial({ color: '#a8927a', roughness: 0.8 });
-    const [wallM, floorM, ceilM] = await Promise.all([
+    const [wallM, floorM, ceilM, fixtures] = await Promise.all([
       wallSrc ? (wallSrc.tex ? texturedMaterial(wallSrc.tex, { rep: wallSrc.rep, tint: wallSrc.tint }) : new THREE.MeshStandardMaterial({ color: wallSrc.color || '#e8e2d8', roughness: 0.92 })) : plainWall,
       floorSrc?.tex ? texturedMaterial(floorSrc.tex, { rep: floorSrc.rep || 3, tint: floorSrc.tint }) : (floorSrc?.color ? new THREE.MeshStandardMaterial({ color: floorSrc.color, roughness: 0.7 }) : plainFloor),
-      new THREE.MeshStandardMaterial({ color: '#f3f0ea', roughness: 0.95 }),
+      new THREE.MeshStandardMaterial({ color: sh.ceil, roughness: 0.95 }),
+      // 備え付けの物（浴槽・キッチンなど）
+      Promise.all(sh.built.map(b => buildFixture(b, sh).catch(e => { console.warn('fixture', b.kind, e); return null; }))),
     ]);
+    if (this.sh !== sh) return; // 作っているあいだに別の部屋へ移った
     // 天井は下からの照り返しが少ないので、ほんのり明るくしておく
     ceilM.emissive = new THREE.Color(this.mood.hemiGround).multiplyScalar(0.35);
     if (!wallSrc?.tex) wallM.userData.rep = 1;
@@ -824,90 +946,215 @@ export class Room3D {
       g.add(m);
       return m;
     };
-    // 床・天井
-    const floor = new THREE.Mesh(new THREE.PlaneGeometry(ROOM.w, ROOM.d), fitMaterial(floorM, ROOM.w, ROOM.d));
+    // 床
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(RW, RD), fitMaterial(floorM, RW, RD));
     floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; g.add(floor);
-    box(ROOM.w + 0.4, WALL_T, ROOM.d + 0.4, 0, H + WALL_T / 2, 0, ceilM, ROOM.w, ROOM.d);
-    // 左右と手前の壁
-    box(WALL_T, H, ROOM.d + 0.3, -HW - WALL_T / 2, H / 2, 0, wallM, ROOM.d, H);
-    box(WALL_T, H, ROOM.d + 0.3, HW + WALL_T / 2, H / 2, 0, wallM, ROOM.d, H);
-    // 手前の壁（ドアの穴をあける）
-    const dx0 = DOOR.x - DOOR.w / 2, dx1 = DOOR.x + DOOR.w / 2, zf = HD + WALL_T / 2;
-    box(dx0 + HW + 0.15, H, WALL_T, (-HW - 0.15 + dx0) / 2, H / 2, zf, wallM);
-    box(HW + 0.15 - dx1, H, WALL_T, (dx1 + HW + 0.15) / 2, H / 2, zf, wallM);
-    box(DOOR.w, H - DOOR.h, WALL_T, DOOR.x, (H + DOOR.h) / 2, zf, wallM);
-    // 奥の壁（窓の穴をあける）
-    const x0 = WINDOW.x - WINDOW.w / 2, x1 = WINDOW.x + WINDOW.w / 2;
-    const zb = -HD - WALL_T / 2;
-    box(x0 + HW, H, WALL_T, (-HW + x0) / 2, H / 2, zb, wallM);
-    box(HW - x1, H, WALL_T, (x1 + HW) / 2, H / 2, zb, wallM);
-    box(WINDOW.w, WINDOW.y0, WALL_T, WINDOW.x, WINDOW.y0 / 2, zb, wallM);
-    box(WINDOW.w, H - WINDOW.y1, WALL_T, WINDOW.x, (H + WINDOW.y1) / 2, zb, wallM);
+    // 天井（屋根裏は、途中から斜めに下がる）
+    if (!sh.slope) box(RW + 0.4, WALL_T, RD + 0.4, 0, H + WALL_T / 2, 0, ceilM, RW, RD);
+    else this.makeSlope(g, ceilM);
 
-    // 幅木（壁の下の板）
+    // 壁：壁ごとに、窓とドアの穴をあけて箱を並べる
+    const piece = (seg, a0, a1, y0, y1) => {
+      // 斜めの天井の下の壁は、天井の上に突き出さないように低くする（天窓から見えるので）
+      if (sh.slope && seg.axis === 'x' && seg.c > sh.slope.start) y1 = Math.min(y1, ceilAt(sh, seg.c) + WALL_T + 0.02);
+      if (sh.slope && seg.axis === 'z' && a1 > sh.slope.start + 0.01) {
+        const st = sh.slope.start;
+        if (a0 < st) { piece(seg, a0, st, y0, y1); a0 = st; }
+        for (let x = a0; x < a1 - 1e-4; x += 0.2) {
+          const x2 = Math.min(a1, x + 0.2);
+          const top = Math.min(y1, ceilAt(sh, x) + WALL_T + 0.02);
+          if (top > y0) piece2(seg, x, x2, y0, top);
+        }
+        return;
+      }
+      piece2(seg, a0, a1, y0, y1);
+    };
+    const piece2 = (seg, a0, a1, y0, y1) => {
+      const len = a1 - a0, hgt = y1 - y0;
+      if (len < 0.002 || hgt < 0.002) return;
+      const am = (a0 + a1) / 2, ym = (y0 + y1) / 2, off = seg.c - seg.n * WALL_T / 2;
+      if (seg.axis === 'z') box(len, hgt, WALL_T, am, ym, off, wallM, len, hgt);
+      else box(WALL_T, hgt, len, off, ym, am, wallM, len, hgt);
+    };
+    for (const seg of sh.walls) {
+      const lo = seg.a0 - (seg.e0 ? WALL_T + 0.01 : 0), hi = seg.a1 + (seg.e1 ? WALL_T + 0.01 : 0);
+      let cur = lo;
+      for (const o of openingsOn(sh, seg.id)) {
+        const l = o.a - o.w / 2, r = o.a + o.w / 2;
+        piece(seg, cur, l, 0, H);
+        piece(seg, l, r, 0, o.y0);
+        piece(seg, l, r, o.y1, H);
+        cur = r;
+      }
+      piece(seg, cur, hi, 0, H);
+    }
+
+    // 幅木（壁の下の板）。床までの開口（ドア・大きな窓）のところはなし
     const skirt = new THREE.MeshStandardMaterial({ color: wallV && /黒|コンクリ/.test(wallV.name) ? '#2b2724' : '#efe9df', roughness: 0.6 });
-    const sk = (w, d, x, z) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, 0.08, d), skirt); m.position.set(x, 0.04, z); m.receiveShadow = true; g.add(m); };
-    sk(0.015, ROOM.d, -HW + 0.008, 0); sk(0.015, ROOM.d, HW - 0.008, 0);
-    sk(dx0 + HW, 0.015, (-HW + dx0) / 2, HD - 0.008); sk(HW - dx1, 0.015, (dx1 + HW) / 2, HD - 0.008);
-    sk(x0 + HW, 0.015, (-HW + x0) / 2, -HD + 0.008); sk(HW - x1, 0.015, (x1 + HW) / 2, -HD + 0.008);
-    sk(WINDOW.w, 0.015, WINDOW.x, -HD + 0.008);
+    for (const seg of sh.walls) {
+      let cur = seg.a0;
+      const sk = (a0, a1) => {
+        if (a1 - a0 < 0.01) return;
+        const m = new THREE.Mesh(new THREE.BoxGeometry(seg.axis === 'z' ? a1 - a0 : 0.015, 0.08, seg.axis === 'z' ? 0.015 : a1 - a0), skirt);
+        m.position.copy(segPoint(seg, (a0 + a1) / 2, 0.04, 0.008)); m.receiveShadow = true; g.add(m);
+      };
+      for (const o of openingsOn(sh, seg.id).filter(o => o.y0 < 0.1)) { sk(cur, o.a - o.w / 2); cur = o.a + o.w / 2; }
+      sk(cur, seg.a1);
+    }
 
-    // 窓（選んだデザイン）とカーテン
-    const ym = (WINDOW.y0 + WINDOW.y1) / 2;
+    // 窓（1つ目の窓は選んだデザイン・カーテン付き）
     const winI = this.surfItem('window');
-    let win = null;
-    try { win = winI?.src?.proc ? buildProc(winI.src.proc) : null; } catch (e) { console.warn('window', e); }
-    if (win) { win.position.set(WINDOW.x, ym, -HD - 0.03); shadowAll(win); g.add(win); }
-    else {
-      const frameM = new THREE.MeshStandardMaterial({ color: '#ece6dc', roughness: 0.45 });
-      const fr = (w, h, x, y) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.07), frameM); m.position.set(x, y, -HD - 0.02); m.castShadow = true; m.receiveShadow = true; g.add(m); };
-      fr(WINDOW.w + 0.08, 0.05, WINDOW.x, WINDOW.y0); fr(WINDOW.w + 0.08, 0.05, WINDOW.x, WINDOW.y1);
-      fr(0.05, WINDOW.y1 - WINDOW.y0, x0, ym); fr(0.05, WINDOW.y1 - WINDOW.y0, x1, ym);
-      fr(0.04, WINDOW.y1 - WINDOW.y0, WINDOW.x, ym);
-      const sill = new THREE.Mesh(new THREE.BoxGeometry(WINDOW.w + 0.2, 0.04, 0.22), frameM);
-      sill.position.set(WINDOW.x, WINDOW.y0 - 0.02, -HD + 0.06); sill.castShadow = sill.receiveShadow = true; g.add(sill);
-      const glass = new THREE.Mesh(new THREE.PlaneGeometry(WINDOW.w, WINDOW.y1 - WINDOW.y0),
-        new THREE.MeshPhysicalMaterial({ color: '#ffffff', roughness: 0.05, transparent: true, opacity: 0.08 }));
-      glass.position.set(WINDOW.x, ym, -HD - 0.03); g.add(glass);
+    for (const wd of sh.windows) {
+      const seg = segOf(sh, wd.wall);
+      if (!seg) continue;
+      const wg = new THREE.Group();
+      this.makeWindow(wg, wd, winI);
+      putOnWall(wg, seg, wd.a);
+      g.add(wg);
     }
     const curI = this.surfItem('curtain');
-    if (curI?.src?.curtain) g.add(makeCurtain(curI.src.curtain));
+    const mainWin = sh.windows[0];
+    if (curI?.src?.curtain && !mainWin.open) {
+      const cg = makeCurtain(curI.src.curtain, mainWin);
+      putOnWall(cg, segOf(sh, mainWin.wall), mainWin.a);
+      g.add(cg);
+    }
+    // 窓の上のひさし（家の外）
+    const eave = new THREE.Mesh(new THREE.BoxGeometry(Math.max(9, RW + 3), 0.12, 0.9), new THREE.MeshStandardMaterial({ color: '#5b5550', roughness: 0.7 }));
+    eave.position.set(0, H + 0.18, -HD - 0.48); eave.castShadow = true; eave.receiveShadow = true;
+    g.add(eave);
 
-    // ドア・スイッチ・コンセント・エアコン・天井の縁
+    // ドア
     const doorI = this.surfItem('door');
+    const dseg = segOf(sh, sh.door.wall);
     let door = null;
     try { door = doorI?.src?.proc ? buildProc(doorI.src.proc) : null; } catch (e) { console.warn('door', e); }
     if (door) {
-      door.rotation.y = Math.PI; door.position.set(DOOR.x, 0, HD + 0.03);
-      shadowAll(door); door.traverse(o => { if (o.isMesh) o.userData.door = true; });
+      door.position.set(0, 0, -0.03);
+      shadowAll(door);
     } else door = makeDoor(darkWall ? '#3a3633' : '#ddd5c8');
-    this.door = door;
-    g.add(door);
-    g.add(makeFixtures(skirt.color));
+    const dg = new THREE.Group(); dg.add(door);
+    dg.traverse(o => { if (o.isMesh) o.userData.door = true; });
+    putOnWall(dg, dseg, sh.door.a);
+    this.door = dg;
+    g.add(dg);
+    // スイッチ・コンセント・エアコン・天井の縁
+    g.add(makeFixtures(sh, skirt.color));
     this.floorMesh = floor;
     floor.userData.floor = true;
 
-    // 家の外（2階の部屋は3m上から見る）
+    // 備え付けの物と、家具を置けない所
+    this.solids = [];
+    if (sh.notch) {
+      const nt = sh.notch;
+      this.solids.push({ block: 'all', box: new THREE.Box3(new THREE.Vector3(nt.x0, -1, nt.z0), new THREE.Vector3(nt.x1, H + 1, nt.z1)) });
+    }
+    for (const f of fixtures) {
+      if (!f) continue;
+      g.add(f.obj);
+      f.obj.updateMatrixWorld(true);
+      this.solids.push({ block: f.block, box: new THREE.Box3().setFromObject(f.obj), kind: f.obj.userData.fixture });
+    }
+
+    // 家の外（別荘は海辺。2階の部屋は3m上から見る）
     const level = this.roomDef.level || 0;
-    const key = this.mood.photo + level;
+    const home = this.roomDef.home || 'main';
+    const key = this.mood.photo + level + home;
+    const placeExt = () => { if (this.exterior) this.exterior.world.position.set(0, -3 * level, 2.5 - this.sh.hd); };
     if (this.extKey !== key) {
       this.extKey = key;
       const mood = this.mood;
-      buildExterior(mood, level).then(({ world, own }) => {
+      buildExterior(mood, level, home).then((ext) => {
         if (this.extKey !== key) return;
-        if (this.exterior) this.scene.remove(this.exterior.world, this.exterior.own);
-        this.exterior = { world, own };
-        this.scene.add(world, own);
+        if (this.exterior) this.scene.remove(this.exterior.world);
+        this.exterior = ext;
+        this.scene.add(ext.world);
+        placeExt();
       });
-    }
+    } else placeExt();
     // 光の筋とほこり
     this.makeRays();
+  }
+
+  // 窓1つ（壁の内側の面が z=0、部屋の中が +z の向きで作る）
+  makeWindow(wg, wd, winI) {
+    const ww = wd.w, wh = wd.y1 - wd.y0, ym = (wd.y0 + wd.y1) / 2;
+    const frameM = new THREE.MeshStandardMaterial({ color: wd.open ? '#9a7652' : '#ece6dc', roughness: 0.45 });
+    const fr = (w, h, x, y, d = 0.07, z = -0.02) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), frameM); m.position.set(x, y, z); m.castShadow = true; m.receiveShadow = true; wg.add(m); };
+    if (wd.open) {
+      // ガラスなしの大きな開口（露天風呂）：木の枠だけ
+      fr(ww + 0.16, 0.08, 0, wd.y1 + 0.04, WALL_T + 0.06, -WALL_T / 2);
+      fr(0.08, wh, -ww / 2 - 0.04, ym, WALL_T + 0.06, -WALL_T / 2); fr(0.08, wh, ww / 2 + 0.04, ym, WALL_T + 0.06, -WALL_T / 2);
+      fr(ww + 0.16, 0.05, 0, wd.y0 - 0.025, WALL_T + 0.12, -WALL_T / 2 + 0.03);
+      return;
+    }
+    let made = false;
+    if (winI?.src?.proc) {
+      // 大きな窓は、同じデザインの窓を横に並べる
+      const n = Math.max(1, Math.round(ww / 2.2));
+      for (let i = 0; i < n; i++) {
+        let win = null;
+        try { win = buildProc(winI.src.proc); } catch (e) { console.warn('window', e); }
+        if (!win) break;
+        win.scale.set(ww / n / 2.2, wh / 1.75, 1);
+        win.position.set(-ww / 2 + (i + 0.5) * ww / n, ym, -0.03);
+        shadowAll(win); wg.add(win); made = true;
+      }
+    }
+    if (made) return;
+    fr(ww + 0.08, 0.05, 0, wd.y0); fr(ww + 0.08, 0.05, 0, wd.y1);
+    fr(0.05, wh, -ww / 2, ym); fr(0.05, wh, ww / 2, ym);
+    fr(0.04, wh, 0, ym);
+    const sill = new THREE.Mesh(new THREE.BoxGeometry(ww + 0.2, 0.04, 0.22), frameM);
+    sill.position.set(0, wd.y0 - 0.02, 0.06); sill.castShadow = sill.receiveShadow = true; wg.add(sill);
+    const glass = new THREE.Mesh(new THREE.PlaneGeometry(ww, wh),
+      new THREE.MeshPhysicalMaterial({ color: '#ffffff', roughness: 0.05, transparent: true, opacity: 0.08 }));
+    glass.position.set(0, ym, -0.03); wg.add(glass);
+  }
+
+  // 屋根裏の天井：平らな所と、+x の壁へ下がる斜めの面（天窓つき）
+  makeSlope(g, ceilM) {
+    const sh = this.sh, s = sh.slope, H = sh.h;
+    const add = (parent, w, h, d, x, y, z, mat, fw, fh) => {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), fitMaterial(mat, fw ?? w, fh ?? d));
+      m.position.set(x, y, z); m.castShadow = true; m.receiveShadow = true; parent.add(m); return m;
+    };
+    const flatW = s.start + sh.hw + 0.2;
+    add(g, flatW, WALL_T, sh.d + 0.4, (-sh.hw - 0.2 + s.start) / 2, H + WALL_T / 2, 0, ceilM);
+    const run = sh.hw - s.start, drop = H - s.low;
+    const L = Math.hypot(run, drop) + 0.35;
+    const slab = new THREE.Group();
+    slab.position.set(s.start, H, 0);
+    slab.rotation.z = -Math.atan2(drop, run);
+    g.add(slab);
+    const z0 = -sh.hd - 0.2, z1 = sh.hd + 0.2, T = WALL_T;
+    const k = sh.skylight;
+    if (!k) add(slab, L, T, z1 - z0, L / 2, T / 2, 0, ceilM);
+    else {
+      const uc = k.u * (L - 0.35), u0 = uc - k.len / 2, u1 = uc + k.len / 2, w0 = k.z - k.wid / 2, w1 = k.z + k.wid / 2;
+      add(slab, u0, T, z1 - z0, u0 / 2, T / 2, 0, ceilM);
+      add(slab, L - u1, T, z1 - z0, (u1 + L) / 2, T / 2, 0, ceilM);
+      add(slab, k.len, T, w0 - z0, uc, T / 2, (z0 + w0) / 2, ceilM);
+      add(slab, k.len, T, z1 - w1, uc, T / 2, (w1 + z1) / 2, ceilM);
+      // 天窓の枠とガラス
+      const fm = new THREE.MeshStandardMaterial({ color: '#f0ece4', roughness: 0.5 });
+      add(slab, k.len, T + 0.06, 0.04, uc, T / 2 - 0.03, w0 + 0.02, fm);
+      add(slab, k.len, T + 0.06, 0.04, uc, T / 2 - 0.03, w1 - 0.02, fm);
+      add(slab, 0.04, T + 0.06, k.wid, u0 + 0.02, T / 2 - 0.03, k.z, fm);
+      add(slab, 0.04, T + 0.06, k.wid, u1 - 0.02, T / 2 - 0.03, k.z, fm);
+      const glass = new THREE.Mesh(new THREE.PlaneGeometry(k.len - 0.08, k.wid - 0.08),
+        new THREE.MeshPhysicalMaterial({ color: '#ffffff', roughness: 0.05, transparent: true, opacity: 0.1, depthWrite: false, side: THREE.DoubleSide }));
+      glass.rotation.x = -Math.PI / 2; glass.position.set(uc, T * 0.6, k.z); slab.add(glass);
+    }
   }
 
   makeRays() {
     this.fx.clear();
     const d = this.sunDir;
-    const x0 = WINDOW.x - WINDOW.w / 2, x1 = WINDOW.x + WINDOW.w / 2;
+    const HD = this.sh.hd;
+    const WINDOW = this.sh.windows[0];
+    if (WINDOW.wall !== '-z') { this.dust = null; return; }
+    const x0 = WINDOW.a - WINDOW.w / 2, x1 = WINDOW.a + WINDOW.w / 2;
     const corners = [[x0, WINDOW.y0], [x1, WINDOW.y0], [x1, WINDOW.y1], [x0, WINDOW.y1]].map(([x, y]) => new THREE.Vector3(x, y, -HD));
     const proj = (p) => {
       let t = -p.y / d.y;
@@ -959,9 +1206,12 @@ export class Room3D {
 
   addBareBulb() {
     const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.05, 16, 12), new THREE.MeshStandardMaterial({ emissive: '#ffd9a0', emissiveIntensity: 3, color: '#fff' }));
-    bulb.position.set(0.6, H - 0.45, 0.3);
+    const sh = this.sh;
+    const bx = clamp(sh.cam[0] + 0.4, -sh.hw + 0.5, sh.hw - 0.5), bz = clamp(sh.cam[1] - 0.9, -sh.hd + 0.5, sh.hd - 0.5);
+    const H = ceilAt(sh, bx);
+    bulb.position.set(bx, H - 0.45, bz);
     const cord = new THREE.Mesh(new THREE.CylinderGeometry(0.004, 0.004, 0.4), new THREE.MeshStandardMaterial({ color: '#222' }));
-    cord.position.set(0.6, H - 0.22, 0.3);
+    cord.position.set(bx, H - 0.22, bz);
     const l = new THREE.PointLight('#ffd9a0', 2.5 * this.mood.lampI, 0, 2);
     l.position.copy(bulb.position).y -= 0.08;
     const g = new THREE.Group(); g.add(bulb, cord, l);
@@ -990,60 +1240,68 @@ function recolor(obj, v) {
 
 // --- 家のつくり ---
 // ドア（木目の凹凸を残した塗装の開き戸・枠・レバーハンドル）
+// 壁の内側の面が z=0、部屋の中が +z、ドアの中心が x=0 の向きで作る
 function makeDoor(color) {
   const g = new THREE.Group();
+  const DW = 0.86, DH = 2.05;
   const paint = new THREE.MeshStandardMaterial({ color, roughness: 0.55 });
-  const zIn = HD;
   // 枠
-  const frame = (w, h, x, y) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, WALL_T + 0.04), paint); m.position.set(x, y, zIn + WALL_T / 2); m.castShadow = m.receiveShadow = true; g.add(m); };
-  frame(0.05, DOOR.h + 0.05, DOOR.x - DOOR.w / 2 - 0.02, DOOR.h / 2);
-  frame(0.05, DOOR.h + 0.05, DOOR.x + DOOR.w / 2 + 0.02, DOOR.h / 2);
-  frame(DOOR.w + 0.14, 0.05, DOOR.x, DOOR.h + 0.02);
+  const frame = (w, h, x, y) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, WALL_T + 0.04), paint); m.position.set(x, y, -WALL_T / 2); m.castShadow = m.receiveShadow = true; g.add(m); };
+  frame(0.05, DH + 0.05, DW / 2 + 0.02, DH / 2);
+  frame(0.05, DH + 0.05, -DW / 2 - 0.02, DH / 2);
+  frame(DW + 0.14, 0.05, 0, DH + 0.02);
   // 扉の板（ふちの溝つき）
-  const leaf = new THREE.Mesh(new THREE.BoxGeometry(DOOR.w - 0.02, DOOR.h - 0.02, 0.04), paint);
-  leaf.position.set(DOOR.x, DOOR.h / 2, zIn + 0.03); leaf.castShadow = leaf.receiveShadow = true;
-  leaf.userData.door = true; g.add(leaf);
+  const leaf = new THREE.Mesh(new THREE.BoxGeometry(DW - 0.02, DH - 0.02, 0.04), paint);
+  leaf.position.set(0, DH / 2, -0.03); leaf.castShadow = leaf.receiveShadow = true;
+  g.add(leaf);
   const groove = new THREE.MeshStandardMaterial({ color: new THREE.Color(color).multiplyScalar(0.82), roughness: 0.6 });
-  for (const [w, h, y] of [[DOOR.w - 0.24, 0.9, 1.45], [DOOR.w - 0.24, 0.8, 0.55]]) {
+  for (const [w, h, y] of [[DW - 0.24, 0.9, 1.45], [DW - 0.24, 0.8, 0.55]]) {
     const p = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.006), groove);
-    p.position.set(DOOR.x, y, zIn + 0.008); p.userData.door = true; g.add(p);
+    p.position.set(0, y, -0.008); g.add(p);
     const p2 = new THREE.Mesh(new THREE.BoxGeometry(w - 0.03, h - 0.03, 0.008), paint);
-    p2.position.set(DOOR.x, y, zIn + 0.006); p2.userData.door = true; g.add(p2);
+    p2.position.set(0, y, -0.006); g.add(p2);
   }
   // レバーハンドル
   const metal = new THREE.MeshStandardMaterial({ color: '#b9b6b0', metalness: 1, roughness: 0.25 });
+  const hx = DW / 2 - 0.08;
   const rose = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.028, 0.012, 24), metal);
-  rose.rotation.x = Math.PI / 2; rose.position.set(DOOR.x - DOOR.w / 2 + 0.08, 0.95, zIn + 0.004); g.add(rose);
+  rose.rotation.x = Math.PI / 2; rose.position.set(hx, 0.95, -0.004); g.add(rose);
   const lever = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.018, 0.018), metal);
-  lever.position.set(DOOR.x - DOOR.w / 2 + 0.13, 0.95, zIn - 0.035); lever.castShadow = true; g.add(lever);
+  lever.position.set(hx - 0.05, 0.95, 0.035); lever.castShadow = true; g.add(lever);
   const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.04, 12), metal);
-  neck.rotation.x = Math.PI / 2; neck.position.set(DOOR.x - DOOR.w / 2 + 0.08, 0.95, zIn - 0.018); g.add(neck);
+  neck.rotation.x = Math.PI / 2; neck.position.set(hx, 0.95, 0.018); g.add(neck);
   // ちょうつがい
   for (const y of [0.25, 1.8]) {
     const hg = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.09, 0.012), metal);
-    hg.position.set(DOOR.x + DOOR.w / 2 - 0.005, y, zIn - 0.002); g.add(hg);
+    hg.position.set(-DW / 2 + 0.005, y, 0.002); g.add(hg);
   }
   // 敷居
-  const sill = new THREE.Mesh(new THREE.BoxGeometry(DOOR.w + 0.1, 0.012, WALL_T + 0.04), new THREE.MeshStandardMaterial({ color: '#8b735a', roughness: 0.5 }));
-  sill.position.set(DOOR.x, 0.006, zIn + WALL_T / 2); sill.receiveShadow = true; g.add(sill);
-  g.traverse(o => { if (o.isMesh) o.userData.door = true; });
+  const sill = new THREE.Mesh(new THREE.BoxGeometry(DW + 0.1, 0.012, WALL_T + 0.04), new THREE.MeshStandardMaterial({ color: '#8b735a', roughness: 0.5 }));
+  sill.position.set(0, 0.006, -WALL_T / 2); sill.receiveShadow = true; g.add(sill);
   return g;
 }
 
 // スイッチ・コンセント・エアコン・天井の縁（廻り縁）
-function makeFixtures(trimColor) {
+function makeFixtures(sh, trimColor) {
   const g = new THREE.Group();
+  const H = sh.h;
   const white = new THREE.MeshStandardMaterial({ color: '#f4f2ee', roughness: 0.35 });
   const grey = new THREE.MeshStandardMaterial({ color: '#d9d6d0', roughness: 0.4 });
   const dark = new THREE.MeshStandardMaterial({ color: '#2a2a2a', roughness: 0.6 });
-  // 壁に付ける小物：wall = 'x-' / 'x+' / 'z-' / 'z+'
+  // 壁に付ける小物（壁の id と、壁にそった位置）
   const onWall = (mesh, wall, a, y) => {
+    const seg = segOf(sh, wall);
+    if (!seg) return null;
     const o = new THREE.Group(); o.add(mesh);
-    if (wall === 'z+') { o.position.set(a, y, HD); o.rotation.y = Math.PI; }
-    if (wall === 'z-') { o.position.set(a, y, -HD); }
-    if (wall === 'x-') { o.position.set(-HW, y, a); o.rotation.y = Math.PI / 2; }
-    if (wall === 'x+') { o.position.set(HW, y, a); o.rotation.y = -Math.PI / 2; }
+    putOnWall(o, seg, a, y);
     g.add(o); return o;
+  };
+  // 開口や備え付けの物と重ならないか
+  const free = (wall, a, y) => {
+    const seg = segOf(sh, wall);
+    if (!seg || a < seg.a0 + 0.15 || a > seg.a1 - 0.15) return false;
+    if (openingsOn(sh, wall).some(o => Math.abs(o.a - a) < o.w / 2 + 0.15 && y > o.y0 - 0.15 && y < o.y1 + 0.15)) return false;
+    return !sh.built.some(b => b.wall === wall && (b.a0 !== undefined ? a > b.a0 - 0.2 && a < b.a0 + b.len + 0.2 : Math.abs((b.a ?? 0) - a) < 0.8));
   };
   // 照明スイッチ（ドアの横）
   const sw = new THREE.Group();
@@ -1051,7 +1309,10 @@ function makeFixtures(trimColor) {
   for (const y of [0.022, -0.022]) {
     const r = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.035, 0.01), grey); r.position.set(0, y, 0.01); r.rotation.x = y > 0 ? 0.08 : -0.08; sw.add(r);
   }
-  onWall(sw, 'z+', DOOR.x - DOOR.w / 2 - 0.22, 1.2);
+  const D = sh.door;
+  const swA = free(D.wall, D.a - D.w / 2 - 0.22, 1.2) ? D.a - D.w / 2 - 0.22 : D.a + D.w / 2 + 0.22;
+  onWall(sw, D.wall, swA, 1.2);
+  if (sh.plain) return g;
   // コンセント
   const outlet = () => {
     const o = new THREE.Group();
@@ -1061,30 +1322,47 @@ function makeFixtures(trimColor) {
     }
     return o;
   };
-  onWall(outlet(), 'z+', -1.6, 0.25);
-  onWall(outlet(), 'x-', -1.4, 0.25);
-  onWall(outlet(), 'x+', 1.6, 0.25);
-  onWall(outlet(), 'z-', 1.0, 0.25);
-  // エアコン（左の壁の上）
-  const ac = new THREE.Group();
-  const body = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.28, 0.22), white); body.position.z = 0.11; body.castShadow = true; ac.add(body);
-  const front = new THREE.Mesh(new THREE.BoxGeometry(0.78, 0.2, 0.01), new THREE.MeshStandardMaterial({ color: '#fbfaf8', roughness: 0.2 }));
-  front.position.set(0, 0.03, 0.222); ac.add(front);
-  const vent = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.04, 0.02), new THREE.MeshStandardMaterial({ color: '#c9c6c0', roughness: 0.5 }));
-  vent.position.set(0, -0.115, 0.2); vent.rotation.x = 0.4; ac.add(vent);
-  const led = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.006, 0.004), new THREE.MeshStandardMaterial({ color: '#000', emissive: '#58e07a', emissiveIntensity: 1.5 }));
-  led.position.set(0.3, -0.07, 0.228); ac.add(led);
-  onWall(ac, 'x-', -1.0, 2.45);
-  // エアコンの配管カバー
-  const pipe = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.06, 0.05), white);
-  pipe.position.set(-HW + 0.03, 2.4, -1.47); g.add(pipe);
-  // 天井の縁（廻り縁）
+  let outs = sh.outlets;
+  if (!outs) {
+    outs = [];
+    for (const id of ['+z', '-x', '+x', '-z']) {
+      const seg = segOf(sh, id);
+      const a = [0.3, 0.7, 0.5].map(f => seg.a0 + (seg.a1 - seg.a0) * f).find(a => free(id, a, 0.25));
+      if (a !== undefined) outs.push([id, a]);
+    }
+  }
+  for (const [w, a] of outs) onWall(outlet(), w, a, 0.25);
+  // エアコン
+  if (sh.ac && segOf(sh, sh.ac.wall)) {
+    const ac = new THREE.Group();
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.28, 0.22), white); body.position.z = 0.11; body.castShadow = true; ac.add(body);
+    const front = new THREE.Mesh(new THREE.BoxGeometry(0.78, 0.2, 0.01), new THREE.MeshStandardMaterial({ color: '#fbfaf8', roughness: 0.2 }));
+    front.position.set(0, 0.03, 0.222); ac.add(front);
+    const vent = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.04, 0.02), new THREE.MeshStandardMaterial({ color: '#c9c6c0', roughness: 0.5 }));
+    vent.position.set(0, -0.115, 0.2); vent.rotation.x = 0.4; ac.add(vent);
+    const led = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.006, 0.004), new THREE.MeshStandardMaterial({ color: '#000', emissive: '#58e07a', emissiveIntensity: 1.5 }));
+    led.position.set(0.3, -0.07, 0.228); ac.add(led);
+    const acY = H - 0.35;
+    onWall(ac, sh.ac.wall, sh.ac.a, acY);
+    // エアコンの配管カバー
+    const pipe = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.06, 0.07), white);
+    putOnWall(pipe, segOf(sh, sh.ac.wall), sh.ac.a - 0.47, acY - 0.05, 0.03); g.add(pipe);
+  }
+  // 天井の縁（廻り縁）。斜めの天井の下は、平らな所だけ
   const trim = new THREE.MeshStandardMaterial({ color: trimColor, roughness: 0.6 });
-  const t = (w, d, x, z) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, 0.035, d), trim); m.position.set(x, H - 0.018, z); g.add(m); };
-  t(ROOM.w, 0.02, 0, -HD + 0.01); t(ROOM.w, 0.02, 0, HD - 0.01); t(0.02, ROOM.d, -HW + 0.01, 0); t(0.02, ROOM.d, HW - 0.01, 0);
+  for (const seg of sh.walls) {
+    let a0 = seg.a0, a1 = seg.a1, y = H;
+    if (sh.slope) {
+      if (seg.axis === 'x') y = ceilAt(sh, seg.c);
+      else { a1 = Math.min(a1, sh.slope.start); if (a1 - a0 < 0.1) continue; }
+    }
+    const m = new THREE.Mesh(new THREE.BoxGeometry(seg.axis === 'z' ? a1 - a0 : 0.02, 0.035, seg.axis === 'z' ? 0.02 : a1 - a0), trim);
+    m.position.copy(segPoint(seg, (a0 + a1) / 2, y - 0.018, 0.01)); g.add(m);
+  }
   // 火災報知器
   const smoke = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.065, 0.035, 32), white);
-  smoke.position.set(-0.8, H - 0.018, 0.9); g.add(smoke);
+  const sx = clamp(sh.cam[0] - 1.0, -sh.hw + 0.4, sh.hw - 0.4), sz = clamp(sh.cam[1] - 0.3, -sh.hd + 0.4, sh.hd - 0.4);
+  smoke.position.set(sx, ceilAt(sh, sx) - 0.018, sz); g.add(smoke);
   return g;
 }
 
@@ -1105,7 +1383,8 @@ function makeFrame(v) {
   return g;
 }
 
-function makeCurtain(v) {
+// 窓 win の前のカーテン（壁の内側の面が z=0、窓の中心が x=0）
+function makeCurtain(v, WINDOW) {
   const g = new THREE.Group();
   const top = WINDOW.y1 + 0.18, bottom = 0.06;
   const mat = new THREE.MeshStandardMaterial({
@@ -1122,16 +1401,16 @@ function makeCurtain(v) {
     }
     geo.computeVertexNormals();
     const m = new THREE.Mesh(geo, mat);
-    m.position.set(cx, (top + bottom) / 2, -HD + 0.14);
+    m.position.set(cx, (top + bottom) / 2, 0.14);
     m.castShadow = v.opacity >= 0.9; m.receiveShadow = true;
     g.add(m);
   };
-  const x0 = WINDOW.x - WINDOW.w / 2, x1 = WINDOW.x + WINDOW.w / 2;
+  const x0 = -WINDOW.w / 2, x1 = WINDOW.w / 2;
   panel(x0 + 0.05, 0.6, 7);
   panel(x1 - 0.05, 0.6, 7);
-  if (v.opacity < 0.7) panel(WINDOW.x, WINDOW.w * 0.9, 16); // レースは窓全体に
+  if (v.opacity < 0.7) panel(0, WINDOW.w * 0.9, 16); // レースは窓全体に
   const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, WINDOW.w + 0.6), new THREE.MeshStandardMaterial({ color: '#3a3330', metalness: 0.6, roughness: 0.4 }));
-  rod.rotation.z = Math.PI / 2; rod.position.set(WINDOW.x, top + 0.01, -HD + 0.14);
+  rod.rotation.z = Math.PI / 2; rod.position.set(0, top + 0.01, 0.14);
   g.add(rod);
   return g;
 }

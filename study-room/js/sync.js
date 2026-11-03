@@ -69,3 +69,13 @@ S.setSaveHook(schedule);
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden' && dirty) push(true); });
 window.addEventListener('pagehide', () => { if (dirty) push(true); });
 window.addEventListener('online', () => { if (dirty) push(); });
+
+// ほかの端末でログインされたら、この端末はログアウトする（1分ごと・画面に戻ったときに確かめる）
+async function ping() {
+  const u = Auth.currentUser();
+  if (!u || document.visibilityState !== 'visible') return;
+  try { await rpc('sr_ping', { p_token: u.token }); }
+  catch (e) { if (e.code === 'bad_token') onExpired && onExpired('other'); }
+}
+setInterval(ping, 60e3);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') ping(); });

@@ -1,3 +1,4 @@
+import { addToPool, gachaById } from './gacha.js';
 // 家具リスト（ショップ・図鑑・部屋づくりで使う）。
 // 仕組みは docs/ITEMS-API.md を参照。
 // src の種類：
@@ -452,6 +453,9 @@ add('interior', { place: 'surface', surface: 'wall' }, [
   ['wall-green-planks', '緑の古い板壁', 'r', { tex: 'green_rough_planks', rep: 1.2 }, 6],
   ['wall-cedar', '杉板の壁', 'n', { tex: 'japanese_cedar_planks', rep: 1.2 }, 6],
   ['wall-clay-plaster', '土の塗り壁', 'n', { tex: 'patterned_clay_plaster', rep: 1.5 }, 6],
+  ['wall-white-tile', '白いタイルの壁', 'mn', { tex: 'long_white_tiles', rep: 1.2 }, 6],
+  ['wall-stone', '石積みの壁', 'ni', { tex: 'japanese_stone_wall', rep: 2 }, 6],
+  ['wall-juraku', 'じゅらく壁（和室の土壁）', 'n', { color: '#d6c39b' }, 6],
 ]);
 add('interior', { place: 'surface', surface: 'floor' }, [
   ['floor-oak', '明るいオークの床', 'n', { tex: 'oak_wood_planks', rep: 3 }, 6],
@@ -484,6 +488,7 @@ add('interior', { place: 'surface', surface: 'floor' }, [
   ['floor-deep-wood', '深い色のフローリング', 'rm', { tex: 'wood_floor', rep: 3 }, 6],
   ['floor-brick', 'レンガ敷きの床', 'ir', { tex: 'brick_floor', rep: 3 }, 6],
   ['floor-sand-tiles', 'ベージュの石タイルの床', 'n', { tex: 'floor_tiles_02', rep: 3 }, 6],
+  ['floor-mosaic-tile', 'モザイクタイルの床', 'rm', { tex: 'square_tiles', rep: 1.5 }, 6],
 ]);
 
 // ───────── ドア・窓 ─────────
@@ -602,8 +607,10 @@ export const STARTER = {
 };
 
 const BY_ID = new Map(ITEMS.map((it) => [it.id, it]));
+// 「レア」の家具はガチャでだけ出る（★3）。ガチャ専用の家具も itemById で引けるようにする
+addToPool(ITEMS.filter((it) => it.rare && !it.special), 3);
 export function itemById(id) {
-  return BY_ID.get(id) || null;
+  return BY_ID.get(id) || gachaById(id) || null;
 }
 export function itemsOf(genre) {
   return ITEMS.filter((it) => it.genre === genre);

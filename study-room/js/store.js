@@ -2,7 +2,8 @@
 let KEY = null;
 const DAY_START_HOUR = 6; // 1日の区切りは朝6時
 export const REVIEW_GAPS = [1, 3, 7]; // 正解するごとに 1日後 → 3日後 → 7日後
-export const SET_SIZE = 5;
+export const SET_SIZE = 1; // 1問ずつ（手軽さ重視）
+export const BONUS_PER_DAY = 5; // その日の最初の5問はゲージ1.5倍
 
 function blank() {
   return {
@@ -114,6 +115,13 @@ export function dayKey(d = new Date()) {
   const t = new Date(d.getTime() - DAY_START_HOUR * 3600e3);
   return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
 }
+// その週の月曜日（朝6時区切りの日付で）を返す
+export function weekKey(d = new Date()) {
+  const [y, m, dd] = dayKey(d).split('-').map(Number);
+  const t = new Date(y, m - 1, dd);
+  const back = (t.getDay() + 6) % 7; // 月曜=0
+  return addDays(dayKey(d), -back);
+}
 function addDays(key, n) {
   const [y, m, d] = key.split('-').map(Number);
   const t = new Date(y, m - 1, d + n);
@@ -137,6 +145,9 @@ export function currentStreak() {
   return 0;
 }
 export function playedToday() { return state.streak.last === dayKey(); }
+// 今日解いた数（ゲージ1.5倍は最初の5問）
+export function solvedToday() { const t = state.today; return t && t.day === dayKey() ? t.n : 0; }
+function countToday() { const d = dayKey(); if (!state.today || state.today.day !== d) state.today = { day: d, n: 0 }; state.today.n++; }
 
 // --- 復習 ---
 export function reviewDue(sub, problems) {
@@ -196,11 +207,35 @@ export function recordResult(sub, id, perfect, wasReview) {
 export const XP = { perfect: 12, ok: 8, wrong: 4 };
 // ランク L から L+1 に必要な経験値（だんだん増える）
 export function xpToNext(rank) { return 30 + (rank - 1) * 20; }
+export const MAX_RANK = 100; // いったん Lv100 で頭打ち
 export function rankInfo(xp = state.profile?.xp || 0) {
   let rank = 1, rest = xp;
-  while (rest >= xpToNext(rank)) { rest -= xpToNext(rank); rank++; }
+  while (rank < MAX_RANK && rest >= xpToNext(rank)) { rest -= xpToNext(rank); rank++; }
+  if (rank >= MAX_RANK) return { rank: MAX_RANK, into: xpToNext(MAX_RANK), need: xpToNext(MAX_RANK), xp, max: true };
   return { rank, into: rest, need: xpToNext(rank), xp };
 }
+// Lv が上がったときのごほうび：毎回レアチケット、5ごとに★4以上確定、50と100で★5限定チケット
+export function rankRewards(L) {
+  const r = { ticket: 1, ticket4: 0, ticket5: 0 };
+  if (L % 5 === 0) r.ticket4 = 1;
+  if (L === 50 || L === 100) r.ticket5 = 1;
+  return r;
+}
+function giveRankRewards(from, to) {
+  const h = house();
+  const sum = { ticket: 0, ticket4: 0, ticket5: 0 };
+  for (let L = from + 1; L <= to; L++) {
+    const r = rankRewards(L);
+    sum.ticket += r.ticket; sum.ticket4 += r.ticket4; sum.ticket5 += r.ticket5;
+  }
+  h.rareTickets = (h.rareTickets || 0) + sum.ticket;
+  h.rareTickets4 = (h.rareTickets4 || 0) + sum.ticket4;
+  h.rareTickets5 = (h.rareTickets5 || 0) + sum.ticket5;
+  return sum;
+}
+// ランク L のちょうど始まりの経験値（管理者がレベルを変えるときに使う）
+export function xpAtRank(L) { let x = 0; for (let r = 1; r < L; r++) x += xpToNext(r); return x; }
+export function setRank(L) { const p = profile(); p.xp = xpAtRank(Math.max(1, Math.min(MAX_RANK, L))); } // 管理者のためし用（ごほうびは出さない）
 // 1つの部屋に置ける家具の数
 export function capacity(rank = rankInfo().rank) { return 6 + (rank - 1) * 2; }
 // 1問の結果を記録（分野ごとの数・経験値）。戻り値 { gained, rankUp, rank }
@@ -210,22 +245,55 @@ export function addAnswer(sub, unit, kind) {
   const gained = XP[kind] || 0;
   p.xp += gained;
   p.solved += 1;
+  countToday();
   if (kind !== 'wrong') p.correct += 1;
   if (kind === 'perfect') p.perfect += 1;
   const u = (sub.units || (sub.units = {}))[unit] || (sub.units[unit] = { solved: 0, correct: 0, perfect: 0 });
   u.solved += 1;
   if (kind !== 'wrong') u.correct += 1;
   if (kind === 'perfect') u.perfect += 1;
+  // 週ごとの解いた数（ランキング用。月曜の朝6時で区切る）
+  const wk = weekKey();
+  if (!p.week || p.week.key !== wk) p.week = { key: wk, solved: 0, correct: 0 };
+  p.week.solved += 1;
+  if (kind !== 'wrong') p.week.correct += 1;
   const after = rankInfo(p.xp).rank;
-  return { gained, rankUp: after > before, rank: after };
+  const rewards = after > before ? giveRankRewards(before, after) : null;
+  return { gained, rankUp: after > before, rank: after, rewards };
 }
 export function profile() { return state.profile || (state.profile = blankProfile()); }
 
+// --- ログインボーナス（30日で1周。5日ごとにレアチケット、30日目は★4以上確定チケット） ---
+export function loginBonusDay(n) {
+  if (n === 30) return { kind: 'ticket4', label: '★4以上確定チケット' };
+  if (n % 5 === 0) return { kind: 'ticket', label: 'レアチケット' };
+  return { kind: 'gauge', amount: 8, label: 'ゲージ +8' };
+}
+// 今日まだもらっていなければもらう。戻り値 { day, reward } か null
+export function claimLoginBonus() {
+  const lb = state.loginBonus || (state.loginBonus = { count: 0, last: null });
+  const today = dayKey();
+  if (lb.last === today) return null;
+  lb.count = (lb.count % 30) + 1;
+  lb.last = today;
+  const reward = loginBonusDay(lb.count);
+  const h = house();
+  if (reward.kind === 'ticket') h.rareTickets = (h.rareTickets || 0) + 1;
+  if (reward.kind === 'ticket4') h.rareTickets4 = (h.rareTickets4 || 0) + 1;
+  if (reward.kind === 'gauge') h.gauge += reward.amount;
+  return { day: lb.count, reward };
+}
+
 // --- 持ち物・配置 ---
 export function own(itemId, n = 1) {
-  const inv = house().inventory;
-  inv[itemId] = (inv[itemId] || 0) + n;
+  const h = house();
+  h.inventory[itemId] = (h.inventory[itemId] || 0) + n;
+  // 図鑑：一度でも手に入れた物の記録（持ち物の数とは別に残す）
+  const c = h.collected || (h.collected = {});
+  if (!c[itemId]) c[itemId] = Date.now();
 }
+// 図鑑に載っているか（前の版の持ち物も、持っていれば載せる）
+export function collected(itemId) { const h = house(); return !!(h.collected?.[itemId] || h.inventory[itemId]); }
 export function owned(itemId) { return house().inventory[itemId] || 0; }
 // 部屋に置いている数（持ち物の個数より多くは置けない）
 export function placedCount(itemId) {
