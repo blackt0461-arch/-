@@ -100,7 +100,7 @@ const BUILD = {
     box(g, 0.32, 0.06, 0.07, ch, 0.22, 0.82, 0.035);
     for (const x of [0.1, 0.34]) { const k = cyl(g, 0.025, 0.025, 0.05, ch, x, 0.82, 0.07, 14); k.rotation.x = Math.PI / 2; }
     // 鏡
-    const mirror = new THREE.Mesh(new THREE.PlaneGeometry(0.42, 0.62), std({ color: '#dfe6ea', roughness: 0.02, metalness: 1 }));
+    const mirror = new THREE.Mesh(new THREE.PlaneGeometry(0.42, 0.62), std({ color: '#f2f6f8', roughness: 0.14, metalness: 0.75, emissive: '#5e666a', emissiveIntensity: 0.35 }));
     mirror.position.set(-0.42, 1.38, 0.006); g.add(mirror);
     // 棚とボトル
     box(g, 0.42, 0.02, 0.12, std({ color: '#f2f2f2', roughness: 0.3 }), -0.42, 0.98, 0.06);
@@ -198,7 +198,7 @@ const BUILD = {
     tube(g, [[0, 1.0, 0.1], [0, 1.03, 0.16], [0, 0.98, 0.22]], 0.011, ch);
     // 鏡の収納
     box(g, 0.9, 0.72, 0.13, front, 0, 1.62, 0.065);
-    const mir = new THREE.Mesh(new THREE.PlaneGeometry(0.86, 0.68), std({ color: '#e4ebee', roughness: 0.02, metalness: 1 }));
+    const mir = new THREE.Mesh(new THREE.PlaneGeometry(0.86, 0.68), std({ color: '#f2f6f8', roughness: 0.14, metalness: 0.75, emissive: '#5e666a', emissiveIntensity: 0.35 }));
     mir.position.set(0, 1.62, 0.131); g.add(mir);
     const lamp = box(g, 0.8, 0.05, 0.08, std({ color: '#fff', emissive: '#fff4de', emissiveIntensity: 1.2 }), 0, 2.02, 0.07);
     lamp.castShadow = false;
