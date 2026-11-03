@@ -7,6 +7,8 @@ const TABS = [['party', 'パーティ'], ['enemy', 'てき'], ['mem', 'メモリ
 const STAT_KEYS = ['HP', 'こうげき力', 'こうげき魔力', 'かいふく魔力', 'しゅび力', '呪文しゅび力', 'きようさ'];
 const EQTABS = [['w', '武器'], ['盾', '盾'], ['頭防具', '頭'], ['上防具', '上'], ['下防具', '下'], ['c', 'アクセ']];
 const ALL_SKILLS = [...new Set(Object.values(ITEMS).flatMap(it => (it.kind === 'm' ? it.effs : [...it.lv.map(x => x[1]), ...it.totu.map(x => x[1]), ...(it.perf || [])]).filter(e => e.k === 'skill').map(e => e.skill)))].sort((a, b) => a.localeCompare(b, 'ja'));
+// アイコン（GameWith の画像。見えている分だけ読む）
+const ico = (it, size = 40, cls = '') => it && it.img ? `<img class="ico ${cls}" src="${esc(it.img)}" alt="" width="${size}" height="${size}" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="this.style.visibility='hidden'">` : `<span class="ico ico-none" style="width:${size}px;height:${size}px"></span>`;
 const byName = n => Object.values(ITEMS).find(it => it.n === n);
 
 function defaults() {
@@ -150,7 +152,7 @@ function vMem() {
     <span class="sub">もってない ${nOff} / ${MEMS.length}</span></div>
     <div class="row" style="margin-top:8px"><button class="chip ${!S.memColor ? 'on' : ''}" data-act="mcol" data-c="">ぜんぶ</button>${['赤', '青', '黄', '緑', '紫'].map(c => `<button class="chip ${S.memColor === c ? 'on' : ''}" data-act="mcol" data-c="${c}"><span class="cdot c-${c}"></span> ${c}</button>`).join('')}</div></div>
   <div class="tiles">${list.map(m => `<div class="tile ${S.memNo[m.id] ? 'off' : ''} ${S.memPin[m.id] ? 'pin' : ''}" role="button" tabindex="0" data-act="memtog" data-id="${m.id}" aria-pressed="${!S.memNo[m.id]}">
-      <span class="cdot c-${m.c}"></span><span class="nm">${esc(m.n)}</span>
+      <span class="icow">${ico(m, 44)}<span class="cdot c-${m.c} icodot"></span></span><span class="nm">${esc(m.n)}</span>
       <button class="rk" data-act="memsheet" data-id="${m.id}" aria-label="${esc(m.n)}の くわしく">${S.memRank[m.id] || 'S'}</button>
       <span class="ct">コスト${m.ct}${S.memPin[m.id] ? '　★かならず' : ''}</span></div>`).join('')}</div>`;
 }
@@ -158,7 +160,7 @@ function memSheet(id) {
   const m = ITEMS[id];
   const sh = $('#sheet');
   sh.innerHTML = `<div class="win"><span class="tag">メモリ</span>
-    <div class="row" style="justify-content:space-between;margin-top:6px"><h2 style="margin:0"><span class="cdot c-${m.c}"></span> ${esc(m.n)}</h2><button class="btn" data-act="close">とじる</button></div>
+    <div class="row" style="justify-content:space-between;margin-top:6px"><h2 style="margin:0;display:flex;gap:10px;align-items:center">${ico(m, 64)}<span><span class="cdot c-${m.c}"></span> ${esc(m.n)}</span></h2><button class="btn" data-act="close">とじる</button></div>
     <div class="sub">${esc(m.f || '')}　コスト${m.ct}　${esc(m.r)}</div>
     <div class="calc" style="margin:8px 0">${STAT_KEYS.map((k, i) => `<span>${k}</span><span>${Math.round(m.st[i] * (RANKF[S.memRank[id] || 'S']))}</span>`).join('')}</div>
     <div class="eff">${m.effs.map(e => esc(e.text)).join('<br>')}</div>
@@ -190,7 +192,7 @@ function vEq() {
     const s = S.eq[it.id] || { n: 0, lv: 1, t: 0 };
     const st = eqStats(it, s.lv, s.t).st;
     const stat = it.kind === 'w' ? [st[1] ? 'こうげき' + st[1] : '', st[2] ? 'まりょく' + st[2] : ''].filter(Boolean).join(' ') : it.kind === 'a' ? `しゅび${st[4]} じゅもん${st[5]}` : '';
-    return `<div class="eqrow"><div class="eqtop"><div class="nm"><div>${'★'.repeat(it.rar || 0)} ${esc(it.n)}</div><div class="sub">${esc(it.kind === 'w' ? it.t + '・' + (it.el || '無') + 'ぞくせい' : it.t)}　${stat}</div></div>
+    return `<div class="eqrow"><div class="eqtop">${ico(it, 48)}<div class="nm" style="flex:1"><div>${'★'.repeat(it.rar || 0)} ${esc(it.n)}</div><div class="sub">${esc(it.kind === 'w' ? it.t + '・' + (it.el || '無') + 'ぞくせい' : it.t)}　${stat}</div></div>
       <div class="stepper"><button data-act="eqn" data-id="${it.id}" data-d="-1" aria-label="へらす">－</button><output>${s.n}</output><button data-act="eqn" data-id="${it.id}" data-d="1" aria-label="ふやす">＋</button></div></div>
       ${s.n > 0 ? `<div class="eqmore">${it.maxLv > 1 ? `<label>Lv <input id="lv_${it.id}" type="number" inputmode="numeric" min="1" max="99" value="${s.lv || 1}" data-act="eqlv" data-id="${it.id}"></label><label>凸 <input id="tt_${it.id}" type="number" inputmode="numeric" min="0" max="5" value="${s.t || 0}" data-act="eqt" data-id="${it.id}"></label>` : ''}<button class="chip ${s.pin ? 'on' : ''}" data-act="eqpin" data-id="${it.id}">★ メインに かならず使う</button></div>` : ''}
       <div class="eff">${esc(eqEffText(it))}</div></div>`;
@@ -206,14 +208,14 @@ function itemLine(k, x) {
   if (!x) return `<div class="line"><span class="k">${k}</span><span class="v sub">なし</span></div>`;
   const s = S.eq[x.it.id] || {};
   const lv = x.it.maxLv > 1 ? ` <span class="sub">Lv${s.lv || 1}${s.t ? ' ' + s.t + '凸' : ''}</span>` : '';
-  return `<div class="line"><span class="k">${k}</span><span class="v">${esc(x.it.n)}${lv}</span></div>`;
+  return `<div class="line"><span class="k">${k}</span><span class="v vi">${ico(x.it, 32)}<span>${esc(x.it.n)}${lv}</span></span></div>`;
 }
 function loadout(r, p) {
   const eqs = [['武器', r.W], ...PARTS.map(pt => [pt.replace('防具', ''), r.eq[pt]]), ...Array.from({ length: ACC_SLOTS }, (_, i) => ['アクセ', r.eq['c' + i]])];
   return `<div class="lines">${eqs.map(([k, x]) => itemLine(k, x)).join('')}</div>
     <h2 style="margin-top:12px">メモリ <span class="sub">コスト ${r.cost} / ${p.cap}</span></h2>
     <div class="lines">${r.slots.map((c, j) => { const x = r.mem[j]; return `<div class="memslot">${c === '虹' ? '<span class="cdot c-虹"></span>' : [...c].map(y => `<span class="cdot c-${y}"></span>`).join('')}
-      <span>${x ? `${esc(x.m.n)} <span class="sub">${x.rank}・コスト${x.m.ct}</span>` : '<span class="sub">あき</span>'}</span>
+      <span class="vi">${x ? `${ico(x.m, 32)}<span>${esc(x.m.n)} <span class="sub">${x.rank}・コスト${x.m.ct}</span></span>` : '<span class="sub">あき</span>'}</span>
       <span class="sub">${x && x.matched ? '色いっち' : ''}</span></div>`; }).join('')}</div>`;
 }
 function statsLine(V) { return `<div class="calc" style="margin-top:10px">${STAT_KEYS.map((k, i) => `<span>${k}</span><span>＋${fmt(V[i])}</span>`).join('')}</div>`; }

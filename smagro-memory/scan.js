@@ -139,7 +139,7 @@ const Scan = (() => {
   function confirmView() {
     const { kind, results, unmatched } = pending;
     const isMem = kind === 'mem';
-    const rows = results.sort((a, b) => a.it.n.localeCompare(b.it.n, 'ja')).map(r => `<div class="line"><span class="k">${isMem ? (r.rank || 'S') : '×' + r.n}</span><span class="v">${esc(r.it.n)}${!isMem && r.lv ? ` <span class="sub">Lv${r.lv}${r.t ? ' ' + r.t + '凸' : ''}</span>` : ''}</span></div>`).join('');
+    const rows = results.sort((a, b) => a.it.n.localeCompare(b.it.n, 'ja')).map(r => `<div class="line"><span class="k">${isMem ? (r.rank || 'S') : '×' + r.n}</span><span class="v vi">${ico(r.it, 28)}<span>${esc(r.it.n)}</span>${!isMem && r.lv ? ` <span class="sub">Lv${r.lv}${r.t ? ' ' + r.t + '凸' : ''}</span>` : ''}</span></div>`).join('');
     sheet(`<div class="row" style="justify-content:space-between;margin-top:6px"><h2 style="margin:0">${results.length}こ よみとれました</h2><button class="btn" data-act="close">やめる</button></div>
       <div class="lines" style="margin:8px 0;max-height:34vh;overflow:auto">${rows || '<div class="note">見つかりませんでした</div>'}</div>
       ${unmatched.length ? `<div class="note">わからなかった 名前：${unmatched.map(esc).join('、')}</div>` : ''}

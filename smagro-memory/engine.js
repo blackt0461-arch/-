@@ -44,12 +44,12 @@ function initData(D) {
   FAMS = D.fam.map(q);
   JOBS = D.jobs;
   for (const m of D.mem) {
-    const it = { kind: 'm', id: 'm' + m.id, n: m.n, c: m.c, ct: m.ct, f: q(m.f), r: m.r, st: m.st, effs: m.e.filter(Boolean).map(parseEff), get: m.get };
+    const it = { kind: 'm', id: 'm' + m.id, n: m.n, c: m.c, ct: m.ct, f: q(m.f), r: m.r, img: m.img || '', st: m.st, effs: m.e.filter(Boolean).map(parseEff), get: m.get };
     ITEMS[it.id] = it; MEMS.push(it);
   }
   for (const e of D.equip) {
     const kind = e.cat;
-    const it = { kind, id: e.id, n: e.n, t: kind === 'w' ? e.t : (kind === 'c' ? 'アクセ' : e.t), el: e.el || '', rar: e.rar, get: e.get || '' };
+    const it = { kind, id: e.id, n: e.n, t: kind === 'w' ? e.t : (kind === 'c' ? 'アクセ' : e.t), el: e.el || '', rar: e.rar, img: e.img || '', get: e.get || '' };
     it.maxLv = kind === 'w' ? 50 : (kind === 'a' ? 25 : 1);
     const sm = e.stat || {};
     const pick = k => sm[k] || [0, 0];
