@@ -13,11 +13,11 @@ function defaults() {
   const ex = {};
   for (const n of ['ロトのつるぎ', 'はやぶさの剣', 'りゅうおうの杖', 'メタスラの盾', 'ロトの盾', 'メタスラヘルム', 'メタスラよろい下', '炎のイヤリング', 'インテリのうでわ']) { const it = byName(n); if (it) ex[it.id] = { n: 1, lv: 1, t: 0 }; }
   return {
-    v: 1, example: true, tab: 'result', eqTab: 'w', memColor: '', memQ: '', eqQ: '', eqOwned: false,
+    v: 2, example: true, tab: 'result', eqTab: 'w', memColor: '', memQ: '', eqQ: '', eqOwned: false,
     party: [
-      { job: '戦士', cap: 185, base: { atk: 150, matk: 150 }, w: [0, 1, 0, 0, 0, 0, 0] },
-      { job: '僧侶', cap: 150, base: { atk: 100, matk: 100 }, w: [0, 0, 0, 1, 0, 0, 0] },
-      { job: '魔法使い', cap: 150, base: { atk: 100, matk: 100 }, w: [0, 0, 1, 0, 0, 0, 0] }
+      { job: '戦士', cap: 185, base: { atk: 150, matk: 150 }, w: [0, 1, 1, 0, 0, 0, 0] },
+      { job: '僧侶', cap: 150, base: { atk: 100, matk: 100 }, w: [0, 1, 1, 0, 0, 0, 0] },
+      { job: '魔法使い', cap: 150, base: { atk: 100, matk: 100 }, w: [0, 1, 1, 0, 0, 0, 0] }
     ],
     main: 0, fixW: '', need: [],
     enemy: { mode: 'boss', boss: (BOSSES.find(b => b.boss === 'スライムナイト') || BOSSES[0] || {}).n || '', fam: 'スライム系', weak: {} },
@@ -26,6 +26,12 @@ function defaults() {
 }
 let S = defaults();
 try { const raw = localStorage.getItem(KEY); if (raw) S = Object.assign(defaults(), JSON.parse(raw)); } catch (e) { }
+// 1人目を いつも メインにする（前の保存で ちがう人が メインだったら 先頭へ）
+if (S.main && S.party[S.main]) { const m = S.party.splice(S.main, 1)[0]; S.party.unshift(m); }
+S.main = 0;
+// v2: サブは「こうげき力＋こうげき魔力」を たいせつにするのが 初期設定
+if (!(S.v >= 2)) { for (const p of S.party) p.w = [0, 1, 1, 0, 0, 0, 0]; S.v = 2; }
+for (const p of S.party) { p.base = p.base || { atk: 100, matk: 100 }; p.w = p.w || [0, 0, 0, 0, 0, 0, 0]; }
 let lastResult = null;
 function save() {
   try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { }
@@ -93,12 +99,12 @@ function slotDots(job) { const j = JOBS.find(x => x.n === job); return j ? `<spa
 
 function vParty() {
   return `<div class="win"><span class="tag">パーティ</span>
-    <div class="note" style="margin-top:4px">★の人の 火力が いちばん高くなるように えらびます。ほかの2人は、チェックした のうりょくが 高くなるように、のこりから えらびます。</div></div>` +
+    <div class="note" style="margin-top:4px">1人目（★メイン）の 火力が いちばん高くなるように えらびます。2人目・3人目（サブ）は、のこりの そうびと メモリで、チェックした のうりょく（はじめは こうげき力＋こうげき魔力）の 合計が 高くなるように えらびます。「⇅ メインと入れかえ」で 入れかえられます。</div></div>` +
     S.party.map((p, i) => {
       const main = i === S.main;
       return `<section class="win member"><span class="tag">${i + 1}人め${main ? '　★メイン' : ''}</span>
       <div class="head" style="margin-top:6px"><div class="row">${slotDots(p.job)}</div>
-        ${main ? '<span class="chip on">★ メインで たたかう</span>' : `<button class="chip" data-act="setmain" data-i="${i}">★ メインにする</button>`}</div>
+        ${main ? '<span class="chip on">★ メインで たたかう</span>' : `<button class="chip" data-act="swap" data-i="${i}">⇅ メインと入れかえ</button>`}</div>
       <div class="grid2">
         <label class="f">しょくぎょう<select id="job${i}" data-act="job" data-i="${i}">${JOBS.map(j => `<option ${j.n === p.job ? 'selected' : ''}>${j.n}</option>`).join('')}</select></label>
         <label class="f">コストの じょうげん<input id="cap${i}" type="number" inputmode="numeric" min="0" max="999" value="${esc(p.cap)}" data-act="cap" data-i="${i}"></label>
@@ -138,6 +144,8 @@ function vMem() {
   const nOff = MEMS.filter(m => S.memNo[m.id]).length;
   return `<div class="win"><span class="tag">メモリ</span>
     <div class="note" style="margin-top:6px">ぜんぶ もっている あつかいです。<b style="color:var(--line)">もっていない メモリを タップ</b>して はずしてください。右の ランクを おすと ランクや「かならず使う」を かえられます。</div>
+    <button class="btn big" style="margin-top:8px" data-act="scan" data-k="mem">スクショから よみこむ</button>
+    <div class="note">ゲームの メモリ一覧を スクロールしながら スクショを 何まいか 撮って、まとめて えらんでください。</div>
     <div class="row" style="margin-top:8px"><input id="memq" type="search" placeholder="なまえ・こうかで さがす" value="${esc(S.memQ)}" data-act="memq" style="flex:1 1 180px">
     <span class="sub">もってない ${nOff} / ${MEMS.length}</span></div>
     <div class="row" style="margin-top:8px"><button class="chip ${!S.memColor ? 'on' : ''}" data-act="mcol" data-c="">ぜんぶ</button>${['赤', '青', '黄', '緑', '紫'].map(c => `<button class="chip ${S.memColor === c ? 'on' : ''}" data-act="mcol" data-c="${c}"><span class="cdot c-${c}"></span> ${c}</button>`).join('')}</div></div>
@@ -174,6 +182,8 @@ function vEq() {
   const owned = ownedEq().length;
   return `<div class="win"><span class="tag">そうび</span>
     <div class="note" style="margin-top:6px"><b style="color:var(--line)">もっている そうびの 数</b>を ＋で ふやしてください（いまは ${owned}しゅるい）。強化したものは レベルと 凸を 入れます。入れなければ 強化していない あつかいです。</div>
+    <button class="btn big" style="margin-top:8px" data-act="scan" data-k="eq">スクショから よみこむ</button>
+    <div class="note">ゲームの そうび一覧を スクロールしながら スクショを 何まいか 撮って、まとめて えらんでください。</div>
     <div class="row" style="margin-top:8px">${EQTABS.map(([k, l]) => `<button class="btn ${t === k ? 'on' : ''}" data-act="eqtab" data-t="${k}">${l}</button>`).join('')}</div>
     <div class="row" style="margin-top:8px"><input id="eqq" type="search" placeholder="なまえで さがす" value="${esc(S.eqQ)}" data-act="eqq" style="flex:1 1 160px"><button class="chip ${S.eqOwned ? 'on' : ''}" data-act="eqowned">もってるだけ</button></div></div>
   <div class="win"><span class="tag">${EQTABS.find(x => x[0] === t)[1]}</span><div style="margin-top:4px">${list.map(it => {
@@ -214,7 +224,8 @@ function vResultBody() {
   const typ = r.ctx.type === 'phys' ? '物理' : '呪文';
   const weakLab = r.ctx.weakMul > 1 ? `${r.ctx.el}が ${r.ctx.weakMul >= 1.7 ? '超弱点' : '弱点'}` : r.ctx.weakMul < 1 ? `${r.ctx.el}は 効きにくい` : 'ふつう';
   let html = `<section class="win"><span class="tag">★ ${M.idx + 1}人め ${esc(M.p.job)}</span>
-    <div class="power" style="margin-top:8px"><span class="num">${fmt(pt.total)}</span><span class="sub">火力の めやす（${typ}・${esc(r.ctx.el || '無')}ぞくせい）</span></div>
+    <div class="row" style="justify-content:flex-end;margin-top:6px"><button class="chip" data-act="pip" data-i="0">うかぶメモ</button></div>
+    <div class="power" style="margin-top:4px"><span class="num">${fmt(pt.total)}</span><span class="sub">火力の めやす（${typ}・${esc(r.ctx.el || '無')}ぞくせい）</span></div>
     ${!r.skillOK ? '<div class="banner" style="margin-top:8px">かならず ほしい 冒険スキルを 入れられませんでした。もっている そうびか メモリを 見なおしてください。</div>' : ''}
     <div style="margin-top:10px">${loadout(r, M.p)}</div>
     <h2 style="margin-top:12px">火力の うちわけ</h2>
@@ -228,7 +239,8 @@ function vResultBody() {
   </section>`;
   if (R.alts.length) html += `<section class="win"><span class="tag">べつの あん（武器ちがい）</span><div class="lines" style="margin-top:6px">${R.alts.map((a, i) => `<details class="alt-d"><summary class="alt" style="list-style:none"><span>${esc(a.r.W ? a.r.W.it.n : '武器なし')}</span><span class="altnum">${fmt(a.r.parts.total)} <span class="sub">(${Math.round(a.r.parts.total / pt.total * 100)}%)</span></span></summary><div style="padding:8px 4px">${loadout(a.r, a.p)}</div></details>`).join('')}</div></section>`;
   for (const s of R.subs) html += `<section class="win"><span class="tag">${s.idx + 1}人め ${esc(s.p.job)}</span>
-    <div class="note" style="margin-top:6px">たいせつ：${STAT_KEYS.filter((k, j) => s.p.w[j]).join('・') || '（えらんでいません）'}</div>
+    <div class="row" style="justify-content:flex-end;margin-top:6px"><button class="chip" data-act="pip" data-i="${s.idx}">うかぶメモ</button><button class="chip" data-act="swap" data-i="${s.idx}">⇅ メインと入れかえて けいさん</button></div>
+    <div class="note">たいせつ：${STAT_KEYS.filter((k, j) => s.p.w[j]).join('・') || '（えらんでいません）'}</div>
     <div style="margin-top:8px">${loadout(s.r, s.p)}</div>${statsLine(s.r.V)}</section>`;
   html += `<div class="note">※ 火力は ゲームの 正しい計算式ではなく、くらべるための めやすです。メモリの S以外のランクの数字も めやすです。</div>`;
   return html;
@@ -253,7 +265,7 @@ document.addEventListener('click', ev => {
   const a = b.dataset.act, i = +b.dataset.i;
   if (b.dataset.tab) { S.tab = b.dataset.tab; save(); $('#sheet').hidden = true; render(); window.scrollTo({ top: 0 }); return; }
   switch (a) {
-    case 'setmain': S.main = i; break;
+    case 'swap': { const P = S.party; [P[0], P[i]] = [P[i], P[0]]; S.main = 0; if (S.tab === 'result') window.scrollTo({ top: 0 }); break; }
     case 'w': S.party[i].w[+b.dataset.j] = S.party[i].w[+b.dataset.j] ? 0 : 1; break;
     case 'needdel': S.need = S.need.filter(x => x !== b.dataset.s); break;
     case 'emode': S.enemy.mode = b.dataset.m; break;
@@ -266,6 +278,13 @@ document.addEventListener('click', ev => {
     case 'rank': S.memRank[b.dataset.id] = b.dataset.r; invalidate(); save(); render(); memSheet(b.dataset.id); return;
     case 'mpin': S.memPin[b.dataset.id] = !S.memPin[b.dataset.id]; invalidate(); save(); render(); memSheet(b.dataset.id); return;
     case 'close': $('#sheet').hidden = true; return;
+    case 'scan': Scan.start(b.dataset.k); return;
+    case 'scankey': Scan.saveKey(b.dataset.k); return;
+    case 'scanreset': Scan.resetKey(b.dataset.k); return;
+    case 'scanapply': Scan.apply(); return;
+    case 'pip': Pip.open(i); return;
+    case 'pipgo': Pip.go(); return;
+    case 'pipclose': Pip.stop(); $('#sheet').hidden = true; return;
     case 'eqtab': S.eqTab = b.dataset.t; save(); render(); return;
     case 'eqowned': S.eqOwned = !S.eqOwned; save(); render(); return;
     case 'eqn': { const id = b.dataset.id; const s = S.eq[id] || { n: 0, lv: 1, t: 0 }; s.n = Math.max(0, Math.min(9, (s.n || 0) + (+b.dataset.d))); S.eq[id] = s; if (S.example) { S.example = false; } break; }
