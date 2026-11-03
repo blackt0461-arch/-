@@ -911,9 +911,18 @@ function photoMode() {
 }
 
 // =========================== 更新のお知らせ ===========================
+// このプログラムの版（version.json と同じにする。公開のたびに上げる）
+const APP_VERSION = '2.4.1';
 async function checkUpdateNotes() {
   try {
     const v = await (await fetch('version.json', { cache: 'no-store' })).json();
+    // 手元のプログラムが古いまま（スマホが前の版を覚えている）なら、1回だけ読みこみ直す
+    if (v.version !== APP_VERSION && sessionStorage.getItem('studyroom.reloaded') !== v.version) {
+      sessionStorage.setItem('studyroom.reloaded', v.version);
+      S.save();
+      location.reload();
+      return;
+    }
     const seen = localStorage.getItem('studyroom.version');
     localStorage.setItem('studyroom.version', v.version);
     if (!seen || seen === v.version || !v.notes?.length) return;
@@ -1898,7 +1907,7 @@ function titleSettings(host) {
 showTitle();
 
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
-  navigator.serviceWorker.register('sw.js').catch(() => {});
+  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(r => r.update()).catch(() => {});
 }
 // テスト用
 window.__app = { putIntoRoom, get room3d() { return room3d; }, S, sub, HS, switchRoom, ensureRooms, goHome, showHome, curRoom, visitFriend, leaveVisit, showLoginBonus };
