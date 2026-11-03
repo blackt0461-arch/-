@@ -139,12 +139,12 @@ function showFurnitureHub() {
   const el = screenWithTabs('furn', `<h2>家具</h2><span></span>`, 'furn', `
     <div class="hub">
       <button class="hub-card buy ${canBuyNow() ? 'ready' : ''}" data-h="buy">
-        <span class="hub-ic">${icon('gift')}</span><b>家具を買う</b>
+        ${canBuyNow() ? '<i class="dot"></i>' : ''}<span class="hub-ic">${icon('gift')}</span><b>家具を買う</b>
         <small>${canBuyNow() ? '今すぐ1つ買えます' : `ゲージ ${pct}%`}</small>
         <span class="hub-bar"><i style="width:${pct}%"></i></span>
       </button>
       <button class="hub-card gacha" data-h="gacha">
-        <span class="hub-art">${ticketSVG('ticket', 'mini')}</span><b>レアガチャ</b>
+        ${ticketCount() ? '<i class="dot"></i>' : ''}<span class="hub-art">${ticketSVG('ticket', 'mini')}</span><b>レアガチャ</b>
         <small>チケット ${hs.rareTickets || 0}枚${hs.rareTickets4 ? `・★4確定 ${hs.rareTickets4}` : ''}${hs.rareTickets5 ? `・★5限定 ${hs.rareTickets5}` : ''}</small>
       </button>
       <button class="hub-card" data-h="edit"><span class="hub-ic">${icon('move')}</span><b>模様がえ</b><small>持っている家具を動かす</small></button>
@@ -355,6 +355,7 @@ function remainCapacity(room = curRoom()) {
 
 let notesChecked = false;
 function showHome() {
+  S.setUnlimited(isAdmin());
   if (visiting) return showVisit();
   room3d?.setActive(true);
   room3d?.setEditMode(false);
@@ -378,7 +379,7 @@ function showHome() {
       <header class="hud">
         <div class="room-name">
           <span class="rn-ic">${icon(def.icon)}</span>
-          <span class="rn-t">${def.name}<small>${r.style ? styleDef(r.style).name + '・' : ''}置いている ${r.placed.length} / ${S.capacity()}</small></span>
+          <span class="rn-t"><span class="rn-n">${esc(roomLabel(r))}<i class="rn-edit">${icon('chevronRight')}</i></span><small>${r.style ? styleDef(r.style).name + '・' : ''}置いている ${r.placed.length} / ${S.capacity()}</small></span>
         </div>
         <button class="rankchip" aria-label="ランク">
           <span class="lv">Lv<b>${rk.rank}</b></span>
@@ -389,10 +390,6 @@ function showHome() {
         <button class="round photo" aria-label="写真をとる">${icon('camera')}</button>
         <button class="round friends" aria-label="フレンド">${icon('users')}${friendBadge ? '<i class="dot"></i>' : ''}</button>
       </div>
-      <nav class="rooms">${home === 'villa' ? homeBtn : ''}${here.map(({ rr, i }) => {
-        const d = roomDef(rr.id);
-        return `<button data-i="${i}" class="${i === hs.current ? 'on' : ''}">${icon(d.icon)}${d.name}</button>`;
-      }).join('')}${locked.slice(0, 1).map(x => `<button class="locked next-lock" data-lv="${x.unlock}" data-n="${x.name}">${icon('lock')}${x.name}<small>Lv${x.unlock}</small></button>`).join('')}${home === 'main' ? homeBtn : ''}</nav>
       <div class="hint">なぞると見回す・床をタップで歩く・ドアで別の部屋へ</div>
       <div class="dock">
         <button class="capsule ${canBuy ? 'ready' : ''}">
@@ -408,17 +405,42 @@ function showHome() {
   el.querySelector('.testfill')?.addEventListener('click', () => { hs.gauge = max; S.save(); showHome(); });
   el.querySelector('.photo').onclick = photoMode;
   el.querySelector('.friends').onclick = showFriends;
-  el.querySelector('.rankchip').onclick = showRecords;
-  el.querySelectorAll('.rooms button[data-i]').forEach(b => b.onclick = () => switchRoom(+b.dataset.i));
-  el.querySelector('.next-lock')?.addEventListener('click', e => { const b = e.currentTarget; toast(`「${b.dataset.n}」は Lv${b.dataset.lv} で開きます`, 2600); });
-  el.querySelector('.villa-lock')?.addEventListener('click', () => toast(villaHint(), 4200));
-  el.querySelector('.homebtn')?.addEventListener('click', e => goHome(e.currentTarget.dataset.home));
+  el.querySelector('.rankchip').onclick = showRankRoad;
+  el.querySelector('.room-name').onclick = () => showRoomPicker({ hs, r, here, locked, home });
   app.append(el, tabbar('room'));
-  scrollRoomsNav(el);
   if (!notesChecked) { notesChecked = true; checkUpdateNotes(); }
   if (hs.villaNew) celebrateVilla();
 }
 // 部屋のボタンが多いので、今の部屋が見える所まで横に送る
+// 左上の部屋名から開く「部屋えらび」
+function showRoomPicker({ hs, r, here, locked, home }) {
+  const old = app.querySelector('.room-pop');
+  if (old) { old.remove(); return; }
+  const card = ({ rr, i }) => {
+    const d = roomDef(rr.id);
+    return `<button class="rp-room ${i === hs.current ? 'on' : ''}" data-i="${i}"><span class="rp-ic">${icon(d.icon)}</span><b>${esc(roomLabel(rr))}</b><small>家具 ${rr.placed.length}</small></button>`;
+  };
+  const next = locked[0];
+  const villaBtn = home === 'villa'
+    ? `<button class="rp-home" data-home="main">${icon('home')}家へもどる</button>`
+    : hs.villa ? `<button class="rp-home villa" data-home="villa">${icon('palm')}別荘へ行く</button>`
+      : `<button class="rp-home lock">${icon('lock')}別荘<small>全部屋に家具${VILLA_MIN_ITEMS}個で開く</small></button>`;
+  const pop = h(`
+    <div class="room-pop">
+      <div class="rp-head"><b>${home === 'villa' ? '別荘' : '家'}の部屋</b><button class="rp-rename">${icon('pencil')}名前を変える</button></div>
+      <div class="rp-grid">${here.map(card).join('')}${next ? `<button class="rp-room lock"><span class="rp-ic">${icon('lock')}</span><b>${next.name}</b><small>Lv${next.unlock}で開く</small></button>` : ''}</div>
+      ${villaBtn}
+    </div>`);
+  pop.querySelectorAll('.rp-room[data-i]').forEach(b => b.onclick = () => { pop.remove(); if (+b.dataset.i !== hs.current) switchRoom(+b.dataset.i); });
+  pop.querySelector('.rp-room.lock')?.addEventListener('click', () => toast(`「${next.name}」は Lv${next.unlock} で開きます`, 2600));
+  pop.querySelector('.rp-rename').onclick = () => { pop.remove(); renameRoom(r); };
+  pop.querySelector('.rp-home').onclick = (e) => { const t = e.currentTarget; if (t.classList.contains('lock')) return toast(villaHint(), 4200); pop.remove(); goHome(t.dataset.home); };
+  app.querySelector('.home').append(pop);
+  setTimeout(() => {
+    const close = (e) => { if (!pop.contains(e.target) && !e.target.closest('.room-name')) { pop.remove(); document.removeEventListener('pointerdown', close, true); } };
+    document.addEventListener('pointerdown', close, true);
+  });
+}
 function scrollRoomsNav(el) {
   const nav = el.querySelector('.rooms'), on = nav?.querySelector('.on');
   if (nav && on) nav.scrollLeft = on.offsetLeft - nav.clientWidth / 2 + on.offsetWidth / 2;
@@ -554,7 +576,7 @@ function pickCandidates(genre, style) {
 
 // 買える1回分の候補：ジャンル3つ（その部屋にまだ無いジャンルほど出やすい）と、ジャンルごとの家具3つ。
 // 画面を閉じたり開き直したりしても変わらない（買うまで保存しておく）
-function buyable(i) { return !i.special && !i.rare && !S.owned(i.id); }
+function buyable(i) { return !i.special && !i.rare && !HS().inventory[i.id]; }
 function currentOffer() {
   const hs = HS();
   const ok = (o) => o && o.genres?.length && o.genres.every(g => itemsOf(g).some(buyable));
@@ -589,19 +611,23 @@ function buyFlow() {
   const o = currentOffer();
   if (!o.genres.length) return toast('買える家具はもう全部そろっています');
   const el = sheet(`
-    <div class="sh-head"><span class="sh-ic gold">${icon('gift')}</span><div><h3>何を買いますか？</h3><p>ジャンルを1つ選ぶと、3つの中から1つ選べます</p></div></div>
-    <div class="genregrid three">${o.genres.map(gid => {
+    <div class="sh-head"><span class="sh-ic gold">${icon('gift')}</span><div><h3>何を買いますか？</h3><p>ジャンルを選ぶと、右の3つから1つ選べます</p></div></div>
+    <div class="genrelist">${o.genres.map(gid => {
       const g = GENRES.find(x => x.id === gid);
       const all = itemsOf(gid).filter(i => !i.special && !i.rare);
       const have = all.filter(i => S.owned(i.id)).length;
       const fresh = !curRoom().placed.some(p => itemById(p.item)?.genre === gid);
-      return `<button class="genre" data-g="${gid}">
-        <span class="g-ic">${icon(GENRE_ICON[gid] || 'box')}</span><b>${g.name}</b><small>${have}/${all.length}</small>${fresh ? '<i class="g-new">この部屋にまだない</i>' : ''}</button>`;
+      const peek = offerCands(gid);
+      return `<button class="genre-row" data-g="${gid}">
+        <span class="g-ic">${icon(GENRE_ICON[gid] || 'box')}</span>
+        <span class="g-t"><b>${g.name}</b><small>${fresh ? '<i class="g-new">NEW</i>' : ''}${have}/${all.length}</small></span>
+        <span class="g-peek">${peek.map(it => `<span class="thumb">${thumbHTML(it)}</span>`).join('')}</span>
+        ${icon('chevronRight')}</button>`;
     }).join('')}</div>
     <button class="link close">あとで</button>`, 'buy-sheet');
   app.querySelector('.tabbar')?.classList.add('hide');
   el.querySelector('.close').onclick = () => { el.remove(); showHome(); };
-  el.querySelectorAll('.genre').forEach(b => b.onclick = () => chooseCandidate(b.dataset.g));
+  el.querySelectorAll('.genre-row').forEach(b => b.onclick = () => chooseCandidate(b.dataset.g));
 }
 
 function chooseCandidate(genreId) {
@@ -612,13 +638,13 @@ function chooseCandidate(genreId) {
   for (const it of cands) if (it.src.model) loadModel(it.src.model).catch(() => {});
   let picked = null;
   const el = sheet(`
-    <div class="sh-head"><button class="sh-back">${icon('back')}</button><div><h3>${g.name}</h3><p>どれを買いますか？</p></div></div>
+    <div class="sh-head"><button class="sh-back">${icon('back')}</button><div><h3>${g.name}</h3><p>買うと、部屋の合う場所に自動で置きます</p></div></div>
     <div class="candgrid">${cands.map(it => `
       <button class="cand ${it.rare ? 'rare' : ''}" data-id="${it.id}">
         <span class="thumb">${thumbHTML(it)}</span>
         ${it.rare ? `<span class="badge-rare">${icon('star')}レア</span>` : ''}
         <b>${esc(it.name)}</b>
-        <span class="chips">${(it.styles || []).map(s => `<i>${styleDef(s).name}</i>`).join('')}</span>
+        <span class="chips">${(it.styles || []).slice(0, 2).map(s => `<i>${styleDef(s).name}</i>`).join('')}</span>
       </button>`).join('')}</div>
     <button class="btn gold big ok" disabled>${icon('check')}これを買う</button>`, 'cand-sheet');
   app.querySelector('.tabbar')?.classList.add('hide');
@@ -641,6 +667,29 @@ function chooseCandidate(genreId) {
     S.save();
     showHome();
   };
+}
+
+// 部屋の名前（自分でつけた名前があればそれ）
+function roomLabel(rr) { return (rr && rr.name) || roomDef(rr?.id)?.name || '部屋'; }
+function renameRoom(r) {
+  const def = roomDef(r.id);
+  const el = sheet(`
+    <div class="sh-head"><span class="sh-ic">${icon('pencil')}</span><div><h3>部屋の名前</h3><p>12文字まで。フレンドにもこの名前で見えます</p></div></div>
+    <input class="rn-input" maxlength="12" value="${esc(roomLabel(r))}" placeholder="${esc(def.name)}">
+    <div class="eb-btns"><button class="btn ghost reset">もとの名前</button><button class="btn primary ok">${icon('check')}決める</button></div>
+    <button class="link close">とじる</button>`, 'rename-sheet');
+  const inp = el.querySelector('.rn-input');
+  setTimeout(() => inp.focus(), 50);
+  const done = (name) => {
+    name = (name || '').replace(/\s+/g, ' ').trim().slice(0, 12);
+    if (!name || name === def.name) delete r.name; else r.name = name;
+    S.save(); el.remove(); showHome();
+    toast(`「${roomLabel(r)}」にしました`);
+  };
+  el.querySelector('.ok').onclick = () => done(inp.value);
+  inp.onkeydown = e => { if (e.key === 'Enter') done(inp.value); };
+  el.querySelector('.reset').onclick = () => done('');
+  el.querySelector('.close').onclick = () => el.remove();
 }
 
 // 持ち物から部屋へ（壁紙などはその場で変える）
@@ -693,7 +742,7 @@ function showLoginBonus() {
         <p class="lb-kicker">LOGIN BONUS</p>
         <h2 class="lb-day"><b>${got.day}</b>日目</h2>
         <div class="lb-reward ${r.kind}">
-          ${r.kind === 'gauge' ? `<div class="lb-gbig">${icon('gift')}<span>+${r.amount}</span></div>` : ticketSVG(r.kind, 'big')}
+          ${r.kind === 'gauge' ? `<div class="lb-gbig">${icon('gift')}<span>×${r.amount}</span></div>` : ticketSVG(r.kind, 'big')}
           <p><b>${r.label}</b>をもらいました${r.kind === 'gauge' ? '' : '！'}</p>
         </div>
         <div class="lb-grid">${cells}</div>
@@ -787,12 +836,13 @@ function onSelectItem(uid) {
 }
 function showInventory() {
   const inv = HS().inventory;
-  const list = Object.keys(inv).map(itemById).filter(it => it && it.place !== 'surface' && S.owned(it.id) > S.placedCount(it.id));
+  const ids = S.isUnlimited() ? [...new Set([...ITEMS, ...G.GACHA_ITEMS].map(i => i.id))] : Object.keys(inv);
+  const list = ids.map(itemById).filter(it => it && it.place !== 'surface' && S.owned(it.id) > S.placedCount(it.id));
   const el = sheet(`
     <div class="sh-head"><span class="sh-ic">${icon('box')}</span><div><h3>持ち物</h3><p>タップすると部屋に置きます（あと ${Math.max(0, remainCapacity())} 個置けます）</p></div></div>
     ${list.length ? `<div class="invgrid">${list.map(it => `
       <button class="inv-item" data-id="${it.id}"><span class="thumb">${thumbHTML(it)}</span><b>${esc(it.name)}</b>
-      ${S.owned(it.id) - S.placedCount(it.id) > 1 ? `<i class="cnt">×${S.owned(it.id) - S.placedCount(it.id)}</i>` : ''}</button>`).join('')}</div>`
+      ${S.isUnlimited() ? '<i class="cnt">∞</i>' : S.owned(it.id) - S.placedCount(it.id) > 1 ? `<i class="cnt">×${S.owned(it.id) - S.placedCount(it.id)}</i>` : ''}</button>`).join('')}</div>`
       : '<p class="empty">置いていない家具はありません。問題を解いてゲージをためると、家具を買えます。</p>'}
     <button class="link close">とじる</button>`, 'inv-sheet');
   el.querySelector('.close').onclick = () => el.remove();
@@ -962,6 +1012,41 @@ function showMenu() {
 }
 
 // =========================== 記録 ===========================
+// Lv をタッチ：Lv100 までの道のりと、それぞれのLvでもらえるごほうび
+function showRankRoad() {
+  const rk = rankNow();
+  const toNext = rk.max ? 0 : rk.need - rk.into;
+  const roomAt = {};
+  for (const d of ROOMS) if (d.home === 'main' && d.unlock > 1) roomAt[d.unlock] = d;
+  const rows = [];
+  for (let L = S.MAX_RANK; L >= 2; L--) {
+    const r = S.rankRewards(L);
+    const st = L <= rk.rank ? 'got' : L === rk.rank + 1 ? 'next' : '';
+    const big = r.ticket5 ? 'gold5' : r.ticket4 ? 'mile' : '';
+    const gifts = [r.ticket5 ? ticketSVG('ticket5', 'mini') : '', r.ticket4 ? ticketSVG('ticket4', 'mini') : '', ticketSVG('ticket', 'mini')].join('');
+    rows.push(`<li class="rr-row ${st} ${big}" data-l="${L}">
+      <span class="rr-lv"><small>Lv</small>${L}</span>
+      <span class="rr-node">${L <= rk.rank ? icon('check') : ''}</span>
+      <span class="rr-gifts">${gifts}${roomAt[L] ? `<i class="rr-room">${icon(roomAt[L].icon)}${roomAt[L].name}</i>` : ''}<i class="rr-cap">置ける数 ${S.capacity(L)}</i></span>
+    </li>`);
+  }
+  const el = sheet(`
+    <div class="rr-top">
+      <div class="rr-now"><small>いまのランク</small><b>Lv${rk.rank}</b><span>/ ${S.MAX_RANK}</span></div>
+      <div class="rr-bar"><i style="width:${rk.max ? 100 : Math.round(rk.into / rk.need * 100)}%"></i></div>
+      <p class="rr-sub">${rk.max ? '最高ランクです！' : `次のLvまで あと <b>${toNext}</b> 経験値（およそ${Math.max(1, Math.ceil(toNext / 10))}問）`}</p>
+      <div class="rr-legend"><span>${ticketSVG('ticket', 'mini')}毎回</span><span>${ticketSVG('ticket4', 'mini')}5Lvごと</span><span>${ticketSVG('ticket5', 'mini')}Lv50・100</span></div>
+    </div>
+    <ol class="rr-road">${rows.join('')}</ol>
+    <div class="rr-btns"><button class="btn ghost rec">${icon('chart')}記録を見る</button><button class="btn primary close">とじる</button></div>`, 'rr-sheet');
+  el.querySelector('.close').onclick = () => el.remove();
+  el.querySelector('.rec').onclick = () => { el.remove(); showRecords(); };
+  // 次のLvが見える位置まで動かしておく
+  setTimeout(() => {
+    const road = el.querySelector('.rr-road'), nx = el.querySelector('.rr-row.next') || el.querySelector('.rr-row.got');
+    if (road && nx) road.scrollTop = nx.offsetTop - road.clientHeight * 0.55;
+  }, 30);
+}
 function showRecords() {
   const rk = rankNow(), pf = S.profile(), st = sub();
   const s = S.stats(st, PROBLEMS);
@@ -1279,13 +1364,13 @@ async function showVisit() {
   const home = homeOf(room.id);
   const here = v.house.rooms.map((rr, i) => ({ rr, i })).filter(x => homeOf(x.rr.id) === home);
   const other = v.house.rooms.findIndex(rr => homeOf(rr.id) !== home);
-  const navHTML = here.length > 1 || other >= 0 ? `<nav class="rooms">${here.map(({ rr, i }) => `<button data-i="${i}" class="${i === v.current ? 'on' : ''}">${icon(roomDef(rr.id).icon)}${roomDef(rr.id).name}</button>`).join('')}${other >= 0 ? `<button data-i="${other}" class="homebtn">${home === 'main' ? `${icon('palm')}別荘へ` : `${icon('home')}家へ`}</button>` : ''}</nav>` : '';
+  const navHTML = here.length > 1 || other >= 0 ? `<nav class="rooms">${here.map(({ rr, i }) => `<button data-i="${i}" class="${i === v.current ? 'on' : ''}">${icon(roomDef(rr.id).icon)}${esc(roomLabel(rr))}</button>`).join('')}${other >= 0 ? `<button data-i="${other}" class="homebtn">${home === 'main' ? `${icon('palm')}別荘へ` : `${icon('home')}家へ`}</button>` : ''}</nav>` : '';
   app.innerHTML = '';
   const el = h(`
     <div class="home visiting">
       <header class="hud">
         <button class="round back" aria-label="もどる">${icon('back')}</button>
-        <div class="room-name"><span class="rn-ic">${icon('user')}</span><span class="rn-t">${esc(v.username)}さんの${roomDef(room.id).name}<small>Lv${S.rankInfo(v.summary?.xp || 0).rank} ・ 家具 ${room.placed.length}個</small></span></div>
+        <div class="room-name"><span class="rn-ic">${icon('user')}</span><span class="rn-t">${esc(v.username)}さんの${esc(roomLabel(room))}<small>Lv${S.rankInfo(v.summary?.xp || 0).rank} ・ 家具 ${room.placed.length}個</small></span></div>
         <button class="round photo" aria-label="写真をとる">${icon('camera')}</button>
       </header>
       ${navHTML}

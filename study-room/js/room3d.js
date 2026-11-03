@@ -72,6 +72,8 @@ export class Room3D {
     r.toneMapping = THREE.ACESFilmicToneMapping;
     r.shadowMap.enabled = true;
     r.shadowMap.type = THREE.PCFSoftShadowMap;
+    // 影の地図は1コマに1回だけ作る（後処理の中で作り直すと、画面が斜めに暗くなることがある）
+    r.shadowMap.autoUpdate = false;
 
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color('#1a1714');
@@ -361,6 +363,7 @@ export class Room3D {
       p.needsUpdate = true;
     }
     if (this.exterior?.update) this.exterior.update(t);
+    this.renderer.shadowMap.needsUpdate = true;
     if (this.composer && this.effectsOn !== false) {
       this.grade.uniforms.uTime.value = t;
       this.composer.render(dt);
@@ -429,6 +432,7 @@ export class Room3D {
     try { localStorage.setItem('studyroom.quality', q); } catch (e) { /* なし */ }
     if (this.ao) this.ao.enabled = q === 'high';
     this.effectsOn = q !== 'low';
+    if (this.sh && this.items) this.updateLights();
   }
   // 重くてカクカクするときは、すき間の影を自動で切る
   watchSpeed(dt) {
@@ -461,6 +465,8 @@ export class Room3D {
     if (token !== this.token) return;
     await this.placeAll(token);
   }
+  // 確かめ用：時間帯を指定して光を変える
+  setMoodId(id) { if (MOODS[id]) this.applyMood(MOODS[id]); }
   // 時刻が変わって時間帯が変わったら、光と空を変える
   refreshMood() {
     const id = moodNow();
@@ -544,7 +550,8 @@ export class Room3D {
     if (!Room3D.blobMat) {
       const c = document.createElement('canvas'); c.width = c.height = 128;
       const g = c.getContext('2d'); const gr = g.createRadialGradient(64, 64, 8, 64, 64, 64);
-      gr.addColorStop(0, 'rgba(0,0,0,0.55)'); gr.addColorStop(0.55, 'rgba(0,0,0,0.28)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
+      // 足もとにだけ、くっきりめの接地の影（大きくぼかすと浮いて見えるので小さく）
+      gr.addColorStop(0, 'rgba(0,0,0,0.42)'); gr.addColorStop(0.62, 'rgba(0,0,0,0.34)'); gr.addColorStop(0.85, 'rgba(0,0,0,0.12)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
       g.fillStyle = gr; g.fillRect(0, 0, 128, 128);
       const tex = new THREE.CanvasTexture(c);
       Room3D.blobMat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, toneMapped: false });
@@ -553,7 +560,7 @@ export class Room3D {
     if (!b) { b = new THREE.Mesh(Room3D.blobGeo, Room3D.blobMat); b.userData.uid = uid; b.renderOrder = 1; this.blobs.add(b); }
     const bb = new THREE.Box3().setFromObject(wrap.children[0]);
     const sz = bb.getSize(new THREE.Vector3()), c = bb.getCenter(new THREE.Vector3());
-    b.scale.set(Math.max(0.25, sz.x * 1.3), 1, Math.max(0.25, sz.z * 1.3));
+    b.scale.set(Math.max(0.2, sz.x * 1.08), 1, Math.max(0.2, sz.z * 1.08));
     b.position.set(c.x, bb.min.y + 0.004, c.z);
     b.visible = true;
   }
@@ -779,7 +786,7 @@ export class Room3D {
       const obj = o.children[0];
       return obj && (obj.userData.light || o.userData.item?.light);
     });
-    if (!lit.length) { this.addBareBulb(); return; }
+    if (!lit.length) { this.addBareBulb(); this.addLampShadow(); this.applyLightsOff(); return; }
     lit.slice(0, MAX_LIGHTS).forEach(o => {
       const obj = o.children[0];
       const il = o.userData.item.light;
@@ -792,9 +799,29 @@ export class Room3D {
       this.scene.add(l);
       this.lamps.push(l);
     });
+    this.addLampShadow();
     this.applyLightsOff();
   }
 
+  // いちばん強い照明（天井の照明を優先）から、下向きのスポットで本物の影を落とす。
+  // 点光源の影は「すき間の影」とぶつかるので、1方向だけのスポットにして、ずれ（バイアス）を調整してある
+  addLampShadow() {
+    // 夕方・夜（照明が主役の時間）だけ。すき間の影（GTAO）とは同時に使えないので、そのあいだは切る
+    const want = this.quality !== 'low' && this.lamps.length && (this.mood?.lampI || 0) >= 1;
+    if (this.ao) this.ao.enabled = this.quality === 'high' && !this.autoLowered && !want;
+    if (!want) return;
+    const main = this.lamps.reduce((a, b) => (b.position.y > a.position.y ? b : a));
+    const sp = new THREE.SpotLight(main.color, main.intensity * 0.9, 0, Math.PI * 0.42, 0.85, 2);
+    sp.position.copy(main.position);
+    sp.target.position.set(main.position.x, 0, main.position.z);
+    sp.castShadow = true;
+    sp.shadow.mapSize.set(this.quality === 'high' ? 1024 : 512, this.quality === 'high' ? 1024 : 512);
+    sp.shadow.camera.near = 0.1; sp.shadow.camera.far = 8;
+    sp.shadow.bias = -0.0006; sp.shadow.normalBias = 0.04;
+    main.intensity *= 0.45; // スポットと合わせて、明るさは今までと同じくらい
+    this.scene.add(sp, sp.target);
+    this.lamps.push(sp, sp.target);
+  }
   // 照明スイッチ：部屋の明かりを消す／つける（部屋ごとに覚えておく）
   toggleLights() {
     if (!this.st) return;
@@ -870,6 +897,22 @@ export class Room3D {
   }
   applyTopHide() {
     const hide = !!this.topView;
+    // 上から見るときは、外の景色や建物の裏側（裏世界）が見えないよう、まわりを暗い色でぬりつぶす
+    if (this.exterior?.world) this.exterior.world.visible = !hide;
+    if (hide) {
+      if (!this.topBg) {
+        this.topBg = { bg: this.scene.background, fog: this.scene.fog };
+        this.scene.background = new THREE.Color('#14110e');
+        this.scene.fog = null;
+        const m = new THREE.Mesh(new THREE.PlaneGeometry(400, 400).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: '#14110e' }));
+        m.position.y = -0.3; this.topFloor = m; this.scene.add(m);
+      }
+    } else if (this.topBg) {
+      if (this.scene.background?.isColor) this.scene.background = this.topBg.bg;
+      if (!this.scene.fog) this.scene.fog = this.topBg.fog;
+      this.topBg = null;
+      if (this.topFloor) { this.scene.remove(this.topFloor); this.topFloor = null; }
+    }
     this.shell?.traverse(o => { if (o.isMesh && o.material === this.ceilMat) o.visible = !hide; });
     for (const o of this.items.children) if (o.userData.item?.place === 'ceiling' || o.userData.kind === 'bareBulb') o.visible = !hide;
   }
@@ -1023,6 +1066,7 @@ export class Room3D {
   capture() {
     if (this.selBox) this.selBox.visible = false;
     if (this.marker) this.marker.visible = false;
+    this.renderer.shadowMap.needsUpdate = true;
     if (this.composer && this.effectsOn !== false) this.composer.render(0); else this.renderer.render(this.scene, this.camera);
     const url = this.canvas.toDataURL('image/jpeg', 0.92);
     if (this.selBox) this.selBox.visible = true;
@@ -1051,6 +1095,7 @@ export class Room3D {
     });
     this.scene.fog = new THREE.Fog(m.fog, 60, 520);
     this.setStars(m.photo === 'night');
+    if (this.sh && this.items) this.updateLights(); // 時間帯で、照明の影を出す／出さないが変わる
   }
   // 夜だけ、窓の外にまたたく星
   setStars(on) {
@@ -1206,6 +1251,10 @@ export class Room3D {
       shadowAll(door);
     } else door = makeDoor(darkWall ? '#3a3633' : '#ddd5c8');
     const dg = new THREE.Group(); dg.add(door);
+    // ドアのうしろをふさぐ板：扉と枠のすき間から外（裏側）が見えないように
+    const back = new THREE.Mesh(new THREE.BoxGeometry(sh.door.w + 0.02, sh.door.h + 0.02, WALL_T - 0.07), new THREE.MeshStandardMaterial({ color: '#2b2622', roughness: 0.9 }));
+    back.position.set(0, (sh.door.h + 0.02) / 2 - 0.01, -0.07 - (WALL_T - 0.07) / 2);
+    dg.add(back);
     dg.traverse(o => { if (o.isMesh) o.userData.door = true; });
     putOnWall(dg, dseg, sh.door.a);
     this.door = dg;
@@ -1423,8 +1472,9 @@ function makeDoor(color) {
   frame(0.05, DH + 0.05, -DW / 2 - 0.02, DH / 2);
   frame(DW + 0.14, 0.05, 0, DH + 0.02);
   // 扉の板（ふちの溝つき）
-  const leaf = new THREE.Mesh(new THREE.BoxGeometry(DW - 0.02, DH - 0.02, 0.04), paint);
-  leaf.position.set(0, DH / 2, -0.03); leaf.castShadow = leaf.receiveShadow = true;
+  // 扉は枠に少し食いこむ大きさにして、まわりにすき間ができないようにする
+  const leaf = new THREE.Mesh(new THREE.BoxGeometry(DW + 0.01, DH + 0.02, 0.04), paint);
+  leaf.position.set(0, (DH + 0.02) / 2, -0.03); leaf.castShadow = leaf.receiveShadow = true;
   g.add(leaf);
   const groove = new THREE.MeshStandardMaterial({ color: new THREE.Color(color).multiplyScalar(0.82), roughness: 0.6 });
   for (const [w, h, y] of [[DW - 0.24, 0.9, 1.45], [DW - 0.24, 0.8, 0.55]]) {
