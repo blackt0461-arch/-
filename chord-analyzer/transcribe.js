@@ -12,6 +12,7 @@ import { estimateBeats, findDownbeatScored, decodeChords, buildChart, cosine } f
 
 import { suppressVocal } from './vocal-remove.js';
 import { riseSpectrum, learnProfile, checkBySynthesis, compareBySynthesis } from './synth-check.js';
+import { pitchNotes, pitchChroma } from './ai-pitch.js';
 const LOWEST = 40;  // E2（6弦の開放）
 const HIGHEST = 88; // E6（1弦24フレット）
 const freq = (m) => 440 * 2 ** ((m - 69) / 12);
@@ -471,7 +472,7 @@ function refineWithChart(events, onsetList, timeline, tuning, { strumStrength = 
  * - chords: 0.1秒ごとのコードの判定（buildChordTimeline でコード進行にまとめる）
  * - events: 弾いた瞬間ごとの、新しく鳴った音（タブ譜の材料）
  */
-function transcribeOnce(channels, sampleRate, { mode = 'auto', voiceFilter = true, method = 'peel', riseRatio = 1.3, minStrength = 0.2, harmonicRatio = 4, tuning = TUNINGS[0], snapStrums = true, snapMin = 3, peelOptions = {}, useChart = true, chartOptions = {}, noteWeight = null, chromaMethod = 'auto', harmonicResidual = 0.35, vocalOptions = {}, vocalPresence = 0.35, minBeats = 1, precise = true, highWeight = 0.6, useContext = true, contextOptions = {}, dropVocalNotes = true, estimateDurations = true, stopRatio = 0.25, voiceOptions = { wobbleCents: 60, useSwell: false }, attackRatio = 0, chordWindow = 16384, chordMinDuration = 0.5, segmentChroma = 0, segmentBass = false, prevSubtract = 0, attackChroma = 0, changeGate = 0, fuseAttack = 0, fuseSubtract = 0, changeBonus = 0, exportFeatures = false, learned = 0, learnedConfidence = false, onsetOptions = {}, noteOnsetOptions = null, legatoNotes = false, synthCheck = false, strumCheck = { perNote: 0.01 }, vocalRemove = false, noteChannels = null, edgeTrim = 0, onProgress = () => {} } = {}) {
+function transcribeOnce(channels, sampleRate, { mode = 'auto', voiceFilter = true, method = 'peel', riseRatio = 1.3, minStrength = 0.2, harmonicRatio = 4, tuning = TUNINGS[0], snapStrums = true, snapMin = 3, peelOptions = {}, useChart = true, chartOptions = {}, noteWeight = null, chromaMethod = 'auto', harmonicResidual = 0.35, vocalOptions = {}, vocalPresence = 0.35, minBeats = 1, precise = true, highWeight = 0.6, useContext = true, contextOptions = {}, dropVocalNotes = true, estimateDurations = true, stopRatio = 0.25, voiceOptions = { wobbleCents: 60, useSwell: false }, attackRatio = 0, chordWindow = 16384, chordMinDuration = 0.5, segmentChroma = 0, segmentBass = false, prevSubtract = 0, attackChroma = 0, changeGate = 0, fuseAttack = 0, fuseSubtract = 0, changeBonus = 0, exportFeatures = false, learned = 0, learnedConfidence = false, onsetOptions = {}, noteOnsetOptions = null, legatoNotes = false, synthCheck = false, strumCheck = { perNote: 0.01 }, vocalRemove = false, noteChannels = null, edgeTrim = 0, pitchAI = null, aiEvents = null, aiChroma = 0, aiBass = false, aiBeatChroma = 0, onProgress = () => {} } = {}) {
   const chosen = chooseSignal(channels, mode, sampleRate, vocalRemove);
   const { guitar, mid, useSide, sideRatio } = chosen;
   // AI で歌を除いた音（noteChannels）があれば、左右に分かれていない曲では、1音ずつ（弾いた瞬間と音の高さ）をその音で探す。
@@ -517,9 +518,17 @@ function transcribeOnce(channels, sampleRate, { mode = 'auto', voiceFilter = tru
       chroma = new Array(12).fill(0);
       peelNotes(frameMags, zeros, sampleRate / cwin, { maxNotes: 8, stopRatio: 0.1 }).forEach((n) => { chroma[n.m % 12] += n.s; });
     }
+    // AI が聞いた 12 音の強さを混ぜる（aiChroma：AI の割合 0〜1）。AI は倍音と本当の音を聞き分けるのが得意
+    let aiHeard = null;
+    if (pitchAI && (aiChroma > 0 || aiBass)) aiHeard = pitchChroma(pitchAI, c / sampleRate, (c + cwin) / sampleRate);
+    if (aiHeard && aiChroma > 0) {
+      const t0 = chroma.reduce((a, b) => a + b, 0) || 1, t1 = aiHeard.chroma.reduce((a, b) => a + b, 0);
+      if (t1 > 0) chroma = chroma.map((v, i) => (1 - aiChroma) * (v / t0) + aiChroma * (aiHeard.chroma[i] / t1));
+    }
     const total = chroma.reduce((a, b) => a + b, 0) || 1;
     // ベース音は、サイドでは消えてしまうベースギターも含む真ん中の音から探す
-    const { bass } = analyzeSpectrum(magnitudeSpectrum(useSide ? mid : guitar, c, cwin), sampleRate, cwin);
+    let { bass } = analyzeSpectrum(magnitudeSpectrum(useSide ? mid : guitar, c, cwin), sampleRate, cwin);
+    if (aiHeard && aiBass && aiHeard.bass !== null) bass = aiHeard.bass;
     const [top] = identifyFromChroma(chroma, bass, 1);
     if (top) chordFrames.push({ t: (c + cwin / 2) / sampleRate, name: top.name, confidence: top.confidence, chroma: chroma.map((v) => v / total), bass });
   }
@@ -614,6 +623,7 @@ function transcribeOnce(channels, sampleRate, { mode = 'auto', voiceFilter = tru
     if (fresh.length) events.push(positions ? { t, notes: fresh, positions } : { t, notes: fresh });
   });
 
+
   // 試し弾きで確かめる：曲の中のはっきりした1音から音色を覚え、迷いやすい1〜2音の答えを、候補を鳴らして比べ直す
   let synthProfile = null;
   if ((synthCheck || strumCheck) && synthRises.size) {
@@ -678,6 +688,12 @@ function transcribeOnce(channels, sampleRate, { mode = 'auto', voiceFilter = tru
         const tot = a.chroma.reduce((x, y) => x + y, 0) || 1;
         a.chroma.forEach((v, i) => { chroma[i] = (1 - Math.min(1, segmentChroma)) * chroma[i] + segmentChroma * (v / tot) * frameTotal; });
         if (segmentBass) segBass = analyzeSpectrum(magnitudeSpectrum(useSide ? mid : guitar, s0, len, 16384), sampleRate, 16384).bass;
+      }
+      // AI が聞いた、その拍の中の 12 音の強さを混ぜる（aiBeatChroma：AI の割合 0〜1）
+      if (pitchAI && aiBeatChroma > 0 && end - b >= 0.08) {
+        const ai = pitchChroma(pitchAI, b + 0.03, end - 0.02).chroma;
+        const at = ai.reduce((x, y) => x + y, 0), ct = chroma.reduce((x, y) => x + y, 0) || 1;
+        if (at > 0) for (let i = 0; i < 12; i++) chroma[i] = (1 - aiBeatChroma) * chroma[i] + aiBeatChroma * (ai[i] / at) * ct;
       }
       chromas.push(chroma);
       const counts = new Map();
@@ -858,6 +874,60 @@ function transcribeOnce(channels, sampleRate, { mode = 'auto', voiceFilter = tru
     }).filter((e) => e.notes.length);
   }
 
+  // 5b. AI で聞き取った音で、1音ずつの答えを直す（aiEvents）。
+  //   - 弾いた瞬間（今までの方法で見つけたもの。時刻はこちらの方が正確）の近く（snap 秒以内）に AI が音を見つけたら、
+  //     その瞬間の音を AI の音に置きかえる（ストロークでコードの押さえ方にそろえた和音は、strums: true のときだけ置きかえる）
+  //   - 近くに今までの瞬間が無い AI の音は、add: true のとき新しい音として足す（今までの方法が見落とした音）
+  if (pitchAI && aiEvents) {
+    const o = typeof aiEvents === 'object' ? aiEvents : {};
+    // shift：AI の時刻は実際より少し遅れて出る（研究用データで約 0.035 秒）ので、その分早める
+    const { snap = 0.06, shift = -0.035, maxNotes = 6, minFrames = 6, strums = false, strumMin = 0, add = true, addMin = 0, groupGap = 0.035, keepOld = false } = o;
+    const found = pitchNotes(pitchAI, { minFrames, ...o });
+    const byEvent = new Map();
+    const loose = [];
+    found.forEach((n) => {
+      const t = n.t + shift;
+      let best = -1;
+      events.forEach((e, i) => { if (Math.abs(e.t - t) <= snap && (best < 0 || Math.abs(e.t - t) < Math.abs(events[best].t - t))) best = i; });
+      if (best < 0) loose.push({ ...n, t });
+      else { if (!byEvent.has(best)) byEvent.set(best, []); byEvent.get(best).push(n); }
+    });
+    const pick = (ns) => [...new Set(ns.sort((a, b) => b.amp - a.amp).slice(0, maxNotes).map((n) => n.midi))].sort((a, b) => a - b);
+    // veto：AI の音が近くに無い瞬間では、AI がほとんど鳴っていないと聞いた高さ（鳴っている確率の最大が veto 未満）の音を消す
+    const { veto = 0, vetoStrums = false } = o;
+    const heardProb = (t, m) => {
+      const p = m - 21;
+      if (p < 0 || p > 87) return 0;
+      const a = Math.max(0, Math.floor((t - shift) * pitchAI.fps) - 2), b = Math.min(pitchAI.frames, a + 12);
+      let mx = 0;
+      for (let f = a; f < b; f++) mx = Math.max(mx, pitchAI.note[f * 88 + p]);
+      return mx;
+    };
+    events = events.map((e, i) => {
+      const ns = byEvent.get(i);
+      if (!ns && veto > 0 && (!e.positions || vetoStrums)) {
+        const notes = e.notes.filter((m) => heardProb(e.t, m) >= veto);
+        if (notes.length === e.notes.length) return e;
+        const { positions, ...rest } = e;
+        return { ...rest, notes };
+      }
+      // ストロークでそろえた和音は、AI が strumMin 音以上聞き取れたときだけ置きかえる（AI が和音の一部しか拾えないことがあるため）
+      if (!ns || (e.positions && (!strums || new Set(ns.map((n) => n.midi)).size < strumMin))) return e;
+      const notes = keepOld ? [...new Set([...pick(ns), ...e.notes])].sort((a, b) => a - b) : pick(ns);
+      const { positions, ...rest } = e;
+      return { ...rest, notes, ai: true };
+    }).filter((e) => e.notes.length);
+    if (add) {
+      const groups = [];
+      // addMin：今までの方法が見落とした音は、AI が「弾いた瞬間」をはっきり聞いたもの（確率 addMin 以上）だけ足す
+      loose.filter((n) => n.onset >= addMin).sort((a, b) => a.t - b.t).forEach((n) => {
+        const g = groups[groups.length - 1];
+        if (g && n.t - g.t <= groupGap) g.notes.push(n); else groups.push({ t: n.t, notes: [n] });
+      });
+      events = [...events, ...groups.map((g) => ({ t: g.t, notes: pick(g.notes), ai: true }))].sort((a, b) => a.t - b.t);
+    }
+  }
+
   // 6. 音の長さ：弾いた後、音量がどこまで下がったら止めた（ミュートした）とみなすかを、音量の変化から読み取る。
   //    コード譜の再生で、実際の演奏と同じ長さで鳴らすため
   if (estimateDurations) {
@@ -958,6 +1028,8 @@ export function estimateTuning(signal, sampleRate, { frame = 8192, frames = 60, 
  * やり方：音の高さの目盛りをずれの分だけ動かして解析し、時刻は元に戻す
  */
 export function transcribe(channels, sampleRate, options = {}) {
+  // AI の聞き取り結果（pitchAI）があれば、採点で選んだ使い方を標準にする（呼ぶ側が決めた設定があればそちらを使う）
+  if (options.pitchAI) options = { ...AI_PITCH_DEFAULTS, ...options };
   // 解析のしくみは 1秒あたり 44100 の細かさで調整してあるので、ほかの細かさ（iPhone は 48000）の音はそろえてから解析する。
   // そろえないと、テンポや拍の位置がずれて、コードが早く出るなどの間違いが起きる
   if (sampleRate !== ANALYSIS_RATE) {
@@ -983,7 +1055,8 @@ export function transcribe(channels, sampleRate, options = {}) {
   if (Math.abs(cents) < tuneMinCents) return { ...transcribeInTune(channels, sampleRate, options), tuningCents: cents };
   // 音の高さが c セント高い曲は、1秒の長さを少し短いとみなして解析すると、ちょうど基準の高さに聞こえる
   const r = 2 ** (-cents / 1200);
-  const res = transcribeInTune(channels, sampleRate * r, options);
+  // AI の聞き取り結果は元の時刻のままなので、解析の中の時刻（r 倍に縮んだ時刻）に合わせて読む
+  const res = transcribeInTune(channels, sampleRate * r, options.pitchAI ? { ...options, pitchAI: { ...options.pitchAI, fps: options.pitchAI.fps * r } } : options);
   const fix = (t) => (typeof t === 'number' ? t * r : t);
   const fixObj = (o) => {
     if (!o || typeof o !== 'object') return o;
@@ -1010,6 +1083,18 @@ export function transcribe(channels, sampleRate, options = {}) {
  * - normal：ふつう（おすすめ）。採点に合格した方法を全部使う
  * - careful：じっくり。時間をかけてよい場合に、より重い方法も使う（採点に合格したものだけを足していく）
  */
+/**
+ * AI（Basic Pitch）で聞き取った音の使い方の標準。研究用データと合成曲の採点（tests/eval）で選んだもの：
+ * 1音ずつ 47.8→60.8%（知らない演奏者 47.4→60.5%）、短い音 +4.4、
+ * コード 77.0→78.4%（知らない演奏者 66.7→72.0%）、コードの切り替わり発見 +16、再生のリズムは変わらず。
+ * - veto 0.3：AI がほとんど鳴っていないと聞いた高さの音は消す（余計な音が減る）
+ * - strums・strumMin 3：ストロークの和音も、AI が3音以上聞き取れたら AI の音にする
+ * - addMin 0.65：今までの方法が見落とした音は、AI が弾いた瞬間をはっきり聞いたものだけ足す
+ * - aiBeatChroma 0.8：コードを決めるとき、拍ごとの 12 音の強さに AI が聞いた強さを 8 割混ぜる（倍音や前のコードの残りに強い）
+ * マイクのその場の判定には使わない（採点で 52.1→49〜51% と下がったため）
+ */
+export const AI_PITCH_DEFAULTS = { aiEvents: { veto: 0.3, strums: true, vetoStrums: true, strumMin: 3, addMin: 0.65 }, aiBeatChroma: 0.8 };
+
 export const ANALYSIS_PRESETS = {
   fast: { precise: false, fastBeats: 0, learned: 0 },
   normal: {},
