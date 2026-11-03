@@ -647,3 +647,13 @@ select, input[type="text"] {
 .ts-stem.ts-strum { stroke: var(--text); stroke-width: 2; }
 .ts-stem.ts-legato { stroke: #4fc3f7; stroke-width: 1.5; }
 .ts-cursor { stroke: #ff5a5a; stroke-width: 1.5; }
+
+/* AI（歌声を取り除く）のダウンロード */
+.ai-panel { margin: 10px 0; padding: 10px 12px; border: 1px solid var(--surface); border-radius: 10px; }
+.ai-toggle { display: flex; gap: 8px; align-items: flex-start; font-size: 0.92rem; line-height: 1.4; }
+.ai-toggle input { margin-top: 3px; width: 18px; height: 18px; flex: none; }
+.ai-toggle:has(input:disabled) { opacity: 0.55; }
+.ai-status { margin: 6px 0; font-size: 0.82rem; color: var(--muted, #9aa); }
+.ai-buttons { display: flex; gap: 8px; flex-wrap: wrap; }
+.ai-buttons .secondary-button { min-height: 40px; padding: 0 14px; }
+.ai-buttons [hidden] { display: none; }

@@ -101,7 +101,7 @@
       </label>
       <label class="song-mode">ジャンル
         <select id="song-genre">
-          <option value="auto" selected>おまかせ（音から自動で判断）</option>
+          <option value="auto" selected>おまかせ（標準の読み方）</option>
           <option value="pop">ポップ・ロック</option>
           <option value="singer">弾き語り</option>
           <option value="jazz">ジャズ</option>
@@ -116,6 +116,18 @@
           <option value="careful">じっくり（時間がかかっても正確に）</option>
         </select>
       </label>
+      <div class="ai-panel" id="ai-panel">
+        <label class="ai-toggle"><input type="checkbox" id="ai-vocal" disabled> AI で歌声を取り除いて解析（弾き語りなど歌のある曲で、1音ずつ・短い音が正確に）</label>
+        <p class="ai-status" id="ai-status">AI はまだダウンロードされていません（約 50MB・初回だけ。Wi-Fi でのダウンロードがおすすめです）</p>
+        <div class="ai-buttons">
+          <button type="button" id="ai-download" class="secondary-button">AI をダウンロード</button>
+          <button type="button" id="ai-delete" class="secondary-button" hidden>AI を削除</button>
+        </div>
+        <div id="ai-progress" class="progress" hidden>
+          <div class="progress-bar"><span id="ai-progress-fill"></span></div>
+          <p id="ai-progress-label" class="progress-label"></p>
+        </div>
+      </div>
       <p id="song-error" class="error" hidden></p>
       <div id="song-progress" class="progress" hidden>
         <div class="progress-bar"><span id="song-progress-fill"></span></div>

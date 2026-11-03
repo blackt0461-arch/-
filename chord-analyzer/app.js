@@ -6,11 +6,12 @@ import { TUNINGS, parseShape, formatShape, soundingNotes, renderFretboard, findV
 import { playNotes, playSequence } from './sound.js';
 import { formatTime, assignTab, formatTab, chartPlayback } from './song.js';
 import { buildStaffRows } from './tab-staff.js';
+import { aiReady, downloadAI, deleteAI, AI_TOTAL } from './ai-loader.js';
 import { estimateKey, suggestCapo, easiestVoicing } from './practice.js';
 
 // version.json と同じ値にする（新しいバージョンを公開したら両方を上げる）
 const APP_VERSION = '1.13.0';
-const APP_FILES = ['index.html', 'style.css', 'app.js', 'chord-engine.js', 'audio.js', 'fretboard.js', 'sound.js', 'song.js', 'dsp.js', 'chart.js', 'live.js', 'practice.js', 'transcribe.js', 'transcribe-worker.js', 'tab-staff.js', 'learned.js', 'synth-check.js', 'sw.js', 'manifest.webmanifest'];
+const APP_FILES = ['index.html', 'style.css', 'app.js', 'chord-engine.js', 'audio.js', 'fretboard.js', 'sound.js', 'song.js', 'dsp.js', 'chart.js', 'live.js', 'practice.js', 'transcribe.js', 'transcribe-worker.js', 'tab-staff.js', 'learned.js', 'synth-check.js', 'vocal-remove.js', 'ai-vocal.js', 'ai-loader.js', 'sw.js', 'manifest.webmanifest'];
 const HOLD_MS = 150;      // マイク：別のコードがこの時間続いたら表示を切り替える
 const HISTORY_SIZE = 16;  // マイク：覚えておくコードの数
 const HISTORY_STABLE_MS = 400; // マイク：この時間続いたコードを履歴に入れる
@@ -368,6 +369,53 @@ try { const q = localStorage.getItem('songQuality'); if (q && songQuality.queryS
 songQuality.addEventListener('change', () => { try { localStorage.setItem('songQuality', songQuality.value); } catch { /* 保存できない環境 */ } });
 try { const g = localStorage.getItem('songGenre'); if (g && songGenre.querySelector(`option[value="${g}"]`)) songGenre.value = g; } catch { /* 保存できない環境 */ }
 songGenre.addEventListener('change', () => { try { localStorage.setItem('songGenre', songGenre.value); } catch { /* 保存できない環境 */ } });
+
+// AI（歌声を取り除くしくみ）：初回だけダウンロードして、スマホの中に保存する
+const aiVocal = document.getElementById('ai-vocal');
+const aiStatus = document.getElementById('ai-status');
+const aiDownload = document.getElementById('ai-download');
+const aiDelete = document.getElementById('ai-delete');
+const aiProgress = document.getElementById('ai-progress');
+const aiProgressFill = document.getElementById('ai-progress-fill');
+const aiProgressLabel = document.getElementById('ai-progress-label');
+const mb = (b) => (b / 1e6).toFixed(0);
+async function refreshAI() {
+  const ready = await aiReady().catch(() => false);
+  aiVocal.disabled = !ready;
+  aiDownload.hidden = ready;
+  aiDelete.hidden = !ready;
+  if (ready) {
+    try { aiVocal.checked = localStorage.getItem('aiVocal') !== 'off'; } catch { aiVocal.checked = true; }
+    aiStatus.textContent = 'AI はダウンロード済みです（電波がなくても使えます）';
+  } else {
+    aiVocal.checked = false;
+    aiStatus.textContent = `AI はまだダウンロードされていません（約 ${mb(AI_TOTAL)}MB・初回だけ。Wi-Fi でのダウンロードがおすすめです）`;
+  }
+}
+aiVocal.addEventListener('change', () => { try { localStorage.setItem('aiVocal', aiVocal.checked ? 'on' : 'off'); } catch { /* 保存できない環境 */ } });
+aiDownload.addEventListener('click', async () => {
+  aiDownload.disabled = true;
+  aiProgress.hidden = false;
+  try {
+    await downloadAI((got, total) => {
+      aiProgressFill.style.width = `${Math.round((got / total) * 100)}%`;
+      aiProgressLabel.textContent = `ダウンロード中… ${mb(got)}MB ／ ${mb(total)}MB`;
+    });
+    aiProgressLabel.textContent = 'ダウンロードが終わりました';
+  } catch (err) {
+    aiProgressLabel.textContent = `ダウンロードできませんでした：${err.message}（もう一度押すと、続きから再開します）`;
+  } finally {
+    aiDownload.disabled = false;
+    await refreshAI();
+    setTimeout(() => { if (!aiDownload.hidden) return; aiProgress.hidden = true; }, 2000);
+  }
+});
+aiDelete.addEventListener('click', async () => {
+  if (!confirm('ダウンロードした AI を削除しますか？（また使うときは、もう一度ダウンロードが必要です）')) return;
+  await deleteAI();
+  await refreshAI();
+});
+refreshAI();
 const songError = document.getElementById('song-error');
 const songProgress = document.getElementById('song-progress');
 const songProgressFill = document.getElementById('song-progress-fill');
@@ -406,7 +454,7 @@ async function decodeFile(file) {
   }
 }
 
-function runTranscription(channels, sampleRate, mode, quality = 'normal', genre = 'auto') {
+function runTranscription(channels, sampleRate, mode, quality = 'normal', genre = 'auto', useAI = false) {
   worker?.terminate();
   worker = new Worker('transcribe-worker.js', { type: 'module' });
   return new Promise((resolve, reject) => {
@@ -422,7 +470,7 @@ function runTranscription(channels, sampleRate, mode, quality = 'normal', genre 
       }
     };
     worker.onerror = (e) => reject(new Error(e.message || '解析中にエラーが起きました'));
-    worker.postMessage({ channels, sampleRate, mode, quality, genre }, channels.map((c) => c.buffer));
+    worker.postMessage({ channels, sampleRate, mode, quality, genre, useAI }, channels.map((c) => c.buffer));
   });
 }
 
@@ -671,12 +719,14 @@ songFile.addEventListener('change', async () => {
   songMedia.src = URL.createObjectURL(file);
   try {
     const { channels, sampleRate, duration } = await decodeFile(file);
-    const result = await runTranscription(channels, sampleRate, songMode.value, songQuality.value, songGenre.value);
+    const result = await runTranscription(channels, sampleRate, songMode.value, songQuality.value, songGenre.value, aiVocal.checked && !aiVocal.disabled);
     pendingBeats = { beats: result.beats, downbeat: result.downbeat, duration: result.duration, timeline: result.timeline };
     analysis = { timeline: result.timeline, tabBlocks: buildTabBlocks(result.events), events: result.events, beats: result.beats, downbeat: result.downbeat, duration: result.duration, bpm: result.bpm, onsets: result.onsets };
-    const how = result.useSide ? '左右の差で歌を弱めて解析しました'
+    const how = result.aiVocal?.used ? 'AI で歌声を取り除いて解析しました'
+      : result.useSide ? '左右の差で歌を弱めて解析しました'
       : result.chartInfo?.method === '歌を除く' ? '歌のメロディを取り除いて解析しました' : 'ギターの音をそのまま解析しました（歌は見つかりませんでした）';
-    songInfo.textContent = `${file.name}（${formatTime(duration)}）・テンポ ${Math.round(result.bpm || 0)}・${how}・解析 ${Math.round(result.seconds ?? 0)}秒（${songQuality.selectedOptions[0].textContent.split('（')[0]}）`;
+    const aiNote = result.aiError ? `・AI は使えませんでした（${result.aiError}）` : result.aiVocal && !result.aiVocal.used ? '・歌がほとんど無いので AI は使いませんでした' : '';
+    songInfo.textContent = `${file.name}（${formatTime(duration)}）・テンポ ${Math.round(result.bpm || 0)}・${how}・解析 ${Math.round(result.seconds ?? 0)}秒（${songQuality.selectedOptions[0].textContent.split('（')[0]}）${aiNote}`;
     renderAnalysis();
     renderStrip(duration);
     renderKey();
