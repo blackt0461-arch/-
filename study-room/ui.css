@@ -729,3 +729,16 @@ h3.sec { font-size: 14px; color: var(--muted); margin: 18px 4px 8px; font-weight
 .up-notes li { display: flex; align-items: center; gap: 8px; }
 .up-notes svg { width: 14px; height: 14px; color: var(--gold1, #f0b44c); }
 .up-s { position: relative; margin: 6px 0 0; font-size: 11.5px; color: rgba(255,255,255,.5); }
+
+/* ガチャの切りかえ：代表の家具のアイコン（限定が左・恒常が右） */
+.bn-tabs { gap: 10px; padding: 4px 2px 6px; }
+.bn-tabs .bn-tab { display: grid; justify-items: center; gap: 5px; padding: 0; border: 0; background: none; border-radius: 0; font-size: 11.5px; color: var(--muted); }
+.bn-tabs .bn-tab.on, .bn-tabs .bn-tab.lim.on { background: none; color: #fff; }
+.bt-art { position: relative; display: grid; place-items: center; width: 74px; height: 74px; min-height: 0; margin: 0; padding: 0; border: 0; border-radius: 20px; overflow: hidden; box-shadow: 0 0 0 1px rgba(255,255,255,.12), 0 6px 14px rgba(0,0,0,.35); transition: transform .15s, box-shadow .2s; }
+.bt-art .thumb { width: 86%; background: none; filter: drop-shadow(0 4px 8px rgba(0,0,0,.5)); }
+.bn-tab.on .bt-art { transform: translateY(-2px); box-shadow: 0 0 0 2.5px var(--gold1), 0 0 18px rgba(240,180,76,.55); }
+.bn-tab.lim.on .bt-art { box-shadow: 0 0 0 2.5px #ff7a8e, 0 0 20px rgba(255,90,120,.55); }
+.bn-tab:not(.on) .bt-art { filter: saturate(.6) brightness(.75); }
+.bt-rib { position: absolute; top: 5px; left: 5px; display: inline-flex; align-items: center; gap: 2px; padding: 1px 6px 1px 4px; border-radius: 99px; font-style: normal; font-size: 9px; font-weight: 800; color: #fff; background: linear-gradient(180deg, #ff5a6e, #c8233c); box-shadow: 0 2px 6px rgba(0,0,0,.4); }
+.bt-rib svg { width: 9px; height: 9px; }
+.bn-tab b { font-size: 11.5px; }

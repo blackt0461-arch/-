@@ -181,12 +181,17 @@ function showGacha(banner = null) {
   if (isAdmin()) adminTopUp();
   const hs = HS();
   const act = G.activeSeries();
-  const banners = [{ id: 'standard', name: 'スタンダード', desc: '★5は上質な定番（恒常）から出ます' }, ...act.map(s => ({ id: s.id, name: `限定：${s.name}`, desc: s.desc, limited: true }))];
-  const b = banners.find(x => x.id === banner) || banners[banners.length - 1];
+  // 限定が左、恒常（スタンダード）が右。アイコンはそのガチャの代表の家具
+  const heroOf = (sid) => G.bySeries(sid).find(i => i.rarity === 5) || G.bySeries(sid)[0];
+  const banners = [...act.map(s => ({ id: s.id, name: `限定：${s.name}`, short: s.name.replace('シリーズ', ''), desc: s.desc, limited: true, hero: heroOf(s.id) })),
+    { id: 'standard', name: 'スタンダード', short: 'スタンダード', desc: '★5は上質な定番（恒常）から出ます', hero: G.gachaById('g5-grand-piano') || G.byRarity(5).find(i => !i.limited) }];
+  const b = banners.find(x => x.id === banner) || banners[0];
   const t1 = hs.rareTickets || 0, t4 = hs.rareTickets4 || 0, t5 = hs.rareTickets5 || 0;
   const s4 = hs.shards4 || 0, s5 = hs.shards5 || 0;
   const el = screenWithTabs('gacha', `<button class="icon back">${icon('back')}</button><h2>レアガチャ</h2><span></span>`, 'furn', `
-    <div class="bn-tabs">${banners.map(x => `<button data-b="${x.id}" class="${x.id === b.id ? 'on' : ''} ${x.limited ? 'lim' : ''}">${x.limited ? icon('star') : ''}${esc(x.name)}</button>`).join('')}</div>
+    <div class="bn-tabs">${banners.map(x => `<button data-b="${x.id}" class="bn-tab ${x.id === b.id ? 'on' : ''} ${x.limited ? 'lim' : ''}" aria-label="${esc(x.name)}">
+      <span class="bt-art banner ${x.limited ? 'b-' + x.id : 'b-standard'}">${x.hero ? `<span class="thumb">${thumbHTML(x.hero)}</span>` : ''}${x.limited ? `<i class="bt-rib">${icon('star')}限定</i>` : ''}</span>
+      <b>${esc(x.short)}</b></button>`).join('')}</div>
     <div class="banner ${b.limited ? 'b-' + b.id : 'b-standard'}">
       <div class="bn-glow"></div>
       ${b.limited ? '<span class="bn-tag">期間限定</span>' : ''}
