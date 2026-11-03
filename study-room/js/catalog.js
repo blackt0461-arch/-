@@ -362,7 +362,7 @@ export const ROOMS = [
     order: ['wall', 'floor', 'sofa', 'ceilLight', 'curtain', 'table', 'rug', 'shelf', 'plant', 'chair', 'picture', 'clock', 'side', 'plant2'],
   },
   {
-    id: 'hobby', name: '趣味部屋', icon: '🎸',
+    id: 'hobby', name: '趣味部屋', icon: '🎸', level: 1,
     question: '何の趣味部屋にしますか？',
     directions: [
       { id: 'music', name: '音楽の部屋', desc: 'こげ茶の木とギター、夕日の光', sun: 'sunset' },

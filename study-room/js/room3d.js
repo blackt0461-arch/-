@@ -1,101 +1,26 @@
 // 立体の部屋。部屋の真ん中に立って、スワイプで見回す。
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { ROOM, WINDOW, kindsOf, variantsOf, SPECIALS } from './catalog.js';
-import { ASSETS } from './assets.js';
+import { loadTex, texturedMaterial, loadModel, fitMaterial, shadowAll } from './loaders.js';
+import { buildExterior } from './exterior.js';
 
 const HW = ROOM.w / 2, HD = ROOM.d / 2, H = ROOM.h;
 const WALL_T = 0.14;
 
 // 時間帯・天気ごとの光
+// 時間帯・天気ごとの光。sky = 空の写真（Poly Haven の puresky を、太陽が窓の外に来るよう回したもの）
+// dir = 日の光の進む向き（空の写真の太陽の位置から計算）
 const MOODS = {
-  morning: { photo: 'morning', sun: '#fff0d8', sunI: 7.5, dir: [-0.35, -0.55, 1], hemiSky: '#e4eeff', hemiGround: '#d9c6ad', hemiI: 0.9,
-    env: 0.45, exp: 1.0, ray: '#fff4dc', rayI: 0.10, lampI: 0.6 },
-  overcast: { photo: 'overcast', sun: '#e6edf6', sunI: 3.0, dir: [0.25, -0.75, 1], hemiSky: '#e3e8f0', hemiGround: '#bdb6ac', hemiI: 1.25,
-    env: 0.5, exp: 1.05, ray: '#e8eef8', rayI: 0.05, lampI: 0.8 },
-  sunset: { photo: 'sunset', sun: '#ffa65a', sunI: 8.5, dir: [0.55, -0.32, 1], hemiSky: '#ffd2a6', hemiGround: '#b98e6c', hemiI: 0.6,
-    env: 0.3, exp: 0.95, ray: '#ffc27a', rayI: 0.16, lampI: 1.0 },
-  night: { photo: 'night', sun: '#8fa8ff', sunI: 0.8, dir: [0.3, -0.5, 1], hemiSky: '#33405e', hemiGround: '#3a3026', hemiI: 0.35,
-    env: 0.1, exp: 1.1, ray: '#9fb4ff', rayI: 0.03, lampI: 3.0 },
+  morning: { photo: 'morning', sun: '#fff1dc', sunI: 6.5, dir: [-0.208, -0.741, 0.639], hemiSky: '#dce9ff', hemiGround: '#d9c6ad', hemiI: 0.9,
+    env: 0.45, exp: 1.0, ray: '#fff4dc', rayI: 0.09, lampI: 0.6, bg: 1.0, fog: '#c9d8e8', hill: '#6f8a5c' },
+  overcast: { photo: 'overcast', sun: '#e6edf6', sunI: 2.2, dir: [0.25, -0.75, 1], hemiSky: '#e3e8f0', hemiGround: '#bdb6ac', hemiI: 1.3,
+    env: 0.5, exp: 1.05, ray: '#e8eef8', rayI: 0.03, lampI: 0.8, bg: 1.0, fog: '#c3c7cd', hill: '#6b7766' },
+  sunset: { photo: 'sunset', sun: '#ffa65a', sunI: 7.5, dir: [0.365, -0.122, 0.923], hemiSky: '#ffd2a6', hemiGround: '#b98e6c', hemiI: 0.6,
+    env: 0.3, exp: 0.95, ray: '#ffc27a', rayI: 0.15, lampI: 1.0, bg: 1.0, fog: '#e7b48e', hill: '#5c5a48' },
+  night: { photo: 'night', sun: '#8fa8ff', sunI: 0.6, dir: [0.3, -0.5, 1], hemiSky: '#33405e', hemiGround: '#3a3026', hemiI: 0.3,
+    env: 0.1, exp: 1.1, ray: '#9fb4ff', rayI: 0.02, lampI: 3.0, bg: 0.12, fog: '#0f1420', hill: '#1d2430' },
 };
-
-const texLoader = new THREE.TextureLoader();
-const gltfLoader = new GLTFLoader();
-const texCache = new Map();
-const modelCache = new Map();
-
-function loadTex(url, srgb) {
-  const k = url + srgb;
-  if (!texCache.has(k)) {
-    texCache.set(k, new Promise((res) => {
-      texLoader.load(url, t => {
-        t.wrapS = t.wrapT = THREE.RepeatWrapping;
-        t.anisotropy = 8;
-        if (srgb) t.colorSpace = THREE.SRGBColorSpace;
-        res(t);
-      }, undefined, () => res(null));
-    }));
-  }
-  return texCache.get(k);
-}
-
-// Poly Haven の質感を読み込んで材質を作る。repeat は 1m あたりの繰り返し
-async function texturedMaterial(texId, opts = {}) {
-  const t = ASSETS.textures[texId];
-  const mat = new THREE.MeshStandardMaterial({ color: opts.tint || '#ffffff', roughness: 1, metalness: 0 });
-  if (!t) return mat;
-  const [map, normal, rough] = await Promise.all([
-    t.map ? loadTex(t.map, true) : null,
-    t.normal ? loadTex(t.normal, false) : null,
-    t.rough ? loadTex(t.rough, false) : null,
-  ]);
-  mat.map = map; mat.normalMap = normal; mat.roughnessMap = rough;
-  mat.userData.rep = opts.rep || 1;
-  mat.needsUpdate = true;
-  return mat;
-}
-
-function loadModel(id) {
-  const a = ASSETS.models[id];
-  if (!a) return Promise.resolve(null);
-  if (!modelCache.has(id)) {
-    modelCache.set(id, new Promise(res => {
-      // gltf の中の「textures/○○.jpg」を、Poly Haven の本当の置き場所に読みかえる
-      const mgr = new THREE.LoadingManager();
-      const base = a.url.slice(0, a.url.lastIndexOf('/') + 1);
-      mgr.setURLModifier(u => {
-        const rel = u.startsWith(base) ? u.slice(base.length) : u;
-        return (a.inc && a.inc[rel]) || u;
-      });
-      new GLTFLoader(mgr).load(a.url, g => res(g.scene), undefined, () => res(null));
-    }));
-  }
-  return modelCache.get(id).then(s => s && s.clone(true));
-}
-
-// テクスチャの繰り返しを、面の大きさ（m）に合わせる
-function fitMaterial(mat, wMeters, hMeters) {
-  const m = mat.clone();
-  const rep = mat.userData.rep || 1;
-  for (const k of ['map', 'normalMap', 'roughnessMap']) {
-    if (mat[k]) {
-      m[k] = mat[k].clone();
-      m[k].repeat.set(wMeters / rep, hMeters / rep);
-      m[k].needsUpdate = true;
-    }
-  }
-  return m;
-}
-
-function shadowAll(obj, cast = true, receive = true) {
-  obj.traverse(o => {
-    if (o.isMesh) {
-      o.castShadow = cast; o.receiveShadow = receive;
-      if (o.material && o.material.transparent) o.castShadow = false;
-    }
-  });
-}
 
 export class Room3D {
   constructor(canvas) {
@@ -125,7 +50,7 @@ export class Room3D {
     this.sun = new THREE.DirectionalLight('#ffffff', 5);
     this.sun.castShadow = true;
     const sc = this.sun.shadow.camera;
-    sc.left = -6; sc.right = 6; sc.top = 6; sc.bottom = -6; sc.near = 0.5; sc.far = 40;
+    sc.left = -15; sc.right = 15; sc.top = 15; sc.bottom = -15; sc.near = 0.5; sc.far = 80;
     this.sun.shadow.mapSize.set(2048, 2048);
     this.sun.shadow.bias = -0.0004;
     this.sun.shadow.normalBias = 0.03;
@@ -291,10 +216,17 @@ export class Room3D {
     this.sun.color.set(m.sun); this.sun.intensity = m.sunI;
     const d = new THREE.Vector3(...m.dir).normalize();
     this.sunDir = d;
-    const target = new THREE.Vector3(WINDOW.x, 0.2, 0.5);
+    const target = new THREE.Vector3(0, 0, -5);
     this.sun.target.position.copy(target);
-    this.sun.position.copy(target).addScaledVector(d, -18);
+    this.sun.position.copy(target).addScaledVector(d, -40);
     this.sun.target.updateMatrixWorld();
+    loadTex(`img/sky-${m.photo}.jpg`, true).then(t => {
+      if (!t || this.mood !== m) return;
+      t.mapping = THREE.EquirectangularReflectionMapping;
+      this.scene.background = t;
+      this.scene.backgroundIntensity = m.bg;
+    });
+    this.scene.fog = new THREE.Fog(m.fog, 60, 520);
   }
 
   async buildShell(st) {
@@ -364,19 +296,21 @@ export class Room3D {
       new THREE.MeshPhysicalMaterial({ color: '#ffffff', roughness: 0.05, transmission: 0, transparent: true, opacity: 0.08, metalness: 0 }));
     glass.position.set(WINDOW.x, ym, -HD - 0.03); g.add(glass);
 
-    // 窓の外の景色
-    g.add(this.makeOutside(this.mood));
+    // 家の外（2階の部屋は3m上から見る）
+    const level = this.roomDef.level || 0;
+    const key = this.mood.photo + level;
+    if (this.extKey !== key) {
+      this.extKey = key;
+      const mood = this.mood;
+      buildExterior(mood, level).then(({ world, own }) => {
+        if (this.extKey !== key) return;
+        if (this.exterior) this.scene.remove(this.exterior.world, this.exterior.own);
+        this.exterior = { world, own };
+        this.scene.add(world, own);
+      });
+    }
     // 光の筋とほこり
     this.makeRays();
-  }
-
-  // 窓の外の景色（Poly Haven の360度写真から、窓から見える部分を切り抜いたもの）
-  makeOutside(m) {
-    const mat = new THREE.MeshBasicMaterial({ color: '#ffffff', toneMapped: false });
-    loadTex(`img/out-${m.photo}.jpg`, true).then(t => { if (t) { t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping; mat.map = t; mat.needsUpdate = true; } });
-    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(26, 13.5), mat);
-    mesh.position.set(WINDOW.x, 5.0, -12);
-    return mesh;
   }
 
   makeRays() {
