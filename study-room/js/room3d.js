@@ -463,6 +463,7 @@ export class Room3D {
     else if (v.tex) obj = await makeRug(v, slot);
     else obj = await loadModel(v.model);
     if (token !== this.token || !obj) return;
+    if (v.model && (v.tint || v.paint)) recolor(obj, v);
     const wrap = new THREE.Group();
     wrap.add(obj);
     shadowAll(obj);
@@ -546,6 +547,22 @@ export class Room3D {
   }
 }
 
+// 部屋の色に合わせて塗り直す。tint=元の色にかけ合わせる / paint=色を塗りかえる（木目などの凹凸は残す）
+function recolor(obj, v) {
+  obj.traverse(o => {
+    if (!o.isMesh) return;
+    const mats = Array.isArray(o.material) ? o.material : [o.material];
+    const out = mats.map(m => {
+      const c = m.clone();
+      if (v.paint) { c.map = null; c.color.set(v.paint); }
+      else c.color.multiply(new THREE.Color(v.tint));
+      c.needsUpdate = true;
+      return c;
+    });
+    o.material = Array.isArray(o.material) ? out : out[0];
+  });
+}
+
 // --- 自作の形 ---
 function makeFrame(v) {
   const g = new THREE.Group();
@@ -595,7 +612,7 @@ function makeCurtain(v) {
 }
 
 async function makeRug(v, slot) {
-  const mat = await texturedMaterial(v.tex, { rep: 1 });
+  const mat = await texturedMaterial(v.tex, { rep: 1, tint: v.tint });
   const m = new THREE.Mesh(new THREE.BoxGeometry(slot.w, 0.012, slot.d), fitMaterial(mat, slot.w / (v.rep || 1) * 1.6, slot.d / (v.rep || 1) * 1.6));
   m.material.roughness = 1;
   m.position.set(slot.x, 0.006, slot.z);

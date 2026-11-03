@@ -82,29 +82,108 @@ const FLOORS = {
     ],
   },
 };
+// 方向性ごとに候補を分ける（部屋の雰囲気に合う物だけを出す）
+// tint: 部屋の色に合わせて塗り直す色（元の色にかけ合わせる）
 const CURTAIN = {
   name: 'カーテン', icon: '🪟', slot: 'curtain',
-  variants: [
-    { name: '白いレース', proc: 'curtain', color: '#f4efe6', opacity: 0.55 },
-    { name: 'リネンのベージュ', proc: 'curtain', color: '#cdb89a', opacity: 0.92 },
-    { name: '深いグリーン', proc: 'curtain', color: '#3f5a45', opacity: 0.97 },
-  ],
+  variants: {
+    natural: [
+      { name: '白いレース', proc: 'curtain', color: '#f4efe6', opacity: 0.55 },
+      { name: 'リネンのベージュ', proc: 'curtain', color: '#d8c7ab', opacity: 0.92 },
+      { name: 'セージグリーン', proc: 'curtain', color: '#9fae92', opacity: 0.95 },
+    ],
+    industrial: [
+      { name: 'グレーのリネン', proc: 'curtain', color: '#9a9a96', opacity: 0.93 },
+      { name: 'チャコール', proc: 'curtain', color: '#3b3b3d', opacity: 0.97 },
+      { name: '白いレース', proc: 'curtain', color: '#eceae6', opacity: 0.55 },
+    ],
+    retro: [
+      { name: 'からし色', proc: 'curtain', color: '#b98a3a', opacity: 0.95 },
+      { name: 'えんじ色', proc: 'curtain', color: '#7a2f2a', opacity: 0.97 },
+      { name: 'クリームのレース', proc: 'curtain', color: '#efe0c2', opacity: 0.6 },
+    ],
+    music: [
+      { name: 'からし色', proc: 'curtain', color: '#b98a3a', opacity: 0.95 },
+      { name: '深いグリーン', proc: 'curtain', color: '#3f5a45', opacity: 0.97 },
+      { name: 'えんじ色', proc: 'curtain', color: '#7a2f2a', opacity: 0.97 },
+    ],
+    manga: [
+      { name: '白いレース', proc: 'curtain', color: '#f4efe6', opacity: 0.55 },
+      { name: 'リネンのベージュ', proc: 'curtain', color: '#d8c7ab', opacity: 0.92 },
+      { name: 'うすい水色', proc: 'curtain', color: '#b9cbd3', opacity: 0.93 },
+    ],
+    game: [
+      { name: '遮光のネイビー', proc: 'curtain', color: '#23304a', opacity: 0.98 },
+      { name: 'チャコール', proc: 'curtain', color: '#3b3b3d', opacity: 0.97 },
+      { name: '深いワインレッド', proc: 'curtain', color: '#4e1f2a', opacity: 0.98 },
+    ],
+  },
 };
 const CEIL_LIGHT = {
   name: '天井の照明', icon: '💡', slot: 'ceil',
-  variants: [
-    { name: 'モダンなペンダント', model: 'modern_ceiling_lamp_01', light: '#ffd9a8' },
-    { name: '工場風のランプ', model: 'hanging_industrial_lamp', light: '#ffcf8f' },
-    { name: 'パイプのランプ', model: 'industrial_pipe_lamp', light: '#ffc98a' },
-  ],
+  variants: {
+    natural: [
+      { name: '白いペンダント', model: 'modern_ceiling_lamp_01', light: '#ffe2bd' },
+      { name: 'シーリングファン', model: 'ceiling_fan', light: '#ffe6c8' },
+      { name: '裸電球のソケット', model: 'pull_chain_light_socket', light: '#ffd9a0' },
+    ],
+    industrial: [
+      { name: '工場のランプ', model: 'hanging_industrial_lamp', light: '#ffcf8f' },
+      { name: 'かご付きライト', model: 'caged_hanging_light', light: '#ffd49a' },
+      { name: '黒いペンダント', model: 'modern_ceiling_lamp_01', paint: '#2a2a2a', light: '#ffd9a8' },
+    ],
+    retro: [
+      { name: 'シャンデリア', model: 'Chandelier_01', light: '#ffc98a' },
+      { name: '真ちゅうのシャンデリア', model: 'Chandelier_02', light: '#ffc98a' },
+      { name: 'ランタンのシャンデリア', model: 'lantern_chandelier_01', light: '#ffbf7a' },
+    ],
+  },
 };
+CEIL_LIGHT.variants.music = CEIL_LIGHT.variants.retro;
+CEIL_LIGHT.variants.manga = CEIL_LIGHT.variants.natural;
+CEIL_LIGHT.variants.game = CEIL_LIGHT.variants.industrial;
 
-// 壁の絵（自作の額縁に、窓の外と同じ Poly Haven の写真を入れる）
-const PICTURES = [
-  { name: '夕日の海の写真', proc: 'frame', img: 'img/out-sunset.jpg', frame: '#3b2a1e', w: 0.9, h: 0.6 },
-  { name: '草原の写真', proc: 'frame', img: 'img/out-morning.jpg', frame: '#d8cbb6', w: 0.7, h: 0.5 },
-  { name: '夜景の写真', proc: 'frame', img: 'img/out-night.jpg', frame: '#111111', w: 1.0, h: 0.55 },
+// 壁の絵（自作の額縁に、窓の外と同じ Poly Haven の写真を入れる）。額の色は部屋に合わせる
+const pics = (a, b, c) => [
+  { name: '夕日の海の写真', proc: 'frame', img: 'img/out-sunset.jpg', frame: a, w: 0.9, h: 0.6 },
+  { name: '草原の写真', proc: 'frame', img: 'img/out-morning.jpg', frame: b, w: 0.7, h: 0.5 },
+  { name: '夜景の写真', proc: 'frame', img: 'img/out-night.jpg', frame: c, w: 1.0, h: 0.55 },
 ];
+const PICTURES = {
+  name: '壁の絵', icon: '🖼️', slot: 'picture',
+  variants: {
+    natural: pics('#c9a77c', '#f1ece3', '#b08a5e'),
+    industrial: pics('#1d1d1d', '#2b2b2b', '#5a5a5a'),
+    retro: pics('#7a5a2a', '#4a3020', '#8c6b2e'),
+    music: pics('#4a3020', '#7a5a2a', '#1d1d1d'),
+    manga: pics('#c9a77c', '#f1ece3', '#b08a5e'),
+    game: pics('#1d1d1d', '#2b2b2b', '#111111'),
+  },
+};
+const RUG = (slot) => ({
+  name: 'ラグ', icon: '🧶', slot,
+  variants: {
+    natural: [
+      { name: 'ウールのヘリンボーン', tex: 'poly_wool_herringbone', rep: 2 },
+      { name: '生成りのジャカード', tex: 'quatrefoil_jacquard_fabric', rep: 2 },
+      { name: 'セージのウール', tex: 'poly_wool_herringbone', rep: 2, tint: '#b9c7ae' },
+    ],
+    industrial: [
+      { name: 'デニム', tex: 'denim_fabric', rep: 2 },
+      { name: 'グレーのウール', tex: 'poly_wool_herringbone', rep: 2, tint: '#8f8f8f' },
+      { name: '黒い革', tex: 'fabric_leather_02', rep: 2, tint: '#4a4a4a' },
+    ],
+    retro: [
+      { name: '模様の織物', tex: 'fabric_pattern_05', rep: 2 },
+      { name: '幾何学の織物', tex: 'fabric_pattern_07', rep: 2 },
+      { name: 'えんじのジャカード', tex: 'quatrefoil_jacquard_fabric', rep: 2, tint: '#b4664e' },
+    ],
+  },
+});
+const RUG_H = RUG('rug');
+RUG_H.variants.music = RUG_H.variants.retro;
+RUG_H.variants.manga = RUG_H.variants.natural;
+RUG_H.variants.game = RUG_H.variants.industrial;
 
 // 部屋のテーマ。directions = 最初に選ぶ「部屋の方向性」。
 export const ROOMS = [
@@ -112,19 +191,19 @@ export const ROOMS = [
     id: 'living', name: 'リビング', icon: '🛋️',
     question: 'どんなリビングにしますか？',
     directions: [
-      { id: 'natural', name: 'ナチュラル', desc: '木と緑、朝のやわらかい光', sun: 'morning' },
-      { id: 'industrial', name: 'インダストリアル', desc: 'コンクリートと鉄、くもり空の光', sun: 'overcast' },
-      { id: 'retro', name: 'レトロ', desc: '古い木と夕日、あたたかい光', sun: 'sunset' },
+      { id: 'natural', name: 'ナチュラル', desc: '明るい木と白と緑、朝のやわらかい光', sun: 'morning' },
+      { id: 'industrial', name: 'インダストリアル', desc: '黒い鉄と革とコンクリート、くもり空の光', sun: 'overcast' },
+      { id: 'retro', name: 'レトロ', desc: 'こげ茶の木と真ちゅう、夕日のあたたかい光', sun: 'sunset' },
     ],
     slots: {
       curtain: { mount: 'window' },
-      ceil: { mount: 'ceiling', x: 0.9, z: -0.4, max: 0.7 },
+      ceil: { mount: 'ceiling', x: 0.9, z: -0.4, max: 0.8 },
       sofa: { mount: 'floor', wall: '+x', x: 2.5, z: 0.3, face: -P / 2, max: 2.3 },
       table: { mount: 'floor', x: 1.15, z: 0.3, face: -P / 2, max: 1.3 },
       rug: { mount: 'rug', x: 1.3, z: 0.3, w: 2.6, d: 1.9 },
       shelf: { mount: 'floor', wall: '-x', x: -2.7, z: 0.9, face: P / 2, max: 2.0 },
       plant: { mount: 'floor', x: -2.45, z: -2.0, face: 0, max: 1.6 },
-      plant2: { mount: 'floor', x: 2.55, z: -2.05, face: 0, max: 1.4 },
+      plant2: { mount: 'floor', x: 2.55, z: -2.05, face: 0, max: 1.0 },
       chair: { mount: 'floor', x: -0.9, z: 1.75, face: P * 0.8, max: 1.1 },
       picture: { mount: 'wall', wall: '+x', x: 2.98, y: 1.7, z: 0.3, face: -P / 2, max: 1.0 },
       clock: { mount: 'wall', wall: '-z', x: 1.7, y: 1.95, z: -2.48, face: 0, max: 0.6 },
@@ -139,54 +218,146 @@ export const ROOMS = [
     kinds: {
       wall: WALLS,
       floor: FLOORS,
-      sofa: { name: 'ソファ', icon: '🛋️', slot: 'sofa', variants: [
-        { name: '革のソファ', model: 'sofa_02' },
-        { name: '布のソファ', model: 'sofa_03' },
-        { name: '木わくのソファ', model: 'painted_wooden_sofa' },
-      ] },
+      sofa: { name: 'ソファ', icon: '🛋️', slot: 'sofa', variants: {
+        natural: [
+          { name: '生成りのソファ', model: 'Sofa_01', tint: '#f3eee4' },
+          { name: '白い木わくのソファ', model: 'painted_wooden_sofa', paint: '#ece5d6' },
+          { name: 'セージのソファ', model: 'Sofa_01', tint: '#c3cfb5' },
+        ],
+        industrial: [
+          { name: '黒い革のソファ', model: 'sofa_02' },
+          { name: 'グレーのソファ', model: 'Sofa_01', tint: '#8d8d8d' },
+          { name: 'チャコールの木わくソファ', model: 'painted_wooden_sofa', paint: '#454545' },
+        ],
+        retro: [
+          { name: '彫刻のソファ', model: 'sofa_03' },
+          { name: '中国風の長いす', model: 'chinese_sofa' },
+          { name: '花がらのデイベッド', model: 'vintage_day_bed' },
+        ],
+      } },
       ceilLight: CEIL_LIGHT,
       curtain: CURTAIN,
-      table: { name: 'ローテーブル', icon: '☕', slot: 'table', variants: [
-        { name: '丸い木のテーブル', model: 'coffee_table_round_01' },
-        { name: 'モダンなテーブル', model: 'modern_coffee_table_01' },
-        { name: '工場風のテーブル', model: 'industrial_coffee_table' },
-      ] },
-      rug: { name: 'ラグ', icon: '🧶', slot: 'rug', variants: [
-        { name: 'ウールのヘリンボーン', tex: 'poly_wool_herringbone', rep: 2 },
-        { name: '模様の織物', tex: 'fabric_pattern_05', rep: 2 },
-        { name: 'ジャカード織り', tex: 'quatrefoil_jacquard_fabric', rep: 2 },
-      ] },
-      shelf: { name: '棚', icon: '📚', slot: 'shelf', variants: [
-        { name: '古い木の本棚', model: 'wooden_bookshelf_worn' },
-        { name: 'スチールの棚', model: 'steel_frame_shelves_02' },
-        { name: 'アンティークの戸棚', model: 'vintage_cabinet_01' },
-      ] },
-      plant: { name: '観葉植物', icon: '🪴', slot: 'plant', variants: [
-        { name: '大きな観葉植物', model: 'potted_plant_01' },
-        { name: '鉢植えの木', model: 'potted_plant_02' },
-        { name: 'すらっとした植物', model: 'potted_plant_04' },
-      ] },
-      chair: { name: 'ひとりがけ椅子', icon: '🪑', slot: 'chair', variants: [
-        { name: 'ラウンジチェア', model: 'mid_century_lounge_chair' },
-        { name: 'アームチェア', model: 'modern_arm_chair_01' },
-        { name: 'ロッキングチェア', model: 'Rockingchair_01' },
-      ] },
-      picture: { name: '壁の絵', icon: '🖼️', slot: 'picture', variants: PICTURES },
-      clock: { name: '時計', icon: '🕰️', slot: 'clock', variants: [
-        { name: 'シンプルな壁掛け時計', model: 'wall_clock' },
-        { name: '電話つきの古い時計', model: 'vintage_telephone_wall_clock' },
-        { name: '窓辺の置き時計', model: 'mantel_clock_01', at: { mount: 'floor', wall: null, x: -1.45, z: -2.4, base: 0.62, face: 0 } },
-      ] },
-      side: { name: 'サイドテーブル', icon: '🕯️', slot: 'side', variants: [
-        { name: '小さな木のテーブル', model: 'side_table_01' },
-        { name: '背の高いテーブル', model: 'side_table_tall_01' },
-        { name: '丸い木の台', model: 'round_wooden_table_01' },
-      ] },
-      plant2: { name: '小さな植物', icon: '🌿', slot: 'plant2', variants: [
-        { name: 'イラクサの鉢', model: 'nettle_plant' },
-        { name: 'ツルニチニチソウ', model: 'periwinkle_plant' },
-        { name: '素焼きの鉢', model: 'planter_pot_clay' },
-      ] },
+      table: { name: 'ローテーブル', icon: '☕', slot: 'table', variants: {
+        natural: [
+          { name: '木とコンクリのテーブル', model: 'modern_coffee_table_01' },
+          { name: 'シンプルな木のテーブル', model: 'wooden_table_02' },
+          { name: '白い木のテーブル', model: 'painted_wooden_table', paint: '#ece6da' },
+        ],
+        industrial: [
+          { name: '鉄わくのテーブル', model: 'industrial_coffee_table' },
+          { name: '大理石の丸テーブル', model: 'coffee_table_round_01' },
+          { name: '黒い幾何学テーブル', model: 'modern_coffee_table_02' },
+        ],
+        retro: [
+          { name: '彫刻のテーブル', model: 'gothic_coffee_table' },
+          { name: '中国風の茶卓', model: 'chinese_tea_table' },
+          { name: '低い丸木のテーブル', model: 'WoodenTable_02' },
+        ],
+      } },
+      rug: RUG('rug'),
+      shelf: { name: '棚', icon: '📚', slot: 'shelf', variants: {
+        natural: [
+          { name: '明るい木の飾り棚', model: 'wooden_display_shelves_01' },
+          { name: '木と黒鉄の棚', model: 'steel_frame_shelves_01' },
+          { name: '白い戸棚', model: 'painted_wooden_cabinet' },
+        ],
+        industrial: [
+          { name: 'スチールの棚', model: 'steel_frame_shelves_02' },
+          { name: '引き出しつきスチール棚', model: 'steel_frame_shelves_03' },
+          { name: '使い込んだ鉄のラック', model: 'worn_metal_rack' },
+        ],
+        retro: [
+          { name: 'アンティークの戸棚', model: 'vintage_cabinet_01' },
+          { name: 'ゴシックのタンス', model: 'GothicCommode_01' },
+          { name: '中国風の飾り棚', model: 'chinese_cabinet' },
+        ],
+      } },
+      plant: { name: '観葉植物', icon: '🪴', slot: 'plant', variants: {
+        natural: [
+          { name: '大きな観葉植物', model: 'potted_plant_01' },
+          { name: '素焼き鉢の植物', model: 'potted_plant_02' },
+          { name: '白い鉢の多肉植物', model: 'potted_plant_04' },
+        ],
+        industrial: [
+          { name: '白い鉢の多肉植物', model: 'potted_plant_04' },
+          { name: '大きな観葉植物', model: 'potted_plant_01' },
+          { name: 'ミルク缶', model: 'metal_jug' },
+        ],
+        retro: [
+          { name: '素焼き鉢の植物', model: 'potted_plant_02' },
+          { name: '大きな観葉植物', model: 'potted_plant_01' },
+          { name: '木のプランター', model: 'planter_box_02' },
+        ],
+      } },
+      chair: { name: 'ひとりがけ椅子', icon: '🪑', slot: 'chair', variants: {
+        natural: [
+          { name: '木と革のアームチェア', model: 'modern_arm_chair_01' },
+          { name: '白い木の椅子', model: 'painted_wooden_chair_01' },
+          { name: '木のスツール', model: 'wooden_stool_01' },
+        ],
+        industrial: [
+          { name: 'ラウンジチェア', model: 'mid_century_lounge_chair' },
+          { name: '革のオットマン', model: 'Ottoman_01' },
+          { name: '鉄のスツール', model: 'metal_stool_01' },
+        ],
+        retro: [
+          { name: 'ロッキングチェア', model: 'Rockingchair_01' },
+          { name: 'クラシックなアームチェア', model: 'ArmChair_01' },
+          { name: '緑のアームチェア', model: 'GreenChair_01' },
+        ],
+      } },
+      picture: PICTURES,
+      clock: { name: '時計', icon: '🕰️', slot: 'clock', variants: {
+        natural: [
+          { name: 'シンプルな壁掛け時計', model: 'wall_clock' },
+          { name: '窓辺の置き時計', model: 'mantel_clock_01', at: { mount: 'floor', wall: null, x: -1.45, z: -2.4, base: 0.62, face: 0 } },
+          { name: '窓辺の目覚まし時計', model: 'alarm_clock_01', at: { mount: 'floor', wall: null, x: -1.45, z: -2.4, base: 0.62, face: 0 } },
+        ],
+        industrial: [
+          { name: 'シルバーの壁掛け時計', model: 'wall_clock' },
+          { name: 'ダークな壁掛け時計', model: 'wall_clock', tint: '#5a5a5a' },
+          { name: '窓辺の目覚まし時計', model: 'alarm_clock_01', at: { mount: 'floor', wall: null, x: -1.45, z: -2.4, base: 0.62, face: 0 } },
+        ],
+        retro: [
+          { name: '電話つきの古い時計', model: 'vintage_telephone_wall_clock' },
+          { name: '窓辺の置き時計', model: 'mantel_clock_01', at: { mount: 'floor', wall: null, x: -1.45, z: -2.4, base: 0.62, face: 0 } },
+          { name: '真ちゅう色の壁掛け時計', model: 'wall_clock', tint: '#c9a35a' },
+        ],
+      } },
+      side: { name: 'サイドテーブル', icon: '🕯️', slot: 'side', variants: {
+        natural: [
+          { name: '明るい木の台', model: 'side_table_01' },
+          { name: '木のスツール', model: 'wooden_stool_02' },
+          { name: '編みかご', model: 'wicker_basket_02' },
+        ],
+        industrial: [
+          { name: '鉄のスツール', model: 'metal_stool_02' },
+          { name: '工具ワゴン', model: 'industrial_storage_cart' },
+          { name: 'ミルク缶', model: 'metal_jug' },
+        ],
+        retro: [
+          { name: '丸い木の台', model: 'round_wooden_table_02' },
+          { name: '背の高い丸テーブル', model: 'side_table_tall_01' },
+          { name: '中国風のスツール', model: 'chinese_stool' },
+        ],
+      } },
+      plant2: { name: '飾り', icon: '🏺', slot: 'plant2', variants: {
+        natural: [
+          { name: '白い花びん', model: 'ceramic_vase_03' },
+          { name: '白いつぼ', model: 'ceramic_vase_02' },
+          { name: '編みかご', model: 'wicker_basket_01' },
+        ],
+        industrial: [
+          { name: '古いスーツケース', model: 'vintage_suitcase' },
+          { name: 'ラジカセ', model: 'boombox' },
+          { name: '白い花びん', model: 'ceramic_vase_03' },
+        ],
+        retro: [
+          { name: '真ちゅうの花びん', model: 'brass_vase_01' },
+          { name: '宝箱', model: 'treasure_chest' },
+          { name: '古いランタン', model: 'Lantern_01' },
+        ],
+      } },
     },
     order: ['wall', 'floor', 'sofa', 'ceilLight', 'curtain', 'table', 'rug', 'shelf', 'plant', 'chair', 'picture', 'clock', 'side', 'plant2'],
   },
@@ -194,13 +365,13 @@ export const ROOMS = [
     id: 'hobby', name: '趣味部屋', icon: '🎸',
     question: '何の趣味部屋にしますか？',
     directions: [
-      { id: 'music', name: '音楽の部屋', desc: 'ギターやオーディオに囲まれる', sun: 'sunset' },
-      { id: 'manga', name: '漫画の部屋', desc: '本棚と、ごろごろできる場所', sun: 'morning' },
-      { id: 'game', name: 'ゲームの部屋', desc: 'テレビとゲーム機、夜の明かり', sun: 'night' },
+      { id: 'music', name: '音楽の部屋', desc: 'こげ茶の木とギター、夕日の光', sun: 'sunset' },
+      { id: 'manga', name: '漫画の部屋', desc: '明るい木の本棚と、ごろごろできる場所', sun: 'morning' },
+      { id: 'game', name: 'ゲームの部屋', desc: '黒と鉄、テレビとゲーム機、夜の明かり', sun: 'night' },
     ],
     slots: {
       curtain: { mount: 'window' },
-      ceil: { mount: 'ceiling', x: 0.5, z: -0.5, max: 0.7 },
+      ceil: { mount: 'ceiling', x: 0.5, z: -0.5, max: 0.8 },
       main: { mount: 'floor', wall: '+x', x: 2.4, z: 0.2, face: -P / 2, max: 2.3 },
       shelf: { mount: 'floor', wall: '-x', x: -2.7, z: 0.6, face: P / 2, max: 2.0 },
       a: { mount: 'floor', x: -1.4, z: -1.95, face: P * 0.1, max: 1.3 },
@@ -217,7 +388,7 @@ export const ROOMS = [
     ],
     kindsByDirection: {
       music: {
-        wall: WALLS, floor: FLOORS, ceilLight: CEIL_LIGHT, curtain: CURTAIN,
+        wall: WALLS, floor: FLOORS, ceilLight: CEIL_LIGHT, curtain: CURTAIN, rug: RUG_H, picture: PICTURES,
         guitar: { name: 'ギター', icon: '🎸', slot: 'a', variants: [
           { name: 'アコースティックギター', proc: 'guitar', style: 'acoustic' },
           { name: 'エレキギター（赤）', proc: 'guitar', style: 'electric' },
@@ -225,113 +396,95 @@ export const ROOMS = [
         ] },
         audio: { name: 'オーディオ', icon: '📻', slot: 'b', variants: [
           { name: 'ラジカセ', model: 'boombox' },
-          { name: 'カセットプレーヤー', model: 'portable_cassette_player' },
+          { name: 'カセットプレーヤー', model: 'cassette_player' },
           { name: '古い無線機', model: 'vintage_radio_transceiver' },
         ] },
         seat: { name: '練習用の椅子', icon: '🪑', slot: 'c', variants: [
-          { name: '木の椅子', model: 'WoodenChair_01' },
+          { name: '木のスツール', model: 'wooden_stool_02' },
           { name: '丸いバーチェア', model: 'bar_chair_round_01' },
-          { name: '学校の椅子', model: 'SchoolChair_01' },
+          { name: '古い木のスツール', model: 'wooden_stool_01' },
         ] },
         main: { name: 'くつろぐ場所', icon: '🛏️', slot: 'main', variants: [
-          { name: '古いベッド', model: 'old_bed_frame' },
-          { name: 'デイベッド', model: 'vintage_day_bed' },
-          { name: '革のソファ', model: 'sofa_02' },
+          { name: '古い鉄のベッド', model: 'old_bed_frame' },
+          { name: '彫刻のソファ', model: 'sofa_03' },
+          { name: '花がらのデイベッド', model: 'vintage_day_bed' },
         ] },
         shelf: { name: 'レコード棚', icon: '💿', slot: 'shelf', variants: [
-          { name: '古い木の棚', model: 'wooden_bookshelf_worn' },
-          { name: 'スチールの棚', model: 'steel_frame_shelves_03' },
-          { name: '引き出しの棚', model: 'drawer_cabinet' },
-        ] },
-        rug: { name: 'ラグ', icon: '🧶', slot: 'rug', variants: [
-          { name: 'ウールのヘリンボーン', tex: 'poly_wool_herringbone', rep: 2 },
-          { name: '模様の織物', tex: 'fabric_pattern_07', rep: 2 },
-          { name: 'デニム', tex: 'denim_fabric', rep: 2 },
+          { name: '木の引き出し棚', model: 'vintage_wooden_drawer_01' },
+          { name: 'アンティークの戸棚', model: 'vintage_cabinet_01' },
+          { name: 'ゴシックのタンス', model: 'GothicCommode_01' },
         ] },
         guitar2: { name: '2本目のギター', icon: '🎸', slot: 'd', variants: [
           { name: 'アコースティックギター', proc: 'guitar', style: 'acoustic' },
           { name: 'エレキギター（青）', proc: 'guitar', style: 'electric2' },
           { name: 'ベース（白木）', proc: 'guitar', style: 'bass2' },
         ] },
-        picture: { name: '壁の絵', icon: '🖼️', slot: 'picture', variants: PICTURES },
       },
       manga: {
-        wall: WALLS, floor: FLOORS, ceilLight: CEIL_LIGHT, curtain: CURTAIN,
+        wall: WALLS, floor: FLOORS, ceilLight: CEIL_LIGHT, curtain: CURTAIN, rug: RUG_H, picture: PICTURES,
         shelf: { name: '本棚', icon: '📚', slot: 'shelf', variants: [
-          { name: '古い木の本棚', model: 'wooden_bookshelf_worn' },
-          { name: 'シンプルな棚', model: 'Shelf_01' },
-          { name: 'スチールの棚', model: 'steel_frame_shelves_01' },
+          { name: '明るい木の飾り棚', model: 'wooden_display_shelves_01' },
+          { name: '木と黒鉄の棚', model: 'steel_frame_shelves_01' },
+          { name: '白い棚', model: 'painted_wooden_shelves', paint: '#ece5d6' },
         ] },
         main: { name: 'ごろごろする場所', icon: '🛏️', slot: 'main', variants: [
-          { name: 'デイベッド', model: 'vintage_day_bed' },
-          { name: '古いベッド', model: 'old_bed_frame' },
-          { name: '布のソファ', model: 'sofa_03' },
+          { name: '生成りのソファ', model: 'Sofa_01', tint: '#f3eee4' },
+          { name: '白い木わくのソファ', model: 'painted_wooden_sofa', paint: '#ece5d6' },
+          { name: 'セージのソファ', model: 'Sofa_01', tint: '#c3cfb5' },
         ] },
         books: { name: '本と小物', icon: '📖', slot: 'c', variants: [
           { name: '百科事典セット', model: 'book_encyclopedia_set_01' },
-          { name: 'フォトフレーム', model: 'standing_picture_frame_01' },
-          { name: 'バインダー', model: 'binder_notebook' },
+          { name: 'フォトフレーム', model: 'standing_picture_frame_02' },
+          { name: '白いつぼ', model: 'ceramic_vase_01' },
         ] },
         cushion: { name: 'クッション', icon: '🛋️', slot: 'd', variants: [
           { name: 'クッションの山', model: 'throw_pillows_01' },
-          { name: 'ラウンジチェア', model: 'mid_century_lounge_chair' },
-          { name: 'アームチェア', model: 'ArmChair_01' },
+          { name: '木と革のアームチェア', model: 'modern_arm_chair_01' },
+          { name: '白い木の椅子', model: 'painted_wooden_chair_01' },
         ] },
         lamp: { name: '読書灯', icon: '🔦', slot: 'a', variants: [
-          { name: 'アームのランプ', model: 'desk_lamp_arm_01' },
-          { name: 'オイルランプ', model: 'vintage_oil_lamp' },
+          { name: 'オレンジのアームランプ', model: 'desk_lamp_arm_01' },
+          { name: '木のランタン', model: 'wooden_lantern_01' },
           { name: '木のろうそく立て', model: 'wooden_candlestick' },
-        ] },
-        rug: { name: 'ラグ', icon: '🧶', slot: 'rug', variants: [
-          { name: 'ウールのヘリンボーン', tex: 'poly_wool_herringbone', rep: 2 },
-          { name: 'ジャカード織り', tex: 'quatrefoil_jacquard_fabric', rep: 2 },
-          { name: '模様の織物', tex: 'fabric_pattern_05', rep: 2 },
         ] },
         basket: { name: 'かご', icon: '🧺', slot: 'b', variants: [
           { name: '編みかご', model: 'wicker_basket_01' },
-          { name: '大きな編みかご', model: 'wicker_basket_02' },
-          { name: '木箱', model: 'wooden_crate_01' },
+          { name: 'ふたつきの編みかご', model: 'wicker_basket_02' },
+          { name: '素焼き鉢の植物', model: 'potted_plant_02' },
         ] },
-        picture: { name: '壁の絵', icon: '🖼️', slot: 'picture', variants: PICTURES },
       },
       game: {
-        wall: WALLS, floor: FLOORS, ceilLight: CEIL_LIGHT, curtain: CURTAIN,
+        wall: WALLS, floor: FLOORS, ceilLight: CEIL_LIGHT, curtain: CURTAIN, rug: RUG_H, picture: PICTURES,
         tv: { name: 'テレビ', icon: '📺', slot: 'shelf', variants: [
           { name: 'ブラウン管テレビ', model: 'Television_01' },
           { name: '古いテレビ', model: 'television_02' },
-          { name: 'テレビ台つき', model: 'modern_wooden_cabinet' },
+          { name: 'テレビ台', model: 'modern_wooden_cabinet' },
         ] },
         console: { name: 'ゲーム機', icon: '🎮', slot: 'c', variants: [
           { name: 'ゲーム機', model: 'gaming_console' },
-          { name: 'レトロなゲーム機', model: 'ClassicConsole_01' },
           { name: 'コントローラー', model: 'gamepad' },
+          { name: '古いノートパソコン', model: 'classic_laptop' },
         ] },
         main: { name: 'ソファ', icon: '🛋️', slot: 'main', variants: [
-          { name: '布のソファ', model: 'sofa_03' },
-          { name: '革のソファ', model: 'sofa_02' },
-          { name: '中国風のソファ', model: 'chinese_sofa' },
+          { name: '黒い革のソファ', model: 'sofa_02' },
+          { name: 'グレーのソファ', model: 'Sofa_01', tint: '#7d7d7d' },
+          { name: 'チャコールの木わくソファ', model: 'painted_wooden_sofa', paint: '#3e3e3e' },
         ] },
         seat: { name: 'ゲーム用の椅子', icon: '🪑', slot: 'd', variants: [
-          { name: '緑の椅子', model: 'GreenChair_01' },
-          { name: 'アームチェア', model: 'ArmChair_01' },
-          { name: '床屋の椅子', model: 'BarberShopChair_01' },
-        ] },
-        rug: { name: 'ラグ', icon: '🧶', slot: 'rug', variants: [
-          { name: 'デニム', tex: 'denim_fabric', rep: 2 },
-          { name: '模様の織物', tex: 'fabric_pattern_07', rep: 2 },
-          { name: 'ウールのヘリンボーン', tex: 'poly_wool_herringbone', rep: 2 },
+          { name: 'ラウンジチェア', model: 'mid_century_lounge_chair' },
+          { name: '革のオットマン', model: 'Ottoman_01' },
+          { name: '鉄のスツール', model: 'metal_stool_01' },
         ] },
         box: { name: '収納', icon: '📦', slot: 'a', variants: [
-          { name: 'プラスチックケース', model: 'plastic_crate_01' },
-          { name: '木箱', model: 'wooden_crate_02' },
-          { name: 'ダンボール', model: 'cardboard_box_01' },
+          { name: '工具ワゴン', model: 'industrial_storage_cart' },
+          { name: '緑のワゴン', model: 'tool_cart' },
+          { name: '使い込んだ鉄のラック', model: 'worn_metal_rack' },
         ] },
         snack: { name: 'ミニテーブル', icon: '🍿', slot: 'b', variants: [
-          { name: '小さな木のテーブル', model: 'small_wooden_table_01' },
-          { name: '丸い木の台', model: 'round_wooden_table_02' },
-          { name: 'サイドテーブル', model: 'side_table_01' },
+          { name: '鉄のスツール', model: 'metal_stool_02' },
+          { name: '黒い幾何学テーブル', model: 'modern_coffee_table_02' },
+          { name: '大理石の丸テーブル', model: 'coffee_table_round_01' },
         ] },
-        picture: { name: '壁の絵', icon: '🖼️', slot: 'picture', variants: PICTURES },
       },
     },
     orderByDirection: {
@@ -346,10 +499,10 @@ export const ROOMS = [
 export const SPECIALS = [
   { name: '大きな柱時計', model: 'vintage_grandfather_clock_01' },
   { name: 'アンティークの花びん', model: 'antique_ceramic_vase_01' },
-  { name: '真ちゅうの花びん', model: 'brass_vase_03' },
+  { name: '白い馬の像', model: 'horse_statue_01' },
   { name: '古いオイルランプ', model: 'vintage_oil_lamp' },
-  { name: 'ロッキングチェア', model: 'Rockingchair_01' },
-  { name: '中国風の飾り棚', model: 'chinese_cabinet' },
+  { name: '地球儀のような羅針盤', model: 'seadogs_compass' },
+  { name: '宝箱', model: 'treasure_chest' },
 ];
 
 export function kindsOf(room, dir) {
