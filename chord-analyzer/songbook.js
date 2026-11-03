@@ -4,6 +4,7 @@ import { parseLyrics, sungLines, lineSpans, placeChords, timeAtPos, applyEdit, d
 import { parseChordName } from './chord-engine.js';
 import { FEEDBACK_URL, sendFeedback } from './feedback.js';
 import { readLyricsFromImages } from './lyrics-ocr.js';
+import { initSheetEditor } from './sheet-editor.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
@@ -25,14 +26,14 @@ export function initSongbook(app) {
   // 画面に出すコード名（カポを付けているときは押さえ方の名前）
   const show = (name) => (app.displayName ? app.displayName(name) : name);
 
-  const save = () => { if (song) store.set(`songbook:${song.key}`, { id: song.id, text: song.text, times: song.times, edits: song.edits }); };
+  const save = () => { if (song) store.set(`songbook:${song.key}`, { id: song.id, text: song.text, times: song.times, edits: song.edits, sheet: song.sheet ?? null }); };
   const timeline = () => app.getAnalysis()?.timeline ?? [];
 
   // 曲を読み込んだとき（解析が終わったとき）に呼ぶ。同じ曲なら、前に貼った歌詞・タイミング・訂正を戻す
   function onAnalysis(fileKey) {
     const a = app.getAnalysis();
     const saved = store.get(`songbook:${fileKey}`, null);
-    song = { key: fileKey, id: saved?.id ?? Math.random().toString(36).slice(2, 10), text: saved?.text ?? '', times: saved?.times ?? {}, original: a.timeline.map((s) => ({ ...s })), edits: [] };
+    song = { key: fileKey, id: saved?.id ?? Math.random().toString(36).slice(2, 10), text: saved?.text ?? '', times: saved?.times ?? {}, sheet: saved?.sheet ?? null, original: a.timeline.map((s) => ({ ...s })), edits: [] };
     // 訂正のくせ（何度も同じ直し方をしたもの）を、新しい解析結果に反映する
     const applied = applyHabits(a);
     // 前に訂正した内容を、もう一度反映する
@@ -70,11 +71,14 @@ export function initSongbook(app) {
     tools.hidden = !hasLyrics;
     if (!hasLyrics) { view.innerHTML = ''; return; }
     const timed = sungLines(song.lines).filter((i) => typeof song.times[i] === 'number').length;
-    if (!timed && !syncing) {
-      view.innerHTML = `<p class="hint">歌詞を入れました。次に「タイミングを合わせる」を押して、曲に合わせて歌の各行の始まりをタップしてください。</p>`;
+    if (!timed && !syncing && !song.sheet) {
+      view.innerHTML = `<p class="hint">歌詞を入れました。「✍️ 歌詞にコードを置く」で、指でコードを置いていけます。曲に合わせて自動で置きたいときは、先に「タイミングを合わせる」をしてください。</p>`;
       return;
     }
-    const placed = placeChords(song.lines, song.times, a.timeline, { duration: a.duration });
+    // 自分で置いたコード（歌詞にコードを置く画面）があれば、それを出す。無ければ曲から自動で置く
+    const placed = song.sheet
+      ? Object.fromEntries(Object.entries(song.sheet).map(([k, v]) => [k, { marks: v.marks.map((m) => ({ ...m, seg: -1, fixed: true })), after: (v.after ?? []).map((n) => ({ name: n, seg: -1, fixed: true })) }]))
+      : placeChords(song.lines, song.times, a.timeline, { duration: a.duration });
     view.innerHTML = song.lines.map((l, i) => {
       if (!l.text) return '<div class="sb-gap"></div>';
       const p = placed[i];
@@ -87,9 +91,9 @@ export function initSongbook(app) {
         const to = k + 1 < cuts.length ? cuts[k + 1] : chars.length;
         const m = marks.find((x) => x.pos === from);
         const text = chars.slice(from, to).map((c, j) => `<span class="sb-char" data-line="${i}" data-pos="${from + j}">${esc(c)}</span>`).join('');
-        return `<span class="sb-seg">${m ? `<button type="button" class="sb-chord" data-seg="${m.seg}">${esc(show(m.name))}</button>` : '<span class="sb-chord sb-none"></span>'}<span class="sb-text">${text}</span></span>`;
+        return `<span class="sb-seg">${m ? `<button type="button" class="sb-chord" data-seg="${m.seg}">${esc(m.fixed ? m.name : show(m.name))}</button>` : '<span class="sb-chord sb-none"></span>'}<span class="sb-text">${text}</span></span>`;
       }).join('');
-      const after = (p?.after ?? []).map((m) => `<button type="button" class="sb-chord sb-after" data-seg="${m.seg}">${esc(show(m.name))}</button>`).join('');
+      const after = (p?.after ?? []).map((m) => `<button type="button" class="sb-chord sb-after" data-seg="${m.seg}">${esc(m.fixed ? m.name : show(m.name))}</button>`).join('');
       return `<div class="sb-line${p ? '' : ' untimed'}" data-line="${i}">${body}${after ? `<span class="sb-tail">${after}</span>` : ''}</div>`;
     }).join('');
     highlight(app.media.currentTime);
@@ -111,6 +115,8 @@ export function initSongbook(app) {
   // ---- 歌詞の入力 ----
   useBtn.addEventListener('click', () => {
     if (!song) return;
+    // 歌詞が変わったら、前に置いたコードは文字の位置がずれるので消す
+    if (song.text !== input.value) song.sheet = null;
     song.text = input.value;
     delete $('lyrics-edit').dataset.open;
     save();
@@ -187,6 +193,7 @@ export function initSongbook(app) {
       view.classList.remove('moving');
       return;
     }
+    if (chordBtn && song?.sheet) { e.stopPropagation(); sheetEditor.open(); return; }
     if (chordBtn) {
       e.stopPropagation();
       if (!fixMode.checked) { app.playFrom(timeline()[Number(chordBtn.dataset.seg)]?.start ?? 0); return; }
@@ -279,10 +286,29 @@ export function initSongbook(app) {
   function getSheet() {
     const a = app.getAnalysis();
     if (!a || !song?.lines?.some((l) => l.text)) return null;
+    if (song.sheet) return song.lines.map((l, i) => ({ text: l.text, marks: song.sheet[i]?.marks ?? [], after: song.sheet[i]?.after ?? [] }));
     if (!sungLines(song.lines).some((i) => typeof song.times[i] === 'number')) return null;
     const placed = placeChords(song.lines, song.times, a.timeline, { duration: a.duration });
     return song.lines.map((l, i) => ({ text: l.text, marks: (placed[i]?.marks ?? []).map((m) => ({ pos: m.pos, name: show(m.name) })), after: (placed[i]?.after ?? []).map((m) => show(m.name)) }));
   }
+  // 歌詞にコードを置く画面（全画面）
+  function autoSheet() {
+    const a = app.getAnalysis();
+    if (!a || !song?.lines || !sungLines(song.lines).some((i) => typeof song.times[i] === 'number')) return null;
+    const placed = placeChords(song.lines, song.times, a.timeline, { duration: a.duration });
+    return Object.fromEntries(Object.entries(placed).map(([k, v]) => [k, { marks: v.marks.map((m) => ({ pos: m.pos, name: show(m.name) })), after: v.after.map((m) => show(m.name)) }]));
+  }
+  const sheetEditor = initSheetEditor({
+    getLines: () => song?.lines ?? [],
+    getSheet: () => song?.sheet ?? null,
+    autoSheet,
+    setSheet: (sh) => { if (!song) return; song.sheet = sh; save(); render(); app.rerender(); },
+    songChords: () => [...new Set(timeline().filter((s) => s.end - s.start > 0.3).map((s) => show(s.name)))],
+    keyOf: () => app.keyOf?.() ?? null,
+    playChord: (name) => app.playChord?.(name),
+  });
+  $('sheet-editor-open')?.addEventListener('click', () => { if (song?.lines?.some((l) => l.text)) sheetEditor.open(); });
+
   // 編集画面から：直す操作をひとつ加える／ひとつ前に戻す
   const commitEdit = (edit) => commit(edit);
   function undo(prevTimeline) {
