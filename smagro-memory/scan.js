@@ -265,5 +265,6 @@ const Scan = (() => {
     invalidate(); save(); render();
   }
 
-  return { start, apply };
+  function runFiles(kind, files) { sheet('<div class="thinking" style="margin-top:8px">よみこみちゅう…</div>'); run(kind, files).catch(showError); }
+  return { start, apply, runFiles };
 })();
