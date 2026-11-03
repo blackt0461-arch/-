@@ -178,6 +178,7 @@ export class Room3D {
       }
       const dx = e.clientX - lastX, dy = e.clientY - lastY;
       lastX = e.clientX; lastY = e.clientY;
+      if (this.topView) return;
       const k = 0.0042 * this.zoom;
       this.yaw += dx * k; this.pitch += dy * k;  // 指の動きに部屋がついてくる向き
       this.vyaw = dx * k; this.vpitch = dy * k;
@@ -215,7 +216,7 @@ export class Room3D {
     for (const h of hits) {
       let o = h.object;
       while (o && o.parent !== this.items) o = o.parent;
-      if (o && o.userData.uid) return o;
+      if (o && o.userData.uid && o.visible) return o;
     }
     return null;
   }
@@ -286,6 +287,7 @@ export class Room3D {
   }
 
   setZoom(z) {
+    if (this.topView) return;
     this.zoom = Math.min(1.15, Math.max(0.55, z));
     this.camera.fov = this.baseFov * this.zoom;
     this.camera.updateProjectionMatrix();
@@ -321,8 +323,9 @@ export class Room3D {
       this.vyaw *= 0.9; this.vpitch *= 0.9;
       this.clampPitch();
     }
-    this.camera.rotation.set(this.pitch, this.yaw, 0);
-    if (this.walk) {
+    if (!this.topView) this.camera.rotation.set(this.pitch, this.yaw, 0);
+    else if (this._topKey !== this.shell?.uuid + this.items.children.length) { this._topKey = this.shell?.uuid + this.items.children.length; this.applyTopHide(); }
+    if (this.walk && !this.topView) {
       const w = this.walk;
       w.t = Math.min(1, w.t + dt / w.dur);
       const e = w.t < 0.5 ? 2 * w.t * w.t : 1 - Math.pow(-2 * w.t + 2, 2) / 2;
@@ -439,7 +442,9 @@ export class Room3D {
   // opts.readOnly: フレンドの部屋を見るとき（さわれない）
   async show(roomDef, st, opts = {}) {
     const token = (this.token = {});
+    if (this.topView) this.setTopView(false);
     this.sh = roomShape(roomDef);
+    if (this.grid) this.setGrid(false);
     if (this.roomDef !== roomDef || this.st !== st) {
       // 部屋ごとの立つ位置から、窓のほうを向いて始める
       this.camera.position.set(this.sh.cam[0], 1.5, this.sh.cam[1]);
@@ -707,6 +712,64 @@ export class Room3D {
     return false;
   }
 
+  // 種類に合った「良い場所」の候補を順にためして、最初に空いていた所に置く
+  autoSpots(item, self) {
+    const sh = this.sh, out = [];
+    const others = this.items.children.filter(o => o !== self && o.userData.p && o.userData.item);
+    const centerOf = (o) => new THREE.Box3().setFromObject(o).getCenter(new THREE.Vector3());
+    const byGenre = (...g) => others.filter(o => g.includes(o.userData.item.genre) && o.userData.item.place === 'floor');
+    const busy = (seg) => openingsOn(sh, seg.id).reduce((n, op) => n + op.w, 0) / Math.max(0.1, seg.a1 - seg.a0);
+    const walls = [...sh.walls].sort((a, b) => busy(a) - busy(b) || (b.a1 - b.a0) - (a.a1 - a.a0));
+    const alongs = (seg) => { const m = (seg.a0 + seg.a1) / 2, L = seg.a1 - seg.a0; return [m, m - L * 0.25, m + L * 0.25, seg.a0 + 0.6, seg.a1 - 0.6, m - L * 0.4, m + L * 0.4]; };
+    const corners = [];
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) corners.push({ x: sx * (sh.hw - 0.35), z: sz * (sh.hd - 0.35), rot: Math.atan2(-sx, -sz) });
+    const wallSide = (depth) => { for (const seg of walls) for (const a of alongs(seg)) { const q = segPoint(seg, a, 0, depth); out.push({ x: q.x, z: q.z, rot: segRot(seg) }); } };
+    const g = item.genre;
+    if (item.place === 'wall') {
+      for (const seg of walls) for (const a of alongs(seg)) for (const y of [1.55, 1.25, 1.85]) out.push({ wall: seg.id, a, y });
+      return out;
+    }
+    if (item.place === 'ceiling') {
+      out.push({ x: 0, z: 0, rot: 0 });
+      for (const [x, z] of [[0.6, 0], [-0.6, 0], [0, 0.6], [0, -0.6], [1.2, 1.2], [-1.2, -1.2], [1.2, -1.2], [-1.2, 1.2]]) out.push({ x, z, rot: 0 });
+      return out;
+    }
+    if (item.place === 'rug') {
+      const sofa = byGenre('sofa')[0];
+      if (sofa) { const c = centerOf(sofa), r = sofa.userData.p.rot || 0; out.push({ x: c.x + Math.sin(r) * 1.1, z: c.z + Math.cos(r) * 1.1, rot: r }); }
+      out.push({ x: 0, z: 0, rot: 0 }, { x: 0.5, z: 0.5, rot: 0 }, { x: -0.5, z: -0.5, rot: 0 });
+      return out;
+    }
+    // 小物：テーブルや棚の上
+    if (Room3D.canStack(item) && !Room3D.isSupport(item)) for (const s of byGenre('table', 'storage')) { const c = centerOf(s); out.push({ x: c.x, z: c.z, rot: s.userData.p.rot || 0 }, { x: c.x + 0.2, z: c.z, rot: s.userData.p.rot || 0 }, { x: c.x - 0.2, z: c.z, rot: s.userData.p.rot || 0 }); }
+    if (g === 'table') {
+      for (const s of byGenre('sofa')) { const c = centerOf(s), r = s.userData.p.rot || 0; for (const d of [1.0, 1.3, 0.8]) out.push({ x: c.x + Math.sin(r) * d, z: c.z + Math.cos(r) * d, rot: r }); }
+      out.push({ x: 0, z: 0, rot: 0 }, { x: 0.6, z: 0, rot: 0 }, { x: -0.6, z: 0, rot: 0 });
+    } else if (g === 'chair') {
+      for (const t of byGenre('table')) { const c = centerOf(t); for (const [dx, dz] of [[0, 0.75], [0, -0.75], [0.75, 0], [-0.75, 0]]) out.push({ x: c.x + dx, z: c.z + dz, rot: Math.atan2(-dx, -dz) }); }
+      wallSide(0.4);
+    } else if (g === 'plant' || (g === 'light' && item.place === 'floor')) {
+      for (const s of byGenre('sofa')) { const c = centerOf(s), r = s.userData.p.rot || 0; for (const d of [-1.3, 1.3]) out.push({ x: c.x + Math.cos(r) * d, z: c.z - Math.sin(r) * d, rot: r }); }
+      out.push(...corners);
+    } else wallSide(0.5); // ソファ・ベッド・棚・趣味の物などは壁ぎわ
+    out.push(...corners);
+    return out;
+  }
+  autoPlace(o) {
+    const p = o.userData.p, item = o.userData.item;
+    const start = { ...p };
+    for (const c of this.autoSpots(item, o)) {
+      if (item.place !== 'wall') { delete p.on; delete p.y; }
+      Object.assign(p, c);
+      this.mountPlaced(o, p);
+      if (this.checkPlacement(o)) return true;
+    }
+    for (const k of Object.keys(p)) if (!(k in start)) delete p[k];
+    Object.assign(p, start);
+    this.mountPlaced(o, p);
+    return false;
+  }
+
   // 照明の光（重くならないように、近いものから最大4つ）
   updateLights() {
     for (const l of this.lamps) l.parent && l.parent.remove(l);
@@ -758,7 +821,57 @@ export class Room3D {
   // --- 模様がえ ---
   setEditMode(on) {
     this.editMode = !!on && !this.readOnly;
-    if (!this.editMode) this.select(null);
+    if (!this.editMode) { this.select(null); this.setTopView(false); }
+    this.setGrid(this.editMode);
+  }
+  // 床の薄い格子（50cmごと）。模様がえのあいだだけ
+  setGrid(on) {
+    if (this.grid) { this.scene.remove(this.grid); this.grid.geometry.dispose(); this.grid = null; }
+    if (!on || !this.sh) return;
+    const sh = this.sh, st = 0.5, pts = [], nt = sh.notch;
+    const inside = (x, z) => !(nt && x > nt.x0 && x < nt.x1 && z > nt.z0 && z < nt.z1);
+    const xs = [], zs = [];
+    for (let x = -Math.floor(sh.hw / st) * st; x <= sh.hw + 1e-6; x += st) xs.push(x);
+    for (let z = -Math.floor(sh.hd / st) * st; z <= sh.hd + 1e-6; z += st) zs.push(z);
+    const zb = [-sh.hd, ...zs.filter(z => Math.abs(z) < sh.hd - 1e-3), sh.hd], xb = [-sh.hw, ...xs.filter(x => Math.abs(x) < sh.hw - 1e-3), sh.hw];
+    for (const x of xs) for (let i = 0; i < zb.length - 1; i++) if (inside(x, (zb[i] + zb[i + 1]) / 2)) pts.push(x, 0, zb[i], x, 0, zb[i + 1]);
+    for (const z of zs) for (let i = 0; i < xb.length - 1; i++) if (inside((xb[i] + xb[i + 1]) / 2, z)) pts.push(xb[i], 0, z, xb[i + 1], 0, z);
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+    this.grid = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.22, depthWrite: false }));
+    this.grid.position.y = 0.006;
+    this.grid.renderOrder = 2;
+    this.scene.add(this.grid);
+  }
+  // 上から見る（俯瞰）。天井と天井の照明を隠して、真上から部屋全体を見る
+  setTopView(on) {
+    on = !!on && !!this.sh;
+    if (on === !!this.topView) return;
+    if (on) {
+      this.topView = { pos: this.camera.position.clone(), fov: this.camera.fov };
+      this.walk = null; this.targetLook = null; this.vyaw = this.vpitch = 0;
+      const sh = this.sh, a = this.camera.aspect || 1;
+      this.camera.fov = 50;
+      const t = Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2));
+      const hgt = Math.max((sh.hd + 0.3) / t, (sh.hw + 0.3) / (t * a)) + (sh.h || 2.6) * 0.5;
+      this.camera.position.set(0, hgt, 0);
+      this.camera.rotation.set(-Math.PI / 2, 0, 0);
+      // 天井より上（屋根・天井）は切り取って、断面のように見せる
+      this.topView.near = this.camera.near;
+      this.camera.near = Math.max(0.05, hgt - (sh.h || 2.6) + 0.02);
+    } else {
+      this.camera.position.copy(this.topView.pos);
+      this.camera.fov = this.topView.fov;
+      this.camera.near = this.topView.near;
+      this.topView = null;
+    }
+    this.camera.updateProjectionMatrix();
+    this.applyTopHide();
+  }
+  applyTopHide() {
+    const hide = !!this.topView;
+    this.shell?.traverse(o => { if (o.isMesh && o.material === this.ceilMat) o.visible = !hide; });
+    for (const o of this.items.children) if (o.userData.item?.place === 'ceiling' || o.userData.kind === 'bareBulb') o.visible = !hide;
   }
   select(uid) {
     this.selected = uid || null;
@@ -860,10 +973,10 @@ export class Room3D {
     if (this.selected === uid) this.select(null);
     this.updateLights();
   }
-  async addPlaced(p) {
+  async addPlaced(p, auto = false) {
     const o = await this.placeOne(p, true);
     if (!o) return null;
-    if (!this.findFreeSpot(o)) { this.removeObject(p.uid); return null; }
+    if (!(auto && this.autoPlace(o)) && !this.findFreeSpot(o)) { this.removeObject(p.uid); return null; }
     o.userData.baseY = o.position.y;
     this.updateLights();
     this.lookAt(new THREE.Box3().setFromObject(o).getCenter(new THREE.Vector3()));
@@ -991,6 +1104,7 @@ export class Room3D {
     ceilM.emissive = new THREE.Color(this.mood.hemiGround).multiplyScalar(0.35);
     if (!wallSrc?.tex) wallM.userData.rep = 1;
     ceilM.userData.rep = 1;
+    this.ceilMat = ceilM;
     if (!floorSrc?.tex) floorM.userData.rep = 1;
     const darkWall = new THREE.Color(wallM.color).getHSL({}).l < 0.35 || /concrete|black/.test(wallSrc?.tex || '');
     const wallV = { name: darkWall ? '黒' : '' };

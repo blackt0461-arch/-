@@ -660,9 +660,14 @@ async function putIntoRoom(item, justBought) {
   if (S.placedCount(item.id) >= S.owned(item.id)) { toast('もう全部置いています'); return false; }
   const p = { uid: S.newUid(), item: item.id, ...room3d.suggestPlacement(item) };
   r.placed.push(p);
-  S.save();
-  await room3d.addPlaced(p);
-  S.save(); // 置いた位置を直した値で保存
+  const o = await room3d.addPlaced(p, true);
+  if (!o) {
+    r.placed.splice(r.placed.indexOf(p), 1); // 置けなかった記録は残さない
+    S.save();
+    toast('空いている場所がありませんでした。持ち物に入れておきます', 3000);
+    return false;
+  }
+  S.save(); // 置いた位置を保存
   if (!HS().villa) ensureRooms(); // 家具がそろったら別荘が開く
   toast(justBought ? `${item.name}を置きました。模様がえで動かせます` : `${item.name}を置きました`, 2600);
   return true;
@@ -733,12 +738,17 @@ function showEdit() {
     <div class="editbar">
       <div class="eb-top"><b>${icon('sofa')}模様がえ</b><span class="cap">置いている <b>${curRoom().placed.length}</b> / ${S.capacity()}</span></div>
       <p class="eb-hint">家具をタップして選ぶ → そのまま指でなぞって動かす</p>
+      <div class="eb-view seg"><button data-v="eye" class="on">${icon('eye')}ふつう</button><button data-v="top">${icon('grid')}上から</button></div>
       <div class="eb-btns">
         <button class="btn ghost inv">${icon('box')}持ち物</button>
         <button class="btn ghost surf">${icon('brush')}壁・床・ドア・窓</button>
         <button class="btn primary done">${icon('check')}完了</button>
       </div>
     </div>`);
+  bar.querySelectorAll('.eb-view button').forEach(b => b.onclick = () => {
+    bar.querySelectorAll('.eb-view button').forEach(x => x.classList.toggle('on', x === b));
+    room3d.setTopView(b.dataset.v === 'top');
+  });
   bar.querySelector('.inv').onclick = showInventory;
   bar.querySelector('.surf').onclick = showSurfaces;
   bar.querySelector('.done').onclick = () => { room3d.setEditMode(false); S.save(); showHome(); };
@@ -1736,4 +1746,4 @@ if ('serviceWorker' in navigator && location.protocol === 'https:') {
   navigator.serviceWorker.register('sw.js').catch(() => {});
 }
 // テスト用
-window.__app = { get room3d() { return room3d; }, S, sub, HS, switchRoom, ensureRooms, goHome, showHome, curRoom, visitFriend, leaveVisit, showLoginBonus };
+window.__app = { putIntoRoom, get room3d() { return room3d; }, S, sub, HS, switchRoom, ensureRooms, goHome, showHome, curRoom, visitFriend, leaveVisit, showLoginBonus };
