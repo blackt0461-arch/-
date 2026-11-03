@@ -61,7 +61,7 @@ export async function playNotes(midis, { strumMs = 35, seconds = 2.5 } = {}) {
  * from 秒から rate 倍の速さで鳴らし始め、onTime(今の曲の時刻) を画面の更新用に呼ぶ。戻り値の stop() で止める。
  * 音は少し先（0.6秒ぶん）ずつ作って予約していくので、長い曲でも最初に待たされない。
  */
-export async function playSequence(items, { from = 0, rate = 1, onTime = () => {}, onEnd = () => {} } = {}) {
+export async function playSequence(items, { from = 0, rate = 1, volume = 1, onTime = () => {}, onEnd = () => {} } = {}) {
   ctx ??= new (window.AudioContext || window.webkitAudioContext)();
   if (ctx.state !== 'running') await ctx.resume();
   const sr = ctx.sampleRate;
@@ -69,6 +69,7 @@ export async function playSequence(items, { from = 0, rate = 1, onTime = () => {
   const startAt = ctx.currentTime + 0.15;
   const end = queue.length ? queue[queue.length - 1].t + 2 : from;
   const master = ctx.createGain();
+  master.gain.value = volume;
   master.connect(ctx.destination);
   const sources = [];
   const ringing = new Map(); // 弦ごとに、いま鳴っている音（止めるため）
@@ -131,5 +132,7 @@ export async function playSequence(items, { from = 0, rate = 1, onTime = () => {
     master.gain.setTargetAtTime(0, ctx.currentTime, 0.02);
     sources.forEach((s) => { try { s.stop(ctx.currentTime + 0.1); } catch { /* もう止まっている */ } });
   }
-  return { stop };
+  // 鳴らしている途中で音量を変える（聞き比べ用）
+  const setVolume = (v) => master.gain.setTargetAtTime(v, ctx.currentTime, 0.03);
+  return { stop, setVolume };
 }

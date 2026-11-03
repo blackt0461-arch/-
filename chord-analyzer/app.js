@@ -9,11 +9,12 @@ import { buildStaffRows } from './tab-staff.js';
 import { aiReady, downloadAI, deleteAI, AI_TOTAL } from './ai-loader.js';
 import { initSongbook } from './songbook.js';
 import { renderSheetPages, toPng } from './export-sheet.js';
+import { initEditor } from './editor.js';
 import { estimateKey, suggestCapo, easiestVoicing } from './practice.js';
 
 // version.json と同じ値にする（新しいバージョンを公開したら両方を上げる）
-const APP_VERSION = '1.18.1';
-const APP_FILES = ['index.html', 'style.css', 'app.js', 'chord-engine.js', 'audio.js', 'fretboard.js', 'sound.js', 'song.js', 'dsp.js', 'chart.js', 'live.js', 'practice.js', 'transcribe.js', 'transcribe-worker.js', 'tab-staff.js', 'learned.js', 'synth-check.js', 'vocal-remove.js', 'ai-vocal.js', 'ai-loader.js', 'ai-pitch.js', 'models/basic-pitch.onnx', 'lyrics.js', 'songbook.js', 'feedback.js', 'export-sheet.js', 'sw.js', 'manifest.webmanifest'];
+const APP_VERSION = '1.19.0';
+const APP_FILES = ['index.html', 'style.css', 'app.js', 'chord-engine.js', 'audio.js', 'fretboard.js', 'sound.js', 'song.js', 'dsp.js', 'chart.js', 'live.js', 'practice.js', 'transcribe.js', 'transcribe-worker.js', 'tab-staff.js', 'learned.js', 'synth-check.js', 'vocal-remove.js', 'ai-vocal.js', 'ai-loader.js', 'ai-pitch.js', 'models/basic-pitch.onnx', 'lyrics.js', 'songbook.js', 'feedback.js', 'export-sheet.js', 'editor.js', 'sw.js', 'manifest.webmanifest'];
 const HOLD_MS = 150;      // マイク：別のコードがこの時間続いたら表示を切り替える
 const HISTORY_SIZE = 16;  // マイク：覚えておくコードの数
 const HISTORY_STABLE_MS = 400; // マイク：この時間続いたコードを履歴に入れる
@@ -606,7 +607,7 @@ let synth = null;
 function stopSynth() {
   synth?.stop();
   synth = null;
-  playTabButton.textContent = '▶ タブ譜で鳴らす';
+  playTabButton.textContent = '▶ タブ譜どおりに鳴らす';
   playChartButton.textContent = '▶ コードで鳴らす';
 }
 
@@ -780,7 +781,7 @@ const songbook = initSongbook({
   appVersion: APP_VERSION,
   playFrom: (t) => playFrom(t),
   displayName: (name) => shapeName(name),
-  rerender: () => { pendingBeats.timeline = analysis.timeline; renderAnalysis(); renderStrip(stripDuration); highlightNow(); },
+  rerender: () => { pendingBeats.timeline = analysis.timeline; renderAnalysis(); renderStrip(stripDuration); highlightNow(); editor?.render(); },
 });
 
 // ---- 直した譜面を、印刷できる紙の形の画像にする ----
@@ -845,6 +846,36 @@ document.getElementById('sheet-print').addEventListener('click', () => {
   window.print();
 });
 
+// 作曲ツールのような編集画面（再生と聞き比べ・トラック・コードのパレット）
+const editor = initEditor({
+  getAnalysis: () => analysis,
+  media: songMedia,
+  songbook,
+  playSequence,
+  playNotes,
+  chartItems: () => chartItems(),
+  shapeName: (name) => shapeName(name),
+  voicingNotes: (name) => {
+    const shape = parseShape(voicingFor(name));
+    const tuning = currentTuning(), capo = Number(capoSelect.value);
+    return shape ? shape.map((f, s) => (f === null ? null : tuning.strings[s] + capo + f)).filter((m) => m !== null) : [];
+  },
+  keyOf: () => estimateKey(analysis?.timeline ?? []),
+});
+
+// 波形を描くための、0.05秒ごとの音の大きさ（解析に渡す前に作る。渡すと元の音は手元から無くなるため）
+function peaksOf(channels, sampleRate, step = 0.05) {
+  const n = Math.floor(sampleRate * step), x = channels[0], y = channels[1] ?? x;
+  const out = [];
+  for (let i = 0; i < x.length; i += n) {
+    let m = 0;
+    for (let j = i; j < Math.min(x.length, i + n); j += 4) m = Math.max(m, Math.abs((x[j] + y[j]) / 2));
+    out.push(m);
+  }
+  const top = Math.max(...out, 1e-6);
+  return out.map((v) => +(Math.sqrt(v / top)).toFixed(3));
+}
+
 songFile.addEventListener('change', async () => {
   const file = songFile.files[0];
   if (!file) return;
@@ -857,9 +888,12 @@ songFile.addEventListener('change', async () => {
   songMedia.src = URL.createObjectURL(file);
   try {
     const { channels, sampleRate, duration } = await decodeFile(file);
+    const peaks = peaksOf(channels, sampleRate);
     const result = await runTranscription(channels, sampleRate, songMode.value, songQuality.value, songGenre.value, aiVocal.checked && !aiVocal.disabled);
     pendingBeats = { beats: result.beats, downbeat: result.downbeat, duration: result.duration, timeline: result.timeline };
     analysis = { timeline: result.timeline, tabBlocks: buildTabBlocks(result.events), events: result.events, beats: result.beats, downbeat: result.downbeat, duration: result.duration, bpm: result.bpm, onsets: result.onsets, chordFrames: result.chordFrames };
+    analysis.peaks = peaks;
+    analysis.peakStep = 0.05;
     songbook.onAnalysis(`${file.name}|${Math.round(duration)}`);
     songTitle = file.name.replace(/\.[^.]+$/, '');
     sheetTitle.value = '';
@@ -891,6 +925,7 @@ songFile.addEventListener('change', async () => {
     renderLoop();
     songMedia.playbackRate = Number(songSpeed.value);
     songResult.hidden = false;
+    editor.onAnalysis();
     document.getElementById('song-open').classList.add('compact');
     highlightNow();
   } catch (err) {

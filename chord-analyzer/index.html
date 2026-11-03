@@ -155,45 +155,66 @@
 
       <div id="song-result" hidden>
         <div id="song-key" class="song-key" hidden></div>
-        <video id="song-media" class="song-media" controls playsinline preload="metadata"></video>
-        <div class="player">
-        <div class="chord-strip-wrap">
-          <div id="chord-strip" class="chord-strip" role="slider" aria-label="コードの帯（タップでその時刻から再生）"></div>
-        </div>
+        <video id="song-media" class="song-media" playsinline preload="metadata"></video>
         <div class="now-row">
           <div id="song-now" class="song-now">―</div>
-          <label class="edit-toggle"><input type="checkbox" id="fix-mode"><span>✏️ 直す</span></label>
           <button type="button" id="sheet-open" class="icon-button" aria-label="譜面を保存・印刷" title="譜面を保存・印刷">📄</button>
         </div>
         <div id="song-capo" class="song-capo" hidden></div>
+        <div class="ed-transport">
+          <button type="button" id="ed-back" class="ed-tb" aria-label="最初から">⏮</button>
+          <button type="button" id="ed-play" class="ed-big" aria-label="再生">▶</button>
+          <button type="button" id="ed-loop" class="ed-tb" aria-pressed="false" aria-label="選んだコードの間をくり返す" title="選んだコードの間をくり返す">🔁</button>
+          <select id="song-speed" class="ed-speed" aria-label="速さ">
+            <option value="0.5">0.5倍</option>
+            <option value="0.75">0.75倍</option>
+            <option value="1" selected>ふつう</option>
+          </select>
+          <span id="ed-time" class="ed-time">0:00 / 0:00</span>
         </div>
-        <div class="play-buttons quick-play">
-          <button type="button" id="play-tab" class="secondary-button">▶ タブ譜で鳴らす</button>
+        <div class="ed-mix">
+          <span>聞く音</span>
+          <div id="ed-mode" class="ed-seg"><button type="button" data-mode="orig">元の曲</button><button type="button" data-mode="both">両方</button><button type="button" data-mode="chord">コードだけ</button></div>
+          <span class="ed-c-orig">元の曲</span><input id="ed-vol-orig" type="range" min="0" max="100" aria-label="元の曲の音量">
+          <span class="ed-c-chord">コード</span><input id="ed-vol-chord" type="range" min="0" max="100" aria-label="コードの音量">
+        </div>
+        <div class="legacy" hidden>
+          <div class="chord-strip-wrap"><div id="chord-strip" class="chord-strip"></div></div>
+          <label class="edit-toggle"><input type="checkbox" id="fix-mode-legacy"><span></span></label>
           <button type="button" id="play-chart" class="secondary-button">▶ コードで鳴らす</button>
+          <button type="button" id="loop-a">A</button><button type="button" id="loop-b">B</button><button type="button" id="loop-clear">解除</button>
+          <p id="loop-status"></p>
         </div>
-        <div class="practice-row">
-          <label class="speed">速さ
-            <select id="song-speed">
-              <option value="0.5">0.5倍</option>
-              <option value="0.75">0.75倍</option>
-              <option value="1" selected>ふつう</option>
-            </select>
-          </label>
-          <button type="button" id="loop-a" class="secondary-button">A</button>
-          <button type="button" id="loop-b" class="secondary-button">B</button>
-          <button type="button" id="loop-clear" class="secondary-button" disabled>解除</button>
-        </div>
-        <p id="loop-status" class="hint">A と B を押すと、その間をくり返し再生します</p>
-        <details class="mini-help"><summary>？ 帯と目盛りの見かた</summary>
-        <p class="hint">帯：読み取ったコードを時間順に表示。下の目盛りは「弾いた」と判断した瞬間で、見つけた担当ごとに色が違います：<span class="tick-key" style="background:var(--text);width:3px"></span>ジャラーンと弾いた和音 <span class="tick-key" style="background:var(--muted)"></span>1音 <span class="tick-key" style="background:#4fc3f7"></span>指で音を変えた（ハンマリングなど）。タップでその時刻から再生します</p>
-        </details>
         <div class="subtabs" role="tablist">
-          <button type="button" class="subtab" data-sub="chords" aria-selected="true">コード</button>
+          <button type="button" class="subtab" data-sub="chords" aria-selected="true">✎ 編集</button>
           <button type="button" class="subtab" data-sub="songbook" aria-selected="false">歌本</button>
           <button type="button" class="subtab" data-sub="tab" aria-selected="false">タブ譜</button>
         </div>
+        <div class="song-section ed-section" data-sub="chords">
+          <div class="ed-tracks">
+            <div class="ed-names"><span class="ed-n-ruler"></span><span>元の曲</span><span>コード</span><span>歌詞</span><span>メロ</span></div>
+            <div id="ed-scroller" class="ed-scroller">
+              <div id="ed-ruler" class="ed-ruler"></div>
+              <div class="ed-lane-body ed-wave" id="ed-wave"></div>
+              <div class="ed-lane-body ed-chords" id="ed-chords"></div>
+              <div class="ed-lane-body ed-lyrics" id="ed-lyrics"></div>
+              <div class="ed-lane-body ed-notes" id="ed-notes"></div>
+            </div>
+          </div>
+          <div class="ed-panel">
+            <p id="ed-sel" class="ed-sel"></p>
+            <div id="ed-palette" class="ed-palette"></div>
+            <div id="ed-variants" class="ed-variants"></div>
+          </div>
+          <div class="ed-tools">
+            <button type="button" id="ed-undo">↶<small>もどす</small></button>
+            <button type="button" id="ed-add">＋<small>ここに足す</small></button>
+            <button type="button" id="ed-del">🗑<small>消す</small></button>
+            <button type="button" id="ed-audition">🔊<small>試し弾き</small></button>
+          </div>
+        </div>
         <div class="song-section" data-sub="chords">
-          <h2>コード譜 <small>タップでその場面から再生</small></h2>
+          <h2>コード一覧 <small>タップでその場面から再生</small></h2>
           <div id="song-chords" class="song-chords"></div>
           <p id="song-info" class="hint"></p>
 
@@ -218,6 +239,7 @@
           <div id="songbook-tools" class="sb-tools" hidden>
             <button type="button" id="sync-start" class="secondary-button">タイミングを合わせる</button>
             <button type="button" id="lyrics-edit" class="secondary-button">歌詞を変える</button>
+            <label class="edit-toggle"><input type="checkbox" id="fix-mode"><span>✏️ 直す</span></label>
           </div>
           <p id="songbook-habit" class="hint"></p>
           <div id="songbook-view" class="sb-view"></div>
@@ -226,6 +248,7 @@
         </div>
         <div class="song-section" data-sub="tab" hidden>
           <h2>タブ譜 <small>タップでその場面から再生</small></h2>
+          <button type="button" id="play-tab" class="secondary-button tab-play">▶ タブ譜どおりに鳴らす</button>
           <div id="song-tab" class="tab-blocks"></div>
           <div class="song-actions">
             <button type="button" id="song-copy" class="secondary-button">コピー</button>

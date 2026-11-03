@@ -267,5 +267,19 @@ export function initSongbook(app) {
     const placed = placeChords(song.lines, song.times, a.timeline, { duration: a.duration });
     return song.lines.map((l, i) => ({ text: l.text, marks: (placed[i]?.marks ?? []).map((m) => ({ pos: m.pos, name: show(m.name) })), after: (placed[i]?.after ?? []).map((m) => show(m.name)) }));
   }
-  return { onAnalysis, render, editSeg, editAt, getSheet };
+  // 編集画面から：直す操作をひとつ加える／ひとつ前に戻す
+  const commitEdit = (edit) => commit(edit);
+  function undo(prevTimeline) {
+    const a = app.getAnalysis();
+    if (!song || !song.edits.length) return false;
+    song.edits.pop();
+    a.timeline = prevTimeline;
+    save();
+    app.rerender();
+    render();
+    return true;
+  }
+  // 歌詞の各行が歌われる時間（編集画面の歌詞トラック用）
+  const lyricSpans = () => (song?.lines ? lineSpans(song.lines, song.times, app.getAnalysis()?.duration).map((sp) => ({ ...sp, text: song.lines[sp.line].text })) : []);
+  return { onAnalysis, render, editSeg, editAt, getSheet, commitEdit, undo, lyricSpans };
 }

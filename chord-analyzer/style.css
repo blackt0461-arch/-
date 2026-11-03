@@ -99,7 +99,7 @@ body { padding-bottom: calc(84px + env(safe-area-inset-bottom)); }
 /* 曲のプレイヤー（動画・コードの帯・今のコード・操作）：スクロールしても上に残す */
 .player { position: sticky; top: 0; z-index: 20; background: var(--bg); padding: calc(4px + env(safe-area-inset-top)) 0 6px; display: flex; flex-direction: column; gap: 6px; }
 #song-result .song-media { max-height: 28vh; }
-#song-result .song-media.audio-only { height: 54px; background: transparent; }
+#song-result .song-media.audio-only { display: none; }
 .now-row { display: flex; align-items: center; gap: 10px; }
 .now-row .song-now { flex: 1; text-align: left; margin: 0; }
 .edit-toggle { flex: none; }
@@ -752,3 +752,53 @@ select, input[type="text"] {
 /* よく使う「鳴らす」ボタンは、プレイヤーのすぐ下に大きく */
 .quick-play { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .quick-play .secondary-button { min-height: 48px; font-weight: 700; font-size: 0.92rem; white-space: normal; line-height: 1.2; }
+
+/* ===== 作曲ツールのような編集画面 ===== */
+.ed-transport { display: flex; align-items: center; gap: 10px; }
+.ed-big { width: 58px; height: 58px; border-radius: 29px; border: 0; background: var(--accent); color: var(--accent-text); font-size: 1.5rem; font-weight: 900; flex: none; }
+.ed-tb { width: 44px; height: 44px; border-radius: 22px; border: 1px solid var(--line); background: transparent; color: var(--text); font-size: 1rem; flex: none; }
+.ed-tb[aria-pressed="true"] { border-color: var(--accent); background: var(--surface-2); }
+.ed-speed { min-height: 40px; border-radius: 10px; flex: none; width: auto !important; max-width: 96px; padding: 0 8px; }
+.ed-time { flex: 1; text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; font-size: 0.85rem; }
+.ed-mix { display: grid; grid-template-columns: auto 1fr; gap: 6px 10px; align-items: center; background: var(--surface); border-radius: 12px; padding: 8px 10px; font-size: 0.8rem; }
+.ed-seg { display: grid; grid-template-columns: repeat(3, 1fr); background: var(--surface-2); border-radius: 8px; overflow: hidden; }
+.ed-seg button { border: 0; background: transparent; color: var(--muted); padding: 7px 0; font-size: 0.82rem; }
+.ed-seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-text); font-weight: 700; }
+.ed-mix input[type="range"] { width: 100%; }
+.ed-c-orig { color: #4fc3f7; } .ed-c-chord { color: #ff8a65; }
+#ed-vol-orig { accent-color: #4fc3f7; } #ed-vol-chord { accent-color: #ff8a65; }
+
+.ed-tracks { display: flex; border-radius: 12px; overflow: hidden; background: var(--surface); }
+.ed-names { flex: 0 0 52px; display: flex; flex-direction: column; font-size: 0.7rem; color: var(--muted); border-right: 1px solid var(--surface-2); }
+.ed-names span { display: flex; align-items: center; justify-content: center; border-top: 1px solid var(--surface-2); }
+.ed-names .ed-n-ruler { height: 20px; border-top: 0; }
+.ed-names span:nth-child(2) { height: 48px; } .ed-names span:nth-child(3) { height: 54px; } .ed-names span:nth-child(4) { height: 34px; } .ed-names span:nth-child(5) { height: 42px; }
+.ed-scroller { flex: 1; overflow-x: auto; overflow-y: hidden; position: relative; -webkit-overflow-scrolling: touch; touch-action: pan-x; }
+.ed-ruler { position: relative; height: 20px; font-size: 0.68rem; color: var(--muted); }
+.ed-ruler span { position: absolute; top: 2px; padding-left: 3px; border-left: 1px solid var(--line); height: 18px; }
+.ed-lane-body { position: relative; border-top: 1px solid var(--surface-2); background-image: linear-gradient(90deg, var(--surface-2) 1px, transparent 1px); }
+.ed-wave { height: 48px; } .ed-wave svg { position: absolute; top: 2px; left: 0; } .ed-wave polygon { fill: #4fc3f7; opacity: 0.7; }
+.ed-chords { height: 54px; }
+.ed-lyrics { height: 34px; }
+.ed-notes { height: 42px; } .ed-notes i { position: absolute; height: 4px; border-radius: 2px; background: #9ccc65; }
+.ed-blk { position: absolute; top: 6px; bottom: 6px; border-radius: 8px; background: #3a3a4a; border: 1px solid #55556a; display: flex; align-items: center; padding: 0 7px; overflow: visible; white-space: nowrap; cursor: pointer; }
+.ed-blk b { font-size: 0.95rem; overflow: hidden; text-overflow: clip; }
+.ed-blk.sel { background: color-mix(in srgb, var(--accent) 32%, #2d2d39); border: 2px solid var(--accent); z-index: 2; }
+.ed-h { position: absolute; top: 50%; width: 16px; height: 34px; margin-top: -17px; border-radius: 5px; background: var(--accent); touch-action: none; z-index: 3; }
+.ed-h.l { left: -9px; } .ed-h.r { right: -9px; }
+.ed-lyr { position: absolute; top: 8px; font-size: 0.78rem; color: #ddd; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ed-empty { position: absolute; left: 8px; top: 9px; font-size: 0.72rem; color: var(--muted); white-space: nowrap; }
+.ed-head { position: absolute; top: 0; bottom: 0; width: 2px; background: #ff5252; pointer-events: none; z-index: 4; }
+.ed-panel { background: var(--surface); border-radius: 14px; padding: 10px; }
+.ed-sel { margin: 0 0 8px; font-size: 0.8rem; color: var(--muted); } .ed-sel b { color: var(--text); font-size: 0.95rem; }
+.ed-palette { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.ed-pc { border: 1px solid transparent; border-radius: 10px; background: var(--surface-2); color: var(--text); padding: 8px 0; font-size: 1.05rem; font-weight: 800; }
+.ed-pc small { display: block; font-size: 0.65rem; color: var(--muted); font-weight: 600; }
+.ed-pc.cur { border-color: var(--accent); color: var(--accent); }
+.ed-variants { display: flex; gap: 6px; margin-top: 8px; overflow-x: auto; }
+.ed-var { flex: none; border: 1px solid var(--line); border-radius: 16px; background: transparent; color: var(--text); padding: 6px 12px; font-size: 0.9rem; }
+.ed-tools { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.ed-tools button { border: 0; border-radius: 10px; background: var(--surface); color: var(--text); padding: 7px 0; font-size: 1.1rem; }
+.ed-tools small { display: block; font-size: 0.65rem; color: var(--muted); }
+.tab-play { min-height: 46px; width: 100%; margin-bottom: 8px; font-weight: 700; }
+#song-result .song-media:not(.audio-only) { max-height: 22vh; }
