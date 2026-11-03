@@ -131,6 +131,11 @@ function goTab(t) {
   if (t === 'social') return showSocial();
   if (t === 'menu') return showMenu();
 }
+// 管理者：チケット・かけら・引きかえ券も、使ってもなくならないよう いつも 99 にしておく
+function adminTopUp() {
+  const hs = HS();
+  for (const k of ['rareTickets', 'rareTickets4', 'rareTickets5', 'shards4', 'shards5', 'tickets']) if ((hs[k] || 0) < 99) hs[k] = 99;
+}
 function canBuyNow() { const hs = HS(); return hs.gauge >= S.gaugeMax(hs) || hs.tickets > 0; }
 function ticketCount() { const hs = HS(); return (hs.rareTickets || 0) + (hs.rareTickets4 || 0) + (hs.rareTickets5 || 0); }
 
@@ -172,6 +177,7 @@ function bindSocialTabs(el) {
 // =========================== レアガチャ ===========================
 function gachaOwned(id) { return S.realOwned(id); }
 function showGacha(banner = null) {
+  if (isAdmin()) adminTopUp();
   const hs = HS();
   const act = G.activeSeries();
   const banners = [{ id: 'standard', name: 'スタンダード', desc: '★5は上質な定番（恒常）から出ます' }, ...act.map(s => ({ id: s.id, name: `限定：${s.name}`, desc: s.desc, limited: true }))];
@@ -358,6 +364,7 @@ function remainCapacity(room = curRoom()) {
 let notesChecked = false;
 function showHome() {
   S.setUnlimited(isAdmin());
+  if (isAdmin()) adminTopUp();
   if (visiting) return showVisit();
   room3d?.setActive(true);
   room3d?.setEditMode(false);
@@ -1156,9 +1163,11 @@ async function showFeedbackInbox() {
 // =========================== 持ち物 ===========================
 // 家具（持っている数と置いている数）と、アイテム（チケット・かけら・引きかえ券）を分けて見る
 function showBag(tab = 'furniture', genre = '') {
+  if (isAdmin()) adminTopUp();
   const hs = HS();
-  const owned = Object.keys(hs.inventory).map(itemById).filter(it => it && S.owned(it.id) > 0 && it.place !== 'surface' && (!genre || it.genre === genre));
-  const surf = Object.keys(hs.inventory).map(itemById).filter(it => it && it.place === 'surface');
+  const ids = S.isUnlimited() ? [...new Set([...ITEMS, ...G.GACHA_ITEMS].map(i => i.id))] : Object.keys(hs.inventory);
+  const owned = ids.map(itemById).filter(it => it && S.owned(it.id) > 0 && it.place !== 'surface' && (!genre || it.genre === genre));
+  const surf = ids.map(itemById).filter(it => it && it.place === 'surface');
   const items = [
     ['ticket', hs.rareTickets || 0, ticketSVG('ticket', 'mini'), 'ガチャを1回引ける'],
     ['ticket4', hs.rareTickets4 || 0, ticketSVG('ticket4', 'mini'), '1回引くと★4以上が必ず出る'],
@@ -1175,7 +1184,7 @@ function showBag(tab = 'furniture', genre = '') {
       ${owned.length ? `<div class="zk-grid">${owned.map(it => {
         const n = S.owned(it.id), used = S.placedCount(it.id);
         return `<div class="zk-item have bag-item"><span class="thumb">${thumbHTML(it)}</span><b>${esc(it.name)}</b>
-          <small class="bag-n ${used >= n ? 'full' : ''}">置いている ${used} / 持っている ${n}</small></div>`;
+          <small class="bag-n ${used >= n ? 'full' : ''}">置いている ${used} / 持っている ${S.isUnlimited() ? '∞' : n}</small></div>`;
       }).join('')}</div>` : '<p class="empty">まだ家具を持っていません。</p>'}
       ${!genre && surf.length ? `<h3 class="sec">壁・床・ドア・窓・カーテン（${surf.length}）</h3><div class="zk-grid">${surf.map(it => `<div class="zk-item have"><span class="thumb">${thumbHTML(it)}</span><b>${esc(it.name)}</b></div>`).join('')}</div>` : ''}
     ` : `
