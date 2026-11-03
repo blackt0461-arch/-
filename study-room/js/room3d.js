@@ -308,13 +308,14 @@ export class Room3D {
     const plainWall = new THREE.MeshStandardMaterial({ color: '#e8e2d8', roughness: 0.95 });
     const plainFloor = new THREE.MeshStandardMaterial({ color: '#a8927a', roughness: 0.8 });
     const [wallM, floorM, ceilM] = await Promise.all([
-      wallV ? texturedMaterial(wallV.tex, { rep: wallV.rep, tint: wallV.tint }) : plainWall,
+      wallV ? (wallV.tex ? texturedMaterial(wallV.tex, { rep: wallV.rep, tint: wallV.tint }) : new THREE.MeshStandardMaterial({ color: wallV.color, roughness: 0.92 })) : plainWall,
       floorV ? texturedMaterial(floorV.tex, { rep: floorV.rep }) : plainFloor,
-      texturedMaterial('white_plaster_rough_01', { rep: 2, tint: '#ffffff' }),
+      new THREE.MeshStandardMaterial({ color: '#f3f0ea', roughness: 0.95 }),
     ]);
     // 天井は下からの照り返しが少ないので、ほんのり明るくしておく
     ceilM.emissive = new THREE.Color(this.mood.hemiGround).multiplyScalar(0.35);
-    if (!wallV) wallM.userData.rep = 1;
+    if (!wallV?.tex) wallM.userData.rep = 1;
+    ceilM.userData.rep = 1;
     if (!floorV) floorM.userData.rep = 1;
 
     const g = this.shell;

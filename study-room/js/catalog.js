@@ -16,9 +16,9 @@ const WALLS = {
   name: '壁', icon: '🧱', surface: 'wall',
   variants: {
     natural: [
-      { name: '白いしっくい', tex: 'white_plaster_rough_01', rep: 2 },
+      { name: '白い塗り壁', color: '#eeeae3' },
       { name: '木の板張り', tex: 'wood_plank_wall', rep: 1.2 },
-      { name: '淡いグリーンの塗り壁', tex: 'white_plaster_rough_02', tint: '#d5e6cf', rep: 2 },
+      { name: '淡いグリーンの塗り壁', color: '#cfdcc6' },
     ],
     industrial: [
       { name: 'コンクリート打ちっぱなし', tex: 'concrete_wall_008', rep: 1.5 },
@@ -28,7 +28,7 @@ const WALLS = {
     retro: [
       { name: '古い木の壁', tex: 'raw_plank_wall', rep: 1.1 },
       { name: '赤レンガ', tex: 'red_brick_03', rep: 2 },
-      { name: 'クリーム色のしっくい', tex: 'yellow_plaster', rep: 2 },
+      { name: 'クリーム色の塗り壁', color: '#efe2c4' },
     ],
     music: [
       { name: '古い木の壁', tex: 'raw_plank_wall', rep: 1.1 },
@@ -36,8 +36,8 @@ const WALLS = {
       { name: '黒い板張り', tex: 'black_painted_planks', rep: 1.2 },
     ],
     manga: [
-      { name: '白いしっくい', tex: 'white_plaster_rough_01', rep: 2 },
-      { name: 'クリーム色のしっくい', tex: 'yellow_plaster', rep: 2 },
+      { name: '白い塗り壁', color: '#eeeae3' },
+      { name: 'クリーム色の塗り壁', color: '#efe2c4' },
       { name: '木の板張り', tex: 'wood_plank_wall', rep: 1.2 },
     ],
     game: [

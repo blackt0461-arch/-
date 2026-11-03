@@ -832,18 +832,6 @@ export const ASSETS = {
 "rough": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/white_planks_clean/white_planks_clean_rough_1k.jpg",
 "ao": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/white_planks_clean/white_planks_clean_ao_1k.jpg"
 },
-"white_plaster_rough_01": {
-"map": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/white_plaster_rough_01/white_plaster_rough_01_diff_1k.jpg",
-"normal": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/white_plaster_rough_01/white_plaster_rough_01_nor_gl_1k.jpg",
-"rough": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/white_plaster_rough_01/white_plaster_rough_01_rough_1k.jpg",
-"ao": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/white_plaster_rough_01/white_plaster_rough_01_ao_1k.jpg"
-},
-"white_plaster_rough_02": {
-"map": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/white_plaster_rough_02/white_plaster_rough_02_diff_1k.jpg",
-"normal": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/white_plaster_rough_02/white_plaster_rough_02_nor_gl_1k.jpg",
-"rough": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/white_plaster_rough_02/white_plaster_rough_02_rough_1k.jpg",
-"ao": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/white_plaster_rough_02/white_plaster_rough_02_ao_1k.jpg"
-},
 "wood_floor_worn": {
 "map": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/wood_floor_worn/wood_floor_worn_diff_1k.jpg",
 "normal": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/wood_floor_worn/wood_floor_worn_nor_gl_1k.jpg",
@@ -855,12 +843,6 @@ export const ASSETS = {
 "normal": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/wood_plank_wall/wood_plank_wall_nor_gl_1k.jpg",
 "rough": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/wood_plank_wall/wood_plank_wall_rough_1k.jpg",
 "ao": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/wood_plank_wall/wood_plank_wall_ao_1k.jpg"
-},
-"yellow_plaster": {
-"map": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/yellow_plaster/yellow_plaster_diff_1k.jpg",
-"normal": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/yellow_plaster/yellow_plaster_nor_gl_1k.jpg",
-"rough": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/yellow_plaster/yellow_plaster_rough_1k.jpg",
-"ao": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/yellow_plaster/yellow_plaster_ao_1k.jpg"
 }
 }
 };
