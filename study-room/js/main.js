@@ -410,6 +410,7 @@ function showHome() {
   el.querySelector('.rankchip').onclick = showRankRoad;
   el.querySelector('.room-name').onclick = () => showRoomPicker({ hs, r, here, locked, home });
   app.append(el, tabbar('room'));
+  scrollRoomsNav(el);
   if (!notesChecked) { notesChecked = true; checkUpdateNotes(); }
   if (hs.villaNew) celebrateVilla();
 }

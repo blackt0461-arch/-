@@ -45,9 +45,10 @@ function enemyCtx() {
   const e = S.enemy;
   if (e.mode === 'boss') {
     const b = BOSSES.find(x => x.n === e.boss);
-    if (b) { const weak = {}; for (const [lab, els] of Object.entries(b.w || {})) for (const el of els) weak[el] = lab; return { name: b.boss, fam: b.f || e.fam, weak, label: b.n }; }
+    // 系統は データ → 自分で えらんだもの の じゅん。わからなければ とっこうは 計算しない（手動用の 系統は つかわない）
+    if (b) { const weak = {}; for (const [lab, els] of Object.entries(b.w || {})) for (const el of els) weak[el] = lab; return { name: b.boss, fam: q(b.f || (S.bossFam || {})[b.n] || ''), famFromData: !!b.f, weak, label: b.n }; }
   }
-  return { name: '', fam: e.fam, weak: e.weak || {}, label: e.fam || 'てき' };
+  return { name: '', fam: q(e.fam), weak: e.weak || {}, label: e.fam || 'てき' };
 }
 
 /* ---------- 計算 ---------- */
@@ -141,7 +142,8 @@ function vEnemy() {
     <div class="row" style="margin-top:6px"><button class="btn ${e.mode === 'boss' ? 'on' : ''}" data-act="emode" data-m="boss">ボスから えらぶ</button><button class="btn ${e.mode === 'manual' ? 'on' : ''}" data-act="emode" data-m="manual">じぶんで きめる</button></div></div>
   <div class="win"><span class="tag">いまの てき</span>
     <h2 style="margin-top:6px">${esc(en.label)}</h2>
-    <div class="lines"><div class="line"><span class="k">けいとう</span><span class="v">${esc(en.fam || 'わからない')}</span></div></div>
+    <div class="lines"><div class="line"><span class="k">けいとう</span><span class="v">${esc(en.fam || 'わからない（とっこうは 計算しません）')}</span></div></div>
+    ${e.mode === 'boss' && !en.famFromData ? `<label class="f" style="margin-top:8px">この ボスの けいとうは データに ありません。わかれば えらんでください<select id="bossfam" data-act="bossfam"><option value="">わからない</option>${FAMS.map(f => `<option ${f === en.fam ? 'selected' : ''}>${esc(f)}</option>`).join('')}</select></label>` : ''}
     <div class="weak" style="margin-top:8px">${ELS.map(el => `<button ${e.mode === 'manual' ? `data-act="weak" data-el="${el}"` : 'disabled'} data-s="${esc(en.weak[el] || '')}"><span>${el}</span><span>${esc(en.weak[el] || 'ー')}</span></button>`).join('')}</div>
     ${e.mode === 'manual' ? `<label class="f" style="margin-top:10px">けいとう<select id="efam" data-act="efam"><option value="">わからない</option>${FAMS.map(f => `<option ${f === e.fam ? 'selected' : ''}>${esc(f)}</option>`).join('')}</select></label><div class="note">ぞくせいを タップすると ふつう→弱点→超弱→耐性→無効 と かわります。</div>` : '<div class="note" style="margin-top:6px">超弱は ダメージ約1.7倍、弱点は約1.5倍で けいさんします。</div>'}
   </div>
@@ -228,7 +230,7 @@ function loadout(r, p) {
   const eqs = [['武器', r.W], ...PARTS.map(pt => [pt.replace('防具', ''), r.eq[pt]]), ...Array.from({ length: ACC_SLOTS }, (_, i) => ['アクセ', r.eq['c' + i]])];
   return `<div class="lines">${eqs.map(([k, x]) => itemLine(k, x)).join('')}</div>
     <h2 style="margin-top:12px">メモリ <span class="sub">コスト ${r.cost} / ${p.cap}</span></h2>
-    <div class="lines">${r.slots.map((c, j) => { const x = r.mem[j]; return `<div class="memslot">${c === '虹' ? '<span class="cdot c-虹"></span>' : [...c].map(y => `<span class="cdot c-${y}"></span>`).join('')}
+    <div class="lines">${r.slots.map((c, j) => { const x = r.mem[j]; return `<div class="memslot"><span class="slotdots">${c === '虹' ? '<span class="cdot c-虹"></span>' : [...c].map(y => `<span class="cdot c-${y}"></span>`).join('')}</span>
       <span class="vi">${x ? `${ico(x.m, 32)}<span>${esc(x.m.n)} <span class="sub">${x.rank}・コスト${x.m.ct}</span></span>` : '<span class="sub">あき</span>'}</span>
       <span class="sub">${x && x.matched ? '色いっち' : ''}</span></div>`; }).join('')}</div>`;
 }
@@ -248,7 +250,7 @@ function vResultBody() {
     <div class="calc"><span>こうげき${r.ctx.type === 'phys' ? '力' : '魔力'}（もと＋そうび＋メモリ）</span><span>${fmt(pt.base)}</span>
       <span>${typ}ダメージ</span><span>×${pt.mAll.toFixed(2)}</span>
       <span>${esc(r.ctx.el || '無')}ぞくせいダメージ</span><span>×${pt.mEl.toFixed(2)}</span>
-      <span>${esc(R.enemy.fam || 'けいとう')}・あいてへの とっこう</span><span>×${pt.mFam.toFixed(2)}</span>
+      <span>${R.enemy.fam ? esc(R.enemy.fam) + '・あいてへの とっこう' : 'とっこう（けいとうが わからないので なし）'}</span><span>×${pt.mFam.toFixed(2)}</span>
       <span>じゃくてん（${weakLab}）</span><span>×${pt.weak.toFixed(2)}</span>
       <span>${r.ctx.type === 'phys' ? '会心' : '暴走'}の きたいち（${Math.round(pt.rate)}%）</span><span>×${pt.crit.toFixed(2)}</span></div>
     ${statsLine(r.V)}
@@ -344,6 +346,7 @@ document.addEventListener('change', ev => {
     case 'fixw': S.fixW = v; break;
     case 'needadd': if (v && !S.need.includes(v)) S.need.push(v); break;
     case 'efam': S.enemy.fam = v; break;
+    case 'bossfam': S.bossFam = Object.assign({}, S.bossFam, { [S.enemy.boss]: v }); break;
     case 'eqlv': S.eq[b.dataset.id].lv = Math.max(1, Math.min(99, +v || 1)); break;
     case 'eqt': S.eq[b.dataset.id].t = Math.max(0, Math.min(5, +v || 0)); break;
     default: return;
