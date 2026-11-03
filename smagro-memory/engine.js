@@ -5,7 +5,7 @@ const WT = { 槍: 'ヤリ', やり: 'ヤリ' };
 const STATK = { 'こうげき力': 1, '攻撃力': 1, 'こうげき': 1, 'ちから': 1, 'こうげき魔力': 2, 'かいふく魔力': 3, 'しゅび力': 4, '呪文しゅび力': 5, '呪文じゅび力': 5, 'きようさ': 6, '最大HP': 0, 'HP': 0 };
 const STATNAMES = ['HP', 'こうげき力', 'こうげき魔力', 'かいふく魔力', 'しゅび力', '呪文しゅび力', 'きようさ'];
 const PARTS = ['盾', '頭防具', '上防具', '下防具'];
-const ACC_SLOTS = 1;
+const ACC_SLOTS = 2;   // アクセサリーは 2つ つけられる
 const RANKF = { S: 1, A: 0.8, B: 0.65, C: 0.5, D: 0.4 };
 const COLOR_BONUS = 1.2;
 const BASE_CRIT = 5;          // 会心の基本率(%)のめやす
@@ -44,7 +44,7 @@ function initData(D) {
   FAMS = D.fam.map(q);
   JOBS = D.jobs;
   for (const m of D.mem) {
-    const it = { kind: 'm', id: 'm' + m.id, n: m.n, c: m.c, ct: m.ct, f: q(m.f), r: m.r, img: m.img || '', st: m.st, effs: m.e.filter(Boolean).map(parseEff), get: m.get };
+    const it = { kind: 'm', id: 'm' + m.id, n: m.n, c: m.c, ct: m.ct, f: q(m.f), r: m.r, img: m.img || '', src: m.src || '', stage: m.stage || '', st: m.st, effs: m.e.filter(Boolean).map(parseEff), get: m.get };
     ITEMS[it.id] = it; MEMS.push(it);
   }
   for (const e of D.equip) {
@@ -162,7 +162,7 @@ function searchChar(o) {
     for (const s of eqSlots) st.eq[s] = null;
     const pinnedEq = {}, pinnedMem = new Set();
     if (o.pins) {
-      for (const s of eqSlots) { const p = o.pins.eq[kindOf(s)]; if (p && (kindOf(s) !== 'c' || s === 'c0')) { const c = cands[s].find(x => x && x.it.id === p.it.id); if (c) { st.eq[s] = c; pinnedEq[s] = 1; } } }
+      for (const s of eqSlots) { const p = o.pins.eq[s]; if (p) { const c = cands[s].find(x => x && x.it.id === p.it.id); if (c) { st.eq[s] = c; pinnedEq[s] = 1; } } }
       // memories: put pinned into best matching slots
       const pm = o.pins.mem.map(id => memC.find(x => x.m.id === id)).filter(Boolean);
       for (const x of pm) {

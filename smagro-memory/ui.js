@@ -65,7 +65,15 @@ function runAll() {
     const weapons = pool('w');
     let fixW = null;
     if (isMain && S.fixW) fixW = weapons.find(x => x.it.id === S.fixW) || null;
-    const pins = isMain ? { eq: Object.fromEntries(ownedEq().filter(x => x.pin && x.it.kind !== 'w' && avail[x.it.id] > 0).map(x => [x.it.kind === 'c' ? 'c' : x.it.t, x])), mem: Object.keys(S.memPin).filter(k => S.memPin[k] && !S.memNo[k]) } : null;
+    let pins = null;
+    if (isMain) {
+      const pe = {}; let ci = 0;   // アクセは 2つまで（c0, c1）
+      for (const x of ownedEq().filter(x => x.pin && x.it.kind !== 'w' && avail[x.it.id] > 0)) {
+        if (x.it.kind === 'c') { for (let k = 0; k < Math.min(x.n, 2) && ci < ACC_SLOTS; k++) pe['c' + ci++] = x; }
+        else pe[x.it.t] = x;
+      }
+      pins = { eq: pe, mem: Object.keys(S.memPin).filter(k => S.memPin[k] && !S.memNo[k]) };
+    }
     if (isMain && !fixW) { const pw = ownedEq().find(x => x.pin && x.it.kind === 'w'); if (pw) fixW = weapons.find(x => x.it.id === pw.it.id) || null; }
     const res = searchChar({
       job: p.job, cap: +p.cap || 0, slots: job.c, weapons, fixWeapon: fixW, eqAvail: pool, memAvail: mems(+p.cap || 0), pins,
@@ -140,28 +148,34 @@ function vEnemy() {
   ${e.mode === 'boss' ? Object.entries(groups).map(([g, bs]) => `<div class="win"><span class="tag">${g}</span><div class="bosslist" style="margin-top:6px">${bs.map(b => `<button class="chip ${b.n === e.boss ? 'on' : ''}" data-act="boss" data-n="${esc(b.n)}">${esc(b.n)}</button>`).join('')}</div></div>`).join('') : ''}`;
 }
 
+const SRC = [['', 'ぜんぶ'], ['now', 'いまのイベント'], ['hokora', 'いつものほこら'], ['story', 'ストーリー'], ['shop', '交換所'], ['past', 'おわったイベント']];
+const SRCNAME = Object.fromEntries(SRC);
 function vMem() {
-  const qq = S.memQ.trim();
-  const list = MEMS.filter(m => (!S.memColor || m.c === S.memColor) && (!qq || m.n.includes(qq) || m.effs.some(e => e.text.includes(qq)))).sort((a, b) => b.ct - a.ct);
+  const qq = S.memQ.trim(), src = S.memSrc || '';
+  const list = MEMS.filter(m => (!src || m.src === src) && (!S.memColor || m.c === S.memColor) && (!qq || m.n.includes(qq) || m.effs.some(e => e.text.includes(qq)))).sort((a, b) => b.ct - a.ct);
   const nOff = MEMS.filter(m => S.memNo[m.id]).length;
   return `<div class="win"><span class="tag">メモリ</span>
     <div class="note" style="margin-top:6px">ぜんぶ もっている あつかいです。<b style="color:var(--line)">もっていない メモリを タップ</b>して はずしてください。右の ランクを おすと ランクや「かならず使う」を かえられます。</div>
-    <button class="btn big" style="margin-top:8px" data-act="scan" data-k="mem">スクショから よみこむ</button>
+    <label class="btn big scanbtn" style="margin-top:8px">スクショから よみこむ<input type="file" accept="image/*" multiple class="vh" id="scanfile-mem" data-act="scanfile" data-k="mem"></label>
     <div class="note">ゲームの メモリ一覧を スクロールしながら スクショを 何まいか 撮って、まとめて えらんでください。</div>
     <div class="row" style="margin-top:8px"><input id="memq" type="search" placeholder="なまえ・こうかで さがす" value="${esc(S.memQ)}" data-act="memq" style="flex:1 1 180px">
     <span class="sub">もってない ${nOff} / ${MEMS.length}</span></div>
+    <div class="note" style="margin-top:10px">手に入る ところで しぼる</div>
+    <div class="row" style="margin-top:4px">${SRC.map(([k, l]) => `<button class="chip ${src === k ? 'on' : ''}" data-act="msrc" data-s="${k}">${l}${k ? ' ' + MEMS.filter(m => m.src === k).length : ''}</button>`).join('')}</div>
+    ${src ? `<div class="row" style="margin-top:8px"><button class="btn" data-act="msrcall" data-v="1">この ${list.length}こを ぜんぶ「もっている」に</button><button class="btn" data-act="msrcall" data-v="0">ぜんぶ「もっていない」に</button></div>
+      <div class="note">${src === 'now' ? 'いま 開催中の ほこら・強敵・マルチなどで 手に入る メモリです。' : src === 'hokora' ? 'いつでも 行ける ほこらで 手に入る メモリです。' : src === 'past' ? 'おわった イベントの メモリです。いまは 手に入りません。' : ''}色や 検索で しぼっていると、見えている ものだけが かわります。</div>` : ''}
     <div class="row" style="margin-top:8px"><button class="chip ${!S.memColor ? 'on' : ''}" data-act="mcol" data-c="">ぜんぶ</button>${['赤', '青', '黄', '緑', '紫'].map(c => `<button class="chip ${S.memColor === c ? 'on' : ''}" data-act="mcol" data-c="${c}"><span class="cdot c-${c}"></span> ${c}</button>`).join('')}</div></div>
   <div class="tiles">${list.map(m => `<div class="tile ${S.memNo[m.id] ? 'off' : ''} ${S.memPin[m.id] ? 'pin' : ''}" role="button" tabindex="0" data-act="memtog" data-id="${m.id}" aria-pressed="${!S.memNo[m.id]}">
       <span class="icow">${ico(m, 44)}<span class="cdot c-${m.c} icodot"></span></span><span class="nm">${esc(m.n)}</span>
       <button class="rk" data-act="memsheet" data-id="${m.id}" aria-label="${esc(m.n)}の くわしく">${S.memRank[m.id] || 'S'}</button>
-      <span class="ct">コスト${m.ct}${S.memPin[m.id] ? '　★かならず' : ''}</span></div>`).join('')}</div>`;
+      <span class="ct">コスト${m.ct}${S.memPin[m.id] ? '　★かならず' : ''}${m.src === 'now' ? '　<span style="color:var(--ok)">いま入手</span>' : ''}</span></div>`).join('')}</div>`;
 }
 function memSheet(id) {
   const m = ITEMS[id];
   const sh = $('#sheet');
   sh.innerHTML = `<div class="win"><span class="tag">メモリ</span>
     <div class="row" style="justify-content:space-between;margin-top:6px"><h2 style="margin:0;display:flex;gap:10px;align-items:center">${ico(m, 64)}<span><span class="cdot c-${m.c}"></span> ${esc(m.n)}</span></h2><button class="btn" data-act="close">とじる</button></div>
-    <div class="sub">${esc(m.f || '')}　コスト${m.ct}　${esc(m.r)}</div>
+    <div class="sub">${esc(m.f || '')}　コスト${m.ct}　${esc(m.r)}　入手：${esc(SRCNAME[m.src] || '')}${m.stage ? ' ' + esc(m.stage) : ''}</div>
     <div class="calc" style="margin:8px 0">${STAT_KEYS.map((k, i) => `<span>${k}</span><span>${Math.round(m.st[i] * (RANKF[S.memRank[id] || 'S']))}</span>`).join('')}</div>
     <div class="eff">${m.effs.map(e => esc(e.text)).join('<br>')}</div>
     <div class="note" style="margin-top:8px">ランク（S以外の数字は Sの数字からの めやす）</div>
@@ -184,7 +198,7 @@ function vEq() {
   const owned = ownedEq().length;
   return `<div class="win"><span class="tag">そうび</span>
     <div class="note" style="margin-top:6px"><b style="color:var(--line)">もっている そうびの 数</b>を ＋で ふやしてください（いまは ${owned}しゅるい）。強化したものは レベルと 凸を 入れます。入れなければ 強化していない あつかいです。</div>
-    <button class="btn big" style="margin-top:8px" data-act="scan" data-k="eq">スクショから よみこむ</button>
+    <label class="btn big scanbtn" style="margin-top:8px">スクショから よみこむ<input type="file" accept="image/*" multiple class="vh" id="scanfile-eq" data-act="scanfile" data-k="eq"></label>
     <div class="note">ゲームの そうび一覧を スクロールしながら スクショを 何まいか 撮って、まとめて えらんでください。</div>
     <div class="row" style="margin-top:8px">${EQTABS.map(([k, l]) => `<button class="btn ${t === k ? 'on' : ''}" data-act="eqtab" data-t="${k}">${l}</button>`).join('')}</div>
     <div class="row" style="margin-top:8px"><input id="eqq" type="search" placeholder="なまえで さがす" value="${esc(S.eqQ)}" data-act="eqq" style="flex:1 1 160px"><button class="chip ${S.eqOwned ? 'on' : ''}" data-act="eqowned">もってるだけ</button></div></div>
@@ -258,7 +272,7 @@ function vHelp() {
   火力のめやす ＝ こうげき力 × 物理(呪文)ダメージ × ぞくせいダメージ × けいとう とっこう × じゃくてん × 会心の きたいち。<br>
   メモリは 枠の色と あうと のうりょくが 1.2倍。虹の枠は どの色でも 1.2倍。超弱点は 約1.7倍、弱点は 約1.5倍。会心は きほん${BASE_CRIT}%で ダメージ＋50%として います。<br>
   そうびの のうりょくは レベル1〜最大の あいだを まっすぐ のびる として めやすを だしています。<br>
-  データ：メモリ ${MEMS.length}しゅるい、そうび ${Object.values(ITEMS).filter(i => i.kind !== 'm').length}しゅるい、ボス ${BOSSES.length}。${esc(window.DATA_UPDATED || '')} 時点（毎日 じどうで 更新）。</div></div>`;
+  版 ${esc(window.APP_V || '')}。データ：メモリ ${MEMS.length}しゅるい、そうび ${Object.values(ITEMS).filter(i => i.kind !== 'm').length}しゅるい、ボス ${BOSSES.length}。${esc(window.DATA_UPDATED || '')} 時点（毎日 じどうで 更新）。</div></div>`;
 }
 
 /* ---------- 操作 ---------- */
@@ -274,6 +288,12 @@ document.addEventListener('click', ev => {
     case 'boss': S.enemy.boss = b.dataset.n; break;
     case 'weak': { const cur = S.enemy.weak[b.dataset.el] || ''; S.enemy.weak[b.dataset.el] = WEAK_ORDER[(WEAK_ORDER.indexOf(cur) + 1) % WEAK_ORDER.length]; break; }
     case 'mcol': S.memColor = b.dataset.c; break;
+    case 'msrc': S.memSrc = b.dataset.s; break;
+    case 'msrcall': {
+      const qq = S.memQ.trim(), src = S.memSrc || '';
+      for (const m of MEMS) if ((!src || m.src === src) && (!S.memColor || m.c === S.memColor) && (!qq || m.n.includes(qq) || m.effs.some(e => e.text.includes(qq)))) S.memNo[m.id] = b.dataset.v !== '1';
+      break;
+    }
     case 'memsheet': ev.stopPropagation(); memSheet(b.dataset.id); return;
     case 'memtog': S.memNo[b.dataset.id] = !S.memNo[b.dataset.id]; break;
     case 'memtog2': S.memNo[b.dataset.id] = !S.memNo[b.dataset.id]; invalidate(); save(); render(); memSheet(b.dataset.id); return;
@@ -295,8 +315,27 @@ document.addEventListener('click', ev => {
   invalidate(); touch(); render();
 });
 document.addEventListener('keydown', ev => { if ((ev.key === 'Enter' || ev.key === ' ') && ev.target.classList && ev.target.classList.contains('tile')) { ev.preventDefault(); ev.target.click(); } });
+// スクショえらび：同じ写真を もう一度 えらんでも 読めるように、読んだら 毎回 からにする。
+// iPhone で 知らせが 来ないときのために、えらび画面が 閉じたあとも 自分で たしかめる。
+let scanWatch = null;
+function scanPick(inp) {
+  const files = inp.files ? [...inp.files] : [];
+  clearInterval(scanWatch); scanWatch = null;
+  if (!files.length) return;
+  try { inp.value = ''; } catch (e) { }
+  Scan.runFiles(inp.dataset.k, files);
+}
+document.addEventListener('click', ev => {
+  const lab = ev.target.closest('.scanbtn'); if (!lab) return;
+  const inp = lab.querySelector('input[type=file]'); if (!inp) return;
+  try { inp.value = ''; } catch (e) { }
+  clearInterval(scanWatch); let n = 0;
+  scanWatch = setInterval(() => { if (inp.files && inp.files.length) scanPick(inp); else if (++n > 240) { clearInterval(scanWatch); scanWatch = null; } }, 500);
+}, true);
+document.addEventListener('input', ev => { if (ev.target.dataset && ev.target.dataset.act === 'scanfile') scanPick(ev.target); });
 document.addEventListener('change', ev => {
   const b = ev.target.closest('[data-act]'); if (!b) return;
+  if (b.dataset.act === 'scanfile') { scanPick(b); return; }
   const a = b.dataset.act, i = +b.dataset.i, v = b.value;
   switch (a) {
     case 'job': S.party[i].job = v; break;

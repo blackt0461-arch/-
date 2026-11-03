@@ -68,6 +68,8 @@ input[type=number] { font-variant-numeric: tabular-nums; }
 .btn { font: inherit; cursor: pointer; color: var(--line); background: var(--win2); border: 2px solid var(--line); border-radius: 6px; padding: 6px 12px; }
 .btn:hover { background: #22276a; }
 .btn:focus-visible, .chip:focus-visible, .tile:focus-visible { outline: 2px dashed var(--gold); outline-offset: 2px; }
+.vh { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; }
+.scanbtn { display: block; text-align: center; position: relative; box-sizing: border-box; }
 .btn.big { font-size: 18px; padding: 10px 18px; width: 100%; color: var(--gold); border-color: var(--gold); }
 .btn.on { background: var(--line); color: var(--win); }
 .chip { font: inherit; font-size: 13px; cursor: pointer; color: var(--line); background: transparent; border: 2px solid var(--dim); border-radius: 999px; padding: 2px 10px; }
@@ -151,9 +153,9 @@ body { margin: 0; }
 </div>
 <div class="sheet" id="sheet" hidden></div>
 
-<script src="engine.js?v=20261103c"></script>
+<script src="engine.js?v=20261103g"></script>
 <script>
-const V = '20261103c';  // 版。ファイルを変えたら あげる（iPhone が 古いファイルを 使いつづけないように）
+const V = '20261103g'; window.APP_V = V;  // 版。ファイルを変えたら あげる（iPhone が 古いファイルを 使いつづけないように）
 fetch('data.json', { cache: 'no-cache' }).then(r => r.json()).then(D => {
   window.DATA_UPDATED = D.updated;
   initData(D);
