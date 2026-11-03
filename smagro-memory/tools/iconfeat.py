@@ -66,12 +66,25 @@ def feat_from64(a, kind):
     return v / (np.linalg.norm(v) + 1e-9)
 
 
+def resize64(a, x0, y0, side):
+    """正方形の場所を 64x64 に縮める（マスの中の平均）。scan.js の resize64 と同じ計算"""
+    H, W = a.shape[:2]
+    out = np.zeros((64, 64, 3))
+    for v in range(64):
+        ya = min(H - 1, max(0, int(np.floor(y0 + v * side / 64))))
+        yb = min(H, max(ya + 1, int(np.floor(y0 + (v + 1) * side / 64))))
+        for u in range(64):
+            xa = min(W - 1, max(0, int(np.floor(x0 + u * side / 64))))
+            xb = min(W, max(xa + 1, int(np.floor(x0 + (u + 1) * side / 64))))
+            out[v, u] = a[ya:yb, xa:xb].reshape(-1, 3).mean(axis=0)
+    return out
+
+
 def feat_image(img, kind):
-    img = img.convert('RGB')
-    w, h = img.size
+    a = np.asarray(img.convert('RGB')).astype(float)
+    h, w = a.shape[:2]
     s = min(w, h)
-    img = img.crop(((w - s) // 2, (h - s) // 2, (w - s) // 2 + s, (h - s) // 2 + s)).resize((64, 64), Image.BILINEAR)
-    return feat_from64(np.asarray(img), kind)
+    return feat_from64(resize64(a, (w - s) // 2, (h - s) // 2, s), kind)
 
 
 def pack(v):
