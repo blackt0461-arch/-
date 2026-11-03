@@ -7,11 +7,12 @@ import { playNotes, playSequence } from './sound.js';
 import { formatTime, assignTab, formatTab, chartPlayback } from './song.js';
 import { buildStaffRows } from './tab-staff.js';
 import { aiReady, downloadAI, deleteAI, AI_TOTAL } from './ai-loader.js';
+import { initSongbook } from './songbook.js';
 import { estimateKey, suggestCapo, easiestVoicing } from './practice.js';
 
 // version.json と同じ値にする（新しいバージョンを公開したら両方を上げる）
 const APP_VERSION = '1.14.1';
-const APP_FILES = ['index.html', 'style.css', 'app.js', 'chord-engine.js', 'audio.js', 'fretboard.js', 'sound.js', 'song.js', 'dsp.js', 'chart.js', 'live.js', 'practice.js', 'transcribe.js', 'transcribe-worker.js', 'tab-staff.js', 'learned.js', 'synth-check.js', 'vocal-remove.js', 'ai-vocal.js', 'ai-loader.js', 'sw.js', 'manifest.webmanifest'];
+const APP_FILES = ['index.html', 'style.css', 'app.js', 'chord-engine.js', 'audio.js', 'fretboard.js', 'sound.js', 'song.js', 'dsp.js', 'chart.js', 'live.js', 'practice.js', 'transcribe.js', 'transcribe-worker.js', 'tab-staff.js', 'learned.js', 'synth-check.js', 'vocal-remove.js', 'ai-vocal.js', 'ai-loader.js', 'lyrics.js', 'songbook.js', 'feedback.js', 'sw.js', 'manifest.webmanifest'];
 const HOLD_MS = 150;      // マイク：別のコードがこの時間続いたら表示を切り替える
 const HISTORY_SIZE = 16;  // マイク：覚えておくコードの数
 const HISTORY_STABLE_MS = 400; // マイク：この時間続いたコードを履歴に入れる
@@ -707,6 +708,15 @@ songTab.addEventListener('click', (e) => {
   if (block) playFrom(analysis.tabBlocks[Number(block.dataset.index)].t);
 });
 
+// 歌本（歌詞とコード）と、コードの訂正
+const songbook = initSongbook({
+  getAnalysis: () => analysis,
+  media: songMedia,
+  appVersion: APP_VERSION,
+  playFrom: (t) => playFrom(t),
+  rerender: () => { pendingBeats.timeline = analysis.timeline; renderAnalysis(); renderStrip(stripDuration); highlightNow(); },
+});
+
 songFile.addEventListener('change', async () => {
   const file = songFile.files[0];
   if (!file) return;
@@ -721,7 +731,8 @@ songFile.addEventListener('change', async () => {
     const { channels, sampleRate, duration } = await decodeFile(file);
     const result = await runTranscription(channels, sampleRate, songMode.value, songQuality.value, songGenre.value, aiVocal.checked && !aiVocal.disabled);
     pendingBeats = { beats: result.beats, downbeat: result.downbeat, duration: result.duration, timeline: result.timeline };
-    analysis = { timeline: result.timeline, tabBlocks: buildTabBlocks(result.events), events: result.events, beats: result.beats, downbeat: result.downbeat, duration: result.duration, bpm: result.bpm, onsets: result.onsets };
+    analysis = { timeline: result.timeline, tabBlocks: buildTabBlocks(result.events), events: result.events, beats: result.beats, downbeat: result.downbeat, duration: result.duration, bpm: result.bpm, onsets: result.onsets, chordFrames: result.chordFrames };
+    songbook.onAnalysis(`${file.name}|${Math.round(duration)}`);
     const how = result.aiVocal?.used ? 'AI で歌声を取り除いて解析しました'
       : result.useSide ? '左右の差で歌を弱めて解析しました'
       : result.chartInfo?.method === '歌を除く' ? '歌のメロディを取り除いて解析しました' : 'ギターの音をそのまま解析しました（歌は見つかりませんでした）';

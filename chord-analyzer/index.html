@@ -167,6 +167,32 @@
           <div id="song-chords" class="song-chords"></div>
         </div>
 
+        <div class="song-section" id="songbook">
+          <h2>歌本（歌詞とコード） <small>歌詞を貼ると、歌詞の上にコードを載せます</small></h2>
+          <div id="lyrics-setup">
+            <textarea id="lyrics-input" rows="6" placeholder="ここに歌詞を貼り付けてください（自分の練習用に）"></textarea>
+            <div class="song-actions"><button type="button" id="lyrics-use" class="secondary-button">この歌詞で歌本を作る</button></div>
+          </div>
+          <div id="lyrics-sync" class="sb-sync" hidden>
+            <p class="hint">曲が流れます。歌の各行が始まったら「次の行」を押してください。</p>
+            <p id="sync-next-line" class="sb-next"></p>
+            <div class="song-actions">
+              <button type="button" id="sync-tap" class="sb-tap">次の行</button>
+              <button type="button" id="sync-undo" class="secondary-button">1行もどす</button>
+              <button type="button" id="sync-done" class="secondary-button">終わる</button>
+            </div>
+          </div>
+          <div id="songbook-tools" class="sb-tools" hidden>
+            <button type="button" id="sync-start" class="secondary-button">タイミングを合わせる</button>
+            <button type="button" id="lyrics-edit" class="secondary-button">歌詞を変える</button>
+            <label class="ai-toggle"><input type="checkbox" id="fix-mode"> コードを直すモード（コード名を押して直す・文字を押してコードを足す）</label>
+          </div>
+          <p id="songbook-habit" class="hint"></p>
+          <div id="songbook-view" class="sb-view"></div>
+          <label class="ai-toggle sb-consent"><input type="checkbox" id="feedback-consent"> 精度アップに協力する：直したコードと時間を、解析の改良のために開発者へ送ります（送るのはコード名・時間・音の特徴の数字だけで、曲の音・歌詞・名前は送りません）</label>
+          <p id="feedback-status" class="hint"></p>
+        </div>
+
         <div class="song-section">
           <h2>タブ譜 <small>タップでその場面から再生</small></h2>
           <div id="song-tab" class="tab-blocks"></div>
@@ -187,7 +213,19 @@
         <p>YouTube Premium や YouTube Music の一部の曲は、画面収録の音が無音になることがあります。録画したものは自分の練習用にとどめてください。</p>
         <p>歌やほかの楽器も混ざっているため、タブ譜は間違いを含むことがあります。ギターが左右に分かれて聞こえる曲ほど正確になります。</p>
       </details>
-    </section>
+          <dialog id="chord-edit" class="chord-edit">
+        <h3 id="chord-edit-title">コードを直す</h3>
+        <input id="chord-edit-name" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="例：C、Am7、F/G">
+        <div id="chord-edit-cands" class="chord-edit-cands"></div>
+        <p id="chord-edit-error" class="error"></p>
+        <div class="song-actions">
+          <button type="button" id="chord-edit-ok" class="secondary-button">決定</button>
+          <button type="button" id="chord-edit-move" class="secondary-button">位置を動かす</button>
+          <button type="button" id="chord-edit-remove" class="secondary-button">消す</button>
+          <button type="button" id="chord-edit-cancel" class="secondary-button">やめる</button>
+        </div>
+      </dialog>
+</section>
 
     <section id="panel-tuner" class="panel" role="tabpanel" aria-labelledby="tab-tuner" hidden>
       <div class="segmented tuner-mode" role="radiogroup" aria-label="チューナーの使い方">

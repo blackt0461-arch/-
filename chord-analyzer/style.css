@@ -657,3 +657,30 @@ select, input[type="text"] {
 .ai-buttons { display: flex; gap: 8px; flex-wrap: wrap; }
 .ai-buttons .secondary-button { min-height: 40px; padding: 0 14px; }
 .ai-buttons [hidden] { display: none; }
+
+/* 歌本（歌詞の上にコード） */
+#lyrics-input { width: 100%; box-sizing: border-box; font-size: 1rem; padding: 8px; border-radius: 8px; background: var(--surface); color: inherit; border: 1px solid var(--surface); }
+.sb-tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 8px 0; }
+.sb-tools .secondary-button { min-height: 40px; padding: 0 12px; }
+.sb-sync { margin: 8px 0; padding: 10px; border: 1px solid var(--accent); border-radius: 10px; }
+.sb-next { font-size: 1.05rem; font-weight: 700; margin: 6px 0; }
+.sb-tap { min-height: 56px; min-width: 140px; font-size: 1.1rem; font-weight: 700; border-radius: 12px; border: 0; background: var(--accent); color: #111; }
+.sb-tap:disabled { opacity: 0.4; }
+.sb-view { font-size: 1.15rem; line-height: 1; }
+.sb-line { padding: 4px 4px 6px; border-radius: 8px; display: flex; flex-wrap: wrap; align-items: flex-end; row-gap: 4px; }
+.sb-line.now { background: color-mix(in srgb, var(--accent) 18%, transparent); }
+.sb-line.untimed { opacity: 0.55; }
+.sb-gap { height: 0.8em; }
+.sb-seg { display: inline-flex; flex-direction: column; align-items: flex-start; }
+.sb-chord { min-height: 1.2em; padding: 0 6px 2px 0; font-size: 0.85rem; font-weight: 700; color: #ff6b6b; background: none; border: 0; white-space: nowrap; line-height: 1.2; cursor: pointer; text-align: left; }
+.sb-none { cursor: default; }
+.sb-text { white-space: nowrap; }
+.sb-char { display: inline-block; line-height: 1.3; }
+.sb-tail { display: inline-flex; gap: 8px; margin-left: 10px; align-self: flex-start; }
+.sb-view.moving .sb-char { outline: 1px dashed var(--muted); outline-offset: -1px; }
+.sb-consent { margin-top: 10px; font-size: 0.82rem; }
+.chord-edit { border: 1px solid var(--surface); border-radius: 12px; background: var(--bg, #15151c); color: inherit; max-width: 92vw; }
+.chord-edit::backdrop { background: rgba(0,0,0,0.5); }
+.chord-edit input { width: 100%; box-sizing: border-box; font-size: 1.1rem; padding: 8px; border-radius: 8px; border: 1px solid var(--surface); background: var(--surface); color: inherit; }
+.chord-edit-cands { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+.chord-edit-cands .secondary-button { min-height: 36px; padding: 0 10px; }
