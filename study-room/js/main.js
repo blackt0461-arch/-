@@ -384,7 +384,7 @@ function matchSurface(kind, src) {
 
 // =========================== 家具を買う ===========================
 function pickCandidates(genre, style) {
-  const pool = itemsOf(genre).filter(i => !i.special && !S.owned(i.id));
+  const pool = itemsOf(genre).filter(i => !i.special && !i.rare && !S.owned(i.id)); // レアな物はガチャだけ
   const match = S.shuffle(pool.filter(i => style && i.styles?.includes(style)));
   const other = S.shuffle(pool.filter(i => !(style && i.styles?.includes(style))));
   // 3つのうち2つは部屋の雰囲気に合う物（足りなければほかから）
