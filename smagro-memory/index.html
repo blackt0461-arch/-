@@ -85,16 +85,16 @@ input[type=number] { font-variant-numeric: tabular-nums; }
 /* memory grid */
 .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; }
 .tile { all: unset; cursor: pointer; display: grid; grid-template-columns: auto 1fr auto; gap: 2px 6px; align-items: center; border: 2px solid var(--line); border-radius: 6px; padding: 6px 6px 6px 8px; background: var(--win2); min-width: 0; position: relative; }
-.tile .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
+.tile .nm { grid-column: 2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
 .tile .ct { font-size: 12px; color: var(--dim); font-variant-numeric: tabular-nums; grid-column: 2; }
-.tile .rk { all: unset; cursor: pointer; grid-row: 1 / span 2; grid-column: 3; font-size: 13px; border: 1px solid var(--gold); color: var(--gold); border-radius: 4px; padding: 0 6px; }
+.tile .rk { all: unset; cursor: pointer; grid-row: 1 / span 2; grid-column: 3; align-self: center; font-size: 13px; border: 1px solid var(--gold); color: var(--gold); border-radius: 4px; padding: 0 6px; }
 .tile.off { opacity: .42; border-style: dashed; background: transparent; }
 .tile.off .nm { text-decoration: line-through; }
 .tile.pin { box-shadow: inset 0 0 0 2px var(--gold); }
 /* equipment */
 .eqrow { border-bottom: 1px dashed #3a3f7a; padding: 8px 0; display: grid; gap: 6px; }
 .eqrow:last-child { border-bottom: 0; }
-.eqtop { display: flex; justify-content: space-between; gap: 8px; align-items: center; }
+.eqtop { display: flex; justify-content: space-between; gap: 10px; align-items: center; }
 .eqtop .nm { min-width: 0; }
 .stepper { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
 .stepper button { font: inherit; width: 34px; height: 32px; cursor: pointer; color: var(--line); background: var(--win2); border: 2px solid var(--line); border-radius: 6px; }
@@ -109,6 +109,11 @@ input[type=number] { font-variant-numeric: tabular-nums; }
 .line { display: grid; grid-template-columns: 5.5em 1fr; gap: 8px; align-items: start; }
 .line .k { color: var(--dim); font-size: 13px; padding-top: 1px; }
 .line .v { min-width: 0; overflow-wrap: anywhere; }
+.ico { display: block; flex-shrink: 0; border-radius: 6px; background: #1c2050; object-fit: contain; }
+.ico-none { display: inline-block; }
+.icow { position: relative; grid-row: 1 / span 2; grid-column: 1; }
+.icodot { position: absolute; right: -3px; bottom: -3px; width: 13px; height: 13px; }
+.vi { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .memslot { display: grid; grid-template-columns: auto 1fr auto; gap: 6px; align-items: center; }
 .calc { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; font-size: 13px; font-variant-numeric: tabular-nums; }
 .calc span:nth-child(even) { text-align: right; }

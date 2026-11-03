@@ -45,12 +45,12 @@ def strip(x):
 # ---------- 一覧ページ ----------
 def parse_sim(p):
     mem = []
-    for m in re.finditer(r'\{id:`(\d+)`,n:`([^`]+)`,c:`([^`]+)`,ct:(\d+),i:`[^`]*`,r:`([^`]*)`,aId:`\d*`,s:\{(.*?)\},get:\{t:`([^`]*)`', p):
-        mid, n, c, ct, r, sblk, gt = m.groups()
+    for m in re.finditer(r'\{id:`(\d+)`,n:`([^`]+)`,c:`([^`]+)`,ct:(\d+),i:`([^`]*)`,r:`([^`]*)`,aId:`\d*`,s:\{(.*?)\},get:\{t:`([^`]*)`', p):
+        mid, n, c, ct, img, r, sblk, gt = m.groups()
         sm = re.search(r's:\{h:(\d+),a:(\d+),ma:(\d+),mh:(\d+),d:(\d+),md:(\d+),dx:(\d+),s:\[(.*?)\]', sblk)
         if not sm:
             continue
-        mem.append(dict(id=int(mid), n=n, c=c, ct=int(ct), r=r, st=list(map(int, sm.groups()[:7])),
+        mem.append(dict(id=int(mid), n=n, c=c, ct=int(ct), r=r, img=img, st=list(map(int, sm.groups()[:7])),
                         e=[norm(x) for x in re.findall(r'"([^"]*)"', sm.group(8))], get=gt))
     jobs = [dict(n=n, c=json.loads('[' + c + ']')) for n, c in re.findall(r'\{id:`\d+`,n:`([^`]+)`,c:\[([^\]]*)\]\}', p)]
     bosses = []
@@ -80,6 +80,8 @@ def parse_equip_list(s, cat):
         eid, name, filt, body = blk.groups()
         rare = re.search(r'\br(\d)\b', filt)
         d = dict(id=eid, n=name, cat=cat, rar=int(rare.group(1)) if rare else 0)
+        im = re.search(r"data-original='(https://img\.gamewith\.jp/[^']+)'", body) or re.search(r"<img src='(https://img\.gamewith\.jp/img/[^']+)'", body)
+        d['img'] = im.group(1) if im else ''
         if cat == 'c':
             t = norm(re.sub(r'<[^>]+>', '|', re.sub(r'<br>', '|', body)))
             def parts(x): return [y.strip() for y in x.split('|') if y.strip()] if x else []
