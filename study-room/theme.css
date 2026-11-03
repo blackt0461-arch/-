@@ -1,0 +1,196 @@
+/* =====================================================================
+   ROOMIN の見た目（着せ替え）
+   ここは「A 静かな上質」（基本）。色・書体・形は下の --sk-* で決め、
+   ほかの着せ替えは skins.css で <html data-skin="…"> ごとに --sk-* を変える。
+   style.css / ui.css の上にかぶせる（最後に読み込む）。
+   ===================================================================== */
+:root {
+  --sk-font: "Zen Kaku Gothic New", "Hiragino Sans", "Noto Sans JP", system-ui, sans-serif;
+  --sk-head: "Shippori Mincho", "Hiragino Mincho ProN", "Yu Mincho", serif;   /* 見出し */
+  --sk-num: "Cormorant Garamond", "Shippori Mincho", serif;                   /* 数字 */
+  --sk-text: #f2efe9;
+  --sk-muted: rgba(242, 239, 233, .56);
+  --sk-accent: #d8c3a0;
+  --sk-panel: rgba(18, 18, 21, .55);          /* 部屋の画面の上にのる板（部屋名・Lv・丸ボタン） */
+  --sk-panel-line: rgba(255, 255, 255, .11);
+  --sk-blur: blur(20px) saturate(1.3);
+  --sk-sheet: rgba(20, 20, 23, .92);          /* 下から出る画面 */
+  --sk-sheet-line: rgba(255, 255, 255, .08);
+  --sk-card: rgba(28, 28, 31, .8);            /* 一覧の行・カード */
+  --sk-card-line: rgba(255, 255, 255, .08);
+  --sk-icon-bg: rgba(255, 255, 255, .06);
+  --sk-icon-fg: var(--sk-accent);
+  --sk-btn-bg: #f2efe9;  --sk-btn-fg: #17171a;  --sk-btn-line: transparent;  --sk-btn-shadow: 0 6px 20px rgba(0,0,0,.25);
+  --sk-radius: 14px;
+  --sk-cap-bg: rgba(18,18,21,.6);  --sk-cap-fg: #f2efe9;  --sk-cap-line: rgba(255,255,255,.12);
+  --sk-cap-ready-bg: #f2efe9;  --sk-cap-ready-fg: #17171a;  --sk-ring-bg: #17171a;  --sk-ring-fg: #f2efe9;
+  --sk-tab-bg: rgba(16, 16, 19, .8);  --sk-tab-line: rgba(255, 255, 255, .07);
+  --sk-tab-fg: rgba(242, 239, 233, .42);  --sk-tab-on: #f2efe9;
+  --sk-center-bg: #f2efe9;  --sk-center-fg: #17171a;  --sk-center-line: transparent;  --sk-center-shadow: 0 8px 22px rgba(0,0,0,.4);
+  --sk-sel-bg: #f2efe9;  --sk-sel-fg: #17171a;  --sk-sel-line: rgba(242, 239, 233, .8);
+  --sk-new-bg: #d8c3a0;  --sk-new-fg: #17171a;
+  --sk-bar: #d8c3a0;     /* 経験値などのバー */
+  --sk-dot: #e0675a;
+  --sk-head-weight: 600;  --sk-head-spacing: .12em;
+
+  /* もとの変数にもつなぐ（ほかの画面がそのまま着せ替わる） */
+  --bg: #121214;
+  --text: var(--sk-text);  --muted: var(--sk-muted);
+  --accent: var(--sk-accent);  --accent2: var(--sk-accent);
+  --gold1: var(--sk-accent);  --gold2: var(--sk-accent);
+  --panel: var(--sk-sheet);  --panel2: rgba(255, 255, 255, .06);  --line: var(--sk-card-line);
+  --card: var(--sk-card);  --card-line: var(--sk-card-line);
+  --glow: none;
+  --ok: #9cc9a0;  --ng: #e08b80;
+}
+html, body { font-family: var(--sk-font); font-weight: 500; letter-spacing: .02em; -webkit-font-smoothing: antialiased; color: var(--sk-text); }
+b, strong { font-weight: 700; }
+
+/* ---------- 面 ---------- */
+.sheet { background: var(--sk-sheet); backdrop-filter: blur(28px); -webkit-backdrop-filter: blur(28px); border-top: 1px solid var(--sk-sheet-line); box-shadow: 0 -20px 60px rgba(0,0,0,.45); border-radius: 26px 26px 0 0; }
+.sheet .grab { width: 36px; height: 4px; background: var(--sk-card-line); opacity: 1; }
+.sh-head h3 { font-family: var(--sk-head); font-weight: 700; letter-spacing: .06em; font-size: 19px; }
+.sh-head p, .sheet p { color: var(--sk-muted); }
+.sh-ic, .sh-ic.gold { width: 40px; height: 40px; border-radius: 12px; font-size: 20px; background: var(--sk-icon-bg); color: var(--sk-icon-fg); box-shadow: none; }
+.card, .problem { background: var(--sk-sheet); border-color: var(--sk-card-line); }
+
+/* ---------- ボタン ---------- */
+.btn { border-radius: var(--sk-radius); font-weight: 700; letter-spacing: .05em; }
+.btn.primary, .btn.gold { background: var(--sk-btn-bg); color: var(--sk-btn-fg); border: 1.5px solid var(--sk-btn-line); text-shadow: none; box-shadow: var(--sk-btn-shadow); animation: none; }
+.btn.gold:disabled, .btn.primary:disabled { opacity: .35; }
+.btn.ghost { background: var(--sk-icon-bg); border: 1px solid var(--sk-card-line); color: var(--sk-text); }
+.link { color: var(--sk-muted); }
+
+/* ---------- 部屋の画面 ---------- */
+.room-name, .rankchip, .round { background: var(--sk-panel); border: 1px solid var(--sk-panel-line); backdrop-filter: var(--sk-blur); -webkit-backdrop-filter: var(--sk-blur); color: var(--sk-text); }
+.rn-ic { background: var(--sk-icon-bg); color: var(--sk-icon-fg); box-shadow: none; border-radius: 10px; }
+.rn-t { font-weight: 700; } .rn-t small { color: var(--sk-muted); font-weight: 500; }
+.rankchip .lv { color: var(--sk-muted); font-family: var(--sk-num); font-size: 12px; font-weight: 600; letter-spacing: .1em; }
+.rankchip .lv b { font-family: var(--sk-num); font-size: 21px; font-weight: 600; color: var(--sk-text); }
+.xpbar i, .rr-bar i, .hub-bar i, .qprog i { background: var(--sk-bar) !important; box-shadow: none !important; }
+.capsule { background: var(--sk-cap-bg); color: var(--sk-cap-fg); border: 1px solid var(--sk-cap-line); backdrop-filter: var(--sk-blur); -webkit-backdrop-filter: var(--sk-blur); box-shadow: 0 10px 30px rgba(0,0,0,.3); }
+.capsule .ring { color: var(--sk-icon-fg); }
+.capsule .cap-t b { font-weight: 700; letter-spacing: .04em; } .capsule .cap-t small { color: var(--sk-muted); }
+.capsule.ready { background: var(--sk-cap-ready-bg); color: var(--sk-cap-ready-fg); animation: none; border-color: transparent; }
+.capsule.ready .ring { background: var(--sk-ring-bg); color: var(--sk-ring-fg); }
+.capsule.ready .cap-t small, .capsule.ready > .ic:last-child { color: inherit; opacity: .6; }
+
+/* ---------- 下のタブ ---------- */
+.tabbar { background: var(--sk-tab-bg); border-top: 1px solid var(--sk-tab-line); backdrop-filter: blur(26px); -webkit-backdrop-filter: blur(26px); }
+.tabbar button { color: var(--sk-tab-fg); }
+.tabbar button.on, .tabbar button.center .tl { color: var(--sk-tab-on); }
+.tabbar .tl { font-weight: 500; letter-spacing: .06em; }
+.tabbar button.center .ti { background: var(--sk-center-bg) !important; color: var(--sk-center-fg) !important; border: 2px solid var(--sk-center-line) !important; box-shadow: var(--sk-center-shadow) !important; }
+.tabbar .dot, .round .dot, .hub-card > .dot { background: var(--sk-dot); box-shadow: 0 0 0 2px rgba(0,0,0,.6); }
+
+/* ---------- 画面の見出し ---------- */
+.bar h2 { font-family: var(--sk-head); font-weight: var(--sk-head-weight); font-size: 19px; letter-spacing: var(--sk-head-spacing); }
+.icon.back { background: var(--sk-icon-bg); border: 1px solid var(--sk-card-line); color: var(--sk-text); }
+.sec { font-family: var(--sk-head); font-weight: var(--sk-head-weight); letter-spacing: var(--sk-head-spacing); color: var(--sk-muted); }
+
+/* ---------- 一覧・カード ---------- */
+.hub-card, .menu-list button, .genre-row, .cand, .subj, .unit-row, .rec-subj button, .rp-room, .zk-item, .inv-item, .bag-row, .news-card, .stats4 > div, .fix-v, .shard-btn {
+  background: var(--sk-card); border: 1px solid var(--sk-card-line); box-shadow: none; color: var(--sk-text); border-radius: var(--sk-radius);
+}
+.hub-ic, .g-ic, .s-ic, .rp-ic, .zk-genre .g-ic, .ic2 { background: var(--sk-icon-bg) !important; color: var(--sk-icon-fg) !important; box-shadow: none !important; }
+.menu-list button > .ic:first-child, .stats4 .ic { color: var(--sk-icon-fg); }
+.hub-card small, .menu-list small, .genre-row small, .subj small, .rec-subj small { color: var(--sk-muted); }
+.hub-card.buy.ready { background: var(--sk-sel-bg); color: var(--sk-sel-fg); }
+.hub-card.buy.ready small { color: inherit; opacity: .6; }
+.hub-card.buy.ready .hub-ic { background: rgba(0,0,0,.08) !important; color: inherit !important; }
+.profile-card { background: var(--sk-card); border-color: var(--sk-card-line); }
+.pc-lv { background: none !important; border: 1px solid var(--sk-card-line); box-shadow: none !important; }
+.pc-lv span, .pc-lv b { font-family: var(--sk-num); font-weight: 600; color: var(--sk-text) !important; }
+.stats4 b { font-family: var(--sk-num); font-size: 24px; font-weight: 600; }
+/* 選んでいる状態 */
+.cand.on, .genre-row:active { box-shadow: 0 0 0 1.5px var(--sk-sel-line); }
+.seg button.on, .seg.kinds button.on, .rec-subj button.on, .rp-room.on, .bagtabs button.on, .zk-tabs button.on, .eb-view button.on, .fix-v.on, .skin-card.on {
+  background: var(--sk-sel-bg) !important; color: var(--sk-sel-fg) !important; border-color: transparent !important;
+}
+.rec-subj button.on .ic2, .rec-subj button.on small, .rp-room.on small { color: inherit !important; opacity: .65; }
+.rp-room.on .rp-ic, .rec-subj button.on .ic2 { background: rgba(0,0,0,.08) !important; color: inherit !important; }
+.g-new, .po-new { background: var(--sk-new-bg); color: var(--sk-new-fg); font-weight: 700; }
+
+/* ---------- 問題 ---------- */
+.fcard { font-family: var(--sk-num); font-weight: 600; background: var(--sk-card); border-color: var(--sk-card-line); color: var(--sk-text); }
+.cards.ch4 .fcard { font-family: var(--sk-font); font-weight: 500; }
+.fcard.right { background: rgba(156,201,160,.2); border-color: var(--ok); }
+.fcard.wrong { background: rgba(224,139,128,.2); border-color: var(--ng); }
+.res .ttl { font-family: var(--sk-head); font-weight: 700; letter-spacing: .1em; }
+.res .pts { font-family: var(--sk-num); font-weight: 600; }
+.palette .sym { font-family: var(--sk-num); }
+
+/* ---------- ガチャ・ログボ ---------- */
+.pull-btns .btn { background: var(--sk-card); color: var(--sk-text); border: 1px solid var(--sk-card-line); box-shadow: none; animation: none; }
+.pull-btns .btn small { color: var(--sk-muted); opacity: 1; }
+.banner h3 { font-family: var(--sk-head); font-weight: 700; letter-spacing: .1em; }
+.bn-tag { background: rgba(255,255,255,.14) !important; color: #fff !important; font-weight: 600; letter-spacing: .12em; }
+.lb-kicker { color: var(--sk-accent); }
+.lb-day b { font-family: var(--sk-num); font-weight: 600; text-shadow: none; }
+.lb-gbig { background: var(--sk-icon-bg); border-color: var(--sk-card-line); box-shadow: none; color: var(--sk-icon-fg); }
+.lb-cell { background: var(--sk-icon-bg); border-color: var(--sk-card-line); }
+.lb-cell.today { box-shadow: 0 0 0 1.5px var(--sk-sel-line); }
+.lb-cell .stamp { color: var(--sk-accent); }
+
+/* ---------- そのほか ---------- */
+.toast { background: var(--sk-sheet); border-color: var(--sk-card-line); color: var(--sk-text); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); }
+.room-pop { background: var(--sk-sheet); border-color: var(--sk-card-line); }
+.editbar, .float-bar { background: var(--sk-sheet); border-color: var(--sk-card-line); }
+
+/* =====================================================================
+   下のスロット（ゲーム風HUD・3-E）
+   ===================================================================== */
+:root { --tab-h: 92px; --sk-slot: 44px; }
+.tabbar.hotbar {
+  height: calc(var(--tab-h) + var(--safe-b)); padding: 0 12px calc(var(--safe-b) + 12px);
+  display: flex; align-items: flex-end; justify-content: space-between; gap: 8px;
+  background: none; border: 0; backdrop-filter: none; -webkit-backdrop-filter: none; pointer-events: none;
+}
+/* 部屋以外の画面では、下の文字がスロットに重ならないよう、うすく暗くする */
+.tabbar.hotbar:not(.on-room) { background: linear-gradient(180deg, transparent, rgba(0,0,0,.55) 45%); }
+.tabbar.hotbar > * { pointer-events: auto; }
+.hotbar .slots { display: flex; gap: 5px; min-width: 0; }
+.hotbar .sl {
+  position: relative; width: var(--sk-slot); height: var(--sk-slot); padding: 0; border-radius: 11px;
+  display: grid; place-items: center; align-content: center; gap: 1px;
+  background: var(--sk-panel); border: 1px solid var(--sk-panel-line); color: var(--sk-text);
+  backdrop-filter: var(--sk-blur); -webkit-backdrop-filter: var(--sk-blur);
+}
+.hotbar .sl .ic, .hotbar .sl svg { width: 20px; height: 20px; }
+.hotbar .sl-t { font-size: 8.5px; font-weight: 500; letter-spacing: .02em; color: var(--sk-muted); line-height: 1; }
+.hotbar .sl.on { background: var(--sk-sel-bg); color: var(--sk-sel-fg); border-color: transparent; }
+.hotbar .sl.on .sl-t { color: inherit; opacity: .7; }
+.hotbar .sl.hot { background: var(--sk-accent); color: var(--sk-btn-fg); border-color: transparent; box-shadow: 0 0 0 3px color-mix(in srgb, var(--sk-accent) 30%, transparent), 0 0 18px color-mix(in srgb, var(--sk-accent) 60%, transparent); animation: slotHot 1.8s ease-in-out infinite; }
+.hotbar .sl.hot .sl-t { color: inherit; opacity: .75; }
+@keyframes slotHot { 50% { box-shadow: 0 0 0 5px color-mix(in srgb, var(--sk-accent) 18%, transparent), 0 0 24px color-mix(in srgb, var(--sk-accent) 70%, transparent); } }
+.hotbar .dot { position: absolute; top: -3px; right: -3px; width: 10px; height: 10px; border-radius: 50%; background: var(--sk-dot); box-shadow: 0 0 0 2px rgba(0,0,0,.55); }
+.hotbar .solve-wrap { position: relative; display: grid; justify-items: center; gap: 4px; flex: none; }
+.hotbar .solve-need { font-size: 10.5px; color: var(--sk-text); padding: 2px 8px; border-radius: 99px; background: var(--sk-panel); border: 1px solid var(--sk-panel-line); backdrop-filter: var(--sk-blur); -webkit-backdrop-filter: var(--sk-blur); white-space: nowrap; }
+.hotbar .solve-ring {
+  --p: 0; position: relative; width: 74px; height: 74px; padding: 0; border: 0; border-radius: 50%;
+  background: conic-gradient(var(--sk-bar) calc(var(--p) * 1%), rgba(255,255,255,.18) 0);
+  box-shadow: 0 10px 26px rgba(0,0,0,.45); display: grid; place-items: center;
+}
+.hotbar .solve-ring::before { content: ""; position: absolute; inset: 5px; border-radius: 50%; background: var(--sk-center-bg); border: 1.5px solid var(--sk-center-line); }
+.hotbar .solve-ring.full { box-shadow: 0 0 0 4px color-mix(in srgb, var(--sk-bar) 35%, transparent), 0 0 26px color-mix(in srgb, var(--sk-bar) 70%, transparent), 0 10px 26px rgba(0,0,0,.45); }
+.hotbar .sr-in { position: relative; display: grid; justify-items: center; gap: 1px; color: var(--sk-center-fg); }
+.hotbar .sr-in .ic, .hotbar .sr-in svg { width: 24px; height: 24px; }
+.hotbar .sr-in b { font-size: 11px; letter-spacing: .06em; }
+.hotbar .solve-ring .dot { top: 2px; right: 2px; }
+/* 部屋の画面：写真ボタンは右上、ヒントは上へ */
+.home .side-tools { top: calc(var(--safe-t) + 72px); }
+.home .side-tools .friends { display: none; }
+/* 下から半分の画面（家具・みんな） */
+.half-sheet .hs-title { font-family: var(--sk-head); font-weight: 700; letter-spacing: .1em; font-size: 18px; margin: 0 0 12px; }
+.half-sheet .hgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 6px; }
+.half-sheet .hc { position: relative; display: grid; justify-items: center; gap: 4px; padding: 16px 6px 12px; border-radius: var(--sk-radius); background: var(--sk-card); border: 1px solid var(--sk-card-line); color: var(--sk-text); text-align: center; }
+.half-sheet .hc .ic, .half-sheet .hc svg { width: 26px; height: 26px; color: var(--sk-icon-fg); }
+.half-sheet .hc b { font-size: 13.5px; }
+.half-sheet .hc small { font-size: 10.5px; color: var(--sk-muted); }
+.half-sheet .hc.hot { background: var(--sk-sel-bg); color: var(--sk-sel-fg); border-color: transparent; }
+.half-sheet .hc.hot svg, .half-sheet .hc.hot small { color: inherit; opacity: .8; }
+.half-sheet .hc .dot { position: absolute; top: 8px; right: 8px; width: 9px; height: 9px; border-radius: 50%; background: var(--sk-dot); }
+/* 数字は「1」が「I」に見えないよう、ふつうの高さの数字にする */
+.rankchip .lv b, .pc-lv b, .stats4 b, .lb-day b, .res .pts, .rr-now b, .rr-lv, .qn, .fcard { font-variant-numeric: lining-nums tabular-nums; }
+.half-sheet .hc.hot svg { color: var(--sk-sel-fg); opacity: 1; }
+.menu-list button > .ic { flex: none; width: auto; } .menu-list button > span:not(.ic) { flex: 1; min-width: 0; }

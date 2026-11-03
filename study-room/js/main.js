@@ -109,28 +109,80 @@ function startAs(u) {
   if (DL.canDownload() && !DL.downloadState()) showDownload(); else enterHouse();
 }
 
-// =========================== 下のアイコン列 ===========================
+// =========================== 下のスロット（ゲーム風HUD） ===========================
+// 左下に四角いスロットを6つ、右下に大きな「解く」（まわりの輪がゲージ）。
+// 部屋の画面ではいちばん左が「買う」、ほかの画面では「部屋」（部屋にもどる）。
+// 「家具」「みんな」は、下から半分だけの画面で中身を出す。
 function tabbar(active) {
   const st = sub();
   const resume = st.session && st.session.idx < st.session.set.length;
   const due = S.stats(st, probs()).due;
-  const tabs = [['room', 'home', '部屋'], ['furn', 'sofa', '家具'], ['play', 'pencil', resume ? '続きから' : '解く'], ['social', 'users', 'みんな'], ['menu', 'gear', 'メニュー']];
-  const el = h(`<nav class="tabbar">${tabs.map(([k, ic, n]) => `
-    <button data-t="${k}" class="${k === active ? 'on' : ''} ${k === 'play' ? 'center' : ''}">
-      <span class="ti">${icon(ic)}${k === 'play' && (resume || due || !S.playedToday()) ? '<i class="dot"></i>' : ''}${k === 'menu' && newsBadge ? '<i class="dot"></i>' : ''}${k === 'social' && friendBadge ? '<i class="dot"></i>' : ''}${k === 'furn' && (canBuyNow() || ticketCount()) ? '<i class="dot"></i>' : ''}</span><span class="tl">${n}</span>
-    </button>`).join('')}</nav>`);
-  el.querySelectorAll('button').forEach(b => b.onclick = () => goTab(b.dataset.t));
+  const hs = HS(), max = S.gaugeMax(hs);
+  const pct = Math.min(100, Math.round(hs.gauge / max * 100));
+  const need = Math.max(1, Math.ceil((max - hs.gauge) / 24));
+  const buy = canBuyNow();
+  const first = active === 'room' ? ['buy', 'gift', '買う'] : ['room', 'home', '部屋'];
+  const slots = [first, ['furn', 'sofa', '家具'], ['gacha', 'star', 'ガチャ'], ['zukan', 'book', '図鑑'], ['social', 'users', 'みんな'], ['menu', 'menu', 'メニュー']];
+  const dot = (k) => (k === 'menu' && newsBadge) || (k === 'social' && friendBadge) || (k === 'gacha' && ticketCount()) || (k === 'room' && buy);
+  const el = h(`<nav class="tabbar hotbar ${active === 'room' ? 'on-room' : ''}">
+    <div class="slots">${slots.map(([k, ic, n]) => `
+      <button data-t="${k}" class="sl ${k === active ? 'on' : ''} ${k === 'buy' && buy ? 'hot' : ''}" aria-label="${n}">${icon(ic)}<span class="sl-t">${n}</span>${dot(k) ? '<i class="dot"></i>' : ''}</button>`).join('')}</div>
+    <div class="solve-wrap">
+      ${!buy && active === 'room' ? `<span class="solve-need">あと${need}問</span>` : ''}
+      <button data-t="play" class="solve-ring ${buy ? 'full' : ''}" style="--p:${pct}" aria-label="解く">
+        <span class="sr-in">${icon(resume ? 'refresh' : 'pencil')}<b>${resume ? '続きから' : '解く'}</b></span>${resume || due || !S.playedToday() ? '<i class="dot"></i>' : ''}
+      </button>
+    </div>
+  </nav>`);
+  el.querySelectorAll('[data-t]').forEach(b => b.onclick = () => goTab(b.dataset.t));
   return el;
 }
 function goTab(t) {
   if (visiting) leaveVisit(false);
   if (t === 'room') return showHome();
+  if (t === 'buy') {
+    if (canBuyNow()) return buyFlow();
+    const hs = HS(), need = Math.max(1, Math.ceil((S.gaugeMax(hs) - hs.gauge) / 24));
+    return toast(`あと${need}問 解くと、家具が買えます`, 2200);
+  }
   if (t === 'edit') return showEdit();
-  if (t === 'furn') return showFurnitureHub();
+  if (t === 'furn') return halfFurniture();
+  if (t === 'gacha') return showGacha();
   if (t === 'play') return chooseSubject();
   if (t === 'zukan') return showZukan();
-  if (t === 'social') return showSocial();
+  if (t === 'social') return halfSocial();
   if (t === 'menu') return showMenu();
+}
+// 下から半分だけの画面（大きなボタンが並ぶ）
+function halfSheet(title, items) {
+  if (!app.querySelector('.home')) showHome();
+  closeSheets();
+  const el = sheet(`
+    <h3 class="hs-title">${title}</h3>
+    <div class="hgrid">${items.map((x, i) => `<button class="hc ${x.hot ? 'hot' : ''}" data-i="${i}">${icon(x.ic)}<b>${x.name}</b>${x.sub ? `<small>${x.sub}</small>` : ''}${x.dot ? '<i class="dot"></i>' : ''}</button>`).join('')}</div>`, 'half-sheet');
+  el.querySelectorAll('.hc').forEach(b => b.onclick = () => { el.remove(); items[+b.dataset.i].go(); });
+  return el;
+}
+function halfFurniture() {
+  const hs = HS(), max = S.gaugeMax(hs);
+  const r = curRoom();
+  const items = [
+    { ic: 'gift', name: '買う', sub: canBuyNow() ? '今すぐ1つ買える' : `ゲージ ${Math.min(100, Math.round(hs.gauge / max * 100))}%`, hot: canBuyNow(), go: () => goTab('buy') },
+    { ic: 'move', name: '模様がえ', sub: `置いている ${r.placed.length}`, go: showEdit },
+    { ic: 'star', name: 'レアガチャ', sub: `チケット ${hs.rareTickets || 0}`, dot: ticketCount() > 0, go: () => showGacha() },
+    { ic: 'book', name: '図鑑', go: showZukan },
+    { ic: 'box', name: '持ち物', go: () => showBag() },
+    { ic: 'door', name: '部屋えらび', go: () => app.querySelector('.room-name')?.click() },
+  ];
+  if (isAdmin() && hs.gauge < max) items.push({ ic: 'sparkle', name: '管理者', sub: 'ゲージを満タン', go: () => { hs.gauge = max; S.save(); showHome(); } });
+  halfSheet('家具', items);
+}
+function halfSocial() {
+  halfSheet('みんな', [
+    { ic: 'trophy', name: 'ランキング', sub: '今週の解いた数', go: showRanking },
+    { ic: 'users', name: 'フレンド', sub: friendBadge ? `申請 ${friendBadge}件` : '部屋を見に行く', dot: friendBadge > 0, go: showFriends },
+    { ic: 'camera', name: '写真', sub: '部屋をとる', go: () => { showHome(); photoMode(); } },
+  ]);
 }
 // 管理者：チケット・かけら・引きかえ券も、使ってもなくならないよう いつも 99 にしておく
 function adminTopUp() {
@@ -188,7 +240,7 @@ function showGacha(banner = null) {
   const b = banners.find(x => x.id === banner) || banners[0];
   const t1 = hs.rareTickets || 0, t4 = hs.rareTickets4 || 0, t5 = hs.rareTickets5 || 0;
   const s4 = hs.shards4 || 0, s5 = hs.shards5 || 0;
-  const el = screenWithTabs('gacha', `<button class="icon back">${icon('back')}</button><h2>レアガチャ</h2><span></span>`, 'furn', `
+  const el = screenWithTabs('gacha', `<button class="icon back">${icon('back')}</button><h2>レアガチャ</h2><span></span>`, 'gacha', `
     <div class="bn-tabs">${banners.map(x => `<button data-b="${x.id}" class="bn-tab ${x.id === b.id ? 'on' : ''} ${x.limited ? 'lim' : ''}" aria-label="${esc(x.name)}">
       <span class="bt-art banner ${x.limited ? 'b-' + x.id : 'b-standard'}">${x.hero ? `<span class="thumb">${thumbHTML(x.hero)}</span>` : ''}${x.limited ? `<i class="bt-rib">${icon('star')}限定</i>` : ''}</span>
       <b>${esc(x.short)}</b></button>`).join('')}</div>
@@ -214,7 +266,7 @@ function showGacha(banner = null) {
     <details class="rates"><summary>提供割合</summary>
       <p>★5：5%（${b.limited ? 'うち半分は限定シリーズ' : '恒常のみ'}）／★4：25%／★3：70%。10回引くと★4以上が必ず1つ入ります。</p>
       <p>★4・★5がかぶったら、それぞれのかけら1個になります。★3がかぶったら、もう1つ持てます。</p></details>`);
-  el.querySelector('.back').onclick = showFurnitureHub;
+  el.querySelector('.back').onclick = halfFurniture;
   el.querySelectorAll('.bn-tabs button').forEach(x => x.onclick = () => showGacha(x.dataset.b));
   el.querySelector('.bn-sample')?.addEventListener('click', () => showSampleRoom(b.id));
   const opts = { banner: b.id };
@@ -387,23 +439,10 @@ function showHome() {
       </header>
       <div class="side-tools">
         <button class="round photo" aria-label="写真をとる">${icon('camera')}</button>
-        <button class="round friends" aria-label="フレンド">${icon('users')}${friendBadge ? '<i class="dot"></i>' : ''}</button>
       </div>
       <div class="hint">なぞると見回す・床をタップで歩く・ドアで別の部屋へ</div>
-      <div class="dock">
-        <button class="capsule ${canBuy ? 'ready' : ''}">
-          <span class="ring" style="--p:${Math.min(100, Math.round(hs.gauge / max * 100))}">${icon('gift')}</span>
-          <span class="cap-t"><b>${canBuy ? '家具を買う' : `次の家具まで あと${need}問`}</b>
-            <small>${canBuy ? (hs.gauge >= max ? 'ゲージ満タン！' : `引きかえ券 ${hs.tickets}枚`) : `ゲージ ${Math.min(100, Math.round(hs.gauge / max * 100))}%・解いてためよう`}</small></span>
-          ${icon('chevronRight')}
-        </button>
-        ${isAdmin() && hs.gauge < max ? `<button class="link testfill">${icon('sparkle')}管理者：満タンにする</button>` : ''}
-      </div>
     </div>`);
-  el.querySelector('.capsule').addEventListener('click', () => canBuy ? buyFlow() : chooseSubject());
-  el.querySelector('.testfill')?.addEventListener('click', () => { hs.gauge = max; S.save(); showHome(); });
   el.querySelector('.photo').onclick = photoMode;
-  el.querySelector('.friends').onclick = showFriends;
   el.querySelector('.rankchip').onclick = showRankRoad;
   el.querySelector('.room-name').onclick = () => showRoomPicker({ hs, r, here, locked, home });
   app.append(el, tabbar('room'));
@@ -929,7 +968,7 @@ function photoMode() {
 
 // =========================== 更新のお知らせ ===========================
 // このプログラムの版（version.json と同じにする。公開のたびに上げる）
-const APP_VERSION = '2.5.1';
+const APP_VERSION = '2.6.0';
 // 新しい版が出たら、みんな同じタイミングでそろうように強制で再起動する。
 // 開いた時・画面に戻った時・1分ごとに version.json を見る
 async function latestVersion() {
@@ -1239,7 +1278,7 @@ function showBag(tab = 'furniture', genre = '') {
       <div class="bag-items">${items.map(([k, n, art, desc]) => `
         <div class="bag-row ${n ? '' : 'zero'}"><span class="bag-art">${art}</span><span class="bag-t"><b>${NAMES[k]}</b><small>${desc}</small></span><b class="bag-cnt">×${n}</b></div>`).join('')}</div>
     `}`);
-  el.querySelector('.back').onclick = showFurnitureHub;
+  el.querySelector('.back').onclick = halfFurniture;
   el.querySelectorAll('.bagtabs button').forEach(b => b.onclick = () => showBag(b.dataset.t));
   el.querySelectorAll('.zk-tabs button').forEach(b => b.onclick = () => showBag('furniture', b.dataset.g));
 }
@@ -1294,7 +1333,7 @@ function showZukan(genre = null) {
       + GENRES.map(g => card(g.id, GENRE_ICON[g.id] || 'box', g.name, shop.filter(i => i.genre === g.id))).join('')
       + card('special', 'trophy', '特別（克服のごほうび）', special);
   }
-  const el = screenWithTabs('zukan', `<button class="icon back">${icon('back')}</button><h2>図鑑</h2><span class="zk-total"><b>${have}</b> / ${total}</span>`, 'furn', `
+  const el = screenWithTabs('zukan', `<button class="icon back">${icon('back')}</button><h2>図鑑</h2><span class="zk-total"><b>${have}</b> / ${total}</span>`, 'zukan', `
     <div class="zk-progress"><i style="width:${have / total * 100}%"></i></div>
     <div class="zk-tabs">
       <button data-g="" class="${!genre ? 'on' : ''}">すべて</button>
@@ -1303,7 +1342,7 @@ function showZukan(genre = null) {
       <button data-g="special" class="${genre === 'special' ? 'on' : ''}">${icon('trophy')}特別</button>
     </div>
     ${body}`);
-  el.querySelector('.back').onclick = showFurnitureHub;
+  el.querySelector('.back').onclick = halfFurniture;
   el.querySelectorAll('.zk-tabs button, .zk-genre').forEach(b => b.onclick = () => showZukan(b.dataset.g || null));
   el.querySelectorAll('.zk-item.have').forEach(b => b.onclick = () => {
     const it = itemById(b.dataset.id);
