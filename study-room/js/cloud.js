@@ -14,6 +14,8 @@ const MESSAGES = {
   self: '自分にはフレンド申請できません',
   not_friend: 'フレンドになっている人の部屋だけ見られます',
   not_admin: '管理者だけが見られます',
+  too_many: '送りすぎです。少し時間をおいてください',
+  empty: '中身を書いてください',
 };
 
 export class CloudError extends Error {

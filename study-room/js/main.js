@@ -5,6 +5,7 @@ import { ROOMS, roomDef, STYLES, styleDef, homeOf, VILLA_MIN_ITEMS } from './roo
 import { GENRES, ITEMS, itemById, itemsOf, SPECIAL_IDS, STARTER } from './items.js';
 import { icon, GENRE_ICON, SUBJECT_ICON } from './icons.js';
 import { ticketSVG, TICKET_NAME } from './tickets.js';
+import * as G from './gacha.js';
 import { thumbHTML, hydrateThumbs } from './thumbs.js';
 import { loadModel } from './loaders.js';
 import { validProblems, SYMBOLS } from './problems.js';
@@ -110,10 +111,10 @@ function tabbar(active) {
   const st = sub();
   const resume = st.session && st.session.idx < st.session.set.length;
   const due = S.stats(st, PROBLEMS).due;
-  const tabs = [['room', 'home', '部屋'], ['edit', 'sofa', '模様がえ'], ['play', 'pencil', resume ? '続きから' : '解く'], ['zukan', 'book', '図鑑'], ['menu', 'gear', 'メニュー']];
+  const tabs = [['room', 'home', '部屋'], ['furn', 'sofa', '家具'], ['play', 'pencil', resume ? '続きから' : '解く'], ['social', 'users', 'みんな'], ['menu', 'gear', 'メニュー']];
   const el = h(`<nav class="tabbar">${tabs.map(([k, ic, n]) => `
     <button data-t="${k}" class="${k === active ? 'on' : ''} ${k === 'play' ? 'center' : ''}">
-      <span class="ti">${icon(ic)}${k === 'play' && (resume || due || !S.playedToday()) ? '<i class="dot"></i>' : ''}${k === 'menu' && (friendBadge || newsBadge) ? '<i class="dot"></i>' : ''}</span><span class="tl">${n}</span>
+      <span class="ti">${icon(ic)}${k === 'play' && (resume || due || !S.playedToday()) ? '<i class="dot"></i>' : ''}${k === 'menu' && newsBadge ? '<i class="dot"></i>' : ''}${k === 'social' && friendBadge ? '<i class="dot"></i>' : ''}${k === 'furn' && (canBuyNow() || ticketCount()) ? '<i class="dot"></i>' : ''}</span><span class="tl">${n}</span>
     </button>`).join('')}</nav>`);
   el.querySelectorAll('button').forEach(b => b.onclick = () => goTab(b.dataset.t));
   return el;
@@ -122,9 +123,164 @@ function goTab(t) {
   if (visiting) leaveVisit(false);
   if (t === 'room') return showHome();
   if (t === 'edit') return showEdit();
+  if (t === 'furn') return showFurnitureHub();
   if (t === 'play') return chooseSubject();
   if (t === 'zukan') return showZukan();
+  if (t === 'social') return showSocial();
   if (t === 'menu') return showMenu();
+}
+function canBuyNow() { const hs = HS(); return hs.gauge >= S.gaugeMax(hs) || hs.tickets > 0; }
+function ticketCount() { const hs = HS(); return (hs.rareTickets || 0) + (hs.rareTickets4 || 0) + (hs.rareTickets5 || 0); }
+
+// =========================== 家具（買う・ガチャ・模様がえ・図鑑・持ち物） ===========================
+function showFurnitureHub() {
+  const hs = HS(), max = S.gaugeMax(hs);
+  const pct = Math.min(100, Math.round(hs.gauge / max * 100));
+  const el = screenWithTabs('furn', `<h2>家具</h2><span></span>`, 'furn', `
+    <div class="hub">
+      <button class="hub-card buy ${canBuyNow() ? 'ready' : ''}" data-h="buy">
+        <span class="hub-ic">${icon('gift')}</span><b>家具を買う</b>
+        <small>${canBuyNow() ? '今すぐ1つ買えます' : `ゲージ ${pct}%`}</small>
+        <span class="hub-bar"><i style="width:${pct}%"></i></span>
+      </button>
+      <button class="hub-card gacha" data-h="gacha">
+        <span class="hub-art">${ticketSVG('ticket', 'mini')}</span><b>レアガチャ</b>
+        <small>チケット ${hs.rareTickets || 0}枚${hs.rareTickets4 ? `・★4確定 ${hs.rareTickets4}` : ''}${hs.rareTickets5 ? `・★5限定 ${hs.rareTickets5}` : ''}</small>
+      </button>
+      <button class="hub-card" data-h="edit"><span class="hub-ic">${icon('move')}</span><b>模様がえ</b><small>持っている家具を動かす</small></button>
+      <button class="hub-card" data-h="zukan"><span class="hub-ic">${icon('book')}</span><b>図鑑</b><small>${ITEMS.filter(i => S.collected(i.id)).length + G.GACHA_ITEMS.filter(i => !ITEMS.includes(i) && S.collected(i.id)).length} 種類 集めた</small></button>
+      <button class="hub-card" data-h="bag"><span class="hub-ic">${icon('box')}</span><b>持ち物</b><small>家具・チケット・かけら</small></button>
+    </div>`);
+  el.querySelectorAll('.hub-card').forEach(b => b.onclick = () => {
+    const k = b.dataset.h;
+    if (k === 'buy') { if (!canBuyNow()) return toast('問題を解いてゲージをためると買えます'); showHome(); return buyFlow(); }
+    if (k === 'gacha') return showGacha();
+    if (k === 'edit') return showEdit();
+    if (k === 'zukan') return showZukan();
+    if (k === 'bag') return showBag();
+  });
+}
+
+// =========================== みんな（ランキング・フレンド） ===========================
+function showSocial() { return showRanking(); }
+function bindSocialTabs(el) {
+  el.querySelectorAll('.soc button').forEach(b => b.onclick = () => (b.dataset.s === 'friends' ? showFriends() : showRanking()));
+}
+
+// =========================== レアガチャ ===========================
+function gachaOwned(id) { return S.owned(id); }
+function showGacha(banner = null) {
+  const hs = HS();
+  const act = G.activeSeries();
+  const banners = [{ id: 'standard', name: 'スタンダード', desc: '★5は上質な定番（恒常）から出ます' }, ...act.map(s => ({ id: s.id, name: `限定：${s.name}`, desc: s.desc, limited: true }))];
+  const b = banners.find(x => x.id === banner) || banners[banners.length - 1];
+  const t1 = hs.rareTickets || 0, t4 = hs.rareTickets4 || 0, t5 = hs.rareTickets5 || 0;
+  const s4 = hs.shards4 || 0, s5 = hs.shards5 || 0;
+  const el = screenWithTabs('gacha', `<button class="icon back">${icon('back')}</button><h2>レアガチャ</h2><span></span>`, 'furn', `
+    <div class="bn-tabs">${banners.map(x => `<button data-b="${x.id}" class="${x.id === b.id ? 'on' : ''} ${x.limited ? 'lim' : ''}">${x.limited ? icon('star') : ''}${esc(x.name)}</button>`).join('')}</div>
+    <div class="banner ${b.limited ? 'b-' + b.id : 'b-standard'}">
+      <div class="bn-glow"></div>
+      ${b.limited ? '<span class="bn-tag">期間限定</span>' : ''}
+      <h3>${esc(b.name.replace('限定：', ''))}</h3>
+      <p>${esc(b.desc)}</p>
+      <div class="bn-picks">${(b.limited ? G.bySeries(b.id) : G.byRarity(5).filter(i => !i.limited)).slice(0, 4).map(it => `<span class="thumb">${thumbHTML(it)}</span>`).join('')}</div>
+    </div>
+    <div class="pull-btns">
+      <button class="btn gold pull1" ${t1 < 1 ? 'disabled' : ''}>${ticketSVG('ticket', 'mini')}<span>1回引く<small>レアチケット 1枚</small></span></button>
+      <button class="btn gold pull10" ${t1 < 10 ? 'disabled' : ''}>${ticketSVG('ticket', 'mini')}<span>10回引く<small>レアチケット 10枚・★4以上1つ確定</small></span></button>
+      ${t4 ? `<button class="btn special pull4">${ticketSVG('ticket4', 'mini')}<span>★4以上確定で引く<small>のこり ${t4}枚</small></span></button>` : ''}
+      ${t5 && act.length ? `<button class="btn special pull5">${ticketSVG('ticket5', 'mini')}<span>★5限定確定で引く<small>${esc(act[0].name)}・のこり ${t5}枚</small></span></button>` : ''}
+    </div>
+    <p class="have-t">レアチケット <b>${t1}</b> 枚</p>
+    <div class="shards">
+      <button class="shard-btn" data-r="4" ${s4 < G.SHARD_COST ? 'disabled' : ''}><span class="shard s4">${icon('sparkle')}</span>★4のかけら <b>${s4}/${G.SHARD_COST}</b><small>好きな★4と交換</small></button>
+      <button class="shard-btn" data-r="5" ${s5 < G.SHARD_COST ? 'disabled' : ''}><span class="shard s5">${icon('sparkle')}</span>★5のかけら <b>${s5}/${G.SHARD_COST}</b><small>好きな★5と交換</small></button>
+    </div>
+    <details class="rates"><summary>提供割合</summary>
+      <p>★5：5%（${b.limited ? 'うち半分は限定シリーズ' : '恒常のみ'}）／★4：25%／★3：70%。10回引くと★4以上が必ず1つ入ります。</p>
+      <p>★4・★5がかぶったら、それぞれのかけら1個になります。★3がかぶったら、もう1つ持てます。</p></details>`);
+  el.querySelector('.back').onclick = showFurnitureHub;
+  el.querySelectorAll('.bn-tabs button').forEach(x => x.onclick = () => showGacha(x.dataset.b));
+  const opts = { banner: b.id };
+  el.querySelector('.pull1')?.addEventListener('click', () => doPull(() => [G.pullWithTicket('ticket', gachaOwned, Math.random, opts)], { ticket: 1 }, b.id));
+  el.querySelector('.pull10')?.addEventListener('click', () => doPull(() => G.pullTen(gachaOwned, Math.random, opts), { ticket: 10 }, b.id));
+  el.querySelector('.pull4')?.addEventListener('click', () => doPull(() => [G.pullWithTicket('ticket4', gachaOwned, Math.random, opts)], { ticket4: 1 }, b.id));
+  el.querySelector('.pull5')?.addEventListener('click', () => doPull(() => [G.pullWithTicket('ticket5', gachaOwned, Math.random, { ...opts, series: act[0]?.id })], { ticket5: 1 }, b.id));
+  el.querySelectorAll('.shard-btn').forEach(x => x.onclick = () => shardExchange(+x.dataset.r, b.id));
+}
+// チケットを使って引き、結果を持ち物へ（かぶりはかけら）
+function doPull(roll, cost, bannerId) {
+  const hs = HS();
+  const have = { ticket: hs.rareTickets || 0, ticket4: hs.rareTickets4 || 0, ticket5: hs.rareTickets5 || 0 };
+  for (const [k, n] of Object.entries(cost)) if (have[k] < n) return toast('チケットが足りません');
+  hs.rareTickets = have.ticket - (cost.ticket || 0);
+  hs.rareTickets4 = have.ticket4 - (cost.ticket4 || 0);
+  hs.rareTickets5 = have.ticket5 - (cost.ticket5 || 0);
+  const res = roll();
+  for (const r of res) {
+    if (r.shard === 4) hs.shards4 = (hs.shards4 || 0) + 1;
+    else if (r.shard === 5) hs.shards5 = (hs.shards5 || 0) + 1;
+    else S.own(r.item.id);
+  }
+  S.save();
+  playPull(res, bannerId);
+}
+// 引いたときの演出：光る箱 → タップで開く → カードがめくれる
+function playPull(res, bannerId) {
+  const top = Math.max(...res.map(r => r.rarity));
+  const ov = h(`
+    <div class="pull-ov r${top}">
+      <div class="po-rays"></div>
+      <div class="po-box"><div class="po-lid"></div><div class="po-body"></div><div class="po-light"></div></div>
+      <p class="po-tap">タップして開ける</p>
+      <div class="po-cards ${res.length > 1 ? 'ten' : 'one'}"></div>
+      <div class="po-btns hide"><button class="btn ghost again">もう一度</button><button class="btn gold ok">${icon('check')}OK</button></div>
+    </div>`);
+  document.body.append(ov);
+  requestAnimationFrame(() => ov.classList.add('show'));
+  vibrate([20, 60, 20]);
+  let opened = false;
+  ov.addEventListener('click', (e) => {
+    if (opened || e.target.closest('.po-btns')) return;
+    opened = true;
+    ov.classList.add('open');
+    vibrate(top >= 5 ? [40, 40, 120] : top >= 4 ? [30, 40, 60] : 30);
+    const cards = ov.querySelector('.po-cards');
+    cards.innerHTML = res.map((r, i) => `
+      <div class="po-card r${r.rarity}" style="animation-delay:${0.5 + i * (res.length > 1 ? 0.12 : 0)}s">
+        <span class="stars">${'★'.repeat(r.rarity)}</span>
+        <span class="thumb">${thumbHTML(r.item)}</span>
+        <b>${esc(r.item.name)}</b>
+        ${r.shard ? `<i class="po-dup">かぶり → ★${r.shard}のかけら</i>` : r.dup ? '<i class="po-dup">もう1つ</i>' : '<i class="po-new">NEW</i>'}
+      </div>`).join('');
+    hydrateThumbs(cards);
+    setTimeout(() => ov.querySelector('.po-btns').classList.remove('hide'), 600 + res.length * 120);
+  });
+  ov.querySelector('.ok').onclick = () => { ov.remove(); showGacha(bannerId); };
+  ov.querySelector('.again').onclick = () => { ov.remove(); showGacha(bannerId); };
+}
+// かけらで交換
+function shardExchange(rarity, bannerId) {
+  const hs = HS();
+  const key = rarity === 4 ? 'shards4' : 'shards5';
+  if ((hs[key] || 0) < G.SHARD_COST) return;
+  const act = G.activeSeries()[0];
+  const list = G.exchangeable(rarity, gachaOwned, { includeLimited: rarity === 5, series: act?.id });
+  const el = sheet(`
+    <div class="sh-head"><span class="sh-ic">${icon('sparkle')}</span><div><h3>★${rarity}のかけらで交換</h3><p>かけら ${G.SHARD_COST}個で、好きな1つと交換できます</p></div></div>
+    <div class="invgrid">${list.map(it => `<button class="inv-item" data-id="${it.id}"><span class="thumb">${thumbHTML(it)}</span><b>${esc(it.name)}</b></button>`).join('')}</div>
+    <button class="link close">やめる</button>`, 'inv-sheet');
+  el.querySelector('.close').onclick = () => el.remove();
+  el.querySelectorAll('.inv-item').forEach(x => x.onclick = () => {
+    const it = itemById(x.dataset.id);
+    if (!confirm(`${it.name}と交換しますか？（かけら ${G.SHARD_COST}個）`)) return;
+    hs[key] -= G.SHARD_COST;
+    S.own(it.id);
+    S.save();
+    el.remove();
+    toast(`${it.name}を手に入れました`);
+    showGacha(bannerId);
+  });
 }
 
 // =========================== 部屋（ホーム） ===========================
@@ -187,9 +343,9 @@ async function enterHouse() {
   showHome();
   await room3d.show(curDef(), curRoom());
   receiveSpecials();
-  showLoginBonus();
+  const lbShown = showLoginBonus();
   if (added.length > 1) toast(`新しい部屋「${added.map(r => r.name).join('・')}」が開きました`, 3000);
-  if (!curRoom().style) askStyle();
+  if (!lbShown && !curRoom().style) askStyle(); // ログインボーナスがあれば、閉じたあとに出す
 }
 
 function remainCapacity(room = curRoom()) {
@@ -515,7 +671,7 @@ async function putIntoRoom(item, justBought) {
 // ログインボーナス：その日はじめて開いたとき、専用の画面で30日のカレンダーにスタンプ
 function showLoginBonus() {
   const got = S.claimLoginBonus();
-  if (!got) return;
+  if (!got) return false;
   S.save();
   const cellArt = (r) => r.kind === 'gauge' ? `<span class="lb-g">${icon('gift')}</span>` : ticketSVG(r.kind, 'mini');
   const cells = Array.from({ length: 30 }, (_, i) => {
@@ -542,7 +698,12 @@ function showLoginBonus() {
     </div>`);
   document.body.append(el);
   requestAnimationFrame(() => el.classList.add('show'));
-  el.querySelector('.ok').onclick = () => { el.classList.remove('show'); setTimeout(() => el.remove(), 400); showHome(); };
+  el.querySelector('.ok').onclick = () => {
+    el.classList.remove('show'); setTimeout(() => el.remove(), 400);
+    showHome();
+    if (!curRoom().style) askStyle();
+  };
+  return true;
 }
 
 // 克服のごほうび（特別な家具）を持ち物に入れる
@@ -781,14 +942,12 @@ function showMenu() {
     </section>
     <nav class="menu-list">
       <button data-m="records">${icon('chart')}<span>記録<small>分野ごとの成績・連続日数</small></span>${icon('chevronRight')}</button>
-      <button data-m="bag">${icon('box')}<span>持ち物<small>家具・チケット・かけら</small></span>${icon('chevronRight')}</button>
+      <button data-m="feedback">${icon('chat')}<span>要望・バグ報告<small>管理者に送る</small></span>${icon('chevronRight')}</button>
       <button data-m="news">${icon('bell')}<span>お知らせ<small>アップデートや運営からのお知らせ</small></span>${newsBadge ? `<i class="badge">${newsBadge}</i>` : ''}${icon('chevronRight')}</button>
-      <button data-m="ranking">${icon('trophy')}<span>週間ランキング<small>今週解いた問題の数（月曜の朝6時で区切り）</small></span>${icon('chevronRight')}</button>
-      <button data-m="friends">${icon('users')}<span>フレンド<small>申請・フレンドの部屋を見に行く</small></span>${friendBadge ? `<i class="badge">${friendBadge}</i>` : ''}${icon('chevronRight')}</button>
       <button data-m="settings">${icon('gear')}<span>設定<small>画質・データ・ログアウト</small></span>${icon('chevronRight')}</button>
       ${isAdmin() ? `<button data-m="admin">${icon('shield')}<span>管理者<small>みんなの記録と部屋</small></span>${icon('chevronRight')}</button>` : ''}
     </nav>`);
-  el.querySelectorAll('.menu-list button').forEach(b => b.onclick = () => ({ records: showRecords, bag: () => showBag(), news: showNews, ranking: showRanking, friends: showFriends, settings: showSettings, admin: showAdmin })[b.dataset.m]());
+  el.querySelectorAll('.menu-list button').forEach(b => b.onclick = () => ({ records: showRecords, feedback: () => showFeedback(), bag: () => showBag(), news: showNews, ranking: showRanking, friends: showFriends, settings: showSettings, admin: showAdmin })[b.dataset.m]());
   paintSync();
 }
 
@@ -829,6 +988,49 @@ function showRecords() {
   el.querySelector('.back').onclick = showMenu;
 }
 
+// =========================== 要望・バグ報告 ===========================
+function showFeedback(kind = 'bug') {
+  const el = screenWithTabs('feedback', `<button class="icon back">${icon('back')}</button><h2>要望・バグ報告</h2><span></span>`, 'menu', `
+    <p class="note">管理者にとどきます。どの画面で・何をしたら・どうなったかを書いてもらえると助かります。</p>
+    <div class="seg bagtabs"><button data-k="bug" class="${kind === 'bug' ? 'on' : ''}">${icon('alert')}バグ報告</button><button data-k="request" class="${kind === 'request' ? 'on' : ''}">${icon('sparkle')}要望</button></div>
+    <form class="news-form fb-form">
+      <textarea name="b" rows="7" maxlength="2000" placeholder="${kind === 'bug' ? '例：模様がえでソファを動かすと、壁にめりこんだ' : '例：ベッドの種類をもっと増やしてほしい'}" required></textarea>
+      <button class="btn gold big">${icon('check')}送る</button>
+    </form>`);
+  el.querySelector('.back').onclick = showMenu;
+  el.querySelectorAll('.bagtabs button').forEach(b => b.onclick = () => showFeedback(b.dataset.k));
+  el.querySelector('form').onsubmit = async (e) => {
+    e.preventDefault();
+    const body = e.target.b.value.trim();
+    if (!body) return;
+    const btn = e.target.querySelector('button'); btn.disabled = true;
+    try {
+      await rpc('sr_feedback_send', { p_token: Auth.currentUser().token, p_kind: kind, p_body: body + `\n\n（${navigator.userAgent.slice(0, 120)}）` });
+      toast('送りました。ありがとう！'); e.target.reset();
+    } catch (ex) { toast(ex.message); }
+    btn.disabled = false;
+  };
+}
+// 管理者：届いた要望・バグ報告
+async function showFeedbackInbox() {
+  const el = screenWithTabs('feedback', `<button class="icon back">${icon('back')}</button><h2>届いた要望・バグ</h2><span></span>`, 'menu', `<div class="fblist"><p class="empty">読み込み中…</p></div>`);
+  el.querySelector('.back').onclick = showAdmin;
+  const tk = Auth.currentUser().token;
+  const load = async () => {
+    let list = [];
+    try { list = await rpc('sr_feedback_list', { p_token: tk }); } catch (e) { el.querySelector('.fblist').innerHTML = `<p class="empty">${esc(e.message)}</p>`; return; }
+    const day = (t) => new Date(t).toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    el.querySelector('.fblist').innerHTML = list.length ? list.map(f => `
+      <article class="news-card fb-card ${f.done ? 'done' : 'unread'}">
+        <div class="nc-top"><i class="fb-kind ${f.kind}">${f.kind === 'bug' ? 'バグ' : '要望'}</i><b>${esc(f.username || '（消えたユーザー）')}</b><small>${day(f.created_at)}</small></div>
+        <p>${esc(f.body).replace(/\n/g, '<br>')}</p>
+        <button class="btn ghost sm done-btn" data-id="${f.id}" data-done="${f.done ? 0 : 1}">${f.done ? '未対応にもどす' : `${icon('check')}対応ずみにする`}</button>
+      </article>`).join('') : '<p class="empty">まだ届いていません。</p>';
+    el.querySelectorAll('.done-btn').forEach(b => b.onclick = async () => { await rpc('sr_feedback_done', { p_token: tk, p_id: +b.dataset.id, p_done: b.dataset.done === '1' }); load(); });
+  };
+  load();
+}
+
 // =========================== 持ち物 ===========================
 // 家具（持っている数と置いている数）と、アイテム（チケット・かけら・引きかえ券）を分けて見る
 function showBag(tab = 'furniture', genre = '') {
@@ -844,7 +1046,7 @@ function showBag(tab = 'furniture', genre = '') {
     ['exchange', hs.tickets || 0, `<span class="shard ex">${icon('gift')}</span>`, '引きかえ券。ゲージなしで家具を1つ買える'],
   ];
   const NAMES = { ...TICKET_NAME, shard4: '★4のかけら', shard5: '★5のかけら', exchange: '引きかえ券' };
-  const el = screenWithTabs('bag', `<button class="icon back">${icon('back')}</button><h2>持ち物</h2><span></span>`, 'menu', `
+  const el = screenWithTabs('bag', `<button class="icon back">${icon('back')}</button><h2>持ち物</h2><span></span>`, 'furn', `
     <div class="seg bagtabs"><button data-t="furniture" class="${tab === 'furniture' ? 'on' : ''}">${icon('sofa')}家具</button><button data-t="items" class="${tab === 'items' ? 'on' : ''}">${icon('star')}アイテム</button></div>
     ${tab === 'furniture' ? `
       <div class="zk-tabs"><button data-g="" class="${!genre ? 'on' : ''}">すべて</button>${GENRES.map(g => `<button data-g="${g.id}" class="${genre === g.id ? 'on' : ''}">${icon(GENRE_ICON[g.id] || 'box')}${g.name}</button>`).join('')}</div>
@@ -858,7 +1060,7 @@ function showBag(tab = 'furniture', genre = '') {
       <div class="bag-items">${items.map(([k, n, art, desc]) => `
         <div class="bag-row ${n ? '' : 'zero'}"><span class="bag-art">${art}</span><span class="bag-t"><b>${NAMES[k]}</b><small>${desc}</small></span><b class="bag-cnt">×${n}</b></div>`).join('')}</div>
     `}`);
-  el.querySelector('.back').onclick = showMenu;
+  el.querySelector('.back').onclick = showFurnitureHub;
   el.querySelectorAll('.bagtabs button').forEach(b => b.onclick = () => showBag(b.dataset.t));
   el.querySelectorAll('.zk-tabs button').forEach(b => b.onclick = () => showBag('furniture', b.dataset.g));
 }
@@ -868,11 +1070,11 @@ async function showRanking() {
   const wk = S.weekKey();
   const [y, mo, d] = wk.split('-').map(Number);
   const end = new Date(y, mo - 1, d + 6);
-  const el = screenWithTabs('ranking', `<button class="icon back">${icon('back')}</button><h2>週間ランキング</h2><span></span>`, 'menu', `
+  const el = screenWithTabs('ranking', `<h2>みんな</h2><span></span>`, 'social', `<div class="seg bagtabs soc"><button data-s="ranking" class="${'ranking' === 'ranking' ? 'on' : ''}">${icon('trophy')}ランキング</button><button data-s="friends" class="${'ranking' === 'friends' ? 'on' : ''}">${icon('users')}フレンド${friendBadge ? '<i class="badge">' + friendBadge + '</i>' : ''}</button></div>`+`
     <p class="rk-term">${mo}/${d}（月）〜 ${end.getMonth() + 1}/${end.getDate()}（日）に解いた問題の数</p>
     <div class="rk-me"></div>
     <div class="rk-list"><p class="empty">読み込み中…</p></div>`);
-  el.querySelector('.back').onclick = showMenu;
+  bindSocialTabs(el);
   // 自分の最新の数をネットに送ってから見る
   try { await Sync.push(); } catch (e) { /* なし */ }
   let r;
@@ -889,32 +1091,50 @@ async function showRanking() {
 
 // =========================== 図鑑 ===========================
 function showZukan(genre = null) {
-  const all = ITEMS.filter(i => !i.special || S.collected(i.id));
-  const total = ITEMS.length, have = ITEMS.filter(i => S.collected(i.id)).length;
-  const shown = genre ? (genre === 'special' ? ITEMS.filter(i => i.special) : all.filter(i => i.genre === genre && !i.special)) : null;
-  const el = screenWithTabs('zukan', `<h2>図鑑</h2><span class="zk-total"><b>${have}</b> / ${total}</span>`, 'zukan', `
+  // ふつうの家具（買える物）と、ガチャの家具（★3〜★5）を分けて数える
+  const shop = ITEMS.filter(i => !i.rare && !i.special);
+  const gacha = G.GACHA_ITEMS.filter(i => !i.limited || G.activeSeries().some(s => s.id === i.series) || S.collected(i.id));
+  const special = ITEMS.filter(i => i.special);
+  const pool = [...shop, ...gacha, ...special];
+  const total = pool.length, have = pool.filter(i => S.collected(i.id)).length;
+  let body;
+  if (genre === 'gacha') {
+    body = [5, 4, 3].map(r => {
+      const list = gacha.filter(i => i.rarity === r);
+      return `<h3 class="sec">${'★'.repeat(r)}（${list.filter(i => S.collected(i.id)).length} / ${list.length}）</h3>${zukanGrid(list)}`;
+    }).join('');
+  } else if (genre === 'special') body = zukanGrid(special);
+  else if (genre) body = zukanGrid(shop.filter(i => i.genre === genre));
+  else {
+    const card = (id, ic, name, items) => {
+      const n = items.filter(i => S.collected(i.id)).length;
+      return `<button class="zk-genre" data-g="${id}"><span class="g-ic">${icon(ic)}</span><b>${name}</b>
+        <span class="zk-bar"><i style="width:${n / Math.max(1, items.length) * 100}%"></i></span><small>${n} / ${items.length}${n >= items.length ? ' コンプリート' : ''}</small></button>`;
+    };
+    body = card('gacha', 'star', 'ガチャの家具', gacha)
+      + GENRES.map(g => card(g.id, GENRE_ICON[g.id] || 'box', g.name, shop.filter(i => i.genre === g.id))).join('')
+      + card('special', 'trophy', '特別（克服のごほうび）', special);
+  }
+  const el = screenWithTabs('zukan', `<button class="icon back">${icon('back')}</button><h2>図鑑</h2><span class="zk-total"><b>${have}</b> / ${total}</span>`, 'furn', `
     <div class="zk-progress"><i style="width:${have / total * 100}%"></i></div>
     <div class="zk-tabs">
       <button data-g="" class="${!genre ? 'on' : ''}">すべて</button>
+      <button data-g="gacha" class="${genre === 'gacha' ? 'on' : ''}">${icon('star')}ガチャ</button>
       ${GENRES.map(g => `<button data-g="${g.id}" class="${genre === g.id ? 'on' : ''}">${icon(GENRE_ICON[g.id] || 'box')}${g.name}</button>`).join('')}
       <button data-g="special" class="${genre === 'special' ? 'on' : ''}">${icon('trophy')}特別</button>
     </div>
-    ${genre ? zukanGrid(shown) : GENRES.map(g => {
-      const items = ITEMS.filter(i => i.genre === g.id && !i.special);
-      const n = items.filter(i => S.collected(i.id)).length;
-      return `<button class="zk-genre" data-g="${g.id}"><span class="g-ic">${icon(GENRE_ICON[g.id] || 'box')}</span><b>${g.name}</b>
-        <span class="zk-bar"><i style="width:${n / items.length * 100}%"></i></span><small>${n} / ${items.length}${n >= items.length ? ' コンプリート' : ''}</small></button>`;
-    }).join('')}`);
+    ${body}`);
+  el.querySelector('.back').onclick = showFurnitureHub;
   el.querySelectorAll('.zk-tabs button, .zk-genre').forEach(b => b.onclick = () => showZukan(b.dataset.g || null));
   el.querySelectorAll('.zk-item.have').forEach(b => b.onclick = () => {
     const it = itemById(b.dataset.id);
-    toast(`${it.name}（${(it.styles || []).map(s => styleDef(s).name).join('・')}）持っている数：${S.owned(it.id)}`);
+    toast(`${it.name}${it.rarity ? '（' + '★'.repeat(it.rarity) + '）' : ''} 持っている数：${S.owned(it.id)}`);
   });
 }
 function zukanGrid(items) {
   return `<div class="zk-grid">${items.map(it => {
     const have = S.collected(it.id);
-    return `<button class="zk-item ${have ? 'have' : 'locked'} ${it.rare ? 'rare' : ''}" data-id="${it.id}">
+    return `<button class="zk-item ${have ? 'have' : 'locked'} ${it.rarity ? 'r' + it.rarity : ''}" data-id="${it.id}">
       <span class="thumb">${thumbHTML(it)}</span>${have ? '' : `<span class="lock">${icon('lock')}</span>`}
       <b>${have ? esc(it.name) : '？？？'}</b></button>`;
   }).join('')}</div>`;
@@ -986,10 +1206,10 @@ async function refreshFriendBadge() {
   } catch (e) { /* オフライン */ }
 }
 async function showFriends() {
-  const el = screenWithTabs('friends', `<button class="icon back">${icon('back')}</button><h2>フレンド</h2><span></span>`, 'menu', `
+  const el = screenWithTabs('friends', `<h2>みんな</h2><span></span>`, 'social', `<div class="seg bagtabs soc"><button data-s="ranking" class="${'friends' === 'ranking' ? 'on' : ''}">${icon('trophy')}ランキング</button><button data-s="friends" class="${'friends' === 'friends' ? 'on' : ''}">${icon('users')}フレンド${friendBadge ? '<i class="badge">' + friendBadge + '</i>' : ''}</button></div>`+`
     <form class="addf"><input name="n" placeholder="ユーザー名で申請" maxlength="16" autocomplete="off"><button class="btn primary">${icon('userPlus')}申請</button></form>
     <div class="flist"><p class="empty">読み込み中…</p></div>`);
-  el.querySelector('.back').onclick = showMenu;
+  bindSocialTabs(el);
   const u = Auth.currentUser();
   const listEl = el.querySelector('.flist');
   const load = async () => {
@@ -1078,9 +1298,10 @@ async function leaveVisit(goBack) {
 // =========================== 管理者 ===========================
 async function showAdmin() {
   if (!isAdmin()) return showMenu();
-  const el = screenWithTabs('admin', `<button class="icon back">${icon('back')}</button><h2>管理者</h2><span></span>`, 'menu', `<button class="btn primary big compose">${icon('bell')}お知らせを書いて送る</button><div class="alist"><p class="empty">読み込み中…</p></div>`);
+  const el = screenWithTabs('admin', `<button class="icon back">${icon('back')}</button><h2>管理者</h2><span></span>`, 'menu', `<div class="row2 admin-btns"><button class="btn primary compose">${icon('bell')}お知らせを書く</button><button class="btn ghost inbox">${icon('chat')}要望・バグを見る</button></div><div class="alist"><p class="empty">読み込み中…</p></div>`);
   el.querySelector('.back').onclick = showMenu;
   el.querySelector('.compose').onclick = () => composeNews(showNews);
+  el.querySelector('.inbox').onclick = showFeedbackInbox;
   const u = Auth.currentUser();
   let list = [];
   try { list = await rpc('sr_admin_users', { p_token: u.token }); } catch (e) { el.querySelector('.alist').innerHTML = `<p class="empty">${esc(e.message)}</p>`; return; }
@@ -1309,9 +1530,18 @@ function runProblem(p, isReview, retry) {
       if (ss.bonus) pts = Math.round(pts * 1.5);
       HS().gauge += pts;
       ss.gained += pts;
+      const tBefore = { solved: S.profile().solved, streak: S.currentStreak(), mastered: S.stats(st, PROBLEMS).mastered };
       ({ mastered } = S.recordResult(st, p.id, perfect, isReview));
       if (mastered) HS().pendingSpecials++;
       xp = S.addAnswer(st, p.unit, perfect ? 'perfect' : ok ? 'ok' : 'wrong');
+      const firstPlay = S.markPlayedToday();
+      // 50問ごと・連続7日ごと・克服でたまにレアチケット
+      const earned = G.ticketsEarned(tBefore, { solved: S.profile().solved, streak: S.currentStreak(), mastered: S.stats(st, PROBLEMS).mastered });
+      if (earned > 0) {
+        HS().rareTickets = (HS().rareTickets || 0) + earned;
+        xp.rewards = xp.rewards || { ticket: 0, ticket4: 0, ticket5: 0 };
+        xp.rewards.ticket += earned;
+      }
       if (xp.rewards) {
         const sr = ss.rewards || (ss.rewards = { ticket: 0, ticket4: 0, ticket5: 0 });
         for (const k of Object.keys(sr)) sr[k] += xp.rewards[k] || 0;
@@ -1319,7 +1549,7 @@ function runProblem(p, isReview, retry) {
       ss.xp = (ss.xp || 0) + xp.gained;
       if (xp.rankUp) ss.rankUp = true;
       ss.results.push({ id: p.id, perfect, ok, mastered });
-      const first = S.markPlayedToday();
+      const first = firstPlay;
       if (first) toast(`連続 ${S.currentStreak()}日目！`);
       S.save();
     }
@@ -1420,7 +1650,14 @@ function paintSync() {
 }
 Sync.setHandlers({
   onStatus: (s) => { syncState = s; paintSync(); },
-  onExpired: () => { Auth.logOut(); toast('ログインが切れました。もう一度ログインしてください', 3500); showLogin(); },
+  onExpired: () => {
+    // 合い鍵が使えなくなった＝ほかの端末で同じアカウントにログインされた
+    localStorage.removeItem('studyroom.cloud');
+    document.querySelectorAll('.lb-screen, .photo-ui, .photo-preview').forEach(e => e.remove());
+    document.body.classList.remove('photo-mode');
+    toast('別の端末で同じアカウントにログインされたため、ログアウトしました', 4500);
+    showLogin();
+  },
 });
 
 // =========================== タイトル画面 ===========================

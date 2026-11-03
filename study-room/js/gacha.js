@@ -17,9 +17,9 @@ export const SHARD_COST = 5;
 // ★5 限定のシリーズ。start / end は開催期間（ISO 日付文字列。null = 未定）
 export const SERIES = [
   { id: 'starry', name: '星空シリーズ', desc: '濃紺と金に、またたく星。夜空の中で暮らすような部屋に。', start: null, end: null },
-  { id: 'rock', name: 'ロックシリーズ', desc: '黒い革とクローム、ネオンの光。ライブハウスのような部屋に。', start: null, end: null },
-  { id: 'gothic', name: 'ゴシックシリーズ', desc: '黒檀と深紅のベルベット、ゆらめくろうそく。古城の一室のような部屋に。', start: null, end: null },
-  { id: 'wa', name: '和の雅シリーズ', desc: '黒漆と金箔、舞う桜。雅な日本の部屋に。', start: null, end: null },
+  { id: 'rock', name: 'ロックシリーズ', desc: '黒い革とクローム、ネオンの光。ライブハウスのような部屋に。', start: '2099-01-01', end: null }, // まだ開いていない
+  { id: 'gothic', name: 'ゴシックシリーズ', desc: '黒檀と深紅のベルベット、ゆらめくろうそく。古城の一室のような部屋に。', start: '2099-01-01', end: null }, // まだ開いていない
+  { id: 'wa', name: '和の雅シリーズ', desc: '黒漆と金箔、舞う桜。雅な日本の部屋に。', start: '2099-01-01', end: null }, // まだ開いていない
 ];
 
 export const GACHA_ITEMS = [];
@@ -161,6 +161,14 @@ const POOL = {
   4: byRarity(4),
   5: GACHA_ITEMS.filter((it) => it.rarity === 5 && !it.limited), // ★5 恒常
 };
+// ふつうの家具リスト（items.js）の「レア」の物も、★3 としてガチャに入れる（items.js から呼ぶ）
+export function addToPool(items, rarity = 3) {
+  for (const it of items) {
+    if (GACHA_BY_ID[it.id]) continue;
+    it.rarity = rarity;
+    GACHA_ITEMS.push(it); GACHA_BY_ID[it.id] = it; POOL[rarity].push(it);
+  }
+}
 export const BANNER_LIMITED_SHARE = 0.5; // 限定バナーで、★5 が限定シリーズから出る割合
 
 // レア度を決める（min 以上だけで、割合はそのまま）

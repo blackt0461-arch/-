@@ -369,6 +369,11 @@ async function drawItem(item) {
 
   if (src.proc) {
     obj = await buildProcObj(src.proc);
+  } else if (src.gacha) {
+    const [{ buildGacha }, { gachaSpec }] = await Promise.all([import('./gachafurn.js'), import('./gacha.js')]);
+    obj = buildGacha(gachaSpec(item));
+    obj.userData.tick?.(1.5, 0.016); // 動く物は少し進めた姿で撮る
+    disposeGeo = false; // 形は部屋と共有しているので捨てない
   } else if (src.model) {
     obj = await loadModel(src.model);
     if (!obj) return null;

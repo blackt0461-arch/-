@@ -1,3 +1,4 @@
+import { addToPool, gachaById } from './gacha.js';
 // 家具リスト（ショップ・図鑑・部屋づくりで使う）。
 // 仕組みは docs/ITEMS-API.md を参照。
 // src の種類：
@@ -606,8 +607,10 @@ export const STARTER = {
 };
 
 const BY_ID = new Map(ITEMS.map((it) => [it.id, it]));
+// 「レア」の家具はガチャでだけ出る（★3）。ガチャ専用の家具も itemById で引けるようにする
+addToPool(ITEMS.filter((it) => it.rare && !it.special), 3);
 export function itemById(id) {
-  return BY_ID.get(id) || null;
+  return BY_ID.get(id) || gachaById(id) || null;
 }
 export function itemsOf(genre) {
   return ITEMS.filter((it) => it.genre === genre);

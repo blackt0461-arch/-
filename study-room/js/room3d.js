@@ -11,6 +11,8 @@ import { roomShape, ceilAt } from './rooms.js';
 import { buildFixture, segRot, segPoint, putOnWall } from './roomfix.js';
 import { itemById, STARTER } from './items.js';
 import { buildProc } from './procfurn.js';
+import { buildGacha } from './gachafurn.js';
+import { gachaSpec } from './gacha.js';
 import { loadTex, texturedMaterial, loadModel, fitMaterial, shadowAll } from './loaders.js';
 import { buildExterior } from './exterior.js';
 
@@ -93,7 +95,8 @@ export class Room3D {
     this.sun.shadow.mapSize.set(2048, 2048);
     this.sun.shadow.bias = -0.0004;
     this.sun.shadow.normalBias = 0.03;
-    this.sun.shadow.radius = 4;
+    this.sun.shadow.radius = 5;
+    this.sun.shadow.blurSamples = 16;
     this.scene.add(this.sun, this.sun.target);
 
     this.shell = new THREE.Group();   // 壁・床・天井・窓
@@ -331,6 +334,8 @@ export class Room3D {
       this.marker.material.opacity = Math.max(0, this.marker.userData.life) * 0.8;
       this.marker.scale.setScalar(1 + (1 - this.marker.userData.life) * 0.6);
     }
+    // ガチャの家具の動き（炎・星・水など）
+    for (const o of this.items.children) { const f = o.children[0]?.userData.tick; if (f) f(t, dt); }
     // 新しく置いた物のアニメーション
     for (const o of this.items.children) {
       const a = o.userData.appear;
@@ -468,6 +473,7 @@ export class Room3D {
   }
   async placeAll(token = this.token) {
     this.items.clear();
+    this.blobs?.clear();
     this.lamps = [];
     this.objByUid = {};
     const placed = this.st.placed || [];
@@ -484,6 +490,8 @@ export class Room3D {
     let obj = null;
     if (src.proc) {
       try { obj = buildProc(src.proc); } catch (e) { console.warn('proc', item.id, e); }
+    } else if (src.gacha) {
+      try { obj = buildGacha(gachaSpec(item)); } catch (e) { console.warn('gacha', item.id, e); }
     } else if (src.model) {
       obj = await loadModel(src.model);
       if (obj && (src.tint || src.paint)) recolor(obj, src);
@@ -493,7 +501,7 @@ export class Room3D {
     if (!obj) return null;
     shadowAll(obj);
     // 大きすぎるモデルは目安の大きさに縮める
-    if (item.size && !src.proc) {
+    if (item.size && !src.proc && !src.gacha) {
       const sz = new THREE.Box3().setFromObject(obj).getSize(new THREE.Vector3());
       const big = Math.max(sz.x, sz.y, sz.z);
       if (big > item.size * 1.3) obj.scale.multiplyScalar(item.size / big);
@@ -516,7 +524,31 @@ export class Room3D {
     this.objByUid = this.objByUid || {};
     this.objByUid[p.uid] = wrap;
     this.items.add(wrap);
+    this.updateBlob(wrap);
     return wrap;
+  }
+
+  // 家具の足もとに落ちる、やわらかい影（どの時間帯でも家具が浮いて見えないように）
+  updateBlob(wrap) {
+    if (!this.blobs) { this.blobs = new THREE.Group(); this.scene.add(this.blobs); }
+    const uid = wrap.userData.uid, item = wrap.userData.item, p = wrap.userData.p;
+    let b = this.blobs.children.find(x => x.userData.uid === uid);
+    if (item.place !== 'floor') { if (b) this.blobs.remove(b); return; }
+    if (!Room3D.blobMat) {
+      const c = document.createElement('canvas'); c.width = c.height = 128;
+      const g = c.getContext('2d'); const gr = g.createRadialGradient(64, 64, 8, 64, 64, 64);
+      gr.addColorStop(0, 'rgba(0,0,0,0.55)'); gr.addColorStop(0.55, 'rgba(0,0,0,0.28)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
+      g.fillStyle = gr; g.fillRect(0, 0, 128, 128);
+      const tex = new THREE.CanvasTexture(c);
+      Room3D.blobMat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, toneMapped: false });
+      Room3D.blobGeo = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
+    }
+    if (!b) { b = new THREE.Mesh(Room3D.blobGeo, Room3D.blobMat); b.userData.uid = uid; b.renderOrder = 1; this.blobs.add(b); }
+    const bb = new THREE.Box3().setFromObject(wrap.children[0]);
+    const sz = bb.getSize(new THREE.Vector3()), c = bb.getCenter(new THREE.Vector3());
+    b.scale.set(Math.max(0.25, sz.x * 1.3), 1, Math.max(0.25, sz.z * 1.3));
+    b.position.set(c.x, bb.min.y + 0.004, c.z);
+    b.visible = true;
   }
 
   // 配置 p に合わせて、向きと位置をそろえる。部屋からはみ出さないように直し、p も直した値にする
@@ -689,6 +721,7 @@ export class Room3D {
       const L = obj.userData.light || (typeof il === 'string' ? { color: il } : il) || {};
       const bb = new THREE.Box3().setFromObject(o);
       const l = new THREE.PointLight(L.color || '#ffd9a8', (L.intensity || 1) * 3 * this.mood.lampI, 0, 2);
+      // 照明の影は「すき間の影」とぶつかって、部屋が斜めに暗くなるので使わない（足もとの影で代わりにする）
       const center = bb.getCenter(new THREE.Vector3());
       l.position.set(center.x, o.userData.item.place === 'ceiling' ? bb.min.y - 0.05 : center.y + (L.y || 0) * 0 + 0.1, center.z);
       this.scene.add(l);
@@ -744,6 +777,7 @@ export class Room3D {
     }
     this.mountPlaced(o, p);
     const ok = this.checkPlacement(o);
+    this.updateBlob(o);
     this.markValid(ok);
     if (ok) {
       // のっている小物も一緒に
@@ -757,7 +791,7 @@ export class Room3D {
     if (!dx && !dz) return;
     for (const r of this.items.children) {
       const rp = r.userData.p;
-      if (rp && rp.on === uid) { rp.x += dx; rp.z += dz; this.mountPlaced(r, rp); }
+      if (rp && rp.on === uid) { rp.x += dx; rp.z += dz; this.mountPlaced(r, rp); this.updateBlob(r); }
     }
   }
   markValid(ok) {
@@ -774,6 +808,7 @@ export class Room3D {
       this.onInvalid && this.onInvalid();
     }
     this.markValid(true);
+    this.updateBlob(o);
     this.selBox && this.selBox.update();
   }
   rotateSelected(step = Math.PI / 4) {
@@ -793,6 +828,8 @@ export class Room3D {
   removeObject(uid) {
     const o = this.objByUid?.[uid];
     if (o) this.items.remove(o);
+    const b = this.blobs?.children.find(x => x.userData.uid === uid);
+    if (b) this.blobs.remove(b);
     delete this.objByUid[uid];
     if (this.selected === uid) this.select(null);
     this.updateLights();
