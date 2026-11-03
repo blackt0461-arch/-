@@ -10,10 +10,9 @@ const Pip = (() => {
   function lines(entry) {
     const r = entry.r;
     const eq = [['武器', r.W], ...PARTS.map(p => [p.replace('防具', ''), r.eq[p]]), ['アクセ', r.eq.c0]];
-    const lvTxt = x => { const s = S.eq[x.it.id] || {}; return x.it.maxLv > 1 && (s.lv > 1 || s.t) ? ` Lv${s.lv || 1}${s.t ? s.t + '凸' : ''}` : ''; };
     return {
       title: `${entry.idx === 0 ? '★' : ''}${entry.idx + 1}人め ${entry.p.job}`,
-      eq: eq.map(([k, x]) => [k, x ? x.it.n + lvTxt(x) : 'なし']),
+      eq: eq.map(([k, x]) => [k, x ? x.it.n : 'なし']),
       mem: r.slots.map((c, j) => [c, r.mem[j] ? r.mem[j].m.n + (r.mem[j].rank !== 'S' ? ' ' + r.mem[j].rank : '') : 'あき'])
     };
   }
