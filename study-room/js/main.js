@@ -4,6 +4,7 @@ import { ROOMS, SPECIALS, kindsOf, orderOf, variantsOf } from './catalog.js';
 import { validProblems, SYMBOLS } from './problems.js';
 import * as S from './store.js';
 import * as Auth from './auth.js';
+import * as DL from './download.js';
 
 const SUBJECTS = [
   { id: 'physics', name: '物理', icon: '🧲', ready: true },
@@ -36,6 +37,7 @@ function toast(msg, ms = 2200) {
 }
 function vibrate(p) { try { navigator.vibrate && navigator.vibrate(p); } catch (e) { /* なし */ } }
 function sub() { return S.subject(subjectId); }
+const HS = () => S.house();
 
 // =========================== ログイン ===========================
 function showLogin(mode = 'login') {
@@ -75,7 +77,63 @@ function showLogin(mode = 'login') {
 function startAs(u) {
   user = u;
   S.useUser(u.id);
-  showSubjects();
+  if (DL.canDownload() && !DL.downloadState()) showDownload(); else showSubjects();
+}
+
+// =========================== 一括ダウンロード ===========================
+function showDownload() {
+  room3d?.setActive(false);
+  canvas.classList.add('dim');
+  app.innerHTML = '';
+  const mb = DL.totalMB();
+  const el = h(`
+    <div class="screen center">
+      <div class="card dl">
+        <div class="logo">📦</div>
+        <h2>家具のデータをまとめて保存</h2>
+        <p>家具・壁・床などのデータ（約${mb}MB）を先にダウンロードしておくと、あとは待たずに遊べます。<br><b>Wi-Fi のときがおすすめです。</b></p>
+        <div class="gauge big hide"><div class="fill" style="width:0%"></div><span>0%</span></div>
+        <p class="dlnote"></p>
+        <button class="btn primary big go">ダウンロードする</button>
+        <button class="btn ghost later">あとで（使う分だけその場で読み込む）</button>
+      </div>
+    </div>`);
+  app.append(el);
+  const go = el.querySelector('.go'), later = el.querySelector('.later');
+  const bar = el.querySelector('.gauge'), fill = bar.querySelector('.fill'), label = bar.querySelector('span');
+  let job = null;
+  later.onclick = () => { if (job) job.stop(); if (!DL.downloadState()) DL.setDownloadState('later'); showSubjects(); };
+  go.onclick = async () => {
+    go.classList.add('hide'); bar.classList.remove('hide');
+    later.textContent = '中断する（続きはあとで）';
+    job = DL.downloadAll((d, t, b, bt) => {
+      const pct = Math.floor(b / bt * 100);
+      fill.style.width = pct + '%';
+      label.textContent = `${pct}%（${Math.round(b / 1e6)} / ${Math.round(bt / 1e6)}MB）`;
+    });
+    const r = await job.promise;
+    if (r.stopped) return;
+    el.querySelector('.dlnote').textContent = r.failed ? `${r.failed}個は保存できませんでした。遊ぶときにその場で読み込みます。` : '保存できました！';
+    later.classList.add('hide');
+    go.textContent = 'はじめる'; go.classList.remove('hide');
+    go.onclick = () => showSubjects();
+  };
+}
+
+// =========================== 更新のお知らせ ===========================
+async function checkUpdateNotes() {
+  try {
+    const v = await (await fetch('version.json', { cache: 'no-store' })).json();
+    const seen = localStorage.getItem('studyroom.version');
+    localStorage.setItem('studyroom.version', v.version);
+    if (!seen || seen === v.version || !v.notes?.length) return;
+    const sheet = h(`<div class="sheet news">
+      <h3>✨ 新しくなりました</h3>
+      <ul>${v.notes.map(n => `<li>${esc(n)}</li>`).join('')}</ul>
+      <button class="btn primary big ok">OK</button></div>`);
+    app.append(sheet);
+    sheet.querySelector('.ok').onclick = () => sheet.remove();
+  } catch (e) { /* 読めなければ出さない */ }
 }
 
 // =========================== 科目えらび ===========================
@@ -90,41 +148,58 @@ function showSubjects() {
         <div class="who">👤 ${esc(user.name)}</div>
         <div class="streak ${S.playedToday() ? 'on' : ''}">🔥 ${streak}日</div>
       </header>
-      <h2>どの家に行く？</h2>
+      <h2>どの科目を解く？</h2><p class="lead">どの科目を解いても、同じ家が育ちます</p>
       <div class="grid"></div>
       <button class="link logout">ログアウト</button>
     </div>`);
   const grid = el.querySelector('.grid');
   for (const s of SUBJECTS) {
     const st = s.ready ? S.subject(s.id) : null;
-    const done = st ? st.rooms.reduce((n, r) => n + Object.keys(r.items).length, 0) : 0;
+    const done = st ? Object.values(st.srs).filter(r => r.seen).length : 0;
     const b = h(`<button class="subject ${s.ready ? '' : 'soon'}">
       <span class="ic">${s.icon}</span><span class="nm">${s.name}</span>
-      <span class="meta">${s.ready ? (done ? `家具 ${done}こ` : 'はじめる') : '準備中'}</span></button>`);
+      <span class="meta">${s.ready ? (done ? `解いた ${done}問` : 'はじめる') : '準備中'}</span></button>`);
     if (s.ready) b.onclick = () => { subjectId = s.id; enterHouse(); };
     grid.append(b);
   }
   el.querySelector('.logout').onclick = () => { Auth.logOut(); showLogin(); };
+  // 画質（すき間の影・光のにじみ）
+  let q = 'high';
+  try { q = localStorage.getItem('studyroom.quality') || 'high'; } catch (e) { /* なし */ }
+  const qs = h(`<div class="quality"><span>画質</span>${[['high', 'きれい'], ['mid', 'ふつう'], ['low', 'かるい']].map(([k, n]) => `<button data-q="${k}" class="${k === q ? 'on' : ''}">${n}</button>`).join('')}</div>`);
+  qs.querySelectorAll('button').forEach(b => b.onclick = () => {
+    try { localStorage.setItem('studyroom.quality', b.dataset.q); } catch (e) { /* なし */ }
+    room3d?.setQuality(b.dataset.q);
+    qs.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
+  });
+  el.append(qs);
+  if (DL.canDownload() && DL.downloadState() !== 'done') {
+    const b = h('<button class="link dlagain">📦 家具のデータをまとめて保存する</button>');
+    b.onclick = showDownload;
+    el.append(b);
+  }
   app.append(el);
+  checkUpdateNotes();
 }
 
 // =========================== 部屋（ホーム） ===========================
 function ensureRoom() {
   const st = sub();
-  if (!st.rooms.length) {
-    st.rooms.push({ id: ROOMS[0].id, dir: null, items: {}, specials: [] });
-    st.current = 0;
-    st.gauge = S.gaugeMax(st); // 最初の1つはプレゼント
+  if (!HS().rooms.length) {
+    HS().rooms.push({ id: ROOMS[0].id, dir: null, items: {}, specials: [] });
+    HS().current = 0;
+    HS().gauge = S.gaugeMax(HS()); // 最初の1つはプレゼント
     S.save();
   }
   return st;
 }
-function curRoom() { const st = sub(); return st.rooms[st.current]; }
+function curRoom() { const st = sub(); return HS().rooms[HS().current]; }
 function curDef() { return ROOMS.find(r => r.id === curRoom().id); }
 
 async function enterHouse() {
   ensureRoom();
   if (!room3d) room3d = new Room3D(canvas);
+  room3d.onDoor = goThroughDoor;
   canvas.classList.remove('dim');
   room3d.setActive(true);
   showHome();
@@ -144,13 +219,13 @@ function showHome() {
   canvas.classList.remove('dim');
   const st = sub();
   const r = curRoom(), def = curDef();
-  const max = S.gaugeMax(st);
-  const full = st.gauge >= max;
+  const max = S.gaugeMax(HS());
+  const full = HS().gauge >= max;
   const stats = S.stats(st, PROBLEMS);
   const left = remainingKinds();
   const total = r.dir ? orderOf(def, r.dir).length : 0;
   const placed = total - left.length;
-  const need = Math.max(1, Math.ceil((max - st.gauge) / 26));
+  const need = Math.max(1, Math.ceil((max - HS().gauge) / 26));
   const resume = st.session && st.session.idx < st.session.set.length;
   app.innerHTML = '';
   const el = h(`
@@ -161,14 +236,14 @@ function showHome() {
           <small>${r.dir ? `家具 ${placed} / ${total}` : ''}</small></div>
         <div class="streak ${S.playedToday() ? 'on' : ''}">🔥 ${S.currentStreak()}</div>
       </header>
-      ${st.rooms.length > 1 ? `<nav class="rooms">${st.rooms.map((rr, i) => {
+      ${HS().rooms.length > 1 ? `<nav class="rooms">${HS().rooms.map((rr, i) => {
         const d = ROOMS.find(x => x.id === rr.id);
-        return `<button data-i="${i}" class="${i === st.current ? 'on' : ''}">${d.icon} ${d.name}</button>`;
+        return `<button data-i="${i}" class="${i === HS().current ? 'on' : ''}">${d.icon} ${d.name}</button>`;
       }).join('')}</nav>` : ''}
-      <div class="hint">指でなぞって、部屋を見回せます</div>
+      <div class="hint">なぞると見回す・床をタップで歩く・ドアで別の部屋へ</div>
       <footer class="dock">
         <div class="gauge ${full ? 'full' : ''}">
-          <div class="fill" style="width:${Math.min(100, st.gauge / max * 100)}%"></div>
+          <div class="fill" style="width:${Math.min(100, HS().gauge / max * 100)}%"></div>
           <span>${full ? '満タン！ 家具を選べます' : `次の家具まで あと${need}問くらい`}</span>
         </div>
         ${full && left.length ? `<button class="btn gold big unlock">🎁 家具を選ぶ</button>` : ''}
@@ -187,14 +262,32 @@ function showHome() {
   el.querySelector('.edit').onclick = showEdit;
   el.querySelector('.list').onclick = showList;
   el.querySelector('.unlock')?.addEventListener('click', () => unlockFlow());
-  el.querySelector('.testfill')?.addEventListener('click', () => { st.gauge = max; S.save(); showHome(); });
+  el.querySelector('.testfill')?.addEventListener('click', () => { HS().gauge = max; S.save(); showHome(); });
   el.querySelectorAll('.rooms button').forEach(b => b.onclick = async () => {
-    st.current = +b.dataset.i; S.save();
+    HS().current = +b.dataset.i; S.save();
     showHome();
     await room3d.show(curDef(), curRoom());
     if (!curRoom().dir) askDirection();
   });
   app.append(el);
+}
+
+// ドアを通って、となりの部屋へ
+async function goThroughDoor() {
+  const st = sub();
+  if (app.querySelector('.sheet')) return;
+  if (HS().rooms.length < 2) {
+    toast('ドアの向こうは準備中。この部屋を完成させると次の部屋が開きます', 3000);
+    return;
+  }
+  canvas.classList.add('fade');
+  await new Promise(r => setTimeout(r, 350));
+  HS().current = (HS().current + 1) % HS().rooms.length;
+  S.save();
+  showHome();
+  await room3d.show(curDef(), curRoom());
+  canvas.classList.remove('fade');
+  if (!curRoom().dir) askDirection();
 }
 
 // 新しい部屋の方向性をえらぶ
@@ -288,8 +381,8 @@ function chooseVariant(kindId, isUnlock) {
     room3d.st = r;
     if (isUnlock) {
       const st = sub();
-      st.gauge = Math.max(0, st.gauge - S.gaugeMax(st));
-      st.unlocks++;
+      HS().gauge = Math.max(0, HS().gauge - S.gaugeMax(HS()));
+      HS().unlocks++;
       vibrate([30, 40, 60]);
       toast(`${kind.name}を置きました！`);
       S.save();
@@ -306,7 +399,7 @@ function roomCompleted() {
   const st = sub(), def = curDef();
   const idx = ROOMS.findIndex(x => x.id === def.id);
   const next = ROOMS[idx + 1];
-  const have = st.rooms.some(r => next && r.id === next.id);
+  const have = HS().rooms.some(r => next && r.id === next.id);
   const sheet = h(`
     <div class="sheet">
       <h3>🎉 ${def.name}が完成しました！</h3>
@@ -317,8 +410,8 @@ function roomCompleted() {
   sheet.querySelector('.go').onclick = async () => {
     sheet.remove();
     if (next && !have) {
-      st.rooms.push({ id: next.id, dir: null, items: {}, specials: [] });
-      st.current = st.rooms.length - 1;
+      HS().rooms.push({ id: next.id, dir: null, items: {}, specials: [] });
+      HS().current = HS().rooms.length - 1;
       S.save();
       showHome();
       await room3d.show(curDef(), curRoom());
@@ -330,13 +423,13 @@ function roomCompleted() {
 // 克服のごほうび（特別な家具）を置く
 async function placePendingSpecials() {
   const st = sub();
-  while (st.pendingSpecials > 0) {
-    const r = st.rooms.find(rr => (rr.specials || []).length < ROOMS.find(x => x.id === rr.id).specialSlots.length);
+  while (HS().pendingSpecials > 0) {
+    const r = HS().rooms.find(rr => (rr.specials || []).length < ROOMS.find(x => x.id === rr.id).specialSlots.length);
     if (!r) break;
     r.specials = r.specials || [];
-    const si = st.specialsGiven++;
+    const si = HS().specialsGiven++;
     r.specials.push(si);
-    st.pendingSpecials--;
+    HS().pendingSpecials--;
     S.save();
     if (r === curRoom()) {
       await room3d.placeSpecial(si, r.specials.length - 1, true);
@@ -546,10 +639,10 @@ function runProblem(p, isReview, retry) {
     if (!retry) {
       pts = S.gaugePoints(perfect, ok && step1Miss, secs);
       if (ss.bonus) pts = Math.round(pts * 1.5);
-      st.gauge += pts;
+      HS().gauge += pts;
       ss.gained += pts;
       ({ mastered } = S.recordResult(st, p.id, perfect, isReview));
-      if (mastered) st.pendingSpecials++;
+      if (mastered) HS().pendingSpecials++;
       ss.results.push({ id: p.id, perfect, ok, mastered });
       const first = S.markPlayedToday();
       if (first) toast(`🔥 連続 ${S.currentStreak()}日目！`);
@@ -595,7 +688,7 @@ function finishSet() {
   const ss = st.session;
   const perfect = ss.results.filter(r => r.perfect).length;
   const masters = ss.results.filter(r => r.mastered).length;
-  const max = S.gaugeMax(st);
+  const max = S.gaugeMax(HS());
   st.session = null;
   S.save();
   app.innerHTML = '';
@@ -604,9 +697,9 @@ function finishSet() {
       <div class="card done">
         <h2>おつかれさま！</h2>
         <div class="score"><b>${perfect}</b> / ${ss.results.length} 問 ノーミス</div>
-        <div class="gauge big ${st.gauge >= max ? 'full' : ''}"><div class="fill" style="width:${Math.min(100, st.gauge / max * 100)}%"></div>
+        <div class="gauge big ${HS().gauge >= max ? 'full' : ''}"><div class="fill" style="width:${Math.min(100, HS().gauge / max * 100)}%"></div>
           <span>ゲージ +${ss.gained}</span></div>
-        ${st.gauge >= max ? '<p class="gold-t">🎁 家具が選べます！</p>' : ''}
+        ${HS().gauge >= max ? '<p class="gold-t">🎁 家具が選べます！</p>' : ''}
         ${masters ? `<p class="gold-t">🏆 克服 ${masters}問！ 特別な家具が届きます</p>` : ''}
         <p class="streak-t">🔥 連続 ${S.currentStreak()}日</p>
         <button class="btn primary big home">部屋にもどる</button>
