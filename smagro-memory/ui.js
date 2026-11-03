@@ -146,7 +146,7 @@ function vMem() {
   const nOff = MEMS.filter(m => S.memNo[m.id]).length;
   return `<div class="win"><span class="tag">メモリ</span>
     <div class="note" style="margin-top:6px">ぜんぶ もっている あつかいです。<b style="color:var(--line)">もっていない メモリを タップ</b>して はずしてください。右の ランクを おすと ランクや「かならず使う」を かえられます。</div>
-    <button class="btn big" style="margin-top:8px" data-act="scan" data-k="mem">スクショから よみこむ</button>
+    <label class="btn big scanbtn" style="margin-top:8px">スクショから よみこむ<input type="file" accept="image/*" multiple class="vh" id="scanfile-mem" data-act="scanfile" data-k="mem"></label>
     <div class="note">ゲームの メモリ一覧を スクロールしながら スクショを 何まいか 撮って、まとめて えらんでください。</div>
     <div class="row" style="margin-top:8px"><input id="memq" type="search" placeholder="なまえ・こうかで さがす" value="${esc(S.memQ)}" data-act="memq" style="flex:1 1 180px">
     <span class="sub">もってない ${nOff} / ${MEMS.length}</span></div>
@@ -184,7 +184,7 @@ function vEq() {
   const owned = ownedEq().length;
   return `<div class="win"><span class="tag">そうび</span>
     <div class="note" style="margin-top:6px"><b style="color:var(--line)">もっている そうびの 数</b>を ＋で ふやしてください（いまは ${owned}しゅるい）。強化したものは レベルと 凸を 入れます。入れなければ 強化していない あつかいです。</div>
-    <button class="btn big" style="margin-top:8px" data-act="scan" data-k="eq">スクショから よみこむ</button>
+    <label class="btn big scanbtn" style="margin-top:8px">スクショから よみこむ<input type="file" accept="image/*" multiple class="vh" id="scanfile-eq" data-act="scanfile" data-k="eq"></label>
     <div class="note">ゲームの そうび一覧を スクロールしながら スクショを 何まいか 撮って、まとめて えらんでください。</div>
     <div class="row" style="margin-top:8px">${EQTABS.map(([k, l]) => `<button class="btn ${t === k ? 'on' : ''}" data-act="eqtab" data-t="${k}">${l}</button>`).join('')}</div>
     <div class="row" style="margin-top:8px"><input id="eqq" type="search" placeholder="なまえで さがす" value="${esc(S.eqQ)}" data-act="eqq" style="flex:1 1 160px"><button class="chip ${S.eqOwned ? 'on' : ''}" data-act="eqowned">もってるだけ</button></div></div>
@@ -258,7 +258,7 @@ function vHelp() {
   火力のめやす ＝ こうげき力 × 物理(呪文)ダメージ × ぞくせいダメージ × けいとう とっこう × じゃくてん × 会心の きたいち。<br>
   メモリは 枠の色と あうと のうりょくが 1.2倍。虹の枠は どの色でも 1.2倍。超弱点は 約1.7倍、弱点は 約1.5倍。会心は きほん${BASE_CRIT}%で ダメージ＋50%として います。<br>
   そうびの のうりょくは レベル1〜最大の あいだを まっすぐ のびる として めやすを だしています。<br>
-  データ：メモリ ${MEMS.length}しゅるい、そうび ${Object.values(ITEMS).filter(i => i.kind !== 'm').length}しゅるい、ボス ${BOSSES.length}。${esc(window.DATA_UPDATED || '')} 時点（毎日 じどうで 更新）。</div></div>`;
+  版 ${esc(window.APP_V || '')}。データ：メモリ ${MEMS.length}しゅるい、そうび ${Object.values(ITEMS).filter(i => i.kind !== 'm').length}しゅるい、ボス ${BOSSES.length}。${esc(window.DATA_UPDATED || '')} 時点（毎日 じどうで 更新）。</div></div>`;
 }
 
 /* ---------- 操作 ---------- */
@@ -297,6 +297,7 @@ document.addEventListener('click', ev => {
 document.addEventListener('keydown', ev => { if ((ev.key === 'Enter' || ev.key === ' ') && ev.target.classList && ev.target.classList.contains('tile')) { ev.preventDefault(); ev.target.click(); } });
 document.addEventListener('change', ev => {
   const b = ev.target.closest('[data-act]'); if (!b) return;
+  if (b.dataset.act === 'scanfile') { const files = b.files ? [...b.files] : []; if (files.length) Scan.runFiles(b.dataset.k, files); return; }
   const a = b.dataset.act, i = +b.dataset.i, v = b.value;
   switch (a) {
     case 'job': S.party[i].job = v; break;
