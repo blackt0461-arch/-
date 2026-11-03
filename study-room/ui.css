@@ -603,3 +603,13 @@ h3.sec { font-size: 14px; color: var(--muted); margin: 18px 4px 8px; font-weight
 .rr-gifts .rr-room svg { width: 13px; height: 13px; }
 .rr-gifts .rr-cap { margin-left: auto; }
 .rr-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding-top: 10px; }
+.subjgrid { grid-template-columns: repeat(3, 1fr); }
+
+/* 備え付けの物の種類 */
+.seg.kinds { grid-template-columns: repeat(auto-fit, minmax(54px, 1fr)); }
+.fixlist { display: grid; gap: 12px; margin-bottom: 10px; max-height: 50vh; overflow-y: auto; }
+.fix-row b { display: block; font-size: 13px; margin: 0 0 6px 2px; }
+.fix-vs { display: flex; flex-wrap: wrap; gap: 6px; }
+.fix-v { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px 6px 6px; border-radius: 99px; border: 1px solid var(--card-line); background: rgba(255,255,255,.04); color: inherit; font-size: 12px; }
+.fix-v i { width: 18px; height: 18px; border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(255,255,255,.25); }
+.fix-v.on { border-color: var(--gold1); background: rgba(240,180,76,.18); color: var(--gold1); font-weight: 700; }

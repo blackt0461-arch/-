@@ -1,7 +1,8 @@
 // 画面の流れ：ログイン →（一括ダウンロード）→ 部屋（ホーム）
 // 下のアイコン：部屋／模様がえ／解く／図鑑／メニュー（記録・フレンド・設定・管理者）
-import { Room3D, moodNow } from './room3d.js';
-import { ROOMS, roomDef, STYLES, styleDef, homeOf, VILLA_MIN_ITEMS } from './rooms.js';
+import { Room3D, moodNow, weatherToday } from './room3d.js';
+import { ROOMS, roomDef, roomShape, STYLES, styleDef, homeOf, VILLA_MIN_ITEMS } from './rooms.js';
+import { FIX_VARIANTS, FIX_NAMES } from './roomfix.js';
 import { GENRES, ITEMS, itemById, itemsOf, SPECIAL_IDS, STARTER } from './items.js';
 import { icon, GENRE_ICON, SUBJECT_ICON } from './icons.js';
 import { ticketSVG, TICKET_NAME } from './tickets.js';
@@ -17,13 +18,11 @@ import { rpc } from './cloud.js';
 
 const SUBJECTS = [
   { id: 'physics', name: '物理', ready: true },
-  { id: 'math2b', name: '数学II・B' },
-  { id: 'english', name: '英語コミュ' },
-  { id: 'logic-en', name: '論理表現' },
+  { id: 'math', name: '数学' },
+  { id: 'english', name: '英語' },
   { id: 'chem', name: '化学' },
-  { id: 'jp', name: '論理国語' },
-  { id: 'classic', name: '古典探究' },
-  { id: 'geo', name: '地理総合' },
+  { id: 'jp', name: '国語' },
+  { id: 'social', name: '社会' },
 ];
 const PROBLEMS = validProblems();
 const byId = Object.fromEntries(PROBLEMS.map(p => [p.id, p]));
@@ -379,7 +378,7 @@ function showHome() {
       <header class="hud">
         <div class="room-name">
           <span class="rn-ic">${icon(def.icon)}</span>
-          <span class="rn-t"><span class="rn-n">${esc(roomLabel(r))}<i class="rn-edit">${icon('chevronRight')}</i></span><small>${r.style ? styleDef(r.style).name + '・' : ''}置いている ${r.placed.length} / ${S.capacity()}</small></span>
+          <span class="rn-t"><span class="rn-n">${esc(roomLabel(r))}<i class="rn-edit">${icon('chevronRight')}</i></span><small>${({ sunny: '晴れ', cloudy: 'くもり', rain: '雨' })[weatherToday()]}・${r.style ? styleDef(r.style).name + '・' : ''}置いている ${r.placed.length} / ${S.capacity()}</small></span>
         </div>
         <button class="rankchip" aria-label="ランク">
           <span class="lv">Lv<b>${rk.rank}</b></span>
@@ -853,10 +852,11 @@ function showInventory() {
 }
 function showSurfaces(kind = 'wall') {
   const r = curRoom();
+  if (kind === 'fix') return showFixtures();
   const owned = ITEMS.filter(i => i.place === 'surface' && i.surface === kind && S.owned(i.id));
   const el = sheet(`
     <div class="sh-head"><span class="sh-ic">${icon('brush')}</span><div><h3>壁・床・ドア・窓</h3><p>持っている物から選べます</p></div></div>
-    <div class="seg kinds">${SURFACE_KINDS.map(([k, n]) => `<button data-k="${k}" class="${k === kind ? 'on' : ''}">${n}</button>`).join('')}</div>
+    <div class="seg kinds">${surfKinds().map(([k, n]) => `<button data-k="${k}" class="${k === kind ? 'on' : ''}">${n}</button>`).join('')}</div>
     <div class="invgrid">${kind === 'curtain' ? `<button class="inv-item ${!r.surf.curtain ? 'on' : ''}" data-id=""><span class="thumb none">${icon('x')}</span><b>なし</b></button>` : ''}
       ${owned.map(it => `<button class="inv-item ${r.surf[kind] === it.id ? 'on' : ''}" data-id="${it.id}"><span class="thumb">${thumbHTML(it)}</span><b>${esc(it.name)}</b></button>`).join('')}</div>
     ${!owned.length && kind !== 'curtain' ? '<p class="empty">まだ持っていません。「家具を買う」で手に入ります。</p>' : ''}
@@ -867,6 +867,28 @@ function showSurfaces(kind = 'wall') {
     r.surf[kind] = b.dataset.id || null;
     S.save();
     el.querySelectorAll('.inv-item').forEach(x => x.classList.toggle('on', x === b));
+    await room3d.buildShell();
+  });
+}
+
+// 部屋に備え付けの物があれば「備え付け」の切りかえも出す
+function surfKinds() { return roomShape(curDef()).built.some(b => FIX_VARIANTS[b.kind]) ? [...SURFACE_KINDS, ['fix', '備え付け']] : SURFACE_KINDS; }
+function showFixtures() {
+  const r = curRoom();
+  const kinds = [...new Set(roomShape(curDef()).built.map(b => b.kind))].filter(k => FIX_VARIANTS[k]);
+  const el = sheet(`
+    <div class="sh-head"><span class="sh-ic">${icon('brush')}</span><div><h3>壁・床・ドア・窓</h3><p>備え付けの物は、いつでも色や素材を変えられます</p></div></div>
+    <div class="seg kinds">${surfKinds().map(([k, n]) => `<button data-k="${k}" class="${k === 'fix' ? 'on' : ''}">${n}</button>`).join('')}</div>
+    <div class="fixlist">${kinds.map(k => `<div class="fix-row"><b>${FIX_NAMES[k] || k}</b><div class="fix-vs">${FIX_VARIANTS[k].map(v => `
+      <button class="fix-v ${(r.fix?.[k] || 'std') === v.id ? 'on' : ''}" data-k="${k}" data-v="${v.id}"><i style="background:${v.tint || 'linear-gradient(135deg,#f4f1ea,#cfc6b8)'}"></i>${v.name}</button>`).join('')}</div></div>`).join('')}</div>
+    <button class="link close">とじる</button>`, 'inv-sheet');
+  el.querySelector('.close').onclick = () => el.remove();
+  el.querySelectorAll('.kinds button').forEach(b => b.onclick = () => showSurfaces(b.dataset.k));
+  el.querySelectorAll('.fix-v').forEach(b => b.onclick = async () => {
+    r.fix = r.fix || {};
+    if (b.dataset.v === 'std') delete r.fix[b.dataset.k]; else r.fix[b.dataset.k] = b.dataset.v;
+    S.save();
+    el.querySelectorAll(`.fix-v[data-k="${b.dataset.k}"]`).forEach(x => x.classList.toggle('on', x === b));
     await room3d.buildShell();
   });
 }

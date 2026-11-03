@@ -54,10 +54,18 @@ const MOODS = {
 };
 
 // 現実の時刻で時間帯を決める
+// 今日の天気：日にちで決まる（みんな同じ日は同じ天気）。晴れ6・くもり2・雨2 の割合
+export function weatherToday(d = new Date()) {
+  const k = d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
+  let x = (k * 2654435761) >>> 0; x ^= x >>> 15; x = Math.imul(x, 2246822519) >>> 0; x ^= x >>> 13;
+  const n = x % 10;
+  return n < 6 ? 'sunny' : n < 8 ? 'cloudy' : 'rain';
+}
 export function moodNow(d = new Date()) {
   const h = d.getHours() + d.getMinutes() / 60;
-  if (h >= 5 && h < 9.5) return 'morning';
-  if (h >= 9.5 && h < 16) return 'day';
+  const wet = weatherToday(d) !== 'sunny';
+  if (h >= 5 && h < 9.5) return wet ? 'overcast' : 'morning';
+  if (h >= 9.5 && h < 16) return wet ? 'overcast' : 'day';
   if (h >= 16 && h < 19) return 'sunset';
   return 'night';
 }
@@ -340,6 +348,7 @@ export class Room3D {
       this.marker.material.opacity = Math.max(0, this.marker.userData.life) * 0.8;
       this.marker.scale.setScalar(1 + (1 - this.marker.userData.life) * 0.6);
     }
+    this.updateRain(dt);
     if (this.stars && this.stars.visible) { this.stars.position.copy(this.camera.position); this.stars.material.uniforms.uTime.value = t; }
     // ガチャの家具の動き（炎・星・水など）
     for (const o of this.items.children) { const f = o.children[0]?.userData.tick; if (f) f(t, dt); }
@@ -803,24 +812,18 @@ export class Room3D {
     this.applyLightsOff();
   }
 
-  // いちばん強い照明（天井の照明を優先）から、下向きのスポットで本物の影を落とす。
-  // 点光源の影は「すき間の影」とぶつかるので、1方向だけのスポットにして、ずれ（バイアス）を調整してある
+  // いちばん高い照明（天井の照明）から、本物の影を落とす
   addLampShadow() {
     // 夕方・夜（照明が主役の時間）だけ。すき間の影（GTAO）とは同時に使えないので、そのあいだは切る
     const want = this.quality !== 'low' && this.lamps.length && (this.mood?.lampI || 0) >= 1;
     if (this.ao) this.ao.enabled = this.quality === 'high' && !this.autoLowered && !want;
     if (!want) return;
     const main = this.lamps.reduce((a, b) => (b.position.y > a.position.y ? b : a));
-    const sp = new THREE.SpotLight(main.color, main.intensity * 0.9, 0, Math.PI * 0.42, 0.85, 2);
-    sp.position.copy(main.position);
-    sp.target.position.set(main.position.x, 0, main.position.z);
-    sp.castShadow = true;
-    sp.shadow.mapSize.set(this.quality === 'high' ? 1024 : 512, this.quality === 'high' ? 1024 : 512);
-    sp.shadow.camera.near = 0.1; sp.shadow.camera.far = 8;
-    sp.shadow.bias = -0.0006; sp.shadow.normalBias = 0.04;
-    main.intensity *= 0.45; // スポットと合わせて、明るさは今までと同じくらい
-    this.scene.add(sp, sp.target);
-    this.lamps.push(sp, sp.target);
+    main.castShadow = true;
+    const ms = this.quality === 'high' ? 1024 : 512;
+    main.shadow.mapSize.set(ms, ms);
+    main.shadow.camera.near = 0.05; main.shadow.camera.far = 10;
+    main.shadow.bias = -0.002; main.shadow.normalBias = 0.03; main.shadow.radius = 3;
   }
   // 照明スイッチ：部屋の明かりを消す／つける（部屋ごとに覚えておく）
   toggleLights() {
@@ -1094,10 +1097,46 @@ export class Room3D {
       this.scene.backgroundIntensity = m.bg;
     });
     this.scene.fog = new THREE.Fog(m.fog, 60, 520);
-    this.setStars(m.photo === 'night');
+    this.setStars(m.photo === 'night' && weatherToday() === 'sunny');
+    this.setRain(weatherToday() === 'rain');
     if (this.sh && this.items) this.updateLights(); // 時間帯で、照明の影を出す／出さないが変わる
   }
   // 夜だけ、窓の外にまたたく星
+  // 雨の日：家のまわりに雨つぶ（部屋の中には降らない）
+  setRain(on) {
+    if (on && !this.rain) {
+      const N = 1400, pos = new Float32Array(N * 6), seeds = [];
+      for (let i = 0; i < N; i++) seeds.push(this.rainSpot({}));
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+      this.rain = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: '#c8d4e0', transparent: true, opacity: 0.35, depthWrite: false }));
+      this.rain.userData.seeds = seeds;
+      this.rain.frustumCulled = false;
+      this.scene.add(this.rain);
+    }
+    if (this.rain) this.rain.visible = !!on;
+  }
+  rainSpot(d, top = false) {
+    const sh = this.sh || { hw: 2, hd: 2 };
+    for (let k = 0; k < 20; k++) {
+      d.x = (Math.random() - 0.5) * 30; d.z = (Math.random() - 0.5) * 30 - 6;
+      if (Math.abs(d.x) > sh.hw + 0.4 || Math.abs(d.z) > sh.hd + 0.4) break;
+    }
+    d.y = top ? 12 : Math.random() * 12 - 2; d.v = 9 + Math.random() * 4;
+    return d;
+  }
+  updateRain(dt) {
+    const r = this.rain; if (!r || !r.visible) return;
+    const a = r.geometry.attributes.position.array, seeds = r.userData.seeds;
+    for (let i = 0; i < seeds.length; i++) {
+      const d = seeds[i];
+      d.y -= d.v * dt;
+      if (d.y < -3) this.rainSpot(d, true);
+      a[i * 6] = d.x; a[i * 6 + 1] = d.y; a[i * 6 + 2] = d.z;
+      a[i * 6 + 3] = d.x - 0.02; a[i * 6 + 4] = d.y + 0.35; a[i * 6 + 5] = d.z;
+    }
+    r.geometry.attributes.position.needsUpdate = true;
+  }
   setStars(on) {
     if (on && !this.stars) {
       const n = 1400, pos = new Float32Array(n * 3), seed = new Float32Array(n), size = new Float32Array(n);
@@ -1142,7 +1181,7 @@ export class Room3D {
       floorSrc?.tex ? texturedMaterial(floorSrc.tex, { rep: floorSrc.rep || 3, tint: floorSrc.tint }) : (floorSrc?.color ? new THREE.MeshStandardMaterial({ color: floorSrc.color, roughness: 0.7 }) : plainFloor),
       new THREE.MeshStandardMaterial({ color: sh.ceil, roughness: 0.95 }),
       // 備え付けの物（浴槽・キッチンなど）
-      Promise.all(sh.built.map(b => buildFixture(b, sh).catch(e => { console.warn('fixture', b.kind, e); return null; }))),
+      Promise.all(sh.built.map(b => buildFixture(b, sh, this.st?.fix?.[b.kind]).catch(e => { console.warn('fixture', b.kind, e); return null; }))),
     ]);
     if (this.sh !== sh) return; // 作っているあいだに別の部屋へ移った
     // 天井は下からの照り返しが少ないので、ほんのり明るくしておく

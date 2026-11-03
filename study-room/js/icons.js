@@ -138,8 +138,8 @@ export const GENRE_ICON = {
 
 // 教科 id → アイコン名
 export const SUBJECT_ICON = {
-  physics: 'magnet', math2b: 'ruler', english: 'chat', 'logic-en': 'feather',
-  chem: 'flask', jp: 'bookOpen', classic: 'scroll', geo: 'globe',
+  physics: 'magnet', math: 'ruler', english: 'chat',
+  chem: 'flask', jp: 'bookOpen', social: 'globe',
 };
 
 // アイコンを HTML 文字列で返す（知らない名前は空の枠）

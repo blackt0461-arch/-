@@ -386,13 +386,48 @@ const BUILD = {
 };
 
 // 備え付けの物を作る。戻り値 { obj, block }（block = 'all' 家具を重ねない / 'wall' 壁の物だけ重ねない）
-export async function buildFixture(b, sh) {
+// 備え付けの物の「種類」（色・素材）。模様がえでいつでも取りかえられる（買わなくてよい）。
+// tint = 金属・ガラス・水以外の部分にかける色。null は元のまま
+export const FIX_NAMES = { kitchen: 'キッチン', fridge: '冷蔵庫', bathtub: '浴槽', hinoki: '湯船', shower: 'シャワー', washarea: '洗い場', vanity: '洗面台', washer: '洗たく機', closet: '押し入れ・収納', shoji: '障子', tokonoma: '床の間', fusuma: 'ふすま', shutter: 'シャッター', workbench: '作業台' };
+const V = (id, name, tint) => ({ id, name, tint });
+const BASIC = [V('std', 'いつもの', null), V('wood', '木目', '#c99a68'), V('dark', 'ブラック', '#3a3836'), V('sage', 'セージ', '#a9bea0'), V('navy', 'ネイビー', '#5c6f93')];
+export const FIX_VARIANTS = {
+  kitchen: BASIC, closet: BASIC, workbench: [V('std', 'いつもの', null), V('dark', 'こげ茶', '#5b4636'), V('grey', 'グレー', '#8d8d8d')],
+  fridge: [V('std', 'ホワイト', null), V('silver', 'シルバー', '#b8bcc2'), V('dark', 'ブラック', '#3a3a3c'), V('mint', 'ミント', '#b9dccb'), V('cream', 'クリーム', '#efe0bf')],
+  bathtub: [V('std', 'ホワイト', null), V('beige', 'ベージュ', '#e8d8bd'), V('dark', 'ブラック', '#4a4847'), V('blue', 'ブルー', '#a9c6d8')],
+  vanity: BASIC, washer: [V('std', 'ホワイト', null), V('dark', 'ブラック', '#3a3a3c'), V('silver', 'シルバー', '#b8bcc2')],
+  washarea: [V('std', 'いつもの', null), V('dark', 'ブラック', '#4a4847'), V('wood', '木目', '#c99a68')],
+  shower: [V('std', 'いつもの', null), V('gold', 'ゴールド', '#d8b46a'), V('dark', 'ブラック', '#3a3a3c')],
+  hinoki: [V('std', 'ひのき', null), V('dark', 'こげ茶', '#7a5a40')],
+  tokonoma: [V('std', 'いつもの', null), V('dark', 'こげ茶', '#6b5240')],
+  fusuma: [V('std', 'いつもの', null), V('blue', '藍色', '#7f93b5'), V('green', 'うぐいす', '#b3bd8c'), V('pink', '桜', '#e9c6c6')],
+  shoji: [V('std', 'いつもの', null), V('dark', 'こげ茶の桟', '#8a7262')],
+  shutter: [V('std', 'いつもの', null), V('dark', 'ブラック', '#3a3a3c'), V('red', 'レッド', '#b5574b')],
+};
+// 種類の色をかける（金属・ガラス・水は元のまま）
+export function applyFixVariant(obj, kind, vid) {
+  const v = (FIX_VARIANTS[kind] || []).find(x => x.id === vid);
+  if (!v || !v.tint) return;
+  const tint = new THREE.Color(v.tint);
+  obj.traverse(o => {
+    if (!o.isMesh) return;
+    const mats = Array.isArray(o.material) ? o.material : [o.material];
+    const out = mats.map(m => {
+      if (!m || !m.color || m.metalness > 0.5 || m.transparent || m.transmission > 0) return m;
+      const c = m.clone(); c.color.multiply(tint); return c;
+    });
+    o.material = Array.isArray(o.material) ? out : out[0];
+  });
+}
+
+export async function buildFixture(b, sh, variant) {
   const fn = BUILD[b.kind];
   if (!fn) return null;
   const seg = b.wall ? sh.walls.find(w => w.id === b.wall) : (b.kind === 'shoji' ? sh.walls.find(w => w.id === sh.windows[b.win || 0].wall) : null);
   if ((b.wall || b.kind === 'shoji') && !seg) return null;
   const obj = await fn(b, seg, sh);
   obj.userData.fixture = b.kind;
+  if (variant) applyFixVariant(obj, b.kind, variant);
   const block = { fusuma: 'wall', shutter: 'wall' }[b.kind] || 'all';
   return { obj, block };
 }
