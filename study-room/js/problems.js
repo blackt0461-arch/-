@@ -1,16 +1,24 @@
 // 物理のサンプル問題。
 // phrase は text の部分文字列と完全一致させること。
 // hidden: true は「数字は書いていないが文字に当てはまる条件」（例：静かにはなす → v₀ = 0）。
+// formulaSymbols は、公式に出てくるが問題文には書いていない文字（例：両辺で消える質量 m）。{ symbol, meaning }
+//
+// 学年・難しさのタグ（すべての問題につける）
+//   grade: 'hs1' … 高1・物理基礎の範囲
+//          'hs2' … 高2・物理の範囲（運動量、平面内の運動、気体の法則、波の式、ドップラー効果、コンデンサー、静電気力など）
+//   level: 1 … 公式に数字をそのまま入れるだけ
+//          2 … 書いていない条件（hidden）を読み取る、単位をそろえる、式を変形するなど、ひと工夫いる
+//          3 … 考え方を組み合わせる・似た公式との区別がむずかしい
 export const SYMBOLS = {
-  '力学': ['v₀', 'v', 'a', 't', 'x', 'h', 'g', 'm', 'F'],
-  '熱': ['Q', 'm', 'c', 'ΔT', 'p₁', 'p₂', 'V₁', 'V₂', 'T', 'W'],
-  '波動': ['v', 'f', 'λ', 'T', 'L', 'n', 'A'],
-  '電磁気': ['V', 'R', 'I', 'P', 'W', 't', 'Q'],
+  '力学': ['v₀', 'v', 'a', 't', 'x', 'h', 'g', 'm', 'F', 'μ', 'F′', 'μ′', 'θ', 'W', 'P', 'K', 'U', 'k', 'p', 'M', 'V'],
+  '熱': ['Q', 'm', 'c', 'ΔT', 'p₁', 'p₂', 'V₁', 'V₂', 'T', 'W', 'C', 'ΔU', 'T₁', 'T₂', 'm₁', 'm₂', 'Q₁', 'e', 'p', 'V', 'n', 'R'],
+  '波動': ['v', 'f', 'λ', 'T', 'L', 'n', 'A', 'f₁', 'f₂', 'f′', 'V', 'x', 'y', 't'],
+  '電磁気': ['V', 'R', 'I', 'P', 'W', 't', 'Q', 'R₁', 'R₂', 'ρ', 'L', 'S', 'n', 'e', 'C', 'U', 'q₁', 'q₂', 'r', 'k', 'q', 'E', 'm', 'c', 'ΔT'],
 };
 
 export const PROBLEMS = [
   {
-    id: 'phy-001', unit: '力学',
+    id: 'phy-001', unit: '力学', grade: 'hs1', level: 1,
     text: '初速度 5.0 m/s で走っていた車が、一定の加速度 2.0 m/s² で加速した。4.0 秒後の速さは何 m/s か。',
     quantities: [
       { phrase: '初速度 5.0 m/s', symbol: 'v₀', meaning: '初速度' },
@@ -25,7 +33,7 @@ export const PROBLEMS = [
     verified: true,
   },
   {
-    id: 'phy-002', unit: '力学',
+    id: 'phy-002', unit: '力学', grade: 'hs1', level: 2,
     text: 'ボールを高さ 19.6 m のところから静かにはなした。地面に達するまでの時間は何秒か。重力加速度の大きさを 9.8 m/s² とする。',
     quantities: [
       { phrase: '高さ 19.6 m', symbol: 'h', meaning: '落ちる高さ' },
@@ -40,7 +48,7 @@ export const PROBLEMS = [
     verified: true,
   },
   {
-    id: 'phy-003', unit: '力学',
+    id: 'phy-003', unit: '力学', grade: 'hs1', level: 1,
     text: '質量 2.0 kg の物体に、水平方向に 6.0 N の力を加え続けた。物体に生じる加速度の大きさはいくらか。',
     quantities: [
       { phrase: '質量 2.0 kg', symbol: 'm', meaning: '質量' },
@@ -54,7 +62,7 @@ export const PROBLEMS = [
     verified: true,
   },
   {
-    id: 'phy-004', unit: '力学',
+    id: 'phy-004', unit: '力学', grade: 'hs1', level: 2,
     text: '速さ 20 m/s で走っていた自動車がブレーキをかけ、一定の加速度で減速して 40 m 進んで止まった。加速度の大きさはいくらか。',
     quantities: [
       { phrase: '速さ 20 m/s', symbol: 'v₀', meaning: 'ブレーキ前の速さ（初速度）' },
@@ -69,7 +77,7 @@ export const PROBLEMS = [
     verified: true,
   },
   {
-    id: 'phy-005', unit: '力学',
+    id: 'phy-005', unit: '力学', grade: 'hs1', level: 2,
     text: '小球を地面から速さ 14 m/s で真上に投げ上げた。最高点に達するまでの時間は何秒か。重力加速度の大きさを 9.8 m/s² とする。',
     quantities: [
       { phrase: '速さ 14 m/s', symbol: 'v₀', meaning: '投げ上げた速さ（初速度）' },
@@ -84,7 +92,7 @@ export const PROBLEMS = [
     verified: true,
   },
   {
-    id: 'phy-006', unit: '熱',
+    id: 'phy-006', unit: '熱', grade: 'hs1', level: 1,
     text: '比熱 4.2 J/(g·K) の水 100 g の温度を 10 K 上げるのに必要な熱量はいくらか。',
     quantities: [
       { phrase: '比熱 4.2 J/(g·K)', symbol: 'c', meaning: '比熱' },
@@ -99,7 +107,7 @@ export const PROBLEMS = [
     verified: true,
   },
   {
-    id: 'phy-007', unit: '熱',
+    id: 'phy-007', unit: '熱', grade: 'hs2', level: 1,
     text: '圧力 1.0×10⁵ Pa、体積 2.0 L の気体を、温度を一定に保ったまま体積 1.0 L まで圧縮した。圧縮後の圧力はいくらか。',
     quantities: [
       { phrase: '圧力 1.0×10⁵ Pa', symbol: 'p₁', meaning: 'はじめの圧力' },
@@ -114,7 +122,7 @@ export const PROBLEMS = [
     verified: true,
   },
   {
-    id: 'phy-008', unit: '波動',
+    id: 'phy-008', unit: '波動', grade: 'hs1', level: 1,
     text: '振動数 440 Hz の音が、速さ 340 m/s で空気中を伝わる。この音の波長はいくらか。',
     quantities: [
       { phrase: '振動数 440 Hz', symbol: 'f', meaning: '振動数' },
@@ -128,7 +136,7 @@ export const PROBLEMS = [
     verified: true,
   },
   {
-    id: 'phy-009', unit: '波動',
+    id: 'phy-009', unit: '波動', grade: 'hs1', level: 2,
     text: '長さ 0.60 m の弦の両端を固定してはじいたところ、基本振動が生じた。弦を伝わる波の速さが 240 m/s のとき、振動数はいくらか。',
     quantities: [
       { phrase: '長さ 0.60 m', symbol: 'L', meaning: '弦の長さ' },
@@ -143,7 +151,7 @@ export const PROBLEMS = [
     verified: true,
   },
   {
-    id: 'phy-010', unit: '電磁気',
+    id: 'phy-010', unit: '電磁気', grade: 'hs1', level: 1,
     text: '抵抗 20 Ω の抵抗器に 0.50 A の電流が流れている。抵抗器の両端の電圧はいくらか。',
     quantities: [
       { phrase: '抵抗 20 Ω', symbol: 'R', meaning: '抵抗' },
@@ -157,7 +165,7 @@ export const PROBLEMS = [
     verified: true,
   },
   {
-    id: 'phy-011', unit: '電磁気',
+    id: 'phy-011', unit: '電磁気', grade: 'hs1', level: 1,
     text: '100 V の電圧で 2.0 A の電流が流れる電気器具を 60 秒間使った。消費した電力量はいくらか。',
     quantities: [
       { phrase: '100 V の電圧', symbol: 'V', meaning: '電圧' },
@@ -172,7 +180,7 @@ export const PROBLEMS = [
     verified: true,
   },
   {
-    id: 'phy-012', unit: '電磁気',
+    id: 'phy-012', unit: '電磁気', grade: 'hs1', level: 1,
     text: '電圧 12 V の電源につないだ電球に 0.50 A の電流が流れた。電球の消費電力はいくらか。',
     quantities: [
       { phrase: '電圧 12 V', symbol: 'V', meaning: '電圧' },
@@ -183,6 +191,228 @@ export const PROBLEMS = [
     formulaSymbols: [],
     reason: '時間が出てこないので「電力量」ではなく「電力」。電圧 × 電流。',
     distractors: ['W = VIt', 'V = RI', 'Q = It'],
+    verified: true,
+  },
+  // ---- 第1弾：力学 ----
+  {
+    id: 'phy-013', unit: '力学', grade: 'hs1', level: 1,
+    text: '静止していた自転車が、一定の加速度 1.5 m/s² で動き始めた。動き始めてから 4.0 秒間に進む距離は何 m か。',
+    quantities: [
+      { phrase: '静止していた', symbol: 'v₀', meaning: '初速度（0）', hidden: true },
+      { phrase: '加速度 1.5 m/s²', symbol: 'a', meaning: '加速度' },
+      { phrase: '4.0 秒間', symbol: 't', meaning: '経過時間' },
+    ],
+    target: { phrase: '進む距離', symbol: 'x', meaning: '4.0秒間に進む距離' },
+    formula: { expr: 'x = v₀t + ½at²', name: '等加速度運動の変位の式' },
+    formulaSymbols: [],
+    reason: '「時間」がわかっていて「距離」を求める。時間と距離をつなぐ式を使う。静止していたので v₀ = 0。',
+    distractors: ['v = v₀ + at', 'v² − v₀² = 2ax', 'F = ma'],
+    verified: true,
+  },
+  {
+    id: 'phy-014', unit: '力学', grade: 'hs1', level: 1,
+    text: '速さ 10 m/s で走っていた電車が一定の割合で加速し、6.0 秒後に速さが 22 m/s になった。この間の加速度の大きさはいくらか。',
+    quantities: [
+      { phrase: '速さ 10 m/s', symbol: 'v₀', meaning: 'はじめの速さ（初速度）' },
+      { phrase: '6.0 秒後', symbol: 't', meaning: '経過時間' },
+      { phrase: '速さが 22 m/s', symbol: 'v', meaning: 'あとの速さ' },
+    ],
+    target: { phrase: '加速度の大きさ', symbol: 'a', meaning: '加速度' },
+    formula: { expr: 'v = v₀ + at', name: '等加速度運動の速度の式' },
+    formulaSymbols: [],
+    reason: 'はじめと後の「速さ」と「時間」がわかっている。距離は出てこないので、速度と時間の式。',
+    distractors: ['x = v₀t + ½at²', 'v² − v₀² = 2ax', 'F = ma'],
+    verified: true,
+  },
+  {
+    id: 'phy-015', unit: '力学', grade: 'hs1', level: 2,
+    text: '初速度 4.0 m/s で動いていた物体が、一定の加速度 3.0 m/s² で加速し、速さが 10 m/s になった。この間に物体が進んだ距離はいくらか。',
+    quantities: [
+      { phrase: '初速度 4.0 m/s', symbol: 'v₀', meaning: '初速度' },
+      { phrase: '加速度 3.0 m/s²', symbol: 'a', meaning: '加速度' },
+      { phrase: '速さが 10 m/s', symbol: 'v', meaning: 'あとの速さ' },
+    ],
+    target: { phrase: '進んだ距離', symbol: 'x', meaning: '進んだ距離' },
+    formula: { expr: 'v² − v₀² = 2ax', name: '等加速度運動の時間を含まない式' },
+    formulaSymbols: [],
+    reason: '時間が書かれていない。速さ・加速度・距離だけの関係なので、時間を含まない式。',
+    distractors: ['v = v₀ + at', 'x = v₀t + ½at²', 'F = ma'],
+    verified: true,
+  },
+  {
+    id: 'phy-016', unit: '力学', grade: 'hs1', level: 2,
+    text: '速さ 15 m/s で走っていた自動車がブレーキをかけ、一定の加速度で減速して 5.0 秒後に止まった。加速度の大きさはいくらか。',
+    quantities: [
+      { phrase: '速さ 15 m/s', symbol: 'v₀', meaning: 'ブレーキ前の速さ（初速度）' },
+      { phrase: '5.0 秒後', symbol: 't', meaning: '止まるまでの時間' },
+      { phrase: '止まった', symbol: 'v', meaning: '最後の速さ（0）', hidden: true },
+    ],
+    target: { phrase: '加速度の大きさ', symbol: 'a', meaning: '加速度' },
+    formula: { expr: 'v = v₀ + at', name: '等加速度運動の速度の式' },
+    formulaSymbols: [],
+    reason: '「止まった」は速さが0ということ。速さと時間がわかっているので、速度と時間の式。',
+    distractors: ['x = v₀t + ½at²', 'v² − v₀² = 2ax', 'F = ma'],
+    verified: true,
+  },
+  {
+    id: 'phy-017', unit: '力学', grade: 'hs1', level: 1,
+    text: '小石を静かにはなしたところ、2.0 秒後に地面に達した。地面に達する直前の速さは何 m/s か。重力加速度の大きさを 9.8 m/s² とする。',
+    quantities: [
+      { phrase: '静かにはなした', symbol: 'v₀', meaning: '初速度（0）', hidden: true },
+      { phrase: '2.0 秒後', symbol: 't', meaning: '落ちていた時間' },
+      { phrase: '9.8 m/s²', symbol: 'g', meaning: '重力加速度' },
+    ],
+    target: { phrase: '直前の速さ', symbol: 'v', meaning: '地面に達する直前の速さ' },
+    formula: { expr: 'v = gt', name: '自由落下の速度の式' },
+    formulaSymbols: [],
+    reason: '「静かに」なので初速度0の自由落下。時間から速さを出すので、速度と時間の式。',
+    distractors: ['h = ½gt²', 'v² = 2gh', 'F = ma'],
+    verified: true,
+  },
+  {
+    id: 'phy-018', unit: '力学', grade: 'hs1', level: 2,
+    text: '高さ 10 m のビルの屋上から、ボールを静かに落とした。ボールが地面に達する直前の速さはいくらか。重力加速度の大きさを 9.8 m/s² とする。',
+    quantities: [
+      { phrase: '高さ 10 m', symbol: 'h', meaning: '落ちる高さ' },
+      { phrase: '静かに落とした', symbol: 'v₀', meaning: '初速度（0）', hidden: true },
+      { phrase: '9.8 m/s²', symbol: 'g', meaning: '重力加速度' },
+    ],
+    target: { phrase: '直前の速さ', symbol: 'v', meaning: '地面に達する直前の速さ' },
+    formula: { expr: 'v² = 2gh', name: '自由落下の時間を含まない式' },
+    formulaSymbols: [],
+    reason: '時間が書かれていない。高さから速さを直接出すので、時間を含まない式。',
+    distractors: ['v = gt', 'h = ½gt²', 'F = ma'],
+    verified: true,
+  },
+  {
+    id: 'phy-019', unit: '力学', grade: 'hs1', level: 2,
+    text: '小球を地面から初速度 19.6 m/s で真上に投げ上げたところ、小球はやがて最高点に達した。最高点の地面からの高さは何 m か。重力加速度の大きさを 9.8 m/s² とする。',
+    quantities: [
+      { phrase: '初速度 19.6 m/s', symbol: 'v₀', meaning: '投げ上げた速さ（初速度）' },
+      { phrase: '最高点に達した', symbol: 'v', meaning: '最高点での速さ（0）', hidden: true },
+      { phrase: '9.8 m/s²', symbol: 'g', meaning: '重力加速度' },
+    ],
+    target: { phrase: '地面からの高さ', symbol: 'h', meaning: '最高点の高さ' },
+    formula: { expr: 'v² − v₀² = −2gh', name: '鉛直投げ上げの時間を含まない式' },
+    formulaSymbols: [],
+    reason: '最高点では速さが0。時間が出てこないので、速さと高さをつなぐ時間を含まない式。',
+    distractors: ['v = v₀ − gt', 'h = v₀t − ½gt²', 'v = gt'],
+    verified: true,
+  },
+  {
+    id: 'phy-020', unit: '力学', grade: 'hs1', level: 2,
+    text: 'ボールを地面から速さ 24.5 m/s で真上に投げ上げた。投げ上げてから 1.0 秒後の、ボールの地面からの高さはいくらか。重力加速度の大きさを 9.8 m/s² とする。',
+    quantities: [
+      { phrase: '速さ 24.5 m/s', symbol: 'v₀', meaning: '投げ上げた速さ（初速度）' },
+      { phrase: '1.0 秒後', symbol: 't', meaning: '経過時間' },
+      { phrase: '9.8 m/s²', symbol: 'g', meaning: '重力加速度' },
+    ],
+    target: { phrase: '地面からの高さ', symbol: 'h', meaning: '1.0秒後の高さ' },
+    formula: { expr: 'h = v₀t − ½gt²', name: '鉛直投げ上げの変位の式' },
+    formulaSymbols: [],
+    reason: '「時間」がわかっていて「高さ」を求める。上向きを正にした、時間と高さの式。',
+    distractors: ['v = v₀ − gt', 'v² − v₀² = −2gh', 'h = ½gt²'],
+    verified: true,
+  },
+  {
+    id: 'phy-021', unit: '力学', grade: 'hs2', level: 2,
+    text: '高さ 4.9 m の台の上から、小球を水平方向に速さ 3.0 m/s で投げ出した。小球が床に達するまでの時間はいくらか。重力加速度の大きさを 9.8 m/s² とする。',
+    quantities: [
+      { phrase: '高さ 4.9 m', symbol: 'h', meaning: '落ちる高さ' },
+      { phrase: '速さ 3.0 m/s', symbol: 'v₀', meaning: '水平方向の初速度（落ちる時間には関係しない）' },
+      { phrase: '9.8 m/s²', symbol: 'g', meaning: '重力加速度' },
+    ],
+    target: { phrase: '床に達するまでの時間', symbol: 't', meaning: '床に達するまでの時間' },
+    formula: { expr: 'h = ½gt²', name: '自由落下の落下距離の式（水平投射の鉛直方向）' },
+    formulaSymbols: [],
+    reason: '水平に投げても、たての向きは初速度0の自由落下と同じ。落ちる時間は水平の速さに関係しない。',
+    distractors: ['x = v₀t', 'h = v₀t + ½gt²', 'v² = 2gh'],
+    verified: true,
+  },
+  {
+    id: 'phy-022', unit: '力学', grade: 'hs2', level: 2,
+    text: 'がけの上から小石を水平方向に速さ 5.0 m/s で投げ出したところ、2.0 秒後に海面に落ちた。投げ出した点から落ちた点までの水平距離はいくらか。',
+    quantities: [
+      { phrase: '速さ 5.0 m/s', symbol: 'v₀', meaning: '水平方向の初速度' },
+      { phrase: '2.0 秒後', symbol: 't', meaning: '落ちるまでの時間' },
+    ],
+    target: { phrase: '水平距離', symbol: 'x', meaning: '水平に進んだ距離' },
+    formula: { expr: 'x = v₀t', name: '水平投射の水平方向の式（等速直線運動）' },
+    formulaSymbols: [],
+    reason: '水平の向きには力がはたらかないので、速さは変わらない（等速）。距離 = 速さ × 時間。',
+    distractors: ['h = ½gt²', 'x = v₀t + ½at²', 'v = gt'],
+    verified: true,
+  },
+  {
+    id: 'phy-023', unit: '力学', grade: 'hs1', level: 1,
+    text: '質量 3.0 kg の台車が、加速度 2.0 m/s² で運動している。台車にはたらく力の大きさはいくらか。',
+    quantities: [
+      { phrase: '質量 3.0 kg', symbol: 'm', meaning: '質量' },
+      { phrase: '加速度 2.0 m/s²', symbol: 'a', meaning: '加速度' },
+    ],
+    target: { phrase: '力の大きさ', symbol: 'F', meaning: '台車にはたらく力' },
+    formula: { expr: 'F = ma', name: '運動方程式' },
+    formulaSymbols: [],
+    reason: '「質量」と「加速度」から「力」を出すのは運動方程式。',
+    distractors: ['v = v₀ + at', 'W = Fx', 'F = kx'],
+    verified: true,
+  },
+  {
+    id: 'phy-024', unit: '力学', grade: 'hs1', level: 1,
+    text: 'なめらかな水平面上の物体に 12 N の力を加えたところ、物体は加速度 4.0 m/s² で動いた。この物体の質量はいくらか。',
+    quantities: [
+      { phrase: '12 N の力', symbol: 'F', meaning: '加えた力' },
+      { phrase: '加速度 4.0 m/s²', symbol: 'a', meaning: '加速度' },
+    ],
+    target: { phrase: '物体の質量', symbol: 'm', meaning: '質量' },
+    formula: { expr: 'F = ma', name: '運動方程式' },
+    formulaSymbols: [],
+    reason: '力・質量・加速度の3つをつなぐのは運動方程式。式を変形して質量を出す。',
+    distractors: ['W = Fx', 'v = v₀ + at', 'F = kx'],
+    verified: true,
+  },
+  {
+    id: 'phy-025', unit: '力学', grade: 'hs1', level: 2,
+    text: '水平な床に質量 5.0 kg の木箱が置かれている。木箱と床の間の静止摩擦係数を 0.40 とすると、最大摩擦力の大きさはいくらか。重力加速度の大きさを 9.8 m/s² とする。',
+    quantities: [
+      { phrase: '質量 5.0 kg', symbol: 'm', meaning: '質量' },
+      { phrase: '静止摩擦係数を 0.40', symbol: 'μ', meaning: '静止摩擦係数' },
+      { phrase: '9.8 m/s²', symbol: 'g', meaning: '重力加速度' },
+    ],
+    target: { phrase: '最大摩擦力の大きさ', symbol: 'F', meaning: '最大摩擦力' },
+    formula: { expr: 'F = μmg', name: '最大摩擦力の式（垂直抗力 N = mg）' },
+    formulaSymbols: [],
+    reason: '最大摩擦力 = 静止摩擦係数 × 垂直抗力。水平な床なので垂直抗力は mg。',
+    distractors: ['F′ = μ′mg', 'F = ma', 'W = Fx'],
+    verified: true,
+  },
+  {
+    id: 'phy-026', unit: '力学', grade: 'hs1', level: 2,
+    text: '水平な床の上を、質量 4.0 kg の物体がすべっている。物体と床の間の動摩擦係数が 0.20 のとき、物体にはたらく動摩擦力の大きさはいくらか。重力加速度の大きさを 9.8 m/s² とする。',
+    quantities: [
+      { phrase: '質量 4.0 kg', symbol: 'm', meaning: '質量' },
+      { phrase: '動摩擦係数が 0.20', symbol: 'μ′', meaning: '動摩擦係数' },
+      { phrase: '9.8 m/s²', symbol: 'g', meaning: '重力加速度' },
+    ],
+    target: { phrase: '動摩擦力の大きさ', symbol: 'F′', meaning: '動摩擦力' },
+    formula: { expr: 'F′ = μ′mg', name: '動摩擦力の式（垂直抗力 N = mg）' },
+    formulaSymbols: [],
+    reason: '「すべっている」ので動摩擦力。動摩擦係数 × 垂直抗力（mg）。',
+    distractors: ['F = μmg', 'F = ma', 'W = Fx'],
+    verified: true,
+  },
+  {
+    id: 'phy-027', unit: '力学', grade: 'hs1', level: 3,
+    text: '傾きの角 30° のなめらかな斜面上に物体を置き、静かにはなした。物体が斜面をすべり下りるときの加速度の大きさはいくらか。重力加速度の大きさを 9.8 m/s² とする。',
+    quantities: [
+      { phrase: '傾きの角 30°', symbol: 'θ', meaning: '斜面の傾きの角' },
+      { phrase: '9.8 m/s²', symbol: 'g', meaning: '重力加速度' },
+    ],
+    target: { phrase: '加速度の大きさはいくらか', symbol: 'a', meaning: '斜面にそった加速度' },
+    formula: { expr: 'a = g sinθ', name: 'なめらかな斜面をすべる加速度' },
+    formulaSymbols: [],
+    reason: '重力のうち斜面にそった成分 mg sinθ だけが物体を動かす。運動方程式 ma = mg sinθ から a = g sinθ。',
+    distractors: ['a = g cosθ', 'a = g tanθ', 'v² = 2gh'],
     verified: true,
   },
 ];
