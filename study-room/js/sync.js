@@ -31,6 +31,7 @@ export async function pull() {
   if (!u) return false;
   try {
     const r = await rpc('sr_load', { p_token: u.token });
+    if (r.is_admin !== undefined) Auth.setAdmin(r.is_admin);
     return await adopt(r.data);
   } catch (e) {
     if (e.code === 'bad_token') { onExpired && onExpired(); return false; }

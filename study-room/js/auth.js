@@ -17,7 +17,7 @@ async function localHash(password, salt) {
 function localUsers() { try { return JSON.parse(localStorage.getItem(LOCAL_USERS)) || {}; } catch (e) { return {}; } }
 
 function remember(r) {
-  const s = { token: r.token, id: r.username.toLowerCase(), name: r.username };
+  const s = { token: r.token, id: r.username.normalize('NFKC').toLowerCase(), name: r.username, admin: !!r.is_admin };
   localStorage.setItem(SESSION, JSON.stringify(s));
   localStorage.removeItem(LOCAL_SESSION);
   return s;
@@ -42,7 +42,7 @@ export async function logIn(name, password) {
   } catch (e) {
     if (e.code !== 'bad_login') throw e;
     // 以前この端末で作ったアカウントなら、同じ名前とパスワードでネットに作り直す
-    const u = localUsers()[name.trim().toLowerCase()];
+    const u = localUsers()[name.trim().normalize('NFKC').toLowerCase()];
     if (u && (await localHash(password, u.salt)) === u.hash) {
       const r = await rpc('sr_signup', { p_username: u.name, p_password: password });
       return { ...remember(r), data: r.data, updated_at: r.updated_at, moved: true };
@@ -56,6 +56,15 @@ export function logOut() {
   if (s) rpc('sr_logout', { p_token: s.token }).catch(() => {});
   localStorage.removeItem(SESSION);
 }
+
+// サーバーから届いた「管理者かどうか」を覚えなおす
+export function setAdmin(flag) {
+  const s = currentUser();
+  if (!s || s.admin === !!flag) return;
+  s.admin = !!flag;
+  localStorage.setItem(SESSION, JSON.stringify(s));
+}
+export function isAdmin() { return !!currentUser()?.admin; }
 
 export function currentUser() {
   try { return JSON.parse(localStorage.getItem(SESSION)); } catch (e) { return null; }
