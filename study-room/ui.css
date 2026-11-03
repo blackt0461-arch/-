@@ -250,3 +250,10 @@ h3.sec { font-size: 14px; color: var(--muted); margin: 18px 4px 8px; font-weight
 .t-logo { white-space: nowrap; font-size: clamp(44px, 13vw, 110px); letter-spacing: .22em; padding-left: .22em; }
 .float-bar button { white-space: nowrap; flex: none; }
 .float-bar .fb-name { max-width: 34vw; }
+
+/* 部屋がたくさんあるので、ボタンの列は横にすべらせる */
+.rooms { scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.rooms::-webkit-scrollbar { display: none; }
+.rooms button { flex: 0 0 auto; }
+.rooms button.homebtn { border-color: var(--gold1); color: var(--gold1); font-weight: 700; }
+.rooms button.homebtn.villa { background: linear-gradient(180deg, rgba(64,150,170,.85), rgba(30,96,120,.85)); color: #fff; border-color: rgba(255,255,255,.35); }

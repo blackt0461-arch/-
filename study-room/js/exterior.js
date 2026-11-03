@@ -1,6 +1,7 @@
 // 家の外。郊外の住宅街に建つ一軒家。
 // 奥の壁(-z)の窓の外：ウッドデッキ → 芝生の庭 → 木の柵 → 歩道と道路（電柱・街灯）→ 向かいの家々 → 遠くの丘。
-// 1階の部屋は地面の高さ、2階の部屋（level=1）は同じ景色を3m上から見る。
+// 1階の部屋は地面の高さ、2階の部屋（level=1）は同じ景色を3m上から見る（高さと前後の位置は room3d.js が合わせる）。
+// 別荘（home = 'villa'）は海辺：テラス → 砂浜とヤシの木 → 波の立つ海 → 遠くの島。
 import * as THREE from 'three';
 import { texturedMaterial, fitMaterial, loadModel, loadTex, shadowAll } from './loaders.js';
 
@@ -13,9 +14,9 @@ const TREES = {
 // 決まった乱数（毎回同じ街になる）
 function rng(seed) { let s = seed; return () => (s = (s * 16807) % 2147483647) / 2147483647; }
 
-export async function buildExterior(mood, level = 0) {
+export async function buildExterior(mood, level = 0, home = 'main') {
+  if (home === 'villa') return buildSeaside(mood);
   const g = new THREE.Group();
-  g.position.y = -3.0 * level;
   const night = mood.photo === 'night';
   const R = rng(11);
 
@@ -42,18 +43,14 @@ export async function buildExterior(mood, level = 0) {
     m.position.set(x, y, z); m.castShadow = true; m.receiveShadow = true; g.add(m); return m;
   };
 
-  // --- 自分の家のまわり ---
-  // 窓の上のひさし
-  const eaveM = new THREE.MeshStandardMaterial({ color: '#5b5550', roughness: 0.7 });
-  const eave = new THREE.Mesh(new THREE.BoxGeometry(9, 0.12, 0.9), eaveM);
-  eave.position.set(0, 2.98, -2.98); eave.castShadow = true; eave.receiveShadow = true;
-  // ひさしは自分の階にだけ（g の外に置く）
-  const own = new THREE.Group(); own.add(eave);
+  // --- 自分の家のまわり ---（窓の上のひさしは room3d.js が部屋ごとに作る）
   // ウッドデッキ（1階の前）
   plane(deckM, 9, 2.8, 0, -0.18, -4.0);
   box(deckM, 9, 0.18, 0.1, 0, -0.27, -5.4, 9, 0.18);
   // 芝生
   plane(grassM, 60, 50, 0, -0.45, -30);
+  // 家の横と後ろの芝生（横の窓から見える）
+  plane(grassM, 60, 40, 0, -0.46, 15);
   const shrubJobs = [];
   // 木の柵（横板）
   const fence = new THREE.Group();
@@ -172,7 +169,7 @@ export async function buildExterior(mood, level = 0) {
   far.rotation.x = -Math.PI / 2; far.position.set(0, -0.6, -420); g.add(far);
 
   await Promise.all([...shrubJobs, ...treeJobs, ...lampJobs]);
-  return { world: g, own };
+  return { world: g };
 }
 
 async function placeModel(g, id, x, y, z, rotY, scale) {
@@ -264,4 +261,176 @@ function makeHouse(g, { x, z, w, d, h, wall, roof, night, seed, simple }) {
   }
   house.position.set(x, 0, z);
   g.add(house);
+}
+
+// ======================= 別荘：海辺 =======================
+// 波は頂点シェーダーで動かす（スマホでも軽いように、面の数はひかえめ）
+async function buildSeaside(mood) {
+  const g = new THREE.Group();
+  const night = mood.photo === 'night';
+  const R = rng(29);
+  const [deckM, sandM] = await Promise.all([
+    texturedMaterial('wood_floor_deck', { rep: 2, tint: '#e9d9c2' }),
+    texturedMaterial('aerial_beach_01', { rep: 6, tint: '#f3e3c4' }),
+  ]);
+  const plane = (mat, w, d, x, y, z, fit = true) => {
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), fit ? fitMaterial(mat, w, d) : mat);
+    m.rotation.x = -Math.PI / 2; m.position.set(x, y, z); m.receiveShadow = true; g.add(m); return m;
+  };
+  // テラス（ウッドデッキ）と手すり
+  plane(deckM, 12, 3.2, 0, -0.16, -4.2);
+  const railM = new THREE.MeshStandardMaterial({ color: '#f4f1ea', roughness: 0.5 });
+  const rail = new THREE.Mesh(new THREE.BoxGeometry(12, 0.05, 0.06), railM);
+  rail.position.set(0, 0.84, -5.75); rail.castShadow = true; g.add(rail);
+  for (let x = -5.9; x <= 6; x += 0.5) {
+    const p = new THREE.Mesh(new THREE.BoxGeometry(0.035, 1.0, 0.035), railM);
+    p.position.set(x, 0.34, -5.75); g.add(p);
+  }
+  const stepM = new THREE.MeshStandardMaterial({ color: '#cbb796', roughness: 0.8 });
+  const deckEdge = new THREE.Mesh(new THREE.BoxGeometry(12, 0.35, 0.1), stepM);
+  deckEdge.position.set(0, -0.33, -5.82); g.add(deckEdge);
+  // 砂浜（家のまわりも砂）
+  plane(sandM, 200, 32, 0, -0.5, -21.5);
+  plane(sandM, 200, 60, 0, -0.52, 25);
+  // 海：波の高さを時間で動かす
+  const seaU = { uTime: { value: 0 } };
+  const deep = night ? '#0b2233' : mood.photo === 'sunset' ? '#1f4a63' : '#14627e';
+  const shallow = night ? '#1b4050' : mood.photo === 'sunset' ? '#5c8f8f' : '#3fb3b8';
+  const seaM = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.12, metalness: 0.15, envMapIntensity: 1.4 });
+  seaM.onBeforeCompile = (sh) => {
+    sh.uniforms.uTime = seaU.uTime;
+    sh.uniforms.uDeep = { value: new THREE.Color(deep) };
+    sh.uniforms.uShallow = { value: new THREE.Color(shallow) };
+    sh.vertexShader = 'uniform float uTime;\nvarying float vDist;\nvarying float vCrest;\n' + sh.vertexShader
+      .replace('#include <beginnormal_vertex>', `
+        vec2 q = position.xy;
+        float t = uTime;
+        float a1 = 0.12, k1 = 0.35, a2 = 0.07, k2 = 0.62, a3 = 0.04, k3 = 1.3;
+        vec2 d1 = normalize(vec2(0.2, 1.0)), d2 = normalize(vec2(-0.6, 0.8)), d3 = normalize(vec2(0.9, 0.4));
+        float p1 = dot(d1, q) * k1 + t * 0.9, p2 = dot(d2, q) * k2 + t * 1.3, p3 = dot(d3, q) * k3 + t * 2.1;
+        float damp = smoothstep(0.0, 6.0, position.y + 150.0);
+        float hgt = (a1 * sin(p1) + a2 * sin(p2) + a3 * sin(p3)) * damp;
+        vec2 grad = (a1 * k1 * cos(p1) * d1 + a2 * k2 * cos(p2) * d2 + a3 * k3 * cos(p3) * d3) * damp;
+        vec3 objectNormal = normalize(vec3(-grad.x, -grad.y, 1.0));
+        vCrest = hgt;
+      `)
+      .replace('#include <begin_vertex>', `
+        vec3 transformed = vec3(position.xy, hgt);
+        vDist = position.y + 150.0;
+      `);
+    sh.fragmentShader = 'uniform vec3 uDeep;\nuniform vec3 uShallow;\nvarying float vDist;\nvarying float vCrest;\n' + sh.fragmentShader
+      .replace('#include <color_fragment>', `
+        #include <color_fragment>
+        diffuseColor.rgb = mix(uShallow, uDeep, smoothstep(0.0, 40.0, vDist));
+        diffuseColor.rgb += vec3(0.08) * smoothstep(0.1, 0.2, vCrest);
+      `);
+  };
+  // 海の板は、岸 (z=-37) から沖へ 300m。近い所ほど細かく
+  const seaGeo = new THREE.PlaneGeometry(420, 300, 120, 90);
+  const sea = new THREE.Mesh(seaGeo, seaM);
+  sea.rotation.x = -Math.PI / 2;
+  // 平面の y=-150 が岸側になるように置く
+  sea.position.set(0, -0.62, -37 - 150);
+  sea.receiveShadow = true;
+  g.add(sea);
+  // 遠くの海（波なし。地平線まで）
+  const farSea = new THREE.Mesh(new THREE.PlaneGeometry(2400, 1400), new THREE.MeshStandardMaterial({ color: deep, roughness: 0.2, metalness: 0.1 }));
+  farSea.rotation.x = -Math.PI / 2; farSea.position.set(0, -0.66, -330 - 700); g.add(farSea);
+  // 波打ちぎわの白い泡（ゆっくり寄せては返す）
+  const foamM = new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.5, depthWrite: false });
+  const foam = new THREE.Mesh(new THREE.PlaneGeometry(200, 1.6), foamM);
+  foam.rotation.x = -Math.PI / 2; foam.position.set(0, -0.49, -36.8); g.add(foam);
+  const wet = new THREE.Mesh(new THREE.PlaneGeometry(200, 3), new THREE.MeshStandardMaterial({ color: '#b59b74', roughness: 0.35, transparent: true, opacity: 0.55, depthWrite: false }));
+  wet.rotation.x = -Math.PI / 2; wet.position.set(0, -0.495, -36); g.add(wet);
+
+  // ヤシの木
+  const palmSpots = [[-7.5, -9, 1.0], [-10.5, -14, 1.2], [8.5, -10.5, 1.1], [12, -16, 0.9], [-16, -22, 1.3], [17, -24, 1.2], [5, -27, 0.8], [-4, -30, 0.9]];
+  for (const [x, z, s] of palmSpots) g.add(makePalm(x, -0.5, z, s, R));
+  // 岩
+  const rockM = new THREE.MeshStandardMaterial({ color: '#8a857c', roughness: 0.95, flatShading: true });
+  for (let i = 0; i < 7; i++) {
+    const r = new THREE.Mesh(new THREE.DodecahedronGeometry(0.5 + R() * 0.9, 0), rockM);
+    r.scale.y = 0.6; r.position.set(-30 + R() * 60, -0.4, -33 - R() * 6); r.rotation.y = R() * 3; r.castShadow = true; g.add(r);
+  }
+  // 遠くの島
+  const islandM = new THREE.MeshStandardMaterial({ color: night ? '#16202a' : '#5f7d62', roughness: 1 });
+  for (const [x, z, sx, sy] of [[-260, -520, 120, 26], [180, -620, 160, 38], [420, -480, 70, 18]]) {
+    const isl = new THREE.Mesh(new THREE.SphereGeometry(1, 24, 10, 0, Math.PI * 2, 0, Math.PI / 2), islandM);
+    isl.scale.set(sx, sy, sx * 0.5); isl.position.set(x, -0.7, z); g.add(isl);
+  }
+  // 夜はテラスの灯り
+  if (night) {
+    const l = new THREE.PointLight('#ffcf90', 6, 10, 2); l.position.set(0, 2.2, -4.5); g.add(l);
+  }
+  const update = (t) => {
+    seaU.uTime.value = t;
+    const k = (Math.sin(t * 0.5) + 1) / 2;
+    foam.position.z = -36.6 + k * 0.9;
+    foamM.opacity = 0.25 + 0.35 * (1 - k);
+  };
+  return { world: g, update };
+}
+
+// ヤシの木（曲がった幹と、垂れた葉）
+let palmLeafTex = null;
+function leafTexture() {
+  if (palmLeafTex) return palmLeafTex;
+  const c = document.createElement('canvas'); c.width = 64; c.height = 256;
+  const x = c.getContext('2d');
+  x.strokeStyle = '#3f6b2a'; x.lineWidth = 3;
+  x.beginPath(); x.moveTo(32, 0); x.lineTo(32, 256); x.stroke();
+  for (let i = 4; i < 250; i += 7) {
+    const w = 30 * Math.sin((i / 256) * Math.PI) + 2;
+    x.strokeStyle = i % 2 ? '#4f8a34' : '#5c9a3d'; x.lineWidth = 4;
+    x.beginPath(); x.moveTo(32, i); x.lineTo(32 - w, i + 12); x.moveTo(32, i); x.lineTo(32 + w, i + 12); x.stroke();
+  }
+  palmLeafTex = new THREE.CanvasTexture(c); palmLeafTex.colorSpace = THREE.SRGBColorSpace;
+  return palmLeafTex;
+}
+function makePalm(x, y, z, s, R) {
+  const g = new THREE.Group();
+  const trunkM = new THREE.MeshStandardMaterial({ color: '#8b7255', roughness: 0.95 });
+  const h = 5.5 + R() * 2, lean = (R() - 0.5) * 1.6;
+  const pts = [];
+  for (let i = 0; i <= 6; i++) { const u = i / 6; pts.push(new THREE.Vector3(lean * u * u, h * u, 0)); }
+  const curve = new THREE.CatmullRomCurve3(pts);
+  const trunk = new THREE.Mesh(new THREE.TubeGeometry(curve, 12, 0.16, 7), trunkM);
+  trunk.castShadow = true; g.add(trunk);
+  // 幹のふし
+  for (let i = 1; i < 10; i++) {
+    const p = curve.getPoint(i / 10);
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.17, 0.025, 4, 10), trunkM);
+    ring.rotation.x = Math.PI / 2; ring.position.copy(p); g.add(ring);
+  }
+  const top = curve.getPoint(1);
+  const leafM = new THREE.MeshStandardMaterial({ map: leafTexture(), alphaTest: 0.4, side: THREE.DoubleSide, roughness: 0.8 });
+  const n = 9;
+  for (let i = 0; i < n; i++) {
+    // 葉：先が垂れる細長い帯
+    const L = 3.0 + R() * 0.8, segs = 8;
+    const geo = new THREE.PlaneGeometry(0.9, L, 1, segs);
+    const pos = geo.attributes.position;
+    for (let k = 0; k < pos.count; k++) {
+      const v = (pos.getY(k) + L / 2) / L; // 0=根元 1=先
+      pos.setY(k, v * L);
+      pos.setZ(k, -Math.pow(v, 2) * 1.6 + v * 0.6);
+    }
+    geo.computeVertexNormals();
+    const leaf = new THREE.Mesh(geo, leafM);
+    leaf.rotation.order = 'YXZ';
+    leaf.rotation.y = (i / n) * Math.PI * 2 + R() * 0.3;
+    leaf.rotation.x = -Math.PI / 2 + 0.35 + R() * 0.3;
+    leaf.position.copy(top);
+    leaf.castShadow = true;
+    g.add(leaf);
+  }
+  // 実
+  const nutM = new THREE.MeshStandardMaterial({ color: '#5a4a2a', roughness: 0.7 });
+  for (let i = 0; i < 3; i++) {
+    const nut = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 6), nutM);
+    nut.position.copy(top).add(new THREE.Vector3(Math.cos(i * 2.1) * 0.18, -0.2, Math.sin(i * 2.1) * 0.18)); g.add(nut);
+  }
+  g.scale.setScalar(s);
+  g.position.set(x, y, z);
+  return g;
 }

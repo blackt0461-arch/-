@@ -1,7 +1,7 @@
 // 画面の流れ：ログイン →（一括ダウンロード）→ 部屋（ホーム）
 // 下のアイコン：部屋／模様がえ／解く／図鑑／メニュー（記録・フレンド・設定・管理者）
 import { Room3D, moodNow } from './room3d.js';
-import { ROOMS, roomDef, STYLES, styleDef } from './rooms.js';
+import { ROOMS, roomDef, STYLES, styleDef, homeOf, VILLA_MIN_ITEMS } from './rooms.js';
 import { GENRES, ITEMS, itemById, itemsOf, SPECIAL_IDS, STARTER } from './items.js';
 import { icon, GENRE_ICON, SUBJECT_ICON } from './icons.js';
 import { thumbHTML, hydrateThumbs } from './thumbs.js';
@@ -127,29 +127,44 @@ function goTab(t) {
 }
 
 // =========================== 部屋（ホーム） ===========================
+// 別荘が開く条件：家の部屋が全部開いていて、どの部屋にも家具を6個以上置いている
+const MAIN_ROOMS = ROOMS.filter(r => r.home === 'main');
+function villaLack(hs = HS()) {
+  return MAIN_ROOMS.map(d => ({ d, n: (hs.rooms.find(x => x.id === d.id)?.placed || []).length, open: hs.rooms.some(x => x.id === d.id) }))
+    .filter(x => !x.open || x.n < VILLA_MIN_ITEMS);
+}
 function ensureRooms() {
   const hs = HS();
   // ランクで開いた部屋を足す
   const rank = rankNow().rank;
   const added = [];
-  for (const r of ROOMS) {
-    if (r.unlock <= rank && !hs.rooms.some(x => x.id === r.id)) {
-      hs.rooms.push({ id: r.id, style: null, surf: null, placed: [] });
-      added.push(r);
-    }
-  }
-  if (!hs.rooms.length) hs.rooms.push({ id: ROOMS[0].id, style: null, surf: null, placed: [] });
+  const curId = hs.rooms[hs.current || 0]?.id;
+  const has = (id) => hs.rooms.some(x => x.id === id);
+  const addRoom = (d) => {
+    // 部屋ごとの最初の壁・床（お風呂のタイルなど）は持ち物にも入れる
+    for (const id of Object.values(d.surf || {})) if (id && !S.owned(id)) S.own(id);
+    hs.rooms.push({ id: d.id, style: null, surf: { ...STARTER, ...(d.surf || {}) }, placed: [] });
+    added.push(d);
+  };
+  for (const r of MAIN_ROOMS) if (r.unlock <= rank && !has(r.id)) addRoom(r);
+  if (!hs.villa && !villaLack(hs).length) { hs.villa = true; hs.villaNew = true; }
+  if (hs.villa) for (const r of ROOMS) if (r.home === 'villa' && !has(r.id)) addRoom(r);
+  if (!hs.rooms.length) addRoom(ROOMS[0]);
   for (const r of hs.rooms) {
-    r.surf = r.surf || { ...STARTER };
+    r.surf = r.surf || { ...STARTER, ...(roomDef(r.id).surf || {}) };
     r.placed = r.placed || [];
   }
+  // 並びは部屋の一覧の順（今いる部屋はそのまま）
+  const order = (id) => { const i = ROOMS.findIndex(x => x.id === id); return i < 0 ? 999 : i; };
+  hs.rooms.sort((x, y) => order(x.id) - order(y.id));
   // 最初から持っている物
   for (const id of Object.values(STARTER)) if (id && !S.owned(id)) S.own(id);
   if (!hs.started) {
     hs.started = true;
     hs.gauge = Math.max(hs.gauge, S.gaugeMax(hs)); // 最初の1つはプレゼント
   }
-  hs.current = Math.min(hs.current || 0, hs.rooms.length - 1);
+  const ci = hs.rooms.findIndex(x => x.id === curId);
+  hs.current = ci >= 0 ? ci : Math.min(hs.current || 0, hs.rooms.length - 1);
   S.save();
   return added;
 }
@@ -191,7 +206,13 @@ function showHome() {
   const canBuy = hs.gauge >= max || hs.tickets > 0;
   const need = Math.max(1, Math.ceil((max - hs.gauge) / 24));
   const rk = rankNow();
-  const locked = ROOMS.filter(x => !hs.rooms.some(y => y.id === x.id));
+  const home = homeOf(r.id);
+  const here = hs.rooms.map((rr, i) => ({ rr, i })).filter(x => homeOf(x.rr.id) === home);
+  const locked = home === 'main' ? MAIN_ROOMS.filter(x => !hs.rooms.some(y => y.id === x.id)) : [];
+  const homeBtn = home === 'villa'
+    ? `<button class="homebtn" data-home="main">${icon('home')}家へ</button>`
+    : hs.villa ? `<button class="homebtn villa" data-home="villa">${icon('palm')}別荘へ</button>`
+      : `<button class="locked villa-lock">${icon('lock')}別荘<small>全部屋に${VILLA_MIN_ITEMS}個</small></button>`;
   app.innerHTML = '';
   const el = h(`
     <div class="home">
@@ -210,10 +231,10 @@ function showHome() {
         <button class="round photo" aria-label="写真をとる">${icon('camera')}</button>
         <button class="round friends" aria-label="フレンド">${icon('users')}${friendBadge ? '<i class="dot"></i>' : ''}</button>
       </div>
-      <nav class="rooms">${hs.rooms.map((rr, i) => {
+      <nav class="rooms">${home === 'villa' ? homeBtn : ''}${here.map(({ rr, i }) => {
         const d = roomDef(rr.id);
         return `<button data-i="${i}" class="${i === hs.current ? 'on' : ''}">${icon(d.icon)}${d.name}</button>`;
-      }).join('')}${locked.slice(0, 1).map(x => `<button class="locked" disabled>${icon('lock')}${x.name}<small>Lv${x.unlock}</small></button>`).join('')}</nav>
+      }).join('')}${locked.slice(0, 1).map(x => `<button class="locked next-lock" data-lv="${x.unlock}" data-n="${x.name}">${icon('lock')}${x.name}<small>Lv${x.unlock}</small></button>`).join('')}${home === 'main' ? homeBtn : ''}</nav>
       <div class="hint">なぞると見回す・床をタップで歩く・ドアで別の部屋へ</div>
       <div class="dock">
         ${canBuy ? `<button class="btn gold big buy">${icon('gift')}家具を買う${hs.tickets > 0 && hs.gauge < max ? `<small>引きかえ券 ${hs.tickets}枚</small>` : ''}</button>` : ''}
@@ -230,8 +251,53 @@ function showHome() {
   el.querySelector('.friends').onclick = showFriends;
   el.querySelector('.rankchip').onclick = showRecords;
   el.querySelectorAll('.rooms button[data-i]').forEach(b => b.onclick = () => switchRoom(+b.dataset.i));
+  el.querySelector('.next-lock')?.addEventListener('click', e => { const b = e.currentTarget; toast(`「${b.dataset.n}」は Lv${b.dataset.lv} で開きます`, 2600); });
+  el.querySelector('.villa-lock')?.addEventListener('click', () => toast(villaHint(), 4200));
+  el.querySelector('.homebtn')?.addEventListener('click', e => goHome(e.currentTarget.dataset.home));
   app.append(el, tabbar('room'));
+  scrollRoomsNav(el);
   if (!notesChecked) { notesChecked = true; checkUpdateNotes(); }
+  if (hs.villaNew) celebrateVilla();
+}
+// 部屋のボタンが多いので、今の部屋が見える所まで横に送る
+function scrollRoomsNav(el) {
+  const nav = el.querySelector('.rooms'), on = nav?.querySelector('.on');
+  if (nav && on) nav.scrollLeft = on.offsetLeft - nav.clientWidth / 2 + on.offsetWidth / 2;
+}
+function villaHint() {
+  const lack = villaLack();
+  const closed = lack.filter(x => !x.open);
+  if (closed.length) return `家の部屋が全部開いて（Lv${Math.max(...closed.map(x => x.d.unlock))}）、どの部屋にも家具を${VILLA_MIN_ITEMS}個以上置くと、別荘が開きます`;
+  return `あと少し！ 家具を${VILLA_MIN_ITEMS}個置くと別荘が開きます：${lack.map(x => `${x.d.name}（あと${VILLA_MIN_ITEMS - x.n}個）`).join('・')}`;
+}
+// 別荘が開いたお祝い（1回だけ）
+function celebrateVilla() {
+  const hs = HS();
+  hs.villaNew = false; S.save();
+  vibrate([40, 60, 40, 60, 120]);
+  const vr = ROOMS.filter(r => r.home === 'villa');
+  const el = sheet(`
+    <div class="sh-head"><span class="sh-ic gold">${icon('palm')}</span><div><h3>別荘ができました！</h3><p>家の部屋を全部かざったごほうびです</p></div></div>
+    <ul class="news-list">${vr.map(r => `<li>${icon(r.icon)}${esc(r.name)}</li>`).join('')}</ul>
+    <button class="btn gold big go">${icon('palm')}別荘へ行く</button>
+    <button class="btn ghost later">あとで</button>`, 'villa-sheet');
+  el.querySelector('.go').onclick = () => { el.remove(); goHome('villa'); };
+  el.querySelector('.later').onclick = () => el.remove();
+}
+// 家と別荘を行き来する（前にいた部屋へ）
+async function goHome(home) {
+  const hs = HS();
+  if (room3d?.editMode) return;
+  hs.lastIn = hs.lastIn || {};
+  hs.lastIn[homeOf(curRoom().id)] = curRoom().id;
+  let i = hs.rooms.findIndex(r => r.id === hs.lastIn[home]);
+  if (i < 0) i = hs.rooms.findIndex(r => homeOf(r.id) === home);
+  if (i < 0) return;
+  canvas.classList.add('fade');
+  await new Promise(r => setTimeout(r, 350));
+  await switchRoom(i);
+  canvas.classList.remove('fade');
+  if (home === 'villa') toast('別荘に来ました。ドアで別荘の部屋をめぐれます', 2800);
 }
 
 async function switchRoom(i) {
@@ -244,25 +310,30 @@ async function switchRoom(i) {
 // ドアを通って、となりの部屋へ
 async function goThroughDoor() {
   if (visiting) {
-    const n = visiting.house.rooms.length;
-    if (n < 2) return toast('ほかの部屋はまだありません');
+    const rooms = visiting.house.rooms;
+    const home = homeOf(rooms[visiting.current].id);
+    const idx = rooms.map((r, i) => i).filter(i => homeOf(rooms[i].id) === home);
+    if (idx.length < 2) return toast('ほかの部屋はまだありません');
     canvas.classList.add('fade');
     await new Promise(r => setTimeout(r, 350));
-    visiting.current = (visiting.current + 1) % n;
+    visiting.current = idx[(idx.indexOf(visiting.current) + 1) % idx.length];
     showVisit();
     canvas.classList.remove('fade');
     return;
   }
   const hs = HS();
   if (app.querySelector('.sheet') || room3d.editMode) return;
-  if (hs.rooms.length < 2) {
-    const next = ROOMS.find(x => !hs.rooms.some(y => y.id === x.id));
+  // 同じ家（家 or 別荘）の部屋だけを順にめぐる
+  const home = homeOf(curRoom().id);
+  const idx = hs.rooms.map((r, i) => i).filter(i => homeOf(hs.rooms[i].id) === home);
+  if (idx.length < 2) {
+    const next = MAIN_ROOMS.find(x => !hs.rooms.some(y => y.id === x.id));
     toast(next ? `ドアの向こうは「${next.name}」。Lv${next.unlock}で開きます` : 'ほかの部屋はまだありません', 3000);
     return;
   }
   canvas.classList.add('fade');
   await new Promise(r => setTimeout(r, 350));
-  await switchRoom((hs.current + 1) % hs.rooms.length);
+  await switchRoom(idx[(idx.indexOf(hs.current) + 1) % idx.length]);
   canvas.classList.remove('fade');
 }
 
@@ -283,13 +354,14 @@ function askStyle() {
     picked = b.dataset.s;
     el.querySelectorAll('.stylecard').forEach(x => x.classList.toggle('on', x === b));
     el.querySelector('.ok').disabled = false;
-    await room3d.previewSurfaces(styleDef(picked).preview);
+    // お風呂・和室などは、壁と床はそのまま（家具の選ばれ方だけ変わる）
+    if (!def.keepSurf) await room3d.previewSurfaces(styleDef(picked).preview);
   });
   el.querySelector('.ok').onclick = async () => {
     r.style = picked;
     // 雰囲気の壁と床が図鑑にあれば、持ち物に入れてそのまま使う
     const pv = styleDef(picked).preview;
-    for (const kind of ['wall', 'floor']) {
+    for (const kind of def.keepSurf ? [] : ['wall', 'floor']) {
       const it = matchSurface(kind, pv[kind]);
       if (it) { S.own(it.id); r.surf[kind] = it.id; }
     }
@@ -396,6 +468,7 @@ async function putIntoRoom(item, justBought) {
   S.save();
   await room3d.addPlaced(p);
   S.save(); // 置いた位置を直した値で保存
+  if (!HS().villa) ensureRooms(); // 家具がそろったら別荘が開く
   toast(justBought ? `${item.name}を置きました。模様がえで動かせます` : `${item.name}を置きました`, 2600);
   return true;
 }
@@ -782,6 +855,11 @@ async function showVisit() {
   if (!room3d) room3d = new Room3D(canvas);
   room3d.setActive(true);
   canvas.classList.remove('dim');
+  // 今いる家（家 or 別荘）の部屋と、もう一方への切りかえ
+  const home = homeOf(room.id);
+  const here = v.house.rooms.map((rr, i) => ({ rr, i })).filter(x => homeOf(x.rr.id) === home);
+  const other = v.house.rooms.findIndex(rr => homeOf(rr.id) !== home);
+  const navHTML = here.length > 1 || other >= 0 ? `<nav class="rooms">${here.map(({ rr, i }) => `<button data-i="${i}" class="${i === v.current ? 'on' : ''}">${icon(roomDef(rr.id).icon)}${roomDef(rr.id).name}</button>`).join('')}${other >= 0 ? `<button data-i="${other}" class="homebtn">${home === 'main' ? `${icon('palm')}別荘へ` : `${icon('home')}家へ`}</button>` : ''}</nav>` : '';
   app.innerHTML = '';
   const el = h(`
     <div class="home visiting">
@@ -790,13 +868,14 @@ async function showVisit() {
         <div class="room-name"><span class="rn-ic">${icon('user')}</span><span class="rn-t">${esc(v.username)}さんの${roomDef(room.id).name}<small>Lv${S.rankInfo(v.summary?.xp || 0).rank} ・ 家具 ${room.placed.length}個</small></span></div>
         <button class="round photo" aria-label="写真をとる">${icon('camera')}</button>
       </header>
-      ${v.house.rooms.length > 1 ? `<nav class="rooms">${v.house.rooms.map((rr, i) => `<button data-i="${i}" class="${i === v.current ? 'on' : ''}">${icon(roomDef(rr.id).icon)}${roomDef(rr.id).name}</button>`).join('')}</nav>` : ''}
+      ${navHTML}
       <div class="hint">見るだけの部屋です。なぞって見回せます</div>
     </div>`);
   el.querySelector('.back').onclick = () => leaveVisit(true);
   el.querySelector('.photo').onclick = photoMode;
   el.querySelectorAll('.rooms button').forEach(b => b.onclick = () => { v.current = +b.dataset.i; showVisit(); });
   app.append(el);
+  scrollRoomsNav(el);
   await room3d.show(roomDef(room.id), room, { readOnly: true });
 }
 async function leaveVisit(goBack) {
@@ -847,6 +926,9 @@ function showSettings() {
     <section class="group">
       <button class="row-item tap logout"><span class="lbl danger">${icon('logout')}ログアウト</span></button>
     </section>
+    ${isAdmin() ? `<section class="group">
+      <button class="row-item tap reset-all"><span class="lbl danger">${icon('trash')}最初からやり直す（管理者）</span></button>
+    </section>` : ''}
     <p class="ver">ROOMIN ${esc(ver)}</p>`);
   el.querySelector('.back').onclick = showMenu;
   el.querySelectorAll('.seg button').forEach(b => b.onclick = () => {
@@ -856,6 +938,15 @@ function showSettings() {
   });
   el.querySelector('.dl')?.addEventListener('click', () => { if (DL.downloadState() !== 'done') showDownload(); });
   el.querySelector('.logout').onclick = async () => { await Sync.push(); Auth.logOut(); showLogin(); };
+  // 管理者だけ：記録をすべて消して最初から（ログインはそのまま）
+  el.querySelector('.reset-all')?.addEventListener('click', async () => {
+    if (!isAdmin()) return;
+    if (!confirm('本当に最初からやり直しますか？家具・ランク・記録がすべて消えます')) return;
+    if (!confirm('もう一度確認：元に戻せません。やり直しますか？')) return;
+    S.resetAll();
+    try { await Sync.push(); } catch (e) { /* つながらなければ、あとで送られる */ }
+    location.reload();
+  });
   paintSync();
 }
 
@@ -1179,4 +1270,4 @@ if ('serviceWorker' in navigator && location.protocol === 'https:') {
   navigator.serviceWorker.register('sw.js').catch(() => {});
 }
 // テスト用
-window.__app = { get room3d() { return room3d; }, S, sub, HS };
+window.__app = { get room3d() { return room3d; }, S, sub, HS, switchRoom, ensureRooms, goHome, showHome, curRoom };
