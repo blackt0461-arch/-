@@ -153,9 +153,9 @@ body { margin: 0; }
 </div>
 <div class="sheet" id="sheet" hidden></div>
 
-<script src="engine.js?v=20261103d"></script>
+<script src="engine.js?v=20261103e"></script>
 <script>
-const V = '20261103d'; window.APP_V = V;  // 版。ファイルを変えたら あげる（iPhone が 古いファイルを 使いつづけないように）
+const V = '20261103e'; window.APP_V = V;  // 版。ファイルを変えたら あげる（iPhone が 古いファイルを 使いつづけないように）
 fetch('data.json', { cache: 'no-cache' }).then(r => r.json()).then(D => {
   window.DATA_UPDATED = D.updated;
   initData(D);

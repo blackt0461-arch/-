@@ -295,9 +295,27 @@ document.addEventListener('click', ev => {
   invalidate(); touch(); render();
 });
 document.addEventListener('keydown', ev => { if ((ev.key === 'Enter' || ev.key === ' ') && ev.target.classList && ev.target.classList.contains('tile')) { ev.preventDefault(); ev.target.click(); } });
+// スクショえらび：同じ写真を もう一度 えらんでも 読めるように、読んだら 毎回 からにする。
+// iPhone で 知らせが 来ないときのために、えらび画面が 閉じたあとも 自分で たしかめる。
+let scanWatch = null;
+function scanPick(inp) {
+  const files = inp.files ? [...inp.files] : [];
+  clearInterval(scanWatch); scanWatch = null;
+  if (!files.length) return;
+  try { inp.value = ''; } catch (e) { }
+  Scan.runFiles(inp.dataset.k, files);
+}
+document.addEventListener('click', ev => {
+  const lab = ev.target.closest('.scanbtn'); if (!lab) return;
+  const inp = lab.querySelector('input[type=file]'); if (!inp) return;
+  try { inp.value = ''; } catch (e) { }
+  clearInterval(scanWatch); let n = 0;
+  scanWatch = setInterval(() => { if (inp.files && inp.files.length) scanPick(inp); else if (++n > 240) { clearInterval(scanWatch); scanWatch = null; } }, 500);
+}, true);
+document.addEventListener('input', ev => { if (ev.target.dataset && ev.target.dataset.act === 'scanfile') scanPick(ev.target); });
 document.addEventListener('change', ev => {
   const b = ev.target.closest('[data-act]'); if (!b) return;
-  if (b.dataset.act === 'scanfile') { const files = b.files ? [...b.files] : []; if (files.length) Scan.runFiles(b.dataset.k, files); return; }
+  if (b.dataset.act === 'scanfile') { scanPick(b); return; }
   const a = b.dataset.act, i = +b.dataset.i, v = b.value;
   switch (a) {
     case 'job': S.party[i].job = v; break;
