@@ -5,8 +5,9 @@
 // レア度：★3（70%）・★4（25%）・★5（5%）。10連は★4以上が1つ以上かならず出る。
 // ★4・★5 がかぶったら「かけら」（★4のかけら・★5のかけら）になる。SHARD_COST 個で、同じレア度の好きな家具と交換できる。
 // ★3 は少し豪華な単品、★4 は個性の強い物、★5 は「恒常」（いつでも出る最上級の定番）と
-// 「限定」（期間限定ガチャのシリーズ。星空・ロック・ゴシック・和の雅）の2種類。
-// バナー：'standard'（★5 は恒常だけ）／シリーズ id（★5 の半分はそのシリーズ、残りは恒常）。
+// 「限定」（期間限定ガチャのシリーズ。バンド・星空・ゴシック・和の雅）の2種類。
+// 限定シリーズには ★5 だけでなく ★4 の家具もある（バンドシリーズ。壁紙・床・ドアもふくめ全ジャンル）。
+// バナー：'standard'（★4・★5 は恒常だけ）／シリーズ id（★5・★4 の半分はそのシリーズ、残りは恒常）。
 
 // 部屋の雰囲気（1文字の略 → 正式な名前）
 const ST = { n: 'natural', i: 'industrial', r: 'retro', m: 'modern' };
@@ -14,10 +15,11 @@ const ST = { n: 'natural', i: 'industrial', r: 'retro', m: 'modern' };
 export const RATES = { 3: 0.70, 4: 0.25, 5: 0.05 };
 export const SHARD_COST = 5;
 
-// ★5 限定のシリーズ。start / end は開催期間（ISO 日付文字列。null = 未定）
+// 限定のシリーズ。start / end は開催期間（ISO 日付文字列。null = 未定）。いちばん上が今のピックアップ
+// （もとの「ロックシリーズ」の家具は、id はそのままでバンドシリーズに入った）
 export const SERIES = [
-  { id: 'starry', name: '星空シリーズ', desc: '濃紺と金に、またたく星。夜空の中で暮らすような部屋に。', start: null, end: null },
-  { id: 'rock', name: 'ロックシリーズ', desc: '黒い革とクローム、ネオンの光。ライブハウスのような部屋に。', start: '2099-01-01', end: null }, // まだ開いていない
+  { id: 'band', name: 'バンドシリーズ', desc: 'ライブハウスの熱気を、自分の部屋に。', start: null, end: null },
+  { id: 'starry', name: '星空シリーズ', desc: '濃紺と金に、またたく星。夜空の中で暮らすような部屋に。', start: '2099-01-01', end: null }, // お休み中（持っている家具はそのまま）
   { id: 'gothic', name: 'ゴシックシリーズ', desc: '黒檀と深紅のベルベット、ゆらめくろうそく。古城の一室のような部屋に。', start: '2099-01-01', end: null }, // まだ開いていない
   { id: 'wa', name: '和の雅シリーズ', desc: '黒漆と金箔、舞う桜。雅な日本の部屋に。', start: '2099-01-01', end: null }, // まだ開いていない
 ];
@@ -25,7 +27,7 @@ export const SERIES = [
 export const GACHA_ITEMS = [];
 
 // 1行 = [id, 名前, ジャンル, 雰囲気の略, src(gacha=形の種類 + 引数), 大きさ(最大辺 m), その他]
-// その他：{ place, light(照明の色), series }
+// その他：{ place, surface(壁紙・床・ドア・窓のとき), light(照明の色), series }
 function add(rarity, rows, def = {}) {
   for (const [id, name, genre, st, src, size, o = {}] of rows) {
     const item = {
@@ -36,6 +38,7 @@ function add(rarity, rows, def = {}) {
       rare: true,
       rarity,
     };
+    if (o.surface) item.surface = o.surface;
     if (o.light) item.light = o.light;
     const series = o.series || def.series;
     if (series) { item.series = series; item.limited = true; }
@@ -44,6 +47,8 @@ function add(rarity, rows, def = {}) {
 }
 const W = { place: 'wall' };
 const CE = { place: 'ceiling' };
+const RUG = { place: 'rug' };
+const SF = (surface) => ({ place: 'surface', surface });
 
 // ───────── ★3：少し豪華な単品・上質な定番 ─────────
 add(3, [
@@ -110,7 +115,33 @@ add(5, [
   ['g5-canopy-bed', '天蓋つきのベッド', 'sofa', 'rn', { gacha: 'canopyBed' }, 2.3],
 ]);
 
-// ───────── ★5 限定：シリーズ ─────────
+// ───────── 限定：バンドシリーズ（★5 と ★4。12ジャンルすべてに1つ以上） ─────────
+// （g5-neon-rock / g5-amp-stack / g5-neon-guitar / g5-stud-sofa は、もとロックシリーズ。id はそのまま）
+add(5, [
+  ['g5-drum-kit', 'スパークルレッドのドラムセット', 'hobby', 'ir', { gacha: 'drumKit' }, 1.8],
+  ['g5-stage-truss', 'ステージのトラス照明', 'light', 'i', { gacha: 'stageTruss' }, 2.5, { ...CE, light: '#ff6a5a' }],
+  ['g5-amp-stack', '真空管アンプのスタック', 'hobby', 'ir', { gacha: 'ampStack' }, 1.9, { light: '#ff9a4a' }],
+  ['g5-neon-guitar', 'ネオン台のエレキギター', 'hobby', 'i', { gacha: 'guitarStand' }, 1.4, { light: '#ff2e88' }],
+  ['g5-neon-rock', 'ROCK のネオンサイン', 'wallart', 'i', { gacha: 'neonRock' }, 1.2, { ...W, light: '#ff5aa8' }],
+  ['g5-stud-sofa', '鋲打ちの黒革ソファ', 'sofa', 'i', { gacha: 'studSofa' }, 2.0],
+], { series: 'band' });
+add(4, [
+  ['g4-band-mic', 'ヴィンテージのスタンドマイク', 'hobby', 'ir', { gacha: 'micStand' }, 1.6],
+  ['g4-band-keys', '2段のキーボードとシンセ', 'hobby', 'im', { gacha: 'keyboardRig' }, 1.3, { light: '#4adfff' }],
+  ['g4-band-spot', '三脚のステージスポットライト', 'light', 'i', { gacha: 'spotLamp' }, 1.6, { light: '#ffd29a' }],
+  ['g4-band-throne', 'ドラムスローンのスツール', 'chair', 'i', { gacha: 'drumThrone' }, 0.55],
+  ['g4-band-case', 'フライトケースのテーブル', 'table', 'i', { gacha: 'flightCase' }, 0.95],
+  ['g4-band-shelf', 'アンプ型のレコード棚', 'storage', 'ir', { gacha: 'ampShelf' }, 1.05],
+  ['g4-band-planter', 'バスドラムの鉢植え', 'plant', 'in', { gacha: 'kickPlanter' }, 1.4],
+  ['g4-band-pedals', '光るエフェクターボード', 'decor', 'i', { gacha: 'pedalboard' }, 0.65],
+  ['g4-band-posters', 'ライブポスターとセットリスト', 'wallart', 'ir', { gacha: 'posterWall' }, 1.2, W],
+  ['g4-band-rug', 'ドラム用のステージラグ', 'textile', 'ri', { gacha: 'rug', pattern: 'stage', w: 2.3, d: 1.9 }, 2.3, RUG],
+  ['g4-band-wall', 'ライブハウスのレンガの壁', 'interior', 'i', { tex: 'red_brick_03', rep: 2, tint: '#8f7d7a' }, 6, SF('wall')],
+  ['g4-band-floor', '黒いステージの床', 'interior', 'i', { tex: 'black_painted_planks', rep: 3 }, 6, SF('floor')],
+  ['g4-band-door', '赤いライブハウスのドア', 'fixture', 'ir', { proc: { type: 'door', style: 'panel4', color: '#8a1420', handle: 'chrome' } }, 2.1, SF('door')],
+], { series: 'band' });
+
+// ───────── ★5 限定：お休み中のシリーズ ─────────
 add(5, [
   ['g5-star-pendant', '天球儀のペンダントライト', 'light', 'rm', { gacha: 'starPendant' }, 1.2, { ...CE, light: '#ffe2b8' }],
   ['g5-planetarium', '星を映すプラネタリウム', 'hobby', 'rm', { gacha: 'planetarium' }, 1.5, { light: '#aebcff' }],
@@ -118,12 +149,6 @@ add(5, [
   ['g5-constellation', '星座の壁かざり', 'wallart', 'm', { gacha: 'constellation' }, 1.1, W],
   ['g5-moon-table', '月のランプテーブル', 'table', 'm', { gacha: 'moonTable' }, 0.8, { light: '#ffe6c0' }],
 ], { series: 'starry' });
-add(5, [
-  ['g5-neon-rock', 'ROCK のネオンサイン', 'wallart', 'i', { gacha: 'neonRock' }, 1.2, { ...W, light: '#ff5aa8' }],
-  ['g5-amp-stack', '真空管アンプのスタック', 'hobby', 'ir', { gacha: 'ampStack' }, 1.9, { light: '#ff9a4a' }],
-  ['g5-neon-guitar', 'ネオン台のエレキギター', 'hobby', 'i', { gacha: 'guitarStand' }, 1.4, { light: '#ff2e88' }],
-  ['g5-stud-sofa', '鋲打ちの黒革ソファ', 'sofa', 'i', { gacha: 'studSofa' }, 2.0],
-], { series: 'rock' });
 add(5, [
   ['g5-goth-chandelier', 'ろうそくの鉄のシャンデリア', 'light', 'r', { gacha: 'gothChandelier' }, 1.2, { ...CE, light: '#ffad5c' }],
   ['g5-rose-window', 'ステンドグラスのバラ窓', 'wallart', 'r', { gacha: 'roseWindow' }, 1.3, { ...W, light: '#ff9a8a' }],
@@ -143,7 +168,8 @@ export const GACHA_BY_ID = Object.fromEntries(GACHA_ITEMS.map((it) => [it.id, it
 export const gachaById = (id) => GACHA_BY_ID[id] || null;
 export const seriesById = (id) => SERIES.find((s) => s.id === id) || null;
 export const byRarity = (r) => GACHA_ITEMS.filter((it) => it.rarity === r);
-export const bySeries = (id) => GACHA_ITEMS.filter((it) => it.series === id);
+// シリーズの家具（★5 が先）
+export const bySeries = (id) => GACHA_ITEMS.filter((it) => it.series === id).sort((a, b) => b.rarity - a.rarity);
 // 今ひらいている限定シリーズ（start〜end の間。null は「いつでも」）
 export function activeSeries(now = new Date()) {
   const t = +now;
@@ -156,9 +182,10 @@ export function gachaSpec(item) {
 }
 
 // ───────── 引くしくみ ─────────
+// いつでも出る物（限定シリーズの物は、そのシリーズのバナーでだけ出る）
 const POOL = {
-  3: byRarity(3),
-  4: byRarity(4),
+  3: GACHA_ITEMS.filter((it) => it.rarity === 3 && !it.limited),
+  4: GACHA_ITEMS.filter((it) => it.rarity === 4 && !it.limited),
   5: GACHA_ITEMS.filter((it) => it.rarity === 5 && !it.limited), // ★5 恒常
 };
 // ふつうの家具リスト（items.js）の「レア」の物も、★3 としてガチャに入れる（items.js から呼ぶ）
@@ -169,7 +196,7 @@ export function addToPool(items, rarity = 3) {
     GACHA_ITEMS.push(it); GACHA_BY_ID[it.id] = it; POOL[rarity].push(it);
   }
 }
-export const BANNER_LIMITED_SHARE = 0.5; // 限定バナーで、★5 が限定シリーズから出る割合
+export const BANNER_LIMITED_SHARE = 0.5; // 限定バナーで、★5・★4 が限定シリーズから出る割合
 
 // レア度を決める（min 以上だけで、割合はそのまま）
 export function rollRarity(rng = Math.random, min = 3) {
@@ -181,8 +208,8 @@ export function rollRarity(rng = Math.random, min = 3) {
 }
 // そのバナーで、そのレア度の家具の候補
 function poolFor(rarity, banner, rng) {
-  if (rarity === 5 && banner && banner !== 'standard') {
-    const lim = bySeries(banner);
+  if (rarity >= 4 && banner && banner !== 'standard') {
+    const lim = bySeries(banner).filter((it) => it.rarity === rarity);
     if (lim.length && rng() < BANNER_LIMITED_SHARE) return lim;
   }
   return POOL[rarity];
@@ -211,7 +238,7 @@ export function pullTen(owned = () => 0, rng = Math.random, opts = {}) {
   }
   return out;
 }
-// チケットで引く（kind = 'ticket' ふつう | 'ticket4' ★4以上確定 | 'ticket5' ★5限定確定）
+// チケットで引く（kind = 'ticket' ふつう | 'ticket4' ★4以上確定 | 'ticket5' ★5限定確定。★4 の限定は出ない）
 // ticket5 のシリーズ：opts.banner がシリーズ id ならそれ、なければ opts.series、なければ今開催中のシリーズ（opts.now）
 export const TICKET_KINDS = ['ticket', 'ticket4', 'ticket5'];
 export function ticket5Series(opts = {}) {
@@ -225,7 +252,7 @@ export function pullWithTicket(kind = 'ticket', owned = () => 0, rng = Math.rand
   if (kind === 'ticket4') return pick(rollRarity(rng, 4), owned, rng, opts.banner);
   if (kind === 'ticket5') {
     const id = ticket5Series(opts);
-    const pool = id ? bySeries(id) : GACHA_ITEMS.filter((it) => it.limited);
+    const pool = (id ? bySeries(id) : GACHA_ITEMS.filter((it) => it.limited)).filter((it) => it.rarity === 5);
     const item = pool[Math.min(pool.length - 1, Math.floor(rng() * pool.length))];
     const dup = (owned(item.id) || 0) > 0;
     return { item, rarity: 5, dup, shard: dup ? 5 : null };
@@ -233,11 +260,12 @@ export function pullWithTicket(kind = 'ticket', owned = () => 0, rng = Math.rand
   return pullOne(owned, rng, opts);
 }
 // かけらで交換できる家具（まだ持っていない物。全部持っていたら全部）
-// opts.includeLimited = true で ★5 限定も交換の候補に入れる（opts.series でシリーズをしぼれる）
+// opts.series = 今開催中のシリーズ id → そのシリーズの限定（★4・★5）も候補に入れる
+// opts.includeLimited = true（series なし）→ すべての限定を候補に入れる
 export function exchangeable(rarity, owned = () => 0, opts = {}) {
   let pool = byRarity(rarity);
-  if (!opts.includeLimited) pool = pool.filter((it) => !it.limited);
-  else if (opts.series) pool = pool.filter((it) => !it.limited || it.series === opts.series);
+  if (opts.series) pool = pool.filter((it) => !it.limited || it.series === opts.series);
+  else if (!opts.includeLimited) pool = pool.filter((it) => !it.limited);
   const left = pool.filter((it) => !(owned(it.id) > 0));
   return left.length ? left : pool.slice();
 }
