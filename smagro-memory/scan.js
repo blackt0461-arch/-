@@ -22,7 +22,7 @@ const Scan = (() => {
       let s = 0;
       for (let i = 0; i < bin.length; i++) { const q = bin.charCodeAt(i); v[i] = q > 127 ? q - 256 : q; s += v[i] * v[i]; }
       s = Math.sqrt(s) || 1; for (let i = 0; i < v.length; i++) v[i] /= s;
-      (ITEMS[id].kind === 'm' ? FE.m : FE.e).push({ id, v });
+      (ITEMS[id].kind === 'm' ? FE.m : FE.e).push({ id, v, nn: normName(ITEMS[id].n) });
     }
     FE.mask = { m: makeMask('m', FE.n), e: makeMask('e', FE.n) };
     return FE;
@@ -66,9 +66,21 @@ const Scan = (() => {
     }
     return out;
   }
-  function iconFeat(rgba, kind) {
+  // 正方形の場所を 64x64 に縮める（マスの中の平均）。iconfeat.py の resize64 と同じ計算なので、どの機種でも同じ結果になる
+  function resize64(d, W, H, x0, y0, side) {
     const a = new Float32Array(64 * 64 * 3);
-    for (let i = 0, j = 0; i < rgba.length; i += 4, j += 3) { a[j] = rgba[i]; a[j + 1] = rgba[i + 1]; a[j + 2] = rgba[i + 2]; }
+    for (let v = 0; v < 64; v++) {
+      const ya = Math.min(H - 1, Math.max(0, Math.floor(y0 + v * side / 64))), yb = Math.min(H, Math.max(ya + 1, Math.floor(y0 + (v + 1) * side / 64)));
+      for (let u = 0; u < 64; u++) {
+        const xa = Math.min(W - 1, Math.max(0, Math.floor(x0 + u * side / 64))), xb = Math.min(W, Math.max(xa + 1, Math.floor(x0 + (u + 1) * side / 64)));
+        let r = 0, g = 0, b = 0, n = 0;
+        for (let y = ya; y < yb; y++) for (let x = xa, i = (y * W + xa) * 4; x < xb; x++, i += 4) { r += d[i]; g += d[i + 1]; b += d[i + 2]; n++; }
+        const k = (v * 64 + u) * 3; a[k] = r / n; a[k + 1] = g / n; a[k + 2] = b / n;
+      }
+    }
+    return a;
+  }
+  function iconFeat(a, kind) {
     const N = FE.n, mask = FE.mask[kind];
     let v;
     if (kind === 'm') v = cells(a, N, mask);
@@ -113,7 +125,7 @@ const Scan = (() => {
           const yt = yb - tw;
           if (yt >= 0) {
             let c = 0, n = 0; for (let y = yt + Math.floor(tw / 4); y < yb - Math.floor(tw / 4); y++) { n++; if (row(y)) c++; }
-            if (n && c / n > 0.6) tiles.push({ x, y: yt, w: tw });
+            if (n && c / n > 0.6) tiles.push({ x, y: yt, w: tw, lab: { x, y: top, w: tw, h: Math.max(4, bot - top + 1) } });
           }
         }
         x = x2;
@@ -136,24 +148,149 @@ const Scan = (() => {
     return best;
   }
 
-  function matchTile(src, t, kind) {
-    const c = document.createElement('canvas'); c.width = 64; c.height = 64;
-    const cx = c.getContext('2d', { willReadFrequently: true }); cx.imageSmoothingEnabled = true; cx.imageSmoothingQuality = 'high';
+  // 絵の見くらべ：少しずらしながら いちばん合う 位置での 点数を、見本ごとに 返す
+  function imageScores(d, W, H, t, kind) {
     const refs = FE[kind], best = new Float32Array(refs.length).fill(-9);
     for (const dx of [-0.05, 0, 0.05]) for (const dy of [-0.05, 0, 0.05]) for (const sc of [0.94, 1, 1.06]) {
-      const side = t.w * sc, ccx = t.x + t.w / 2 + dx * t.w, ccy = t.y + t.w / 2 + dy * t.w;
-      cx.clearRect(0, 0, 64, 64);
-      cx.drawImage(src, Math.round(ccx - side / 2), Math.round(ccy - side / 2), Math.round(side), Math.round(side), 0, 0, 64, 64);
-      const f = iconFeat(cx.getImageData(0, 0, 64, 64).data, kind);
+      const side = t.w * sc, cx = t.x + t.w / 2 + dx * t.w, cy = t.y + t.w / 2 + dy * t.w;
+      const f = iconFeat(resize64(d, W, H, cx - side / 2, cy - side / 2, side), kind);
       for (let k = 0; k < refs.length; k++) {
         const v = refs[k].v; if (v.length !== f.length) continue;
         let s = 0; for (let i = 0; i < f.length; i++) s += f[i] * v[i];
         if (s > best[k]) best[k] = s;
       }
     }
+    return best;
+  }
+  // 名前の文字（読めたとき）と 絵の点数を あわせて 決める
+  function decide(kind, img, text) {
+    const refs = FE[kind], tot = new Float32Array(refs.length);
+    const tn = normName(text || '');
+    for (let k = 0; k < refs.length; k++) tot[k] = img[k] + (tn.length >= 2 ? 0.6 * nameSim(tn, refs[k].nn) : 0);
     let i1 = -1, i2 = -1;
-    for (let k = 0; k < refs.length; k++) { if (i1 < 0 || best[k] > best[i1]) { i2 = i1; i1 = k; } else if (i2 < 0 || best[k] > best[i2]) i2 = k; }
-    return { id: refs[i1].id, score: best[i1], margin: best[i1] - (i2 >= 0 ? best[i2] : 0) };
+    for (let k = 0; k < refs.length; k++) { if (i1 < 0 || tot[k] > tot[i1]) { i2 = i1; i1 = k; } else if (i2 < 0 || tot[k] > tot[i2]) i2 = k; }
+    return { id: refs[i1].id, score: img[i1], text: tn, textSim: tn.length >= 2 ? nameSim(tn, refs[i1].nn) : 0, margin: tot[i1] - (i2 >= 0 ? tot[i2] : 0) };
+  }
+  function normName(s) { return String(s).normalize('NFKC').replace(/[\s・･\.。、,|｜_\-—ー〜~'"`]/g, m => m === 'ー' ? 'ー' : '').replace(/？/g, '?'); }
+  function nameSim(a, b) {
+    if (!a || !b) return 0;
+    const m = a.length, n = b.length, dp = new Array(n + 1);
+    for (let j = 0; j <= n; j++) dp[j] = j;
+    for (let i = 1; i <= m; i++) { let prev = dp[0]; dp[0] = i; for (let j = 1; j <= n; j++) { const t = dp[j]; dp[j] = Math.min(dp[j] + 1, dp[j - 1] + 1, prev + (a[i - 1] === b[j - 1] ? 0 : 1)); prev = t; } }
+    return 1 - dp[n] / Math.max(m, n);
+  }
+
+  // ===== 文字の読み取り（Tesseract.js・スマホの中で動く。初回だけ 部品を ダウンロード） =====
+  const TESS = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/';
+  const CORE = 'https://cdn.jsdelivr.net/npm/tesseract.js-core@5.1.1';
+  const LANG = 'https://cdn.jsdelivr.net/npm/@tesseract.js-data/jpn@1.0.0/4.0.0_best_int';
+  let ocrWorker = null;
+  async function getOcr() {
+    if (ocrWorker) return ocrWorker;
+    if (!window.Tesseract) await new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = TESS + 'tesseract.min.js'; sc.onload = res; sc.onerror = () => rej(new Error('文字読み取りの部品を ダウンロードできませんでした')); document.head.append(sc); });
+    ocrWorker = await window.Tesseract.createWorker('jpn', 1, { workerPath: TESS + 'worker.min.js', corePath: CORE, langPath: LANG });
+    return ocrWorker;
+  }
+  // 名前の帯を ぬき出して 白地に黒い文字にし、3倍にして 読む
+  function labelCanvas(d, W, t) {
+    const lx = t.lab.x, ly = t.lab.y, lw = t.lab.w, lh = t.lab.h, S = 3;
+    const c = document.createElement('canvas'); c.width = lw * S; c.height = lh * S;
+    const g = c.getContext('2d'); const im = g.createImageData(lw, lh);
+    for (let y = 0; y < lh; y++) for (let x = 0; x < lw; x++) {
+      const i = ((ly + y) * W + lx + x) * 4, j = (y * lw + x) * 4;
+      const v = 255 - Math.min(255, Math.max(0, (d[i] + d[i + 1] + d[i + 2]) / 3 * 1.4 - 60));
+      im.data[j] = im.data[j + 1] = im.data[j + 2] = v; im.data[j + 3] = 255;
+    }
+    const tmp = document.createElement('canvas'); tmp.width = lw; tmp.height = lh; tmp.getContext('2d').putImageData(im, 0, 0);
+    g.imageSmoothingEnabled = true; g.drawImage(tmp, 0, 0, lw * S, lh * S);
+    return c;
+  }
+  // アイコンの中の 一部分（割合で指定）を、色で 文字だけ 黒にして 4倍にする
+  function regionCanvas(d, W, t, box, isInk, nearDark) {
+    const x0 = Math.round(t.x + box[0] * t.w), y0 = Math.round(t.y + box[1] * t.w), w = Math.round((box[2] - box[0]) * t.w), h = Math.round((box[3] - box[1]) * t.w), S = 4, P = 8;
+    const im = new ImageData(w + 2 * P, h + 2 * P); im.data.fill(255);
+    let ink = 0;
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const i = ((y0 + y) * W + x0 + x) * 4, j = ((y + P) * (w + 2 * P) + x + P) * 4;
+      let ok = isInk(d[i], d[i + 1], d[i + 2]);
+      if (ok && nearDark) {   // 黒い ふちどりの 近く（左右 上下 5ドット以内）に ある 黄色だけを 文字とみなす
+        ok = false;
+        for (const [ax, ay] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) { for (let k = 1; k <= 5 && !ok; k++) { const ii = ((y0 + y + ay * k) * W + x0 + x + ax * k) * 4; if (DARK(d[ii], d[ii + 1], d[ii + 2])) ok = true; } }
+      }
+      if (ok) { im.data[j] = im.data[j + 1] = im.data[j + 2] = 0; ink++; }
+    }
+    const tmp = document.createElement('canvas'); tmp.width = w + 2 * P; tmp.height = h + 2 * P; tmp.getContext('2d').putImageData(im, 0, 0);
+    const c = document.createElement('canvas'); c.width = tmp.width * S; c.height = tmp.height * S;
+    const g = c.getContext('2d'); g.imageSmoothingEnabled = false; g.drawImage(tmp, 0, 0, c.width, c.height);
+    return { c, ink: ink / (w * h) };
+  }
+  const YELLOW = (r, g, b) => r > 190 && g > 150 && b < 140 && r - b > 80;
+  const DARK = (r, g, b) => r + g + b < 260;
+  const ORANGE = (r, g, b) => r > 200 && g > 105 && g < 195 && b < 140 && r - b > 95;
+  // 凸の数字（1〜5）の 形を 10x14 マスの 白黒にする
+  function digitVec(d, W, t) {
+    const x0 = Math.round(t.x + 0.13 * t.w), y0 = Math.round(t.y + 0.57 * t.w), w = Math.round(0.17 * t.w), h = Math.round(0.20 * t.w);
+    const ink = new Uint8Array(w * h); let minx = w, maxx = -1, miny = h, maxy = -1;
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const i = ((y0 + y) * W + x0 + x) * 4;
+      if (!ORANGE(d[i], d[i + 1], d[i + 2])) continue;
+      let ok = false;
+      for (const [ax, ay] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) for (let k = 1; k <= 5 && !ok; k++) { const ii = ((y0 + y + ay * k) * W + x0 + x + ax * k) * 4; if (DARK(d[ii], d[ii + 1], d[ii + 2])) ok = true; }
+      if (!ok) continue;
+      ink[y * w + x] = 1; if (x < minx) minx = x; if (x > maxx) maxx = x; if (y < miny) miny = y; if (y > maxy) maxy = y;
+    }
+    if (maxx < 0) return null;
+    const GX = 10, GY = 14, v = [];
+    for (let j = 0; j < GY; j++) for (let i = 0; i < GX; i++) {
+      const xa = minx + Math.floor(i * (maxx - minx + 1) / GX), xb = Math.max(xa + 1, minx + Math.floor((i + 1) * (maxx - minx + 1) / GX));
+      const ya = miny + Math.floor(j * (maxy - miny + 1) / GY), yb = Math.max(ya + 1, miny + Math.floor((j + 1) * (maxy - miny + 1) / GY));
+      let c = 0, n = 0; for (let y = ya; y < yb; y++) for (let x = xa; x < xb; x++) { c += ink[y * w + x]; n++; }
+      v.push(n ? c / n : 0);
+    }
+    return v;
+  }
+  // 1〜5 の 見本（ゲームのスクショから作った 10x14 マスの 形）
+  const DIGITS = {"1":[0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.56,1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.78,1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.22,0.78,1.0,1.0,0.0,0.0,0.0,0.0,0.0,0.56,1.0,1.0,1.0,1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,1.0,1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.56,1.0,0.0,0.0,0.22,0.0,0.0,0.0,0.0,0.0,0.56,1.0,0.0,0.78,1.0,0.22,0.0,0.0,0.0,0.0,0.56,1.0,0.0,0.22,1.0,0.78,0.0,0.0,0.0,0.0,0.56,1.0,0.0,0.0,0.56,1.0,0.56,0.0,0.0,0.0,0.56,1.0,1.0,1.0,1.0,1.0,0.78,0.0,0.0,0.0,0.56,1.0,1.0,1.0,1.0,1.0,1.0,0.15,0.0,0.0,0.56,1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.56,1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.56,1.0],"2":[0.0,0.0,0.0,0.0,0.0,0.5,1.0,1.0,0.5,0.17,0.0,0.0,0.0,0.0,0.28,0.94,0.89,0.78,1.0,0.44,0.0,0.0,0.0,0.0,0.78,0.83,0.28,0.28,0.78,0.94,0.0,0.0,0.0,0.0,1.0,0.5,0.0,0.0,0.28,1.0,0.0,0.0,0.0,0.0,1.0,0.33,0.0,0.0,0.11,1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.56,1.0,0.11,0.39,0.0,0.0,0.0,0.0,0.0,0.22,1.0,0.78,0.0,1.0,0.28,0.0,0.0,0.0,0.0,0.67,1.0,0.5,0.0,0.78,0.89,0.0,0.0,0.0,0.5,1.0,0.67,0.11,0.28,0.94,0.56,0.0,0.0,0.61,1.0,0.72,0.0,0.0,1.0,1.0,0.0,0.0,0.11,1.0,0.89,0.0,0.0,0.0,1.0,0.89,0.0,0.0,0.89,1.0,0.11,0.0,0.0,0.0,0.0,0.0,0.0,0.22,1.0,1.0,0.67,0.56,0.56,0.56,0.0,0.0,0.0,0.11,1.0,1.0,1.0,1.0,1.0,1.0],"3":[0.0,0.0,0.0,0.0,0.0,0.94,1.0,1.0,0.78,0.11,0.0,0.0,0.0,0.0,0.83,0.89,0.5,0.56,1.0,0.44,0.0,0.0,0.0,0.11,0.83,0.39,0.0,0.11,0.78,0.67,0.0,0.0,0.0,0.17,0.5,0.17,0.0,0.11,1.0,0.67,0.0,0.22,0.0,0.0,0.0,0.0,0.33,0.5,1.0,0.39,0.28,0.5,0.11,0.0,0.0,0.0,0.0,0.22,0.94,0.72,0.5,0.44,0.0,0.06,0.33,0.06,0.39,0.5,0.5,0.5,0.78,0.83,0.0,0.11,0.5,0.28,0.28,0.44,0.78,0.78,0.39,0.44,0.0,0.0,0.28,0.5,0.33,0.39,0.89,0.78,0.5,0.33,0.0,0.0,0.0,0.11,0.17,0.17,0.44,0.5,0.5,0.28,0.0,0.17,0.5,0.0,0.0,0.0,0.28,0.5,0.5,0.28,0.0,0.17,0.5,0.17,0.0,0.0,0.39,0.5,0.0,0.0,0.0,0.0,0.5,0.44,0.28,0.33,0.5,0.33,0.0,0.0,0.0,0.0,0.11,0.44,0.5,0.56,0.39,0.11],"4":[0.0,0.0,0.0,0.0,0.0,0.11,0.33,0.67,0.67,0.22,0.0,0.0,0.0,0.0,0.0,0.3,0.41,0.78,0.67,0.22,0.0,0.0,0.0,0.0,0.04,0.33,0.93,0.78,0.67,0.22,0.0,0.0,0.0,0.0,0.19,0.3,1.0,0.41,0.67,0.22,0.0,0.0,0.0,0.0,0.22,0.48,0.78,0.33,0.67,0.22,0.0,0.0,0.0,0.0,0.22,0.59,0.41,0.33,0.67,0.22,0.19,0.37,0.0,0.07,0.33,0.44,0.33,0.33,0.67,0.41,0.93,0.63,0.0,0.22,0.67,0.22,0.33,0.33,0.67,0.22,1.0,0.56,0.0,0.44,0.7,0.0,0.33,0.33,0.67,0.22,1.0,0.56,0.0,0.56,0.93,0.67,0.63,0.48,0.44,0.63,1.0,0.56,0.0,0.52,1.0,0.89,0.78,0.56,0.37,0.67,1.0,0.56,0.0,0.11,0.37,0.37,0.41,0.41,0.59,0.33,0.0,0.0,0.0,0.0,0.0,0.0,0.33,0.33,0.67,0.22,0.0,0.0,0.0,0.0,0.0,0.0,0.33,0.3,0.67,0.22],"5":[0.0,0.0,0.0,0.0,0.56,1.0,1.0,1.0,1.0,0.67,0.0,0.0,0.0,0.0,1.0,0.89,0.56,0.56,0.56,0.0,0.0,0.0,0.0,0.0,1.0,0.56,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,1.0,0.33,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,1.0,0.33,0.56,0.56,0.0,0.0,0.0,0.22,0.0,0.0,1.0,1.0,1.0,1.0,1.0,0.22,1.0,0.89,0.0,0.22,1.0,0.67,0.0,0.33,1.0,0.67,1.0,1.0,0.0,0.0,0.0,0.0,0.0,0.0,1.0,1.0,1.0,0.89,0.0,0.0,0.0,0.0,0.0,0.0,0.56,1.0,1.0,0.67,0.0,0.0,0.22,0.0,0.0,0.0,0.56,1.0,1.0,0.67,0.0,0.33,1.0,0.0,0.0,0.0,0.56,1.0,0.56,0.33,0.0,0.33,1.0,0.56,0.0,0.22,1.0,0.89,0.0,0.0,0.0,0.0,0.78,1.0,0.78,1.0,1.0,0.56,0.0,0.0,0.0,0.0,0.0,0.56,0.78,0.67,0.22,0.0]};
+  function readDigit(v) {
+    if (!v) return 0;
+    let best = 0, bs = -1;
+    const nv = Math.hypot(...v) || 1;
+    for (const [k, tv] of Object.entries(DIGITS)) { let s = 0; for (let i = 0; i < v.length; i++) s += v[i] * tv[i]; s /= nv * (Math.hypot(...tv) || 1); if (s > bs) { bs = s; best = +k; } }
+    return bs > 0.75 ? best : 0;
+  }
+  // そうびの Lv（左下の 黄色い文字）と 凸（△の右の 数字）
+  async function readLevels(d, W, tiles) {
+    let w; try { w = await getOcr(); } catch (e) { return null; }
+    const out = [];
+    await w.setParameters({ tessedit_pageseg_mode: '7', tessedit_char_whitelist: 'Lv.0123456789' });
+    for (const t of tiles) {
+      const r = regionCanvas(d, W, t, [0.02, 0.79, 0.64, 0.99], YELLOW, true);
+      let lv = 0, raw = '';
+      const tryRead = async c => { try { raw = ((await w.recognize(c)).data.text || '').replace(/\s/g, ''); const m = raw.match(/[Lv]\.?(\d{1,2})$/); return m ? +m[1] : 0; } catch (e) { return 0; } };
+      if (r.ink > 0.03) lv = await tryRead(r.c);
+      if (!lv) { const r2 = regionCanvas(d, W, t, [0.02, 0.79, 0.64, 0.99], YELLOW, false); if (r2.ink > 0.03) lv = await tryRead(r2.c); }
+      out.push({ lv: lv >= 1 && lv <= 99 ? lv : 0, t: 0, raw });
+    }
+    for (let i = 0; i < tiles.length; i++) {
+      const tri = regionCanvas(d, W, tiles[i], [0.02, 0.58, 0.14, 0.76], ORANGE, true);
+      out[i].tri = Math.round(tri.ink * 100);
+      if (tri.ink < 0.12) continue;                     // △が ない ＝ 凸なし
+      const v = digitVec(d, W, tiles[i]);
+      out[i].dv = v ? v.map(x => Math.round(x * 9)).join('') : '';
+      out[i].t = readDigit(v);
+    }
+    await w.setParameters({ tessedit_pageseg_mode: '7', tessedit_char_whitelist: '' });
+    return out;
+  }
+  async function readNames(d, W, tiles, onProg) {
+    let w; try { w = await getOcr(); } catch (e) { return null; }
+    await w.setParameters({ tessedit_pageseg_mode: '7', tessedit_char_whitelist: '' });
+    const out = [];
+    for (let i = 0; i < tiles.length; i++) {
+      onProg && onProg(i, tiles.length);
+      try { const r = await w.recognize(labelCanvas(d, W, tiles[i])); out.push((r.data.text || '').trim()); } catch (e) { out.push(''); }
+    }
+    return out;
   }
 
   // iPhone では、画面に置いていない 写真えらびは「えらんだあと」が 届かないことがあるので、画面の中に 置いたままにする
@@ -196,7 +333,8 @@ const Scan = (() => {
     sheet(`<div class="thinking" id="scanprog" style="margin-top:8px">じゅんびちゅう…</div><div class="note">スクショは この スマホの 中だけで 見くらべます（どこにも おくりません）。</div>`);
     try { await loadFeats(); } catch (e) { sheet(`<div class="banner" style="margin-top:8px">見本の データを よみこめませんでした。つうしんを たしかめてください。</div><button class="btn" data-act="close">とじる</button>`); return; }
     const k2 = kind === 'mem' ? 'm' : 'e';
-    const found = new Map(); let tilesAll = 0, bad = 0;
+    const found = new Map(); let tilesAll = 0, bad = 0, ocrNG = false;
+    const thumb = (cv, t) => { const c = document.createElement('canvas'); c.width = c.height = 48; c.getContext('2d').drawImage(cv, t.x, t.y, t.w, t.w + (t.lab ? t.lab.h + (t.lab.y - t.y - t.w) : 0), 0, 0, 48, 48 * (1 + (t.lab ? (t.lab.h + t.lab.y - t.y - t.w) / t.w : 0))); return c.toDataURL('image/jpeg', 0.8); };
     for (let fi = 0; fi < files.length; fi++) {
       setProg(`よみこみちゅう… ${fi + 1} / ${files.length}まい`);
       await new Promise(r => setTimeout(r, 20));
@@ -208,12 +346,19 @@ const Scan = (() => {
       const d = g.getImageData(0, 0, W, H).data;
       const tiles = findTiles(d, W, H); tilesAll += tiles.length;
       const per = new Map();
-      for (const t of tiles) {
-        const m = matchTile(cv, t, k2);
-        const cur = per.get(m.id) || { it: ITEMS[m.id], n: 0, rank: '', unsure: false, score: 1 };
+      const names = await readNames(d, W, tiles, (i, n) => setProg(`${fi + 1} / ${files.length}まいめ：名前を よんでいます ${i + 1} / ${n}`));
+      if (!names) ocrNG = true;
+      const lvs = k2 === 'e' && names ? (setProg(`${fi + 1} / ${files.length}まいめ：Lvと凸を よんでいます`), await readLevels(d, W, tiles)) : null;
+      try { if (localStorage.getItem('smagro.debug')) console.log('SCAN', JSON.stringify({ names, lvs })); } catch (e) { }
+      for (let ti = 0; ti < tiles.length; ti++) {
+        const t = tiles[ti];
+        setProg(`${fi + 1} / ${files.length}まいめ：絵を くらべています ${ti + 1} / ${tiles.length}`);
+        const m = decide(k2, imageScores(d, W, H, t, k2), names ? names[ti] : '');
+        const cur = per.get(m.id) || { it: ITEMS[m.id], n: 0, rank: '', unsure: false, score: 1, thumb: thumb(cv, t), read: m.text, lv: 0, t: 0 };
         cur.n++;
+        if (lvs && lvs[ti] && lvs[ti].lv >= cur.lv) { cur.lv = lvs[ti].lv; cur.t = Math.max(cur.t, lvs[ti].t); }
         if (k2 === 'm') { const rk = rankOf(d, W, t); if (rk && (!cur.rank || 'SABCD'.indexOf(rk) < 'SABCD'.indexOf(cur.rank))) cur.rank = rk; }
-        if (m.score < 0.45 || m.margin < 0.03) cur.unsure = true;
+        if (m.textSim < 0.5 && (m.score < 0.45 || m.margin < 0.03)) cur.unsure = true;
         cur.score = Math.min(cur.score, m.score);
         per.set(m.id, cur);
         await new Promise(r => setTimeout(r, 0));
@@ -222,23 +367,23 @@ const Scan = (() => {
       for (const [id, v] of per) {
         const f = found.get(id);
         if (!f) found.set(id, v);
-        else { f.n = Math.max(f.n, v.n); if (v.rank && (!f.rank || 'SABCD'.indexOf(v.rank) < 'SABCD'.indexOf(f.rank))) f.rank = v.rank; f.unsure = f.unsure && v.unsure; }
+        else { f.n = Math.max(f.n, v.n); if (v.lv > f.lv) { f.lv = v.lv; f.t = v.t; } if (v.rank && (!f.rank || 'SABCD'.indexOf(v.rank) < 'SABCD'.indexOf(f.rank))) f.rank = v.rank; f.unsure = f.unsure && v.unsure; }
       }
     }
-    pending = { kind, results: [...found.values()], tilesAll, bad, files: files.length };
+    pending = { kind, results: [...found.values()], tilesAll, bad, files: files.length, ocrNG };
     confirmView();
   }
 
   function confirmView() {
-    const { kind, results, tilesAll, bad, files } = pending;
+    const { kind, results, tilesAll, bad, files, ocrNG } = pending;
     const isMem = kind === 'mem';
-    const rows = results.sort((a, b) => a.unsure - b.unsure || a.it.n.localeCompare(b.it.n, 'ja')).map((r, i) => `<label class="line" style="align-items:center"><span class="k"><input type="checkbox" data-scanrow="${i}" checked style="width:20px;height:20px;vertical-align:middle"> ${isMem ? (r.rank || 'S') : '×' + r.n}</span><span class="v vi">${ico(r.it, 32)}<span>${esc(r.it.n)}${r.unsure ? ' <span style="color:var(--gold)">？たしかめて</span>' : ''}</span></span></label>`).join('');
+    const rows = results.sort((a, b) => a.unsure - b.unsure || a.it.n.localeCompare(b.it.n, 'ja')).map((r, i) => `<label class="line" style="align-items:center"><span class="k"><input type="checkbox" data-scanrow="${i}" checked style="width:20px;height:20px;vertical-align:middle"> ${isMem ? (r.rank || 'S') : '×' + r.n}</span><span class="v vi">${r.thumb ? `<img src="${r.thumb}" alt="" width="32" height="32" style="border-radius:4px;object-fit:cover;object-position:top">` : ''}<span class="sub">→</span>${ico(r.it, 32)}<span>${esc(r.it.n)}${!isMem && r.lv ? ` <span class="sub">Lv${r.lv}${r.t ? ' ' + r.t + '凸' : ''}</span>` : ''}${r.unsure ? ' <span style="color:var(--gold)">？たしかめて</span>' : ''}</span></span></label>`).join('');
     sheet(`<div class="row" style="justify-content:space-between;margin-top:6px"><h2 style="margin:0">${results.length}しゅるい 見つかりました</h2><button class="btn" data-act="close">やめる</button></div>
-      <div class="note">${files}まいの 写真から アイコン ${tilesAll}こ を 見くらべました。${bad ? `（${bad}まいは ひらけませんでした）` : ''}ちがうものは チェックを はずしてください。</div>
+      <div class="note">${files}まいの 写真から アイコン ${tilesAll}こ を 見くらべました。${bad ? `（${bad}まいは ひらけませんでした）` : ''}ちがうものは チェックを はずしてください。左が スクショから 切りだした絵、右が 見つけたものです。${ocrNG ? '<br>（文字の読み取りが つかえなかったので、絵だけで くらべました）' : ''}</div>
       <div class="lines" style="margin:8px 0;max-height:38vh;overflow:auto">${rows || '<div class="note">アイコンが 見つかりませんでした。ゲームの「もちもの」の一覧画面を そのまま スクショしてください。</div>'}</div>
       <label class="row note" style="margin-top:8px;gap:6px"><input type="checkbox" id="scanall" checked style="width:20px;height:20px">
         ${isMem ? 'よみとれなかった メモリは「もっていない」にする（一覧を さいごまで 撮ったとき）' : '写っていた しゅるい（武器・盾など）で、よみとれなかった そうびは 0こにする（その一覧を さいごまで 撮ったとき）'}</label>
-      ${isMem ? '<label class="row note" style="gap:6px"><input type="checkbox" id="scanrank" checked style="width:20px;height:20px">ランクも 入れる（いちばん 高いもの）</label>' : '<div class="note">レベルと 凸は よみとれないので、強化したものは あとで 入れてください。</div>'}
+      ${isMem ? '<label class="row note" style="gap:6px"><input type="checkbox" id="scanrank" checked style="width:20px;height:20px">ランクも 入れる（いちばん 高いもの）</label>' : '<div class="note">Lvと 凸も 読みとって 入れます（同じそうびが 何こか あるときは いちばん 高いもの）。</div>'}
       <button class="btn big" style="margin-top:10px" data-act="scanapply">この ないようで とうろく</button>`);
   }
 
@@ -258,7 +403,7 @@ const Scan = (() => {
       const cat = it => it.kind === 'w' ? 'w' : it.kind === 'c' ? 'c' : it.t;
       const cats = new Set(results.map(r => cat(r.it)));
       if (all) for (const id of Object.keys(S.eq)) if (ITEMS[id] && ITEMS[id].kind !== 'm' && cats.has(cat(ITEMS[id]))) S.eq[id].n = 0;
-      for (const r of results) { const s = S.eq[r.it.id] || { n: 0, lv: 1, t: 0 }; s.n = Math.min(9, Math.max(s.n || 0, r.n)); S.eq[r.it.id] = s; }
+      for (const r of results) { const s = S.eq[r.it.id] || { n: 0, lv: 1, t: 0 }; s.n = Math.min(9, Math.max(s.n || 0, r.n)); if (r.lv) { s.lv = r.lv; s.t = r.t || 0; } S.eq[r.it.id] = s; }
     }
     S.example = false; pending = null;
     document.getElementById('sheet').hidden = true;
