@@ -257,3 +257,4 @@ h3.sec { font-size: 14px; color: var(--muted); margin: 18px 4px 8px; font-weight
 .rooms button { flex: 0 0 auto; }
 .rooms button.homebtn { border-color: var(--gold1); color: var(--gold1); font-weight: 700; }
 .rooms button.homebtn.villa { background: linear-gradient(180deg, rgba(64,150,170,.85), rgba(30,96,120,.85)); color: #fff; border-color: rgba(255,255,255,.35); }
+.t-sub { display: none; } /* タイトルの説明文は出さない（本人の希望） */
