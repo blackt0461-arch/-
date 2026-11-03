@@ -437,6 +437,7 @@ h3.sec { font-size: 14px; color: var(--muted); margin: 18px 4px 8px; font-weight
 .banner.b-standard { background: linear-gradient(135deg, #6b4a22, #2a1f15); }
 .banner.b-starry { background: radial-gradient(120% 90% at 70% 10%, #2b3f8a, #0b1028 70%); }
 .banner.b-rock { background: linear-gradient(135deg, #3a0a14, #0c0c0c); }
+.banner.b-band { background: radial-gradient(90% 70% at 80% 0%, rgba(255,70,90,.55), transparent 60%), radial-gradient(70% 60% at 10% 100%, rgba(255,170,60,.35), transparent 60%), linear-gradient(160deg, #1a0d12, #050405); }
 .banner.b-gothic { background: linear-gradient(135deg, #3a0d1e, #120a12); }
 .banner.b-wa { background: linear-gradient(135deg, #5a1a1a, #1c1010); }
 .bn-glow { position: absolute; inset: -40%; background: radial-gradient(circle at 70% 30%, rgba(255,240,200,.18), transparent 50%); animation: spin 30s linear infinite; }
@@ -708,3 +709,14 @@ h3.sec { font-size: 14px; color: var(--muted); margin: 18px 4px 8px; font-weight
 .pc .po-new, .pc .po-dup { font-size: 9px; }
 .pfx-btns { position: absolute; z-index: 8; left: 16px; right: 16px; bottom: calc(var(--safe-b, 0px) + 22px); display: grid; grid-template-columns: 1fr 1.4fr; gap: 10px; animation: fadeUp .4s both; }
 .pfx-btns.hide { display: none; }
+
+.bn-sample { position: relative; z-index: 2; display: inline-flex; align-items: center; gap: 6px; margin: 4px 0 8px; padding: 8px 14px; border-radius: 99px; border: 1px solid rgba(255,255,255,.35); background: rgba(0,0,0,.35); color: #fff; font-size: 13px; font-weight: 700; backdrop-filter: blur(6px); }
+.bn-sample svg { width: 16px; height: 16px; }
+
+/* 更新のための再起動 */
+.restart-ov { position: fixed; inset: 0; z-index: 999; display: grid; place-items: center; background: rgba(8,6,4,.88); backdrop-filter: blur(8px); animation: fadeUp .3s both; }
+.rs-box { display: grid; justify-items: center; gap: 10px; text-align: center; color: #fff; padding: 24px; }
+.rs-box b { font-size: 18px; }
+.rs-box p { margin: 0; color: rgba(255,255,255,.7); font-size: 13px; }
+.rs-spin { width: 36px; height: 36px; border-radius: 50%; border: 3px solid rgba(255,255,255,.2); border-top-color: var(--gold1, #f0b44c); animation: rsSpin .8s linear infinite; }
+@keyframes rsSpin { to { transform: rotate(360deg); } }

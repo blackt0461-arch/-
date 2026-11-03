@@ -192,6 +192,7 @@ function showGacha(banner = null) {
       ${b.limited ? '<span class="bn-tag">期間限定</span>' : ''}
       <h3>${esc(b.name.replace('限定：', ''))}</h3>
       <p>${esc(b.desc)}</p>
+      ${b.limited && SAMPLE_ROOMS[b.id] ? `<button class="bn-sample">${icon('eye')}全部そろえた部屋を見る</button>` : ''}
       <div class="bn-picks">${(b.limited ? G.bySeries(b.id) : G.byRarity(5).filter(i => !i.limited)).slice(0, 4).map(it => `<span class="thumb">${thumbHTML(it)}</span>`).join('')}</div>
     </div>
     <div class="pull-btns">
@@ -210,12 +211,23 @@ function showGacha(banner = null) {
       <p>★4・★5がかぶったら、それぞれのかけら1個になります。★3がかぶったら、もう1つ持てます。</p></details>`);
   el.querySelector('.back').onclick = showFurnitureHub;
   el.querySelectorAll('.bn-tabs button').forEach(x => x.onclick = () => showGacha(x.dataset.b));
+  el.querySelector('.bn-sample')?.addEventListener('click', () => showSampleRoom(b.id));
   const opts = { banner: b.id };
   el.querySelector('.pull1')?.addEventListener('click', () => doPull(() => [G.pullWithTicket('ticket', gachaOwned, Math.random, opts)], { ticket: 1 }, b.id));
   el.querySelector('.pull10')?.addEventListener('click', () => doPull(() => G.pullTen(gachaOwned, Math.random, opts), { ticket: 10 }, b.id));
   el.querySelector('.pull4')?.addEventListener('click', () => doPull(() => [G.pullWithTicket('ticket4', gachaOwned, Math.random, opts)], { ticket4: 1 }, b.id));
   el.querySelector('.pull5')?.addEventListener('click', () => doPull(() => [G.pullWithTicket('ticket5', gachaOwned, Math.random, { ...opts, series: act[0]?.id })], { ticket5: 1 }, b.id));
   el.querySelectorAll('.shard-btn').forEach(x => x.onclick = () => shardExchange(+x.dataset.r, b.id));
+}
+// 限定シリーズの「全部そろえた部屋」の見本（見るだけ。フレンドの部屋と同じしくみで見せる）
+const SAMPLE_ROOMS = { band: () => import('./bandsample.js').then(m => m.BAND_SAMPLE) };
+async function showSampleRoom(seriesId) {
+  let room;
+  try { room = await SAMPLE_ROOMS[seriesId](); } catch (e) { return toast('見本の部屋はまだ準備中です'); }
+  if (!room) return toast('見本の部屋はまだ準備中です');
+  const ser = G.SERIES.find(x => x.id === seriesId);
+  visiting = { username: '見本', sample: `${ser?.name || ''}の部屋`, house: { v: 2, rooms: [JSON.parse(JSON.stringify(room))] }, current: 0, summary: {}, back: () => showGacha(seriesId) };
+  showVisit();
 }
 // チケットを使って引き、結果を持ち物へ（かぶりはかけら）
 function doPull(roll, cost, bannerId) {
@@ -912,17 +924,46 @@ function photoMode() {
 
 // =========================== 更新のお知らせ ===========================
 // このプログラムの版（version.json と同じにする。公開のたびに上げる）
-const APP_VERSION = '2.4.1';
+const APP_VERSION = '2.4.2';
+// 新しい版が出たら、みんな同じタイミングでそろうように強制で再起動する。
+// 開いた時・画面に戻った時・1分ごとに version.json を見る
+async function latestVersion() {
+  try { return (await (await fetch('version.json', { cache: 'no-store' })).json()).version; } catch (e) { return null; }
+}
+let restarting = false;
+function forceRestart(ver) {
+  if (restarting) return;
+  // 同じ版で何度も再起動をくり返さない（読みこみ直しても古いままのときの安全装置。3回まで）
+  const key = 'studyroom.restart.' + ver;
+  const n = +(sessionStorage.getItem(key) || 0);
+  if (n >= 3) return;
+  sessionStorage.setItem(key, n + 1);
+  restarting = true;
+  try { S.save(); } catch (e) { /* まだログイン前 */ }
+  try { Sync.push?.(true); } catch (e) { /* なし */ }
+  const el = h(`
+    <div class="restart-ov">
+      <div class="rs-box"><div class="rs-spin"></div><b>アップデートがあります</b><p>新しい版にするため、再起動します</p></div>
+    </div>`);
+  document.body.append(el);
+  setTimeout(async () => {
+    try { const regs = await navigator.serviceWorker?.getRegistrations?.(); for (const r of regs || []) await r.update(); } catch (e) { /* なし */ }
+    location.reload();
+  }, 2200);
+}
+async function watchVersion() {
+  const v = await latestVersion();
+  if (v && v !== APP_VERSION) forceRestart(v);
+}
+setInterval(watchVersion, 60000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) watchVersion(); });
+addEventListener('focus', watchVersion);
+watchVersion();
 async function checkUpdateNotes() {
   try {
     const v = await (await fetch('version.json', { cache: 'no-store' })).json();
     // 手元のプログラムが古いまま（スマホが前の版を覚えている）なら、1回だけ読みこみ直す
-    if (v.version !== APP_VERSION && sessionStorage.getItem('studyroom.reloaded') !== v.version) {
-      sessionStorage.setItem('studyroom.reloaded', v.version);
-      S.save();
-      location.reload();
-      return;
-    }
+    if (v.version !== APP_VERSION) return forceRestart(v.version);
     const seen = localStorage.getItem('studyroom.version');
     localStorage.setItem('studyroom.version', v.version);
     if (!seen || seen === v.version || !v.notes?.length) return;
@@ -1389,12 +1430,13 @@ async function showVisit() {
     <div class="home visiting">
       <header class="hud">
         <button class="round back" aria-label="もどる">${icon('back')}</button>
-        <div class="room-name"><span class="rn-ic">${icon('user')}</span><span class="rn-t">${esc(v.username)}さんの${esc(roomLabel(room))}<small>Lv${S.rankInfo(v.summary?.xp || 0).rank} ・ 家具 ${room.placed.length}個</small></span></div>
+        <div class="room-name"><span class="rn-ic">${icon('user')}</span><span class="rn-t">${v.sample ? esc(v.sample) : `${esc(v.username)}さんの${esc(roomLabel(room))}`}<small>${v.sample ? `全部そろえた部屋の見本 ・ 家具 ${room.placed.length}個` : `Lv${S.rankInfo(v.summary?.xp || 0).rank} ・ 家具 ${room.placed.length}個`}</small></span></div>
         <button class="round photo" aria-label="写真をとる">${icon('camera')}</button>
       </header>
       ${navHTML}
       <div class="hint">見るだけの部屋です。なぞって見回せます</div>
     </div>`);
+  if (v.sample) el.querySelector('.rn-ic').innerHTML = icon('star');
   el.querySelector('.back').onclick = () => leaveVisit(true);
   el.querySelector('.photo').onclick = photoMode;
   el.querySelectorAll('.rooms button').forEach(b => b.onclick = () => { v.current = +b.dataset.i; showVisit(); });
