@@ -2,7 +2,7 @@
 // 送るもの：コード名と時間（訂正前・訂正後）、その区間の12音の強さの数字（ここから曲の音は戻せない）、テンポ・曲の長さ・アプリの版。
 // 送らないもの：曲の音、歌詞、ファイル名、名前など誰のデータかわかるもの。
 // 送り先：開発者の Google スプレッドシート（feedback/apps-script.gs の受け取り口）
-export const FEEDBACK_URL = '';
+export const FEEDBACK_URL = 'https://script.google.com/macros/s/AKfycbwv6sQgx2xvXmasqoDmM_cw3ZXgJRcqPQ6HZq402mJ9OHH2GlSArvF7qaE9Q9ZQV1Q0Vg/exec';
 
 const r3 = (x) => Math.round(x * 1000) / 1000;
 const r2 = (x) => Math.round(x * 100) / 100;
