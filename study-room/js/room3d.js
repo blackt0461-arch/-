@@ -619,7 +619,8 @@ export class Room3D {
     if (!lit.length) { this.addBareBulb(); return; }
     lit.slice(0, MAX_LIGHTS).forEach(o => {
       const obj = o.children[0];
-      const L = obj.userData.light || o.userData.item.light || {};
+      const il = o.userData.item.light;
+      const L = obj.userData.light || (typeof il === 'string' ? { color: il } : il) || {};
       const bb = new THREE.Box3().setFromObject(o);
       const l = new THREE.PointLight(L.color || '#ffd9a8', (L.intensity || 1) * 3 * this.mood.lampI, 0, 2);
       const center = bb.getCenter(new THREE.Vector3());

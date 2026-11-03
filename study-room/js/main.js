@@ -1,6 +1,6 @@
 // 画面の流れ：ログイン →（一括ダウンロード）→ 部屋（ホーム）
 // 下のアイコン：部屋／模様がえ／解く／図鑑／メニュー（記録・フレンド・設定・管理者）
-import { Room3D } from './room3d.js';
+import { Room3D, moodNow } from './room3d.js';
 import { ROOMS, roomDef, STYLES, styleDef } from './rooms.js';
 import { GENRES, ITEMS, itemById, itemsOf, SPECIAL_IDS, STARTER } from './items.js';
 import { icon, GENRE_ICON, SUBJECT_ICON } from './icons.js';
@@ -65,8 +65,7 @@ function showLogin(mode = 'login') {
   const el = h(`
     <div class="screen center">
       <div class="card login">
-        <div class="logo">${icon('home')}</div>
-        <h1>へやづくり勉強</h1>
+        <h1 class="brand">ROOMIN</h1>
         <p class="sub">問題を解くと、部屋ができていく</p>
         <form>
           <label>ユーザー名<input name="name" autocomplete="username" required maxlength="16"></label>
@@ -848,7 +847,7 @@ function showSettings() {
     <section class="group">
       <button class="row-item tap logout"><span class="lbl danger">${icon('logout')}ログアウト</span></button>
     </section>
-    <p class="ver">へやづくり勉強 ${esc(ver)}</p>`);
+    <p class="ver">ROOMIN ${esc(ver)}</p>`);
   el.querySelector('.back').onclick = showMenu;
   el.querySelectorAll('.seg button').forEach(b => b.onclick = () => {
     try { localStorage.setItem('studyroom.quality', b.dataset.q); } catch (e) { /* なし */ }
@@ -1104,15 +1103,77 @@ Sync.setHandlers({
   onExpired: () => { Auth.logOut(); toast('ログインが切れました。もう一度ログインしてください', 3500); showLogin(); },
 });
 
-(async () => {
+// =========================== タイトル画面 ===========================
+// アプリを開いたとき：ROOMIN が浮かぶ → タップしてはじめる。
+// 待っているあいだに、裏で記録の読み込みと部屋の準備をしておく（タップしたらすぐ部屋へ）
+function showTitle() {
+  const mood = moodNow();
   const u = Auth.currentUser();
-  if (!u) return showLogin();
-  // 前に使っていた端末内の記録をすぐ出しつつ、ネットの新しい記録を取りにいく（最大3秒待つ）
-  S.useUser(u.id);
-  await Promise.race([Sync.pull(), new Promise(r => setTimeout(r, 3000))]);
-  startAs(Auth.currentUser() || u);
-  refreshFriendBadge();
-})();
+  const el = h(`
+    <div class="title-screen t-${mood}">
+      <div class="t-glow"></div>
+      <button class="t-gear" aria-label="設定">${icon('gear')}</button>
+      <h1 class="t-logo">${'ROOMIN'.split('').map((c, i) => `<span style="animation-delay:${0.15 + i * 0.12}s">${c}</span>`).join('')}</h1>
+      <p class="t-sub">問題を解くと、部屋ができていく</p>
+      <div class="t-bottom">
+        <p class="t-tap">タップしてはじめる</p>
+        <div class="t-load"><i></i></div>
+      </div>
+    </div>`);
+  document.body.append(el);
+  const bar = el.querySelector('.t-load i');
+  const setP = (v) => { bar.style.width = Math.round(v * 100) + '%'; };
+  setP(0.08);
+  // 裏で準備
+  let ready = Promise.resolve();
+  if (u) {
+    ready = (async () => {
+      S.useUser(u.id);
+      await Promise.race([Sync.pull(), new Promise(r => setTimeout(r, 3000))]);
+      setP(0.35);
+      user = Auth.currentUser() || u;
+      ensureRooms();
+      if (!room3d) { room3d = new Room3D(canvas); setInterval(() => room3d.refreshMood(), 60e3); }
+      room3d.setActive(true);
+      setP(0.55);
+      await Promise.race([room3d.show(curDef(), curRoom()), new Promise(r => setTimeout(r, 12000))]);
+      setP(1);
+    })().catch(() => setP(1));
+  } else setP(1);
+  let started = false;
+  el.addEventListener('click', async (e) => {
+    if (e.target.closest('.t-gear') || e.target.closest('.sheet') || started) return;
+    started = true;
+    el.classList.add('t-go');
+    await ready;
+    el.classList.add('t-out');
+    setTimeout(() => el.remove(), 900);
+    if (!u) return showLogin();
+    startAs(Auth.currentUser() || u);
+    refreshFriendBadge();
+  });
+  el.querySelector('.t-gear').onclick = () => titleSettings(el);
+}
+function titleSettings(host) {
+  let q = 'high';
+  try { q = localStorage.getItem('studyroom.quality') || 'high'; } catch (e) { /* なし */ }
+  const sh = h(`<div class="sheet t-settings"><div class="grab"></div>
+    <div class="sh-head"><span class="sh-ic">${icon('gear')}</span><div><h3>かんたん設定</h3><p>あとからメニューでも変えられます</p></div></div>
+    <p class="lbl">画質</p>
+    <div class="seg q3">${[['high', 'きれい'], ['mid', 'ふつう'], ['low', 'かるい']].map(([k, n]) => `<button data-q="${k}" class="${k === q ? 'on' : ''}">${n}</button>`).join('')}</div>
+    ${DL.canDownload() && DL.downloadState() !== 'done' ? `<button class="btn ghost big dl">${icon('download')}家具のデータをまとめて保存</button>` : ''}
+    <button class="btn primary big close">とじる</button></div>`);
+  host.append(sh);
+  sh.querySelectorAll('.q3 button').forEach(b => b.onclick = () => {
+    try { localStorage.setItem('studyroom.quality', b.dataset.q); } catch (e) { /* なし */ }
+    room3d?.setQuality(b.dataset.q);
+    sh.querySelectorAll('.q3 button').forEach(x => x.classList.toggle('on', x === b));
+  });
+  sh.querySelector('.dl')?.addEventListener('click', () => { DL.setDownloadState(null); try { localStorage.removeItem('studyroom.download'); } catch (e) { /* なし */ } sh.remove(); toast('はじめるときに、ダウンロードの画面が出ます'); });
+  sh.querySelector('.close').onclick = () => sh.remove();
+}
+
+showTitle();
 
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
   navigator.serviceWorker.register('sw.js').catch(() => {});

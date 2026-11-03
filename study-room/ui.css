@@ -216,3 +216,37 @@ h3.sec { font-size: 14px; color: var(--muted); margin: 18px 4px 8px; font-weight
 .xp-line .xpbar { flex: 1; height: 8px; }
 .streak-t { display: inline-flex; gap: 4px; align-items: center; justify-content: center; }
 .streak-t .ic { color: #ff8a4c; }
+
+/* ---- タイトル画面 ---- */
+.brand, .t-logo { font-family: "Cormorant Garamond", "Times New Roman", serif; font-weight: 600; letter-spacing: .32em; }
+.login .brand { font-size: 40px; margin: 6px 0 2px; padding-left: .32em; color: var(--gold1); text-shadow: 0 0 24px rgba(255,207,122,.35); }
+.title-screen { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; align-content: center; gap: 10px; cursor: pointer; overflow: hidden;
+  background: radial-gradient(120% 80% at 50% 35%, var(--t1), var(--t2) 60%, #0b0907); transition: opacity .9s ease; }
+.title-screen.t-morning { --t1: #f6dcae; --t2: #6d5a49; }
+.title-screen.t-day { --t1: #e9e2d0; --t2: #55606b; }
+.title-screen.t-sunset { --t1: #f0a46a; --t2: #5a3424; }
+.title-screen.t-night { --t1: #3b4466; --t2: #141826; }
+.t-glow { position: absolute; width: 140vmax; height: 140vmax; left: 50%; top: 40%; transform: translate(-50%, -50%); background: conic-gradient(from 0deg, rgba(255,240,210,.0), rgba(255,240,210,.12), rgba(255,240,210,0) 30%); animation: spin 24s linear infinite; pointer-events: none; }
+@keyframes spin { to { transform: translate(-50%, -50%) rotate(360deg); } }
+.t-logo { position: relative; margin: 0; font-size: clamp(52px, 17vw, 120px); color: #fffaf0; padding-left: .32em; text-shadow: 0 2px 30px rgba(255,220,170,.55), 0 0 2px rgba(255,255,255,.6); }
+.t-logo span { display: inline-block; opacity: 0; transform: translateY(14px); filter: blur(8px); animation: rise 1.1s cubic-bezier(.2,.7,.2,1) forwards; }
+@keyframes rise { to { opacity: 1; transform: none; filter: none; } }
+.t-sub { position: relative; margin: 0; color: rgba(255,250,240,.75); font-size: 13px; letter-spacing: .2em; opacity: 0; animation: fadein 1s 1.2s forwards; }
+@keyframes fadein { to { opacity: 1; } }
+.t-bottom { position: absolute; left: 0; right: 0; bottom: calc(var(--safe-b) + 64px); display: grid; justify-items: center; gap: 14px; }
+.t-tap { margin: 0; color: #fffaf0; font-size: 15px; letter-spacing: .3em; opacity: 0; animation: fadein .8s 1.8s forwards, breathe 2.4s 2.6s ease-in-out infinite; }
+@keyframes breathe { 50% { opacity: .35; } }
+.t-load { width: 120px; height: 2px; border-radius: 2px; background: rgba(255,255,255,.18); overflow: hidden; }
+.t-load i { display: block; height: 100%; width: 0; background: rgba(255,250,235,.9); transition: width .6s ease; }
+.t-gear { position: absolute; top: calc(var(--safe-t) + 14px); right: 14px; width: 44px; height: 44px; border-radius: 50%; border: 1px solid rgba(255,255,255,.25); background: rgba(0,0,0,.18); color: #fffaf0; font-size: 20px; display: grid; place-items: center; z-index: 2; }
+.title-screen.t-go .t-tap { animation: none; opacity: 1; }
+.title-screen.t-out { opacity: 0; pointer-events: none; }
+.t-settings { z-index: 3; cursor: default; }
+.t-settings .lbl { color: var(--muted); font-size: 13px; margin: 0 0 6px; }
+.t-settings .seg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; background: rgba(255,255,255,.06); padding: 4px; border-radius: 12px; margin-bottom: 14px; }
+.t-settings .seg button { border: 0; background: none; padding: 9px; border-radius: 9px; color: var(--muted); }
+.t-settings .seg button.on { background: var(--accent); color: #2a1706; font-weight: 700; }
+.t-settings .btn.big { margin-top: 8px; width: 100%; }
+.t-logo { white-space: nowrap; font-size: clamp(44px, 13vw, 110px); letter-spacing: .22em; padding-left: .22em; }
+.float-bar button { white-space: nowrap; flex: none; }
+.float-bar .fb-name { max-width: 34vw; }
