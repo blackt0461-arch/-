@@ -181,18 +181,23 @@ function showGacha(banner = null) {
   if (isAdmin()) adminTopUp();
   const hs = HS();
   const act = G.activeSeries();
-  const banners = [{ id: 'standard', name: 'スタンダード', desc: '★5は上質な定番（恒常）から出ます' }, ...act.map(s => ({ id: s.id, name: `限定：${s.name}`, desc: s.desc, limited: true }))];
-  const b = banners.find(x => x.id === banner) || banners[banners.length - 1];
+  // 限定が左、恒常（スタンダード）が右。アイコンはそのガチャの代表の家具
+  const heroOf = (sid) => G.bySeries(sid).find(i => i.rarity === 5) || G.bySeries(sid)[0];
+  const banners = [...act.map(s => ({ id: s.id, name: `限定：${s.name}`, short: s.name.replace('シリーズ', ''), desc: s.desc, limited: true, hero: heroOf(s.id) })),
+    { id: 'standard', name: 'スタンダード', short: 'スタンダード', desc: '★5は上質な定番（恒常）から出ます', hero: G.gachaById('g5-grand-piano') || G.byRarity(5).find(i => !i.limited) }];
+  const b = banners.find(x => x.id === banner) || banners[0];
   const t1 = hs.rareTickets || 0, t4 = hs.rareTickets4 || 0, t5 = hs.rareTickets5 || 0;
   const s4 = hs.shards4 || 0, s5 = hs.shards5 || 0;
   const el = screenWithTabs('gacha', `<button class="icon back">${icon('back')}</button><h2>レアガチャ</h2><span></span>`, 'furn', `
-    <div class="bn-tabs">${banners.map(x => `<button data-b="${x.id}" class="${x.id === b.id ? 'on' : ''} ${x.limited ? 'lim' : ''}">${x.limited ? icon('star') : ''}${esc(x.name)}</button>`).join('')}</div>
+    <div class="bn-tabs">${banners.map(x => `<button data-b="${x.id}" class="bn-tab ${x.id === b.id ? 'on' : ''} ${x.limited ? 'lim' : ''}" aria-label="${esc(x.name)}">
+      <span class="bt-art banner ${x.limited ? 'b-' + x.id : 'b-standard'}">${x.hero ? `<span class="thumb">${thumbHTML(x.hero)}</span>` : ''}${x.limited ? `<i class="bt-rib">${icon('star')}限定</i>` : ''}</span>
+      <b>${esc(x.short)}</b></button>`).join('')}</div>
     <div class="banner ${b.limited ? 'b-' + b.id : 'b-standard'}">
       <div class="bn-glow"></div>
       ${b.limited ? '<span class="bn-tag">期間限定</span>' : ''}
       <h3>${esc(b.name.replace('限定：', ''))}</h3>
       <p>${esc(b.desc)}</p>
-      ${b.limited && SAMPLE_ROOMS[b.id] ? `<button class="bn-sample">${icon('eye')}全部そろえた部屋を見る</button>` : ''}
+      ${b.limited && SAMPLE_ROOMS[b.id] ? `<button class="bn-sample">${icon('home')}モデルハウスを見る</button>` : ''}
       <div class="bn-picks">${(b.limited ? G.bySeries(b.id) : G.byRarity(5).filter(i => !i.limited)).slice(0, 4).map(it => `<span class="thumb">${thumbHTML(it)}</span>`).join('')}</div>
     </div>
     <div class="pull-btns">
@@ -223,10 +228,10 @@ function showGacha(banner = null) {
 const SAMPLE_ROOMS = { band: () => import('./bandsample.js').then(m => m.BAND_SAMPLE) };
 async function showSampleRoom(seriesId) {
   let room;
-  try { room = await SAMPLE_ROOMS[seriesId](); } catch (e) { return toast('見本の部屋はまだ準備中です'); }
-  if (!room) return toast('見本の部屋はまだ準備中です');
+  try { room = await SAMPLE_ROOMS[seriesId](); } catch (e) { return toast('モデルハウスはまだ準備中です'); }
+  if (!room) return toast('モデルハウスはまだ準備中です');
   const ser = G.SERIES.find(x => x.id === seriesId);
-  visiting = { username: '見本', sample: `${ser?.name || ''}の部屋`, house: { v: 2, rooms: [JSON.parse(JSON.stringify(room))] }, current: 0, summary: {}, back: () => showGacha(seriesId) };
+  visiting = { username: '見本', sample: `${(ser?.name || '').replace('シリーズ', '')}のモデルハウス`, house: { v: 2, rooms: [JSON.parse(JSON.stringify(room))] }, current: 0, summary: {}, back: () => showGacha(seriesId) };
   showVisit();
 }
 // チケットを使って引き、結果を持ち物へ（かぶりはかけら）
@@ -849,7 +854,7 @@ function showInventory() {
 function showSurfaces(kind = 'wall') {
   const r = curRoom();
   if (kind === 'fix') return showFixtures();
-  const owned = ITEMS.filter(i => i.place === 'surface' && i.surface === kind && S.owned(i.id));
+  const owned = [...ITEMS, ...G.GACHA_ITEMS.filter(i => !ITEMS.includes(i))].filter(i => i.place === 'surface' && i.surface === kind && S.owned(i.id));
   const el = sheet(`
     <div class="sh-head"><span class="sh-ic">${icon('brush')}</span><div><h3>壁・床・ドア・窓</h3><p>持っている物から選べます</p></div></div>
     <div class="seg kinds">${surfKinds().map(([k, n]) => `<button data-k="${k}" class="${k === kind ? 'on' : ''}">${n}</button>`).join('')}</div>
@@ -924,14 +929,15 @@ function photoMode() {
 
 // =========================== 更新のお知らせ ===========================
 // このプログラムの版（version.json と同じにする。公開のたびに上げる）
-const APP_VERSION = '2.4.2';
+const APP_VERSION = '2.5.0';
 // 新しい版が出たら、みんな同じタイミングでそろうように強制で再起動する。
 // 開いた時・画面に戻った時・1分ごとに version.json を見る
 async function latestVersion() {
-  try { return (await (await fetch('version.json', { cache: 'no-store' })).json()).version; } catch (e) { return null; }
+  try { return await (await fetch('version.json', { cache: 'no-store' })).json(); } catch (e) { return null; }
 }
 let restarting = false;
-function forceRestart(ver) {
+function forceRestart(info) {
+  const ver = info.version;
   if (restarting) return;
   // 同じ版で何度も再起動をくり返さない（読みこみ直しても古いままのときの安全装置。3回まで）
   const key = 'studyroom.restart.' + ver;
@@ -941,19 +947,28 @@ function forceRestart(ver) {
   restarting = true;
   try { S.save(); } catch (e) { /* まだログイン前 */ }
   try { Sync.push?.(true); } catch (e) { /* なし */ }
+  document.querySelectorAll('.pfx, .lb-screen').forEach(e => e.remove());
   const el = h(`
-    <div class="restart-ov">
-      <div class="rs-box"><div class="rs-spin"></div><b>アップデートがあります</b><p>新しい版にするため、再起動します</p></div>
+    <div class="update-ov">
+      <div class="up-glow"></div>
+      <h1 class="up-logo">ROOMIN</h1>
+      <p class="up-ver">ver ${esc(APP_VERSION)} <span>→</span> <b>ver ${esc(ver)}</b></p>
+      <div class="up-bar"><i></i></div>
+      <p class="up-t">アップデートしています…</p>
+      ${info.notes?.length ? `<ul class="up-notes">${info.notes.map(t => `<li>${icon('sparkle')}${esc(t)}</li>`).join('')}</ul>` : ''}
+      <p class="up-s">記録は保存しました。すぐに再起動します</p>
     </div>`);
   document.body.append(el);
+  requestAnimationFrame(() => el.classList.add('show'));
   setTimeout(async () => {
     try { const regs = await navigator.serviceWorker?.getRegistrations?.(); for (const r of regs || []) await r.update(); } catch (e) { /* なし */ }
-    location.reload();
-  }, 2200);
+    el.querySelector('.up-t').textContent = '再起動します';
+    setTimeout(() => location.reload(), 400);
+  }, 2600);
 }
 async function watchVersion() {
   const v = await latestVersion();
-  if (v && v !== APP_VERSION) forceRestart(v);
+  if (v?.version && v.version !== APP_VERSION) forceRestart(v);
 }
 setInterval(watchVersion, 60000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) watchVersion(); });
@@ -963,7 +978,7 @@ async function checkUpdateNotes() {
   try {
     const v = await (await fetch('version.json', { cache: 'no-store' })).json();
     // 手元のプログラムが古いまま（スマホが前の版を覚えている）なら、1回だけ読みこみ直す
-    if (v.version !== APP_VERSION) return forceRestart(v.version);
+    if (v.version !== APP_VERSION) return forceRestart(v);
     const seen = localStorage.getItem('studyroom.version');
     localStorage.setItem('studyroom.version', v.version);
     if (!seen || seen === v.version || !v.notes?.length) return;
@@ -1104,12 +1119,19 @@ function showRankRoad() {
     if (road && nx) road.scrollTop = nx.offsetTop - road.clientHeight * 0.55;
   }, 30);
 }
-function showRecords() {
-  const rk = rankNow(), pf = S.profile(), st = sub();
-  const s = S.stats(st, PROBLEMS);
+function showRecords(subj = subjectId) {
+  const rk = rankNow(), pf = S.profile();
   const today = S.dayKey();
-  const units = UNITS.map(u => ({ u, ...(st.units?.[u] || { solved: 0, correct: 0, perfect: 0 }), total: PROBLEMS.filter(p => p.unit === u).length }));
+  const list = probs(subj);
+  const st = S.subject(subj);
+  // 全教科を合わせた克服の数
+  const mastered = SUBJECTS.reduce((n, x) => n + (probs(x.id).length ? S.stats(S.subject(x.id), probs(x.id)).mastered : 0), 0);
+  const solvedOf = (id) => Object.values(S.subject(id).units || {}).reduce((n, u) => n + (u.solved || 0), 0);
+  // 単元は問題の並び順で
+  const unitNames = [...new Set(list.map(p => p.unit))];
+  const units = unitNames.map(u => ({ u, ...(st.units?.[u] || { solved: 0, correct: 0, perfect: 0 }), total: list.filter(p => p.unit === u).length }));
   const maxSolved = Math.max(1, ...units.map(x => x.solved));
+  const subjName = SUBJECTS.find(x => x.id === subj)?.name || '';
   const el = screenWithTabs('records', `<button class="icon back">${icon('back')}</button><h2>記録</h2><span></span>`, 'menu', `
     <section class="profile-card">
       <div class="pc-lv"><span>Lv</span><b>${rk.rank}</b></div>
@@ -1121,23 +1143,26 @@ function showRecords() {
       <div>${icon('flame')}<b>${S.currentStreak()}</b><span>連続日数</span></div>
       <div>${icon('pencil')}<b>${pf.solved}</b><span>解いた数</span></div>
       <div>${icon('check')}<b>${pf.solved ? Math.round(pf.correct / pf.solved * 100) : 0}%</b><span>正解率</span></div>
-      <div>${icon('trophy')}<b>${s.mastered}</b><span>克服</span></div>
+      <div>${icon('trophy')}<b>${mastered}</b><span>克服</span></div>
     </div>
-    <h3 class="sec">分野ごと（物理）</h3>
+    <div class="rec-subj">${SUBJECTS.filter(x => probs(x.id).length).map(x => `
+      <button data-s="${x.id}" class="${x.id === subj ? 'on' : ''}"><span class="ic2">${icon(SUBJECT_ICON[x.id] || 'book')}</span><b>${x.name}</b><small>${solvedOf(x.id)}問</small></button>`).join('')}</div>
+    <h3 class="sec">分野ごと（${subjName}）</h3>
     <div class="unit-list">${units.map(x => `
-      <div class="unit-row"><b>${x.u}</b>
+      <div class="unit-row"><b>${esc(x.u)}</b>
         <div class="ubar"><i class="all" style="width:${x.solved / maxSolved * 100}%"></i><i class="ok" style="width:${x.correct / maxSolved * 100}%"></i></div>
         <span>${x.solved}問<small>正解 ${x.correct}</small></span></div>`).join('')}</div>
-    <h3 class="sec">問題ごと</h3>
-    <ul class="plist">${PROBLEMS.map(p => {
+    <h3 class="sec">問題ごと（${list.length}問）</h3>
+    <ul class="plist">${list.map(p => {
       const r = st.srs[p.id];
       let badge = '<i class="b new">まだ</i>';
       if (r?.mastered) badge = '<i class="b ok">克服</i>';
       else if (r?.due) badge = `<i class="b due">${r.due <= today ? '今日復習' : '復習 ' + r.due.slice(5).replace('-', '/')}</i>`;
       else if (r?.seen) badge = '<i class="b done">正解</i>';
-      return `<li><span class="unit">${p.unit}</span><span class="tx">${esc(p.text)}</span>${badge}</li>`;
+      return `<li><span class="unit">${esc(p.unit)}</span><span class="tx">${esc(p.text.replace(/\n/g, ' '))}</span>${badge}</li>`;
     }).join('')}</ul>`);
   el.querySelector('.back').onclick = showMenu;
+  el.querySelectorAll('.rec-subj button').forEach(b => b.onclick = () => showRecords(b.dataset.s));
 }
 
 // =========================== 要望・バグ報告 ===========================
@@ -1430,7 +1455,7 @@ async function showVisit() {
     <div class="home visiting">
       <header class="hud">
         <button class="round back" aria-label="もどる">${icon('back')}</button>
-        <div class="room-name"><span class="rn-ic">${icon('user')}</span><span class="rn-t">${v.sample ? esc(v.sample) : `${esc(v.username)}さんの${esc(roomLabel(room))}`}<small>${v.sample ? `全部そろえた部屋の見本 ・ 家具 ${room.placed.length}個` : `Lv${S.rankInfo(v.summary?.xp || 0).rank} ・ 家具 ${room.placed.length}個`}</small></span></div>
+        <div class="room-name"><span class="rn-ic">${icon('user')}</span><span class="rn-t">${v.sample ? esc(v.sample) : `${esc(v.username)}さんの${esc(roomLabel(room))}`}<small>${v.sample ? `全部そろえるとこうなる ・ 家具 ${room.placed.length}個` : `Lv${S.rankInfo(v.summary?.xp || 0).rank} ・ 家具 ${room.placed.length}個`}</small></span></div>
         <button class="round photo" aria-label="写真をとる">${icon('camera')}</button>
       </header>
       ${navHTML}

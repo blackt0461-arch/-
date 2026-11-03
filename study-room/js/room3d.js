@@ -9,6 +9,7 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { roomShape, ceilAt } from './rooms.js';
 import { buildFixture, segRot, segPoint, putOnWall } from './roomfix.js';
+import { layoutSpots } from './layouts.js';
 import { itemById, STARTER } from './items.js';
 import { buildProc } from './procfurn.js';
 import { buildGacha } from './gachafurn.js';
@@ -569,7 +570,10 @@ export class Room3D {
     if (!b) { b = new THREE.Mesh(Room3D.blobGeo, Room3D.blobMat); b.userData.uid = uid; b.renderOrder = 1; this.blobs.add(b); }
     const bb = new THREE.Box3().setFromObject(wrap.children[0]);
     const sz = bb.getSize(new THREE.Vector3()), c = bb.getCenter(new THREE.Vector3());
-    b.scale.set(Math.max(0.2, sz.x * 1.08), 1, Math.max(0.2, sz.z * 1.08));
+    // 照明（アーム付きのスタンドなど）は足もとの台だけに小さく。ほかは家具の大きさに合わせる
+    const lamp = item.genre === 'light';
+    const fx = lamp ? Math.min(0.45, sz.x) : sz.x * 1.08, fz = lamp ? Math.min(0.45, sz.z) : sz.z * 1.08;
+    b.scale.set(Math.max(0.2, fx), 1, Math.max(0.2, fz));
     b.position.set(c.x, bb.min.y + 0.004, c.z);
     b.visible = true;
   }
@@ -741,6 +745,9 @@ export class Room3D {
     for (const sx of [-1, 1]) for (const sz of [-1, 1]) corners.push({ x: sx * (sh.hw - 0.35), z: sz * (sh.hd - 0.35), rot: Math.atan2(-sx, -sz) });
     const wallSide = (depth) => { for (const seg of walls) for (const a of alongs(seg)) { const q = segPoint(seg, a, 0, depth); out.push({ x: q.x, z: q.z, rot: segRot(seg) }); } };
     const g = item.genre;
+    // 部屋ごとの「決まった配置」（layouts.js）を先にためす。小物はテーブルや棚の上がいちばん先
+    const designed = layoutSpots(this.roomDef?.id, item);
+    if (!(Room3D.canStack(item) && !Room3D.isSupport(item))) out.push(...designed);
     if (item.place === 'wall') {
       for (const seg of walls) for (const a of alongs(seg)) for (const y of [1.55, 1.25, 1.85]) out.push({ wall: seg.id, a, y });
       return out;
@@ -757,7 +764,10 @@ export class Room3D {
       return out;
     }
     // 小物：テーブルや棚の上
-    if (Room3D.canStack(item) && !Room3D.isSupport(item)) for (const s of byGenre('table', 'storage')) { const c = centerOf(s); out.push({ x: c.x, z: c.z, rot: s.userData.p.rot || 0 }, { x: c.x + 0.2, z: c.z, rot: s.userData.p.rot || 0 }, { x: c.x - 0.2, z: c.z, rot: s.userData.p.rot || 0 }); }
+    if (Room3D.canStack(item) && !Room3D.isSupport(item)) {
+      for (const s of byGenre('table', 'storage')) { const c = centerOf(s); out.push({ x: c.x, z: c.z, rot: s.userData.p.rot || 0 }, { x: c.x + 0.2, z: c.z, rot: s.userData.p.rot || 0 }, { x: c.x - 0.2, z: c.z, rot: s.userData.p.rot || 0 }); }
+      out.push(...designed);
+    }
     if (g === 'table') {
       for (const s of byGenre('sofa')) { const c = centerOf(s), r = s.userData.p.rot || 0; for (const d of [1.0, 1.3, 0.8]) out.push({ x: c.x + Math.sin(r) * d, z: c.z + Math.cos(r) * d, rot: r }); }
       out.push({ x: 0, z: 0, rot: 0 }, { x: 0.6, z: 0, rot: 0 }, { x: -0.6, z: 0, rot: 0 });
@@ -916,7 +926,7 @@ export class Room3D {
       this.topBg = null;
       if (this.topFloor) { this.scene.remove(this.topFloor); this.topFloor = null; }
     }
-    this.shell?.traverse(o => { if (o.isMesh && o.material === this.ceilMat) o.visible = !hide; });
+    this.shell?.traverse(o => { if (o.isMesh && (o.material === this.ceilMat || o.userData.ceiling)) o.visible = !hide; });
     for (const o of this.items.children) if (o.userData.item?.place === 'ceiling' || o.userData.kind === 'bareBulb') o.visible = !hide;
   }
   select(uid) {
@@ -1377,7 +1387,7 @@ export class Room3D {
     const sh = this.sh, s = sh.slope, H = sh.h;
     const add = (parent, w, h, d, x, y, z, mat, fw, fh) => {
       const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), fitMaterial(mat, fw ?? w, fh ?? d));
-      m.position.set(x, y, z); m.castShadow = true; m.receiveShadow = true; parent.add(m); return m;
+      m.position.set(x, y, z); m.castShadow = true; m.receiveShadow = true; m.userData.ceiling = true; parent.add(m); return m;
     };
     const flatW = s.start + sh.hw + 0.2;
     add(g, flatW, WALL_T, sh.d + 0.4, (-sh.hw - 0.2 + s.start) / 2, H + WALL_T / 2, 0, ceilM);
