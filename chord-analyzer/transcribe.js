@@ -470,7 +470,7 @@ function refineWithChart(events, onsetList, timeline, tuning, { strumStrength = 
  * - chords: 0.1秒ごとのコードの判定（buildChordTimeline でコード進行にまとめる）
  * - events: 弾いた瞬間ごとの、新しく鳴った音（タブ譜の材料）
  */
-function transcribeOnce(channels, sampleRate, { mode = 'auto', voiceFilter = true, method = 'peel', riseRatio = 1.3, minStrength = 0.2, harmonicRatio = 4, tuning = TUNINGS[0], snapStrums = true, snapMin = 3, peelOptions = {}, useChart = true, chartOptions = {}, noteWeight = null, chromaMethod = 'auto', harmonicResidual = 0.35, vocalOptions = {}, vocalPresence = 0.35, minBeats = 1, precise = true, highWeight = 0.6, useContext = true, contextOptions = {}, dropVocalNotes = true, estimateDurations = true, stopRatio = 0.25, voiceOptions = { wobbleCents: 60, useSwell: false }, attackRatio = 0, chordWindow = 16384, chordMinDuration = 0.5, segmentChroma = 0, segmentBass = false, prevSubtract = 0, attackChroma = 0, changeGate = 0, fuseAttack = 0, fuseSubtract = 0, changeBonus = 0, exportFeatures = false, learned = 0, learnedConfidence = false, onsetOptions = {}, noteOnsetOptions = null, legatoNotes = false, synthCheck = false, strumCheck = { perNote: 0.01 }, vocalRemove = false, noteChannels = null, onProgress = () => {} } = {}) {
+function transcribeOnce(channels, sampleRate, { mode = 'auto', voiceFilter = true, method = 'peel', riseRatio = 1.3, minStrength = 0.2, harmonicRatio = 4, tuning = TUNINGS[0], snapStrums = true, snapMin = 3, peelOptions = {}, useChart = true, chartOptions = {}, noteWeight = null, chromaMethod = 'auto', harmonicResidual = 0.35, vocalOptions = {}, vocalPresence = 0.35, minBeats = 1, precise = true, highWeight = 0.6, useContext = true, contextOptions = {}, dropVocalNotes = true, estimateDurations = true, stopRatio = 0.25, voiceOptions = { wobbleCents: 60, useSwell: false }, attackRatio = 0, chordWindow = 16384, chordMinDuration = 0.5, segmentChroma = 0, segmentBass = false, prevSubtract = 0, attackChroma = 0, changeGate = 0, fuseAttack = 0, fuseSubtract = 0, changeBonus = 0, exportFeatures = false, learned = 0, learnedConfidence = false, onsetOptions = {}, noteOnsetOptions = null, legatoNotes = false, synthCheck = false, strumCheck = { perNote: 0.01 }, vocalRemove = false, noteChannels = null, edgeTrim = 0, onProgress = () => {} } = {}) {
   const chosen = chooseSignal(channels, mode, sampleRate, vocalRemove);
   const { guitar, mid, useSide, sideRatio } = chosen;
   // AI で歌を除いた音（noteChannels）があれば、左右に分かれていない曲では、1音ずつ（弾いた瞬間と音の高さ）をその音で探す。
@@ -655,7 +655,10 @@ function transcribeOnce(channels, sampleRate, { mode = 'auto', voiceFilter = tru
     const basses = [];
     beats.forEach((b, k) => {
       const end = k + 1 < beats.length ? beats[k + 1] : b + period;
-      const inside = chordFrames.filter((f) => f.t >= b && f.t < end);
+      // edgeTrim：拍の終わり際の区間は使わない。そこで聞いた音には、次の拍の頭で強く弾いた新しいコードが混ざり、
+      // コードの変わり目が早く出てしまう（Am→F で F が Am に食い込む など）
+      const trimmed = edgeTrim > 0 ? chordFrames.filter((f) => f.t >= b && f.t < end - edgeTrim) : [];
+      const inside = trimmed.length ? trimmed : chordFrames.filter((f) => f.t >= b && f.t < end);
       const chroma = new Array(12).fill(0);
       inside.forEach((f) => f.chroma.forEach((v, i) => { chroma[i] += v; }));
       // その拍の中で実際に弾いた音（倍音をはがして見つけた音）も、コードの手がかりとして足す
