@@ -918,6 +918,21 @@ export class Room3D {
 
     // 壁：壁ごとに、窓とドアの穴をあけて箱を並べる
     const piece = (seg, a0, a1, y0, y1) => {
+      // 斜めの天井の下の壁は、天井の上に突き出さないように低くする（天窓から見えるので）
+      if (sh.slope && seg.axis === 'x' && seg.c > sh.slope.start) y1 = Math.min(y1, ceilAt(sh, seg.c) + WALL_T + 0.02);
+      if (sh.slope && seg.axis === 'z' && a1 > sh.slope.start + 0.01) {
+        const st = sh.slope.start;
+        if (a0 < st) { piece(seg, a0, st, y0, y1); a0 = st; }
+        for (let x = a0; x < a1 - 1e-4; x += 0.2) {
+          const x2 = Math.min(a1, x + 0.2);
+          const top = Math.min(y1, ceilAt(sh, x) + WALL_T + 0.02);
+          if (top > y0) piece2(seg, x, x2, y0, top);
+        }
+        return;
+      }
+      piece2(seg, a0, a1, y0, y1);
+    };
+    const piece2 = (seg, a0, a1, y0, y1) => {
       const len = a1 - a0, hgt = y1 - y0;
       if (len < 0.002 || hgt < 0.002) return;
       const am = (a0 + a1) / 2, ym = (y0 + y1) / 2, off = seg.c - seg.n * WALL_T / 2;

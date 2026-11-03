@@ -239,15 +239,16 @@ function showHome() {
       }).join('')}${locked.slice(0, 1).map(x => `<button class="locked next-lock" data-lv="${x.unlock}" data-n="${x.name}">${icon('lock')}${x.name}<small>Lv${x.unlock}</small></button>`).join('')}${home === 'main' ? homeBtn : ''}</nav>
       <div class="hint">なぞると見回す・床をタップで歩く・ドアで別の部屋へ</div>
       <div class="dock">
-        ${canBuy ? `<button class="btn gold big buy">${icon('gift')}家具を買う${hs.tickets > 0 && hs.gauge < max ? `<small>引きかえ券 ${hs.tickets}枚</small>` : ''}</button>` : ''}
-        <div class="gauge ${hs.gauge >= max ? 'full' : ''}">
-          <div class="fill" style="width:${Math.min(100, hs.gauge / max * 100)}%"></div>
-          <span>${hs.gauge >= max ? '満タン！ 家具を1つ買えます' : `次の家具まで あと${need}問くらい`}</span>
-        </div>
-        ${isAdmin() && hs.gauge < max ? `<button class="link testfill">${icon('sparkle')}管理者：ゲージを満タンにする</button>` : ''}
+        <button class="capsule ${canBuy ? 'ready' : ''}">
+          <span class="ring" style="--p:${Math.min(100, Math.round(hs.gauge / max * 100))}">${icon('gift')}</span>
+          <span class="cap-t"><b>${canBuy ? '家具を買う' : `次の家具まで あと${need}問`}</b>
+            <small>${canBuy ? (hs.gauge >= max ? 'ゲージ満タン！' : `引きかえ券 ${hs.tickets}枚`) : `ゲージ ${Math.min(100, Math.round(hs.gauge / max * 100))}%・解いてためよう`}</small></span>
+          ${icon('chevronRight')}
+        </button>
+        ${isAdmin() && hs.gauge < max ? `<button class="link testfill">${icon('sparkle')}管理者：満タンにする</button>` : ''}
       </div>
     </div>`);
-  el.querySelector('.buy')?.addEventListener('click', () => buyFlow());
+  el.querySelector('.capsule').addEventListener('click', () => canBuy ? buyFlow() : chooseSubject());
   el.querySelector('.testfill')?.addEventListener('click', () => { hs.gauge = max; S.save(); showHome(); });
   el.querySelector('.photo').onclick = photoMode;
   el.querySelector('.friends').onclick = showFriends;
@@ -1078,6 +1079,12 @@ function showSettings() {
         <small>カクカクするときは「ふつう」か「かるい」に</small></div>
       ${DL.canDownload() ? `<button class="row-item tap dl"><span class="lbl">家具のデータ</span><span class="val">${DL.downloadState() === 'done' ? '保存ずみ' : 'まとめて保存する'}</span></button>` : ''}
     </section>
+    ${isAdmin() ? `<section class="group admin-only">
+      <div class="row-item col"><span class="lbl">${icon('shield')}レベル（管理者だけ）</span>
+        <div class="lvctl"><button class="lvm">${icon('back')}</button><b class="lvv">Lv${rankNow().rank}</b><button class="lvp">${icon('chevronRight')}</button>
+          <input class="lvin" type="number" min="1" max="99" value="${rankNow().rank}"><button class="btn ghost sm lvset">この Lv にする</button></div>
+        <small>経験値はその Lv のはじめの値になります。新しい部屋や置ける数もすぐ変わります</small></div>
+    </section>` : ''}
     <section class="group">
       <button class="row-item tap logout"><span class="lbl danger">${icon('logout')}ログアウト</span></button>
     </section>
@@ -1102,6 +1109,19 @@ function showSettings() {
     try { await Sync.push(); } catch (e) { /* つながらなければ、あとで送られる */ }
     location.reload();
   });
+  // 管理者：レベルを自由に変える
+  const setLv = (L) => {
+    if (!isAdmin()) return;
+    S.setRank(L);
+    ensureRooms();
+    S.save();
+    el.querySelector('.lvv').textContent = 'Lv' + rankNow().rank;
+    el.querySelector('.lvin').value = rankNow().rank;
+    toast(`Lv${rankNow().rank} にしました（置ける数 ${S.capacity()}個）`);
+  };
+  el.querySelector('.lvm')?.addEventListener('click', () => setLv(rankNow().rank - 1));
+  el.querySelector('.lvp')?.addEventListener('click', () => setLv(rankNow().rank + 1));
+  el.querySelector('.lvset')?.addEventListener('click', () => setLv(+el.querySelector('.lvin').value || 1));
   paintSync();
 }
 

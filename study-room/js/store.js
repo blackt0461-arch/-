@@ -208,6 +208,9 @@ export function rankInfo(xp = state.profile?.xp || 0) {
   while (rest >= xpToNext(rank)) { rest -= xpToNext(rank); rank++; }
   return { rank, into: rest, need: xpToNext(rank), xp };
 }
+// ランク L のちょうど始まりの経験値（管理者がレベルを変えるときに使う）
+export function xpAtRank(L) { let x = 0; for (let r = 1; r < L; r++) x += xpToNext(r); return x; }
+export function setRank(L) { const p = profile(); p.xp = xpAtRank(Math.max(1, Math.min(99, L))); }
 // 1つの部屋に置ける家具の数
 export function capacity(rank = rankInfo().rank) { return 6 + (rank - 1) * 2; }
 // 1問の結果を記録（分野ごとの数・経験値）。戻り値 { gained, rankUp, rank }
