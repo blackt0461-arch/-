@@ -151,12 +151,13 @@ body { margin: 0; }
 </div>
 <div class="sheet" id="sheet" hidden></div>
 
-<script src="engine.js"></script>
+<script src="engine.js?v=20261103c"></script>
 <script>
+const V = '20261103c';  // 版。ファイルを変えたら あげる（iPhone が 古いファイルを 使いつづけないように）
 fetch('data.json', { cache: 'no-cache' }).then(r => r.json()).then(D => {
   window.DATA_UPDATED = D.updated;
   initData(D);
-  for (const f of ['ui.js', 'scan.js', 'pip.js']) { const s = document.createElement('script'); s.src = f; s.async = false; document.body.appendChild(s); }
+  for (const f of ['ui.js', 'scan.js', 'pip.js']) { const s = document.createElement('script'); s.src = f + '?v=' + V; s.async = false; document.body.appendChild(s); }
 }).catch(() => { document.getElementById('view').innerHTML = '<div class="win">データを よみこめませんでした。つうしんを たしかめて ひらきなおしてください。</div>'; });
 </script>
 </body>
