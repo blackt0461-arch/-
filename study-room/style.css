@@ -83,6 +83,7 @@ input { font: inherit; }
 .dock { position: absolute; left: 0; right: 0; bottom: 0; padding: 14px 14px calc(var(--safe-b) + 14px); display: grid; gap: 10px;
   background: linear-gradient(180deg, rgba(22,19,15,0), rgba(22,19,15,.75) 30%, rgba(22,19,15,.92)); }
 .dock .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.home .testfill { margin: -4px auto 0; font-size: 12px; padding: 4px; }
 .mini { text-align: center; font-size: 12px; color: var(--muted); }
 .gauge { position: relative; height: 30px; border-radius: 999px; background: rgba(255,255,255,.1); border: 1px solid var(--line); overflow: hidden; }
 .gauge .fill { position: absolute; inset: 0 auto 0 0; background: linear-gradient(90deg, #d98c43, #ffcf7a); transition: width .8s cubic-bezier(.2,.8,.2,1); }

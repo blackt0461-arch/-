@@ -16,6 +16,8 @@ const SUBJECTS = [
   { id: 'geo', name: '地理総合', icon: '🗺️' },
 ];
 const PROBLEMS = validProblems();
+// テスト用：問題を解かなくても家具を選べるボタンを出す（妹さんに渡すときは false にする）
+const TEST_MODE = true;
 const byId = Object.fromEntries(PROBLEMS.map(p => [p.id, p]));
 const COLORS = ['#ff8a5b', '#4fc3f7', '#c792ea', '#9ccc65', '#ffd54f', '#f06292', '#4db6ac'];
 
@@ -177,6 +179,7 @@ function showHome() {
           <button class="btn ghost list">📋 問題と記録</button>
         </div>
         <div class="mini">復習待ち ${stats.waiting} ・ 克服 ${stats.mastered} ・ 問題 ${stats.total}</div>
+        ${TEST_MODE && left.length && !full ? '<button class="link testfill">🧪 テスト用：ゲージを満タンにする</button>' : ''}
       </footer>
     </div>`);
   el.querySelector('.back').onclick = showSubjects;
@@ -184,6 +187,7 @@ function showHome() {
   el.querySelector('.edit').onclick = showEdit;
   el.querySelector('.list').onclick = showList;
   el.querySelector('.unlock')?.addEventListener('click', () => unlockFlow());
+  el.querySelector('.testfill')?.addEventListener('click', () => { st.gauge = max; S.save(); showHome(); });
   el.querySelectorAll('.rooms button').forEach(b => b.onclick = async () => {
     st.current = +b.dataset.i; S.save();
     showHome();
