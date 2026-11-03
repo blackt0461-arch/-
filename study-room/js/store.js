@@ -267,7 +267,7 @@ export function profile() { return state.profile || (state.profile = blankProfil
 export function loginBonusDay(n) {
   if (n === 30) return { kind: 'ticket4', label: '★4以上確定チケット' };
   if (n % 5 === 0) return { kind: 'ticket', label: 'レアチケット' };
-  return { kind: 'gauge', amount: 8, label: 'ゲージ +8' };
+  return { kind: 'gauge', amount: 1, label: '家具の引きかえ券' };
 }
 // 今日まだもらっていなければもらう。戻り値 { day, reward } か null
 export function claimLoginBonus() {
@@ -280,7 +280,7 @@ export function claimLoginBonus() {
   const h = house();
   if (reward.kind === 'ticket') h.rareTickets = (h.rareTickets || 0) + 1;
   if (reward.kind === 'ticket4') h.rareTickets4 = (h.rareTickets4 || 0) + 1;
-  if (reward.kind === 'gauge') h.gauge += reward.amount;
+  if (reward.kind === 'gauge') h.tickets = (h.tickets || 0) + reward.amount; // ふつうの日は家具の引きかえ券1枚
   return { day: lb.count, reward };
 }
 
@@ -293,8 +293,13 @@ export function own(itemId, n = 1) {
   if (!c[itemId]) c[itemId] = Date.now();
 }
 // 図鑑に載っているか（前の版の持ち物も、持っていれば載せる）
-export function collected(itemId) { const h = house(); return !!(h.collected?.[itemId] || h.inventory[itemId]); }
-export function owned(itemId) { return house().inventory[itemId] || 0; }
+export function collected(itemId) { if (unlimited) return true; const h = house(); return !!(h.collected?.[itemId] || h.inventory[itemId]); }
+export function owned(itemId) { return unlimited ? 99 : (house().inventory[itemId] || 0); }
+// 管理者：すべての家具・壁紙などを、いくつでも持っている扱いにする（保存はしない）
+let unlimited = false;
+export function realOwned(itemId) { return house().inventory[itemId] || 0; } // 管理者の無限を除いた、本当に持っている数
+export function setUnlimited(on) { unlimited = !!on; }
+export function isUnlimited() { return unlimited; }
 // 部屋に置いている数（持ち物の個数より多くは置けない）
 export function placedCount(itemId) {
   let n = 0;

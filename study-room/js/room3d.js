@@ -49,15 +49,23 @@ const MOODS = {
     env: 0.3, exp: 0.95, ray: '#ffc27a', rayI: 0.22, lampI: 1.0, bg: 1.0, fog: '#e7b48e', hill: '#5c5a48',
     gradeWarm: '#ff9a50', gradeCool: '#40507a', split: 0.2, sat: 1.18, vig: 0.38, bloom: 0.75, bloomTh: 0.72 },
   night: { photo: 'night', sun: '#8fa8ff', sunI: 0.6, dir: [0.3, -0.5, 1], hemiSky: '#33405e', hemiGround: '#3a3026', hemiI: 0.3,
-    env: 0.1, exp: 1.1, ray: '#9fb4ff', rayI: 0.02, lampI: 3.0, bg: 0.12, fog: '#0f1420', hill: '#1d2430',
-    gradeWarm: '#ffb86a', gradeCool: '#2a4070', split: 0.22, sat: 1.1, vig: 0.42, bloom: 0.9, bloomTh: 0.6 },
+    env: 0.1, exp: 1.1, ray: '#9fb4ff', rayI: 0.02, lampI: 2.2, bg: 0.12, fog: '#0f1420', hill: '#1d2430',
+    gradeWarm: '#ffb86a', gradeCool: '#2a4070', split: 0.22, sat: 1.1, vig: 0.42, bloom: 0.5, bloomTh: 0.88 },
 };
 
 // 現実の時刻で時間帯を決める
+// 今日の天気：日にちで決まる（みんな同じ日は同じ天気）。晴れ6・くもり2・雨2 の割合
+export function weatherToday(d = new Date()) {
+  const k = d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
+  let x = (k * 2654435761) >>> 0; x ^= x >>> 15; x = Math.imul(x, 2246822519) >>> 0; x ^= x >>> 13;
+  const n = x % 10;
+  return n < 6 ? 'sunny' : n < 8 ? 'cloudy' : 'rain';
+}
 export function moodNow(d = new Date()) {
   const h = d.getHours() + d.getMinutes() / 60;
-  if (h >= 5 && h < 9.5) return 'morning';
-  if (h >= 9.5 && h < 16) return 'day';
+  const wet = weatherToday(d) !== 'sunny';
+  if (h >= 5 && h < 9.5) return wet ? 'overcast' : 'morning';
+  if (h >= 9.5 && h < 16) return wet ? 'overcast' : 'day';
   if (h >= 16 && h < 19) return 'sunset';
   return 'night';
 }
@@ -72,6 +80,8 @@ export class Room3D {
     r.toneMapping = THREE.ACESFilmicToneMapping;
     r.shadowMap.enabled = true;
     r.shadowMap.type = THREE.PCFSoftShadowMap;
+    // 影の地図は1コマに1回だけ作る（後処理の中で作り直すと、画面が斜めに暗くなることがある）
+    r.shadowMap.autoUpdate = false;
 
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color('#1a1714');
@@ -178,6 +188,7 @@ export class Room3D {
       }
       const dx = e.clientX - lastX, dy = e.clientY - lastY;
       lastX = e.clientX; lastY = e.clientY;
+      if (this.topView) return;
       const k = 0.0042 * this.zoom;
       this.yaw += dx * k; this.pitch += dy * k;  // 指の動きに部屋がついてくる向き
       this.vyaw = dx * k; this.vpitch = dy * k;
@@ -215,7 +226,7 @@ export class Room3D {
     for (const h of hits) {
       let o = h.object;
       while (o && o.parent !== this.items) o = o.parent;
-      if (o && o.userData.uid) return o;
+      if (o && o.userData.uid && o.visible) return o;
     }
     return null;
   }
@@ -227,9 +238,10 @@ export class Room3D {
       return;
     }
     const ray = this.ray(cx, cy);
-    const hits = ray.intersectObjects([this.shell, this.items], true).filter(h => h.object.visible && !h.object.isPoints);
+    const hits = ray.intersectObjects([this.shell, this.items], true).filter(h => (h.object.visible || h.object.userData.lightSwitch) && !h.object.isPoints);
     const h = hits[0];
     if (!h) return;
+    if (h.object.userData.lightSwitch) { this.toggleLights(); return; }
     if (h.object.userData.door) { this.onDoor && this.onDoor(); return; }
     // 床なら当たった所、家具なら家具の足もと
     const p = h.point.clone(); p.y = 0;
@@ -285,6 +297,7 @@ export class Room3D {
   }
 
   setZoom(z) {
+    if (this.topView) return;
     this.zoom = Math.min(1.15, Math.max(0.55, z));
     this.camera.fov = this.baseFov * this.zoom;
     this.camera.updateProjectionMatrix();
@@ -320,8 +333,9 @@ export class Room3D {
       this.vyaw *= 0.9; this.vpitch *= 0.9;
       this.clampPitch();
     }
-    this.camera.rotation.set(this.pitch, this.yaw, 0);
-    if (this.walk) {
+    if (!this.topView) this.camera.rotation.set(this.pitch, this.yaw, 0);
+    else if (this._topKey !== this.shell?.uuid + this.items.children.length) { this._topKey = this.shell?.uuid + this.items.children.length; this.applyTopHide(); }
+    if (this.walk && !this.topView) {
       const w = this.walk;
       w.t = Math.min(1, w.t + dt / w.dur);
       const e = w.t < 0.5 ? 2 * w.t * w.t : 1 - Math.pow(-2 * w.t + 2, 2) / 2;
@@ -334,6 +348,8 @@ export class Room3D {
       this.marker.material.opacity = Math.max(0, this.marker.userData.life) * 0.8;
       this.marker.scale.setScalar(1 + (1 - this.marker.userData.life) * 0.6);
     }
+    this.updateRain(dt);
+    if (this.stars && this.stars.visible) { this.stars.position.copy(this.camera.position); this.stars.material.uniforms.uTime.value = t; }
     // ガチャの家具の動き（炎・星・水など）
     for (const o of this.items.children) { const f = o.children[0]?.userData.tick; if (f) f(t, dt); }
     // 新しく置いた物のアニメーション
@@ -356,6 +372,7 @@ export class Room3D {
       p.needsUpdate = true;
     }
     if (this.exterior?.update) this.exterior.update(t);
+    this.renderer.shadowMap.needsUpdate = true;
     if (this.composer && this.effectsOn !== false) {
       this.grade.uniforms.uTime.value = t;
       this.composer.render(dt);
@@ -424,6 +441,7 @@ export class Room3D {
     try { localStorage.setItem('studyroom.quality', q); } catch (e) { /* なし */ }
     if (this.ao) this.ao.enabled = q === 'high';
     this.effectsOn = q !== 'low';
+    if (this.sh && this.items) this.updateLights();
   }
   // 重くてカクカクするときは、すき間の影を自動で切る
   watchSpeed(dt) {
@@ -437,7 +455,9 @@ export class Room3D {
   // opts.readOnly: フレンドの部屋を見るとき（さわれない）
   async show(roomDef, st, opts = {}) {
     const token = (this.token = {});
+    if (this.topView) this.setTopView(false);
     this.sh = roomShape(roomDef);
+    if (this.grid) this.setGrid(false);
     if (this.roomDef !== roomDef || this.st !== st) {
       // 部屋ごとの立つ位置から、窓のほうを向いて始める
       this.camera.position.set(this.sh.cam[0], 1.5, this.sh.cam[1]);
@@ -454,6 +474,8 @@ export class Room3D {
     if (token !== this.token) return;
     await this.placeAll(token);
   }
+  // 確かめ用：時間帯を指定して光を変える
+  setMoodId(id) { if (MOODS[id]) this.applyMood(MOODS[id]); }
   // 時刻が変わって時間帯が変わったら、光と空を変える
   refreshMood() {
     const id = moodNow();
@@ -537,7 +559,8 @@ export class Room3D {
     if (!Room3D.blobMat) {
       const c = document.createElement('canvas'); c.width = c.height = 128;
       const g = c.getContext('2d'); const gr = g.createRadialGradient(64, 64, 8, 64, 64, 64);
-      gr.addColorStop(0, 'rgba(0,0,0,0.55)'); gr.addColorStop(0.55, 'rgba(0,0,0,0.28)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
+      // 足もとにだけ、くっきりめの接地の影（大きくぼかすと浮いて見えるので小さく）
+      gr.addColorStop(0, 'rgba(0,0,0,0.42)'); gr.addColorStop(0.62, 'rgba(0,0,0,0.34)'); gr.addColorStop(0.85, 'rgba(0,0,0,0.12)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
       g.fillStyle = gr; g.fillRect(0, 0, 128, 128);
       const tex = new THREE.CanvasTexture(c);
       Room3D.blobMat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, toneMapped: false });
@@ -546,7 +569,7 @@ export class Room3D {
     if (!b) { b = new THREE.Mesh(Room3D.blobGeo, Room3D.blobMat); b.userData.uid = uid; b.renderOrder = 1; this.blobs.add(b); }
     const bb = new THREE.Box3().setFromObject(wrap.children[0]);
     const sz = bb.getSize(new THREE.Vector3()), c = bb.getCenter(new THREE.Vector3());
-    b.scale.set(Math.max(0.25, sz.x * 1.3), 1, Math.max(0.25, sz.z * 1.3));
+    b.scale.set(Math.max(0.2, sz.x * 1.08), 1, Math.max(0.2, sz.z * 1.08));
     b.position.set(c.x, bb.min.y + 0.004, c.z);
     b.visible = true;
   }
@@ -705,6 +728,64 @@ export class Room3D {
     return false;
   }
 
+  // 種類に合った「良い場所」の候補を順にためして、最初に空いていた所に置く
+  autoSpots(item, self) {
+    const sh = this.sh, out = [];
+    const others = this.items.children.filter(o => o !== self && o.userData.p && o.userData.item);
+    const centerOf = (o) => new THREE.Box3().setFromObject(o).getCenter(new THREE.Vector3());
+    const byGenre = (...g) => others.filter(o => g.includes(o.userData.item.genre) && o.userData.item.place === 'floor');
+    const busy = (seg) => openingsOn(sh, seg.id).reduce((n, op) => n + op.w, 0) / Math.max(0.1, seg.a1 - seg.a0);
+    const walls = [...sh.walls].sort((a, b) => busy(a) - busy(b) || (b.a1 - b.a0) - (a.a1 - a.a0));
+    const alongs = (seg) => { const m = (seg.a0 + seg.a1) / 2, L = seg.a1 - seg.a0; return [m, m - L * 0.25, m + L * 0.25, seg.a0 + 0.6, seg.a1 - 0.6, m - L * 0.4, m + L * 0.4]; };
+    const corners = [];
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) corners.push({ x: sx * (sh.hw - 0.35), z: sz * (sh.hd - 0.35), rot: Math.atan2(-sx, -sz) });
+    const wallSide = (depth) => { for (const seg of walls) for (const a of alongs(seg)) { const q = segPoint(seg, a, 0, depth); out.push({ x: q.x, z: q.z, rot: segRot(seg) }); } };
+    const g = item.genre;
+    if (item.place === 'wall') {
+      for (const seg of walls) for (const a of alongs(seg)) for (const y of [1.55, 1.25, 1.85]) out.push({ wall: seg.id, a, y });
+      return out;
+    }
+    if (item.place === 'ceiling') {
+      out.push({ x: 0, z: 0, rot: 0 });
+      for (const [x, z] of [[0.6, 0], [-0.6, 0], [0, 0.6], [0, -0.6], [1.2, 1.2], [-1.2, -1.2], [1.2, -1.2], [-1.2, 1.2]]) out.push({ x, z, rot: 0 });
+      return out;
+    }
+    if (item.place === 'rug') {
+      const sofa = byGenre('sofa')[0];
+      if (sofa) { const c = centerOf(sofa), r = sofa.userData.p.rot || 0; out.push({ x: c.x + Math.sin(r) * 1.1, z: c.z + Math.cos(r) * 1.1, rot: r }); }
+      out.push({ x: 0, z: 0, rot: 0 }, { x: 0.5, z: 0.5, rot: 0 }, { x: -0.5, z: -0.5, rot: 0 });
+      return out;
+    }
+    // 小物：テーブルや棚の上
+    if (Room3D.canStack(item) && !Room3D.isSupport(item)) for (const s of byGenre('table', 'storage')) { const c = centerOf(s); out.push({ x: c.x, z: c.z, rot: s.userData.p.rot || 0 }, { x: c.x + 0.2, z: c.z, rot: s.userData.p.rot || 0 }, { x: c.x - 0.2, z: c.z, rot: s.userData.p.rot || 0 }); }
+    if (g === 'table') {
+      for (const s of byGenre('sofa')) { const c = centerOf(s), r = s.userData.p.rot || 0; for (const d of [1.0, 1.3, 0.8]) out.push({ x: c.x + Math.sin(r) * d, z: c.z + Math.cos(r) * d, rot: r }); }
+      out.push({ x: 0, z: 0, rot: 0 }, { x: 0.6, z: 0, rot: 0 }, { x: -0.6, z: 0, rot: 0 });
+    } else if (g === 'chair') {
+      for (const t of byGenre('table')) { const c = centerOf(t); for (const [dx, dz] of [[0, 0.75], [0, -0.75], [0.75, 0], [-0.75, 0]]) out.push({ x: c.x + dx, z: c.z + dz, rot: Math.atan2(-dx, -dz) }); }
+      wallSide(0.4);
+    } else if (g === 'plant' || (g === 'light' && item.place === 'floor')) {
+      for (const s of byGenre('sofa')) { const c = centerOf(s), r = s.userData.p.rot || 0; for (const d of [-1.3, 1.3]) out.push({ x: c.x + Math.cos(r) * d, z: c.z - Math.sin(r) * d, rot: r }); }
+      out.push(...corners);
+    } else wallSide(0.5); // ソファ・ベッド・棚・趣味の物などは壁ぎわ
+    out.push(...corners);
+    return out;
+  }
+  autoPlace(o) {
+    const p = o.userData.p, item = o.userData.item;
+    const start = { ...p };
+    for (const c of this.autoSpots(item, o)) {
+      if (item.place !== 'wall') { delete p.on; delete p.y; }
+      Object.assign(p, c);
+      this.mountPlaced(o, p);
+      if (this.checkPlacement(o)) return true;
+    }
+    for (const k of Object.keys(p)) if (!(k in start)) delete p[k];
+    Object.assign(p, start);
+    this.mountPlaced(o, p);
+    return false;
+  }
+
   // 照明の光（重くならないように、近いものから最大4つ）
   updateLights() {
     for (const l of this.lamps) l.parent && l.parent.remove(l);
@@ -714,7 +795,7 @@ export class Room3D {
       const obj = o.children[0];
       return obj && (obj.userData.light || o.userData.item?.light);
     });
-    if (!lit.length) { this.addBareBulb(); return; }
+    if (!lit.length) { this.addBareBulb(); this.addLampShadow(); this.applyLightsOff(); return; }
     lit.slice(0, MAX_LIGHTS).forEach(o => {
       const obj = o.children[0];
       const il = o.userData.item.light;
@@ -727,12 +808,116 @@ export class Room3D {
       this.scene.add(l);
       this.lamps.push(l);
     });
+    this.addLampShadow();
+    this.applyLightsOff();
+  }
+
+  // いちばん高い照明（天井の照明）から、本物の影を落とす
+  addLampShadow() {
+    // 夕方・夜（照明が主役の時間）だけ。すき間の影（GTAO）とは同時に使えないので、そのあいだは切る
+    const want = this.quality !== 'low' && this.lamps.length && (this.mood?.lampI || 0) >= 1;
+    if (this.ao) this.ao.enabled = this.quality === 'high' && !this.autoLowered && !want;
+    if (!want) return;
+    const main = this.lamps.reduce((a, b) => (b.position.y > a.position.y ? b : a));
+    main.castShadow = true;
+    const ms = this.quality === 'high' ? 1024 : 512;
+    main.shadow.mapSize.set(ms, ms);
+    main.shadow.camera.near = 0.05; main.shadow.camera.far = 10;
+    main.shadow.bias = -0.002; main.shadow.normalBias = 0.03; main.shadow.radius = 3;
+  }
+  // 照明スイッチ：部屋の明かりを消す／つける（部屋ごとに覚えておく）
+  toggleLights() {
+    if (!this.st) return;
+    this.st.lightsOff = !this.st.lightsOff;
+    this.applyLightsOff();
+    this.onLights && this.onLights(this.st.lightsOff);
+  }
+  applyLightsOff() {
+    const off = !!this.st?.lightsOff;
+    for (const l of this.lamps) l.visible = !off;
+    // 光っている部分（電球・かさの内側など）も暗くする
+    const seen = new Set();
+    this.items.traverse(o => {
+      if (!o.isMesh) return;
+      for (const m of Array.isArray(o.material) ? o.material : [o.material]) {
+        if (!m || !m.emissive || seen.has(m)) continue;
+        seen.add(m);
+        if (m.userData.baseEmissive === undefined) m.userData.baseEmissive = m.emissiveIntensity;
+        if (m.userData.baseEmissive > 0) m.emissiveIntensity = off ? 0 : m.userData.baseEmissive;
+      }
+    });
   }
 
   // --- 模様がえ ---
   setEditMode(on) {
     this.editMode = !!on && !this.readOnly;
-    if (!this.editMode) this.select(null);
+    if (!this.editMode) { this.select(null); this.setTopView(false); }
+    this.setGrid(this.editMode);
+  }
+  // 床の薄い格子（50cmごと）。模様がえのあいだだけ
+  setGrid(on) {
+    if (this.grid) { this.scene.remove(this.grid); this.grid.geometry.dispose(); this.grid = null; }
+    if (!on || !this.sh) return;
+    const sh = this.sh, st = 0.5, pts = [], nt = sh.notch;
+    const inside = (x, z) => !(nt && x > nt.x0 && x < nt.x1 && z > nt.z0 && z < nt.z1);
+    const xs = [], zs = [];
+    for (let x = -Math.floor(sh.hw / st) * st; x <= sh.hw + 1e-6; x += st) xs.push(x);
+    for (let z = -Math.floor(sh.hd / st) * st; z <= sh.hd + 1e-6; z += st) zs.push(z);
+    const zb = [-sh.hd, ...zs.filter(z => Math.abs(z) < sh.hd - 1e-3), sh.hd], xb = [-sh.hw, ...xs.filter(x => Math.abs(x) < sh.hw - 1e-3), sh.hw];
+    for (const x of xs) for (let i = 0; i < zb.length - 1; i++) if (inside(x, (zb[i] + zb[i + 1]) / 2)) pts.push(x, 0, zb[i], x, 0, zb[i + 1]);
+    for (const z of zs) for (let i = 0; i < xb.length - 1; i++) if (inside((xb[i] + xb[i + 1]) / 2, z)) pts.push(xb[i], 0, z, xb[i + 1], 0, z);
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+    this.grid = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.22, depthWrite: false }));
+    this.grid.position.y = 0.006;
+    this.grid.renderOrder = 2;
+    this.scene.add(this.grid);
+  }
+  // 上から見る（俯瞰）。天井と天井の照明を隠して、真上から部屋全体を見る
+  setTopView(on) {
+    on = !!on && !!this.sh;
+    if (on === !!this.topView) return;
+    if (on) {
+      this.topView = { pos: this.camera.position.clone(), fov: this.camera.fov };
+      this.walk = null; this.targetLook = null; this.vyaw = this.vpitch = 0;
+      const sh = this.sh, a = this.camera.aspect || 1;
+      this.camera.fov = 50;
+      const t = Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2));
+      const hgt = Math.max((sh.hd + 0.3) / t, (sh.hw + 0.3) / (t * a)) + (sh.h || 2.6) * 0.5;
+      this.camera.position.set(0, hgt, 0);
+      this.camera.rotation.set(-Math.PI / 2, 0, 0);
+      // 天井より上（屋根・天井）は切り取って、断面のように見せる
+      this.topView.near = this.camera.near;
+      this.camera.near = Math.max(0.05, hgt - (sh.h || 2.6) + 0.02);
+    } else {
+      this.camera.position.copy(this.topView.pos);
+      this.camera.fov = this.topView.fov;
+      this.camera.near = this.topView.near;
+      this.topView = null;
+    }
+    this.camera.updateProjectionMatrix();
+    this.applyTopHide();
+  }
+  applyTopHide() {
+    const hide = !!this.topView;
+    // 上から見るときは、外の景色や建物の裏側（裏世界）が見えないよう、まわりを暗い色でぬりつぶす
+    if (this.exterior?.world) this.exterior.world.visible = !hide;
+    if (hide) {
+      if (!this.topBg) {
+        this.topBg = { bg: this.scene.background, fog: this.scene.fog };
+        this.scene.background = new THREE.Color('#14110e');
+        this.scene.fog = null;
+        const m = new THREE.Mesh(new THREE.PlaneGeometry(400, 400).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: '#14110e' }));
+        m.position.y = -0.3; this.topFloor = m; this.scene.add(m);
+      }
+    } else if (this.topBg) {
+      if (this.scene.background?.isColor) this.scene.background = this.topBg.bg;
+      if (!this.scene.fog) this.scene.fog = this.topBg.fog;
+      this.topBg = null;
+      if (this.topFloor) { this.scene.remove(this.topFloor); this.topFloor = null; }
+    }
+    this.shell?.traverse(o => { if (o.isMesh && o.material === this.ceilMat) o.visible = !hide; });
+    for (const o of this.items.children) if (o.userData.item?.place === 'ceiling' || o.userData.kind === 'bareBulb') o.visible = !hide;
   }
   select(uid) {
     this.selected = uid || null;
@@ -834,10 +1019,10 @@ export class Room3D {
     if (this.selected === uid) this.select(null);
     this.updateLights();
   }
-  async addPlaced(p) {
+  async addPlaced(p, auto = false) {
     const o = await this.placeOne(p, true);
     if (!o) return null;
-    if (!this.findFreeSpot(o)) { this.removeObject(p.uid); return null; }
+    if (!(auto && this.autoPlace(o)) && !this.findFreeSpot(o)) { this.removeObject(p.uid); return null; }
     o.userData.baseY = o.position.y;
     this.updateLights();
     this.lookAt(new THREE.Box3().setFromObject(o).getCenter(new THREE.Vector3()));
@@ -884,6 +1069,7 @@ export class Room3D {
   capture() {
     if (this.selBox) this.selBox.visible = false;
     if (this.marker) this.marker.visible = false;
+    this.renderer.shadowMap.needsUpdate = true;
     if (this.composer && this.effectsOn !== false) this.composer.render(0); else this.renderer.render(this.scene, this.camera);
     const url = this.canvas.toDataURL('image/jpeg', 0.92);
     if (this.selBox) this.selBox.visible = true;
@@ -911,6 +1097,75 @@ export class Room3D {
       this.scene.backgroundIntensity = m.bg;
     });
     this.scene.fog = new THREE.Fog(m.fog, 60, 520);
+    this.setStars(m.photo === 'night' && weatherToday() === 'sunny');
+    this.setRain(weatherToday() === 'rain');
+    if (this.sh && this.items) this.updateLights(); // 時間帯で、照明の影を出す／出さないが変わる
+  }
+  // 夜だけ、窓の外にまたたく星
+  // 雨の日：家のまわりに雨つぶ（部屋の中には降らない）
+  setRain(on) {
+    if (on && !this.rain) {
+      const N = 1400, pos = new Float32Array(N * 6), seeds = [];
+      for (let i = 0; i < N; i++) seeds.push(this.rainSpot({}));
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+      this.rain = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: '#c8d4e0', transparent: true, opacity: 0.35, depthWrite: false }));
+      this.rain.userData.seeds = seeds;
+      this.rain.frustumCulled = false;
+      this.scene.add(this.rain);
+    }
+    if (this.rain) this.rain.visible = !!on;
+  }
+  rainSpot(d, top = false) {
+    const sh = this.sh || { hw: 2, hd: 2 };
+    for (let k = 0; k < 20; k++) {
+      d.x = (Math.random() - 0.5) * 30; d.z = (Math.random() - 0.5) * 30 - 6;
+      if (Math.abs(d.x) > sh.hw + 0.4 || Math.abs(d.z) > sh.hd + 0.4) break;
+    }
+    d.y = top ? 12 : Math.random() * 12 - 2; d.v = 9 + Math.random() * 4;
+    return d;
+  }
+  updateRain(dt) {
+    const r = this.rain; if (!r || !r.visible) return;
+    const a = r.geometry.attributes.position.array, seeds = r.userData.seeds;
+    for (let i = 0; i < seeds.length; i++) {
+      const d = seeds[i];
+      d.y -= d.v * dt;
+      if (d.y < -3) this.rainSpot(d, true);
+      a[i * 6] = d.x; a[i * 6 + 1] = d.y; a[i * 6 + 2] = d.z;
+      a[i * 6 + 3] = d.x - 0.02; a[i * 6 + 4] = d.y + 0.35; a[i * 6 + 5] = d.z;
+    }
+    r.geometry.attributes.position.needsUpdate = true;
+  }
+  setStars(on) {
+    if (on && !this.stars) {
+      const n = 1400, pos = new Float32Array(n * 3), seed = new Float32Array(n), size = new Float32Array(n);
+      let s = 11; const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
+      for (let i = 0; i < n; i++) {
+        const az = rnd() * Math.PI * 2, el = Math.asin(0.06 + rnd() * 0.94); // 地平線より上
+        const r = 380;
+        pos.set([Math.cos(el) * Math.cos(az) * r, Math.sin(el) * r, Math.cos(el) * Math.sin(az) * r], i * 3);
+        seed[i] = rnd() * 10; size[i] = 1.2 + Math.pow(rnd(), 4) * 4.5;
+      }
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+      g.setAttribute('seed', new THREE.BufferAttribute(seed, 1));
+      g.setAttribute('size', new THREE.BufferAttribute(size, 1));
+      const mat = new THREE.ShaderMaterial({
+        uniforms: { uTime: { value: 0 }, uPR: { value: this.renderer.getPixelRatio() } },
+        vertexShader: `attribute float seed; attribute float size; uniform float uTime; uniform float uPR; varying float vA;
+          void main(){ vA = 0.55 + 0.45 * sin(uTime * (1.2 + fract(seed) * 2.5) + seed * 6.0);
+            gl_PointSize = size * uPR; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+        fragmentShader: `varying float vA; void main(){ vec2 c = gl_PointCoord - 0.5; float d = length(c);
+            float a = smoothstep(0.5, 0.0, d); gl_FragColor = vec4(vec3(1.0, 0.97, 0.9) * a * vA * 1.6, 1.0); }`,
+        transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false,
+      });
+      this.stars = new THREE.Points(g, mat);
+      this.stars.frustumCulled = false;
+      this.stars.renderOrder = -1;
+      this.scene.add(this.stars);
+    }
+    if (this.stars) this.stars.visible = on;
   }
 
   async buildShell() {
@@ -926,13 +1181,14 @@ export class Room3D {
       floorSrc?.tex ? texturedMaterial(floorSrc.tex, { rep: floorSrc.rep || 3, tint: floorSrc.tint }) : (floorSrc?.color ? new THREE.MeshStandardMaterial({ color: floorSrc.color, roughness: 0.7 }) : plainFloor),
       new THREE.MeshStandardMaterial({ color: sh.ceil, roughness: 0.95 }),
       // 備え付けの物（浴槽・キッチンなど）
-      Promise.all(sh.built.map(b => buildFixture(b, sh).catch(e => { console.warn('fixture', b.kind, e); return null; }))),
+      Promise.all(sh.built.map(b => buildFixture(b, sh, this.st?.fix?.[b.kind]).catch(e => { console.warn('fixture', b.kind, e); return null; }))),
     ]);
     if (this.sh !== sh) return; // 作っているあいだに別の部屋へ移った
     // 天井は下からの照り返しが少ないので、ほんのり明るくしておく
     ceilM.emissive = new THREE.Color(this.mood.hemiGround).multiplyScalar(0.35);
     if (!wallSrc?.tex) wallM.userData.rep = 1;
     ceilM.userData.rep = 1;
+    this.ceilMat = ceilM;
     if (!floorSrc?.tex) floorM.userData.rep = 1;
     const darkWall = new THREE.Color(wallM.color).getHSL({}).l < 0.35 || /concrete|black/.test(wallSrc?.tex || '');
     const wallV = { name: darkWall ? '黒' : '' };
@@ -1034,6 +1290,10 @@ export class Room3D {
       shadowAll(door);
     } else door = makeDoor(darkWall ? '#3a3633' : '#ddd5c8');
     const dg = new THREE.Group(); dg.add(door);
+    // ドアのうしろをふさぐ板：扉と枠のすき間から外（裏側）が見えないように
+    const back = new THREE.Mesh(new THREE.BoxGeometry(sh.door.w + 0.02, sh.door.h + 0.02, WALL_T - 0.07), new THREE.MeshStandardMaterial({ color: '#2b2622', roughness: 0.9 }));
+    back.position.set(0, (sh.door.h + 0.02) / 2 - 0.01, -0.07 - (WALL_T - 0.07) / 2);
+    dg.add(back);
     dg.traverse(o => { if (o.isMesh) o.userData.door = true; });
     putOnWall(dg, dseg, sh.door.a);
     this.door = dg;
@@ -1251,8 +1511,9 @@ function makeDoor(color) {
   frame(0.05, DH + 0.05, -DW / 2 - 0.02, DH / 2);
   frame(DW + 0.14, 0.05, 0, DH + 0.02);
   // 扉の板（ふちの溝つき）
-  const leaf = new THREE.Mesh(new THREE.BoxGeometry(DW - 0.02, DH - 0.02, 0.04), paint);
-  leaf.position.set(0, DH / 2, -0.03); leaf.castShadow = leaf.receiveShadow = true;
+  // 扉は枠に少し食いこむ大きさにして、まわりにすき間ができないようにする
+  const leaf = new THREE.Mesh(new THREE.BoxGeometry(DW + 0.01, DH + 0.02, 0.04), paint);
+  leaf.position.set(0, (DH + 0.02) / 2, -0.03); leaf.castShadow = leaf.receiveShadow = true;
   g.add(leaf);
   const groove = new THREE.MeshStandardMaterial({ color: new THREE.Color(color).multiplyScalar(0.82), roughness: 0.6 });
   for (const [w, h, y] of [[DW - 0.24, 0.9, 1.45], [DW - 0.24, 0.8, 0.55]]) {
@@ -1311,6 +1572,9 @@ function makeFixtures(sh, trimColor) {
   }
   const D = sh.door;
   const swA = free(D.wall, D.a - D.w / 2 - 0.22, 1.2) ? D.a - D.w / 2 - 0.22 : D.a + D.w / 2 + 0.22;
+  const hit = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.26, 0.04), new THREE.MeshBasicMaterial({ visible: false }));
+  hit.position.z = 0.02; sw.add(hit);
+  sw.traverse(o => { o.userData.lightSwitch = true; });
   onWall(sw, D.wall, swA, 1.2);
   if (sh.plain) return g;
   // コンセント
