@@ -2048,7 +2048,7 @@ function sakuraTree(s) {
   // 花（雲のように）
   const list = [];
   for (const t of tips) {
-    const n = 26;
+    const n = 18;
     for (let i = 0; i < n; i++) {
       const v = V3(R() - 0.5, (R() - 0.35) * 0.8, R() - 0.5).normalize().multiplyScalar(0.06 + R() * 0.17);
       list.push(t.clone().add(v));
@@ -2058,7 +2058,7 @@ function sakuraTree(s) {
   const m = new THREE.Matrix4(), q = new THREE.Quaternion(), c = new THREE.Color();
   list.forEach((p, i) => {
     q.setFromEuler(new THREE.Euler(R() * TAU, R() * TAU, R() * TAU));
-    m.compose(p, q, V3(1, 1, 1).multiplyScalar(0.022 + R() * 0.012));
+    m.compose(p, q, V3(1, 1, 1).multiplyScalar(0.026 + R() * 0.014));
     im.setMatrixAt(i, m); im.setColorAt(i, c.setHSL(0.94 + R() * 0.04, 0.7, 0.82 + R() * 0.1));
   });
   im.castShadow = true; im.receiveShadow = true;
@@ -2279,13 +2279,14 @@ function crystalChandelier(s) {
       const p = V3(c * R, y + rise * 0.3, sn * R);
       cups.push(p);
       // 雫のクリスタル（3つ連なり）
-      for (let k = 0; k < 3; k++) drops.push([p.x, p.y - 0.05 - k * 0.04, p.z, k === 2 ? 1.6 : 0.8]);
+      for (let k = 0; k < 5; k++) drops.push([p.x, p.y - 0.05 - k * 0.042, p.z, k === 4 ? 1.7 : 0.8]);
+      for (const sd of [-1, 1]) for (let k = 0; k < 3; k++) drops.push([p.x * 0.88 - sd * sn * 0.04, p.y - 0.06 - k * 0.04, p.z * 0.88 + sd * c * 0.04, k === 2 ? 1.4 : 0.7]);
     }
     // 腕のあいだのガーランド
     for (let i = 0; i < n; i++) {
       const a0 = i / n * TAU, a1 = (i + 1) / n * TAU;
-      for (let k = 1; k < 10; k++) {
-        const t = k / 10, a = a0 + (a1 - a0) * t, sag = Math.sin(PI * t) * 0.09;
+      for (let k = 1; k < 13; k++) {
+        const t = k / 13, a = a0 + (a1 - a0) * t, sag = Math.sin(PI * t) * 0.09;
         beads.push([Math.cos(a) * R * 0.98, y + rise * 0.3 - 0.03 - sag, Math.sin(a) * R * 0.98]);
       }
     }
@@ -2294,9 +2295,9 @@ function crystalChandelier(s) {
   for (let i = 0; i < 12; i++) { const a = i / 12 * TAU; for (let k = 0; k < 4; k++) beads.push([Math.cos(a) * (0.09 - k * 0.012), -1.0 - k * 0.04, Math.sin(a) * (0.09 - k * 0.012)]); drops.push([Math.cos(a) * 0.04, -1.18, Math.sin(a) * 0.04, 1.2]); }
   const crys = new THREE.Group(); g.add(crys);
   const m4 = new THREE.Matrix4(), q = new THREE.Quaternion();
-  const dm = new THREE.InstancedMesh(cg('prismDrop', () => new THREE.OctahedronGeometry(0.018, 0)), PRISM(), drops.length);
+  const dm = new THREE.InstancedMesh(cg('prismDrop', () => new THREE.OctahedronGeometry(0.022, 0)), PRISM(), drops.length);
   drops.forEach(([x, y, z, k], i) => { q.setFromEuler(new THREE.Euler(0, i, 0)); m4.compose(V3(x, y, z), q, V3(1, 1.8 * k, 1)); dm.setMatrixAt(i, m4); });
-  const bm = new THREE.InstancedMesh(cg('prismBead', () => new THREE.OctahedronGeometry(0.009, 0)), PRISM(), beads.length);
+  const bm = new THREE.InstancedMesh(cg('prismBead', () => new THREE.OctahedronGeometry(0.012, 0)), PRISM(), beads.length);
   beads.forEach(([x, y, z], i) => { m4.compose(V3(x, y, z), q.setFromEuler(new THREE.Euler(i, i * 2, 0)), V3(1, 1, 1)); bm.setMatrixAt(i, m4); });
   crys.add(dm, bm);
   // 燭台と電球（ろうそく形）
@@ -2327,20 +2328,19 @@ function leatherSofa(s) {
     mk(g, B(cw - 0.02, 0.44, 0.16, 0.07), L, x, 0.7, -D / 2 + 0.27, -0.18, 0, 0);
   }
   // ブランケット（ひじ掛けにかける）
-  const blanket = cg('blanket', () => {
-    const gg = new THREE.PlaneGeometry(0.5, 1.0, 10, 30); const p = gg.attributes.position;
+  const ax = W / 2 - 0.2;
+  const blanket = cg('blanket' + r4(W), () => {
+    const gg = new THREE.PlaneGeometry(1, 1, 12, 36); const p = gg.attributes.position;
     for (let i = 0; i < p.count; i++) {
-      const x = p.getX(i), v = p.getY(i) + 0.5;
-      // 前に垂れて、ひじ掛けの上を通り、外に垂れる
-      let y, z;
-      if (v < 0.4) { y = 0.62 - (0.4 - v) * 1.0; z = 0.5; } else if (v < 0.75) { y = 0.62; z = 0.5 - (v - 0.4) * 2.6; } else { y = 0.62 - (v - 0.75) * 1.4; z = -0.41; }
-      p.setXYZ(i, x + Math.sin(v * 30) * 0.008, y + Math.sin(x * 25 + v * 4) * 0.006, z);
+      const u = p.getX(i), v = p.getY(i) + 0.5;
+      let x, y;
+      if (v < 0.3) { x = ax - 0.02; y = 0.53 + v / 0.3 * 0.17; } else if (v < 0.55) { x = ax - 0.02 + (v - 0.3) / 0.25 * 0.24; y = 0.7 + Math.sin((v - 0.3) / 0.25 * PI) * 0.015; } else { x = ax + 0.22; y = 0.7 - (v - 0.55) / 0.45 * 0.42; }
+      p.setXYZ(i, x + Math.sin(u * 20 + v * 3) * 0.008 * (v > 0.55 ? 1 : 0.3), y, 0.12 + u * 0.55 + Math.sin(v * 25) * 0.006);
     }
     gg.computeVertexNormals(); return gg;
   });
-  const bl = new THREE.Group(); bl.position.set(W / 2 - 0.12, 0.06, 0.0); bl.rotation.y = PI / 2; g.add(bl);
   const knit = cm('knit', () => phys({ color: '#d9cdb8', roughness: 1, sheen: 1, sheenColor: new THREE.Color('#ffffff'), bumpMap: boucleTex(), bumpScale: 2, side: THREE.DoubleSide }));
-  mk(bl, blanket, knit, 0, 0, 0);
+  mk(g, blanket, knit, 0, 0, 0);
   mk(g, B(0.44, 0.42, 0.14, 0.07), velvet('#2f4a3c'), -W / 2 + 0.45, 0.76, -0.2, -0.25, 0.25, 0);
   mk(g, B(0.4, 0.38, 0.13, 0.06), cloth('#e8dcc4'), -W / 2 + 0.8, 0.74, -0.18, -0.25, -0.1, 0);
   return g;
@@ -2380,9 +2380,11 @@ function fireplace(s) {
   // 真ちゅうのフェンダーと、上の飾り
   tube(g, [V3(-0.5, 0.1, 0.25), V3(-0.45, 0.1, 0.33), V3(0.45, 0.1, 0.33), V3(0.5, 0.1, 0.25)], 0.012, BRASS(), 24, 8);
   for (const sx of [-1, 1]) { mk(g, LA(smooth([[0.04, 0], [0.04, 0.01], [0.015, 0.04], [0.012, 0.18], [0.025, 0.2]], 12), 16), GOLD(), sx * 0.6, H + 0.06, 0.05); candleWax(g, sx * 0.6, H + 0.26, 0.05, 0.12, 0.012, sx + 2); }
-  mk(g, cg('clockface', () => new THREE.CircleGeometry(0.08, 32)), paintG('#f6f0e2', 0.4), 0, H + 0.2, 0.09);
-  mk(g, T(0.085, 0.012, 8, 32), GOLD(), 0, H + 0.2, 0.09);
-  mk(g, B(0.24, 0.1, 0.1, 0.01), GOLD(), 0, H + 0.11, 0.05);
+  mk(g, cg('clockface', () => new THREE.CircleGeometry(0.07, 32)), paintG('#f6f0e2', 0.4), 0, H + 0.2, 0.087);
+  mk(g, T(0.075, 0.008, 6, 32), GOLD(), 0, H + 0.2, 0.087);
+  rod(g, V3(0, H + 0.2, 0.09), V3(0.03, H + 0.24, 0.09), 0.002, paintG('#111', 0.5)); rod(g, V3(0, H + 0.2, 0.09), V3(-0.045, H + 0.2, 0.09), 0.002, paintG('#111', 0.5));
+  mk(g, B(0.22, 0.24, 0.07, 0.02), wood('walnut'), 0, H + 0.18, 0.05);
+  mk(g, B(0.26, 0.03, 0.1, 0.006), GOLD(), 0, H + 0.075, 0.05);
   addTick(g, t => {
     for (const f of fl) f.material.uniforms.uTime.value = t;
     ember.emissiveIntensity = 1.2 + 0.4 * Math.sin(t * 2.1) * Math.sin(t * 3.7);
@@ -2404,7 +2406,7 @@ function pianoShape() {
 function grandPiano(s) {
   const g = new THREE.Group();
   const K = PIANO_BLACK();
-  const flat = (key, sh, d, bev) => cg(key, () => { const gg = new THREE.ExtrudeGeometry(sh, { depth: d, bevelEnabled: bev > 0, bevelThickness: bev, bevelSize: bev, bevelSegments: 2, curveSegments: 32 }); gg.rotateX(-PI / 2); return gg; });
+  const flat = (key, sh, d, bev) => cg(key, () => { const gg = new THREE.ExtrudeGeometry(sh, { depth: d, bevelEnabled: bev > 0, bevelThickness: bev, bevelSize: bev, bevelSegments: 2, curveSegments: 20 }); gg.rotateX(-PI / 2); return gg; });
   // 胴（shape の y が奥 → -z）
   const caseY = 0.66, caseH = 0.3;
   mk(g, flat('pianoCase', pianoShape(), caseH, 0.008), K, 0, caseY, 0);
@@ -2568,7 +2570,7 @@ function neonSunset(s) {
   const g = new THREE.Group();
   mk(g, B(0.9, 0.7, 0.012, 0.004), cm('acryl2', () => phys({ color: '#ffffff', roughness: 0.05, transparent: true, opacity: 0.18, clearcoat: 1, depthWrite: false })), 0, 0, 0.03);
   for (const [x, y] of [[-0.42, 0.32], [0.42, 0.32], [-0.42, -0.32], [0.42, -0.32]]) rod(g, V3(x, y, 0), V3(x, y, 0.04), 0.007, CHROME());
-  const orange = neonMat('#ff7a2a', 3), pink = neonMat('#ff3a8a', 3), green = neonMat('#3aff8a', 2.8);
+  const orange = neonMat('#ff7a2a', 3), pink = neonMat('#ff3a8a', 3), green = neonMat('#3aff8a', 4);
   // 太陽（半円と横線）
   const sun = []; for (let i = 0; i <= 24; i++) { const a = i / 24 * PI; sun.push(V3(Math.cos(a) * 0.26, -0.05 + Math.sin(a) * 0.26, 0.05)); }
   polyTube(g, sun.concat([V3(-0.26, -0.05, 0.05)]), 0.007, orange, true, 6);
@@ -2579,7 +2581,7 @@ function neonSunset(s) {
     const pts = []; for (let i = 0; i <= 6; i++) { const t = i / 6; pts.push(V3(0.12 + dx * t, 0.28 + dy * t + Math.sin(t * PI) * 0.06, 0.06)); }
     polyTube(g, pts, 0.005, green, false, 6);
   }
-  const hl = halo(g, 1.3, 1.1, haloMat('#ff5a6a', 5, 0.5), 0, 0, 0.004);
+  const hl = halo(g, 1.2, 1.0, haloMat('#ff5a6a', 5, 0.28), 0, 0, 0.004);
   addTick(g, t => { pink.emissiveIntensity = 2.6 + 0.5 * Math.sin(t * 1.7); hl.material.uniforms.uTime.value = t; });
   setLight(g, 0, 0.8, '#ff6a6a');
   return g;
@@ -2674,7 +2676,7 @@ function astronaut(s) {
   const visor = cm('visor', () => phys({ color: '#d8a640', metalness: 1, roughness: 0.04, iridescence: 0.6, iridescenceIOR: 1.8 }));
   mk(g, C(0.22, 0.24, 0.08, 40), marble('black'), 0, 0.04, 0);
   mk(g, T(0.225, 0.006, 6, 64), GOLD(), 0, 0.08, 0, PI / 2);
-  const cap = (a, b, r) => { rod(g, a, b, r, suit, r * 0.95, 14); mk(g, S(r, 14, 10), suit, a.x, a.y, a.z); mk(g, S(r * 0.95, 14, 10), suit, b.x, b.y, b.z); };
+  const cap = (a, b, r) => { rod(g, a, b, r, suit, r * 0.95, 12); mk(g, S(r, 12, 8), suit, a.x, a.y, a.z); mk(g, S(r * 0.95, 12, 8), suit, b.x, b.y, b.z); };
   // 足（ブーツ）
   for (const sx of [-1, 1]) {
     mk(g, B(0.09, 0.06, 0.15, 0.025), gray, sx * 0.07, 0.11, 0.02);
@@ -2692,7 +2694,7 @@ function astronaut(s) {
   cap(V3(0.17, 0.78, 0), V3(0.28, 0.9, 0.02), 0.045); cap(V3(0.28, 0.92, 0.02), V3(0.3, 1.06, 0.04), 0.042);
   mk(g, S(0.05, 12, 10), gray, 0.3, 1.1, 0.05);
   // ヘルメット
-  mk(g, S(0.15, 32, 24), suit, 0, 0.98, 0);
+  mk(g, S(0.15, 28, 18), suit, 0, 0.98, 0);
   const vg = cg('visorG', () => new THREE.SphereGeometry(0.152, 32, 20, -0.9 + PI / 2, 1.8, 0.75, 1.2));
   mk(g, vg, visor, 0, 0.98, 0.0);
   mk(g, T(0.12, 0.02, 8, 32), gray, 0, 0.86, 0, PI / 2);
@@ -2708,19 +2710,21 @@ function plantTower(s) {
   const tiers = [[0.0, 0.42, 0.34], [0.55, 0.34, 0.3], [1.05, 0.27, 0.26], [1.5, 0.2, 0.24]];
   rod(g, V3(0, 0, 0), V3(0, 1.9, 0), 0.02, I);
   const pot = cm('towerpot', () => phys({ color: '#d9d2c4', roughness: 0.7 }));
+  const leaves = [];
   tiers.forEach(([y, r, h], i) => {
     mk(g, LA([[0.02, 0], [r * 0.85, 0], [r, h * 0.9], [r * 1.02, h], [r * 0.95, h]], 32), pot, 0, y, 0);
     mk(g, C(r * 0.95, r * 0.95, 0.01, 32), paintG('#3a2a1c', 1), 0, y + h - 0.02, 0);
-    if (PROC) {
-      const p = PROC({ type: 'plant', foliage: i === 3 ? 'monstera' : 'bush', pot: 'bowl', potColor: '#3a2a1c', size: 0.5 + r });
-      p.scale.setScalar(1.1); p.position.set(0, y + h - 0.12, 0);
-      p.traverse(o => { if (o.isMesh && !o.isInstancedMesh && o.geometry.type === 'LatheGeometry') o.visible = false; });
-      g.add(p);
-    }
+    fernInto(leaves, V3(0, y + h - 0.02, 0), r * 2.2 + 0.3, 40 + i);
+    fernInto(leaves, V3(0, y + h - 0.02, 0), r * 1.6 + 0.2, 60 + i);
     // 垂れるつる
     for (let k = 0; k < 6; k++) { const a = k / 6 * TAU + i; const x = Math.cos(a) * r, z = Math.sin(a) * r; ivyInto(g, V3(x, y + h, z), V3(Math.cos(a), 0, Math.sin(a)), 0.25 + (k % 3) * 0.1, i * 10 + k); }
   });
   flushIvy(g);
+  const im = new THREE.InstancedMesh(LEAFG(), FERN(), leaves.length);
+  const c = new THREE.Color();
+  leaves.forEach(([m, hh, l], i) => { im.setMatrixAt(i, m); im.setColorAt(i, c.setHSL(hh, 0.55, l * 0.6)); });
+  im.castShadow = true; im.receiveShadow = true;
+  g.add(im);
   return g;
 }
 const IVY = [];
@@ -2788,7 +2792,7 @@ function discoBall(s) {
   mk(ball, geo, cm('discoM', () => phys({ color: '#ffffff', metalness: 1, roughness: 0.08, flatShading: true, vertexColors: true, envMapIntensity: 2 })), 0, 0, 0);
   const sp = sparkles(ball, shellPts(60, 0.205, 0.21, 2), { size: 0.04, colors: ['#ffffff', '#ffd0f0', '#d0f0ff'], speed: 3, base: 0.0 });
   // 壁に散る光の粒（まわる）
-  const dots = sparkles(g, shellPts(90, 0.9, 1.2, 4, -0.6).map((v, i) => i % 3 === 1 ? v - 0.65 : v), { size: 0.05, colors: ['#ff6ad0', '#6ad0ff', '#ffffff', '#ffe06a'], speed: 1.5, base: 0.5 });
+  const dots = sparkles(g, shellPts(45, 0.7, 1.0, 4, -0.6).map((v, i) => i % 3 === 1 ? v - 0.65 : v), { size: 0.035, colors: ['#ff6ad0', '#6ad0ff', '#ffffff', '#ffe06a'], speed: 1.5, base: 0.5 });
   addTick(g, t => { ball.rotation.y = t * 0.5; dots.rotation.y = t * 0.5; sp.material.uniforms.uTime.value = t; dots.material.uniforms.uTime.value = t; });
   setLight(g, -0.65, 0.7, '#ffd0f0');
   return g;
@@ -2911,12 +2915,13 @@ function bubbleChair(s) {
   mk(g, C(0.06, 0.06, 0.02, 16), CHROME(), 0, -0.01, 0);
   const ch = new Bag(); for (let k = 0; k < 16; k++) ch.add(T(0.016, 0.0035, 4, 10), 0, -0.03 - k * 0.032, 0, 0, (k % 2) * PI / 2, PI / 2); ch.mesh(g, CHROME());
   const y = -1.1;
-  const shellG = cg('bubble', () => new THREE.SphereGeometry(0.55, 40, 28, 0, TAU, 0, PI * 0.8).rotateX(PI / 2 - 0.15));
+  const shellG = cg('bubble', () => new THREE.SphereGeometry(0.55, 40, 28, 0, TAU, 0, PI * 0.8).rotateX(-(PI / 2 - 0.15)));
   mk(g, shellG, cm('acrylBubble', () => phys({ color: '#ffffff', roughness: 0.02, transparent: true, opacity: 0.18, envMapIntensity: 3, side: THREE.DoubleSide, depthWrite: false })), 0, y, 0);
-  mk(g, T(0.55 * Math.sin(PI * 0.8), 0.02, 8, 64), CHROME(), 0, y + Math.sin(0.15) * 0.55 * Math.cos(PI * 0.8) * -1, 0.55 * Math.cos(PI * 0.8) * -1 + 0.0, -0.15);
+  const od = 0.55 * Math.cos(PI * 0.2);
+  mk(g, T(0.55 * Math.sin(PI * 0.8), 0.02, 8, 64), CHROME(), 0, y - Math.sin(0.15) * od, Math.cos(0.15) * od, 0.15);
   mk(g, S(0.06, 12, 8), CHROME(), 0, y + 0.55, 0);
   const cu = cloth(s.fabric || '#f2f2f2');
-  mk(g, LA(smooth([[0.001, 0], [0.36, 0.0], [0.4, 0.06], [0.33, 0.12], [0.001, 0.12]], 10), 32), cu, 0, y - 0.38, 0.0);
+  mk(g, LA(smooth([[0.001, 0], [0.36, 0.0], [0.4, 0.06], [0.33, 0.12], [0.001, 0.12]], 10), 32), cu, 0, y - 0.4, 0.05);
   mk(g, B(0.5, 0.45, 0.14, 0.07), cu, 0, y - 0.05, -0.32, -0.25);
   mk(g, B(0.32, 0.28, 0.12, 0.06), cloth('#ff8ab0'), 0.12, y - 0.12, -0.18, -0.3, 0.3);
   return g;

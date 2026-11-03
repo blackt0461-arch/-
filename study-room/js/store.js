@@ -2,7 +2,8 @@
 let KEY = null;
 const DAY_START_HOUR = 6; // 1日の区切りは朝6時
 export const REVIEW_GAPS = [1, 3, 7]; // 正解するごとに 1日後 → 3日後 → 7日後
-export const SET_SIZE = 5;
+export const SET_SIZE = 1; // 1問ずつ（手軽さ重視）
+export const BONUS_PER_DAY = 5; // その日の最初の5問はゲージ1.5倍
 
 function blank() {
   return {
@@ -144,6 +145,9 @@ export function currentStreak() {
   return 0;
 }
 export function playedToday() { return state.streak.last === dayKey(); }
+// 今日解いた数（ゲージ1.5倍は最初の5問）
+export function solvedToday() { const t = state.today; return t && t.day === dayKey() ? t.n : 0; }
+function countToday() { const d = dayKey(); if (!state.today || state.today.day !== d) state.today = { day: d, n: 0 }; state.today.n++; }
 
 // --- 復習 ---
 export function reviewDue(sub, problems) {
@@ -241,6 +245,7 @@ export function addAnswer(sub, unit, kind) {
   const gained = XP[kind] || 0;
   p.xp += gained;
   p.solved += 1;
+  countToday();
   if (kind !== 'wrong') p.correct += 1;
   if (kind === 'perfect') p.perfect += 1;
   const u = (sub.units || (sub.units = {}))[unit] || (sub.units[unit] = { solved: 0, correct: 0, perfect: 0 });
@@ -281,9 +286,14 @@ export function claimLoginBonus() {
 
 // --- 持ち物・配置 ---
 export function own(itemId, n = 1) {
-  const inv = house().inventory;
-  inv[itemId] = (inv[itemId] || 0) + n;
+  const h = house();
+  h.inventory[itemId] = (h.inventory[itemId] || 0) + n;
+  // 図鑑：一度でも手に入れた物の記録（持ち物の数とは別に残す）
+  const c = h.collected || (h.collected = {});
+  if (!c[itemId]) c[itemId] = Date.now();
 }
+// 図鑑に載っているか（前の版の持ち物も、持っていれば載せる）
+export function collected(itemId) { const h = house(); return !!(h.collected?.[itemId] || h.inventory[itemId]); }
 export function owned(itemId) { return house().inventory[itemId] || 0; }
 // 部屋に置いている数（持ち物の個数より多くは置けない）
 export function placedCount(itemId) {

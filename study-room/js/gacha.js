@@ -203,6 +203,27 @@ export function pullTen(owned = () => 0, rng = Math.random, opts = {}) {
   }
   return out;
 }
+// チケットで引く（kind = 'ticket' ふつう | 'ticket4' ★4以上確定 | 'ticket5' ★5限定確定）
+// ticket5 のシリーズ：opts.banner がシリーズ id ならそれ、なければ opts.series、なければ今開催中のシリーズ（opts.now）
+export const TICKET_KINDS = ['ticket', 'ticket4', 'ticket5'];
+export function ticket5Series(opts = {}) {
+  const ok = (id) => id && SERIES.some((s) => s.id === id);
+  if (ok(opts.banner)) return opts.banner;
+  if (ok(opts.series)) return opts.series;
+  const act = activeSeries(opts.now || new Date());
+  return act.length ? act[0].id : null;
+}
+export function pullWithTicket(kind = 'ticket', owned = () => 0, rng = Math.random, opts = {}) {
+  if (kind === 'ticket4') return pick(rollRarity(rng, 4), owned, rng, opts.banner);
+  if (kind === 'ticket5') {
+    const id = ticket5Series(opts);
+    const pool = id ? bySeries(id) : GACHA_ITEMS.filter((it) => it.limited);
+    const item = pool[Math.min(pool.length - 1, Math.floor(rng() * pool.length))];
+    const dup = (owned(item.id) || 0) > 0;
+    return { item, rarity: 5, dup, shard: dup ? 5 : null };
+  }
+  return pullOne(owned, rng, opts);
+}
 // かけらで交換できる家具（まだ持っていない物。全部持っていたら全部）
 // opts.includeLimited = true で ★5 限定も交換の候補に入れる（opts.series でシリーズをしぼれる）
 export function exchangeable(rarity, owned = () => 0, opts = {}) {
@@ -214,16 +235,16 @@ export function exchangeable(rarity, owned = () => 0, opts = {}) {
 }
 
 // ───────── チケットのもらい方 ─────────
-// before / after = { solved, streak, rank, mastered }（解いた数・連続日数・ランク・克服した問題の数）
-// 50問ごと・連続7日ごと・ランク5つごとに1枚。新しく克服した問題1つにつき 30% で1枚。
-export const TICKET_RULES = { solvedEvery: 50, streakEvery: 7, rankEvery: 5, masteredChance: 0.3 };
+// before / after = { solved, streak, mastered }（解いた数・連続日数・克服した問題の数）
+// 50問ごと・連続7日ごとに1枚。新しく克服した問題1つにつき 30% で1枚。
+// （ログインボーナスと Lv アップのごほうびは store.js で管理）
+export const TICKET_RULES = { solvedEvery: 50, streakEvery: 7, masteredChance: 0.3 };
 const crossed = (a = 0, b = 0, step) => Math.max(0, Math.floor(b / step) - Math.floor(a / step));
 export function ticketsEarned(before = {}, after = {}, rng = Math.random) {
   let n = 0;
   n += crossed(before.solved, after.solved, TICKET_RULES.solvedEvery);
   // 連続日数は途切れると 0 に戻るので、のびたときだけ数える
   if ((after.streak || 0) > (before.streak || 0)) n += crossed(before.streak, after.streak, TICKET_RULES.streakEvery);
-  n += crossed(before.rank, after.rank, TICKET_RULES.rankEvery);
   const newly = Math.max(0, (after.mastered || 0) - (before.mastered || 0));
   for (let i = 0; i < newly; i++) if (rng() < TICKET_RULES.masteredChance) n++;
   return n;

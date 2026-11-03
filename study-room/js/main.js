@@ -4,7 +4,7 @@ import { Room3D, moodNow } from './room3d.js';
 import { ROOMS, roomDef, STYLES, styleDef, homeOf, VILLA_MIN_ITEMS } from './rooms.js';
 import { GENRES, ITEMS, itemById, itemsOf, SPECIAL_IDS, STARTER } from './items.js';
 import { icon, GENRE_ICON, SUBJECT_ICON } from './icons.js';
-import { ticketSVG } from './tickets.js';
+import { ticketSVG, TICKET_NAME } from './tickets.js';
 import { thumbHTML, hydrateThumbs } from './thumbs.js';
 import { loadModel } from './loaders.js';
 import { validProblems, SYMBOLS } from './problems.js';
@@ -748,7 +748,7 @@ function chooseSubject() {
       const st = s.ready ? S.subject(s.id) : null;
       const resume = st && st.session && st.session.idx < st.session.set.length;
       const stats = st ? S.stats(st, PROBLEMS) : null;
-      const meta = !s.ready ? '準備中' : resume ? '続きから' : stats.due ? `復習 ${stats.due}問` : (!S.playedToday() ? 'ゲージ1.5倍' : '1セット5問');
+      const meta = !s.ready ? '準備中' : resume ? '続きから' : stats.due ? `復習 ${stats.due}問` : (S.solvedToday() < S.BONUS_PER_DAY ? 'ゲージ1.5倍' : '1問ずつ');
       return `<button class="subj ${s.ready ? '' : 'soon'}" data-s="${s.id}" ${s.ready ? '' : 'disabled'}>
         <span class="s-ic">${icon(SUBJECT_ICON[s.id] || 'book')}</span><b>${s.name}</b><small>${meta}</small></button>`;
     }).join('')}</div>
@@ -781,13 +781,14 @@ function showMenu() {
     </section>
     <nav class="menu-list">
       <button data-m="records">${icon('chart')}<span>記録<small>分野ごとの成績・連続日数</small></span>${icon('chevronRight')}</button>
+      <button data-m="bag">${icon('box')}<span>持ち物<small>家具・チケット・かけら</small></span>${icon('chevronRight')}</button>
       <button data-m="news">${icon('bell')}<span>お知らせ<small>アップデートや運営からのお知らせ</small></span>${newsBadge ? `<i class="badge">${newsBadge}</i>` : ''}${icon('chevronRight')}</button>
       <button data-m="ranking">${icon('trophy')}<span>週間ランキング<small>今週解いた問題の数（月曜の朝6時で区切り）</small></span>${icon('chevronRight')}</button>
       <button data-m="friends">${icon('users')}<span>フレンド<small>申請・フレンドの部屋を見に行く</small></span>${friendBadge ? `<i class="badge">${friendBadge}</i>` : ''}${icon('chevronRight')}</button>
       <button data-m="settings">${icon('gear')}<span>設定<small>画質・データ・ログアウト</small></span>${icon('chevronRight')}</button>
       ${isAdmin() ? `<button data-m="admin">${icon('shield')}<span>管理者<small>みんなの記録と部屋</small></span>${icon('chevronRight')}</button>` : ''}
     </nav>`);
-  el.querySelectorAll('.menu-list button').forEach(b => b.onclick = () => ({ records: showRecords, news: showNews, ranking: showRanking, friends: showFriends, settings: showSettings, admin: showAdmin })[b.dataset.m]());
+  el.querySelectorAll('.menu-list button').forEach(b => b.onclick = () => ({ records: showRecords, bag: () => showBag(), news: showNews, ranking: showRanking, friends: showFriends, settings: showSettings, admin: showAdmin })[b.dataset.m]());
   paintSync();
 }
 
@@ -828,6 +829,40 @@ function showRecords() {
   el.querySelector('.back').onclick = showMenu;
 }
 
+// =========================== 持ち物 ===========================
+// 家具（持っている数と置いている数）と、アイテム（チケット・かけら・引きかえ券）を分けて見る
+function showBag(tab = 'furniture', genre = '') {
+  const hs = HS();
+  const owned = Object.keys(hs.inventory).map(itemById).filter(it => it && S.owned(it.id) > 0 && it.place !== 'surface' && (!genre || it.genre === genre));
+  const surf = Object.keys(hs.inventory).map(itemById).filter(it => it && it.place === 'surface');
+  const items = [
+    ['ticket', hs.rareTickets || 0, ticketSVG('ticket', 'mini'), 'ガチャを1回引ける'],
+    ['ticket4', hs.rareTickets4 || 0, ticketSVG('ticket4', 'mini'), '1回引くと★4以上が必ず出る'],
+    ['ticket5', hs.rareTickets5 || 0, ticketSVG('ticket5', 'mini'), '限定シリーズの★5が必ず出る'],
+    ['shard4', hs.shards4 || 0, `<span class="shard s4">${icon('sparkle')}</span>`, '★4のかけら。5個で好きな★4と交換'],
+    ['shard5', hs.shards5 || 0, `<span class="shard s5">${icon('sparkle')}</span>`, '★5のかけら。5個で好きな★5と交換'],
+    ['exchange', hs.tickets || 0, `<span class="shard ex">${icon('gift')}</span>`, '引きかえ券。ゲージなしで家具を1つ買える'],
+  ];
+  const NAMES = { ...TICKET_NAME, shard4: '★4のかけら', shard5: '★5のかけら', exchange: '引きかえ券' };
+  const el = screenWithTabs('bag', `<button class="icon back">${icon('back')}</button><h2>持ち物</h2><span></span>`, 'menu', `
+    <div class="seg bagtabs"><button data-t="furniture" class="${tab === 'furniture' ? 'on' : ''}">${icon('sofa')}家具</button><button data-t="items" class="${tab === 'items' ? 'on' : ''}">${icon('star')}アイテム</button></div>
+    ${tab === 'furniture' ? `
+      <div class="zk-tabs"><button data-g="" class="${!genre ? 'on' : ''}">すべて</button>${GENRES.map(g => `<button data-g="${g.id}" class="${genre === g.id ? 'on' : ''}">${icon(GENRE_ICON[g.id] || 'box')}${g.name}</button>`).join('')}</div>
+      ${owned.length ? `<div class="zk-grid">${owned.map(it => {
+        const n = S.owned(it.id), used = S.placedCount(it.id);
+        return `<div class="zk-item have bag-item"><span class="thumb">${thumbHTML(it)}</span><b>${esc(it.name)}</b>
+          <small class="bag-n ${used >= n ? 'full' : ''}">置いている ${used} / 持っている ${n}</small></div>`;
+      }).join('')}</div>` : '<p class="empty">まだ家具を持っていません。</p>'}
+      ${!genre && surf.length ? `<h3 class="sec">壁・床・ドア・窓・カーテン（${surf.length}）</h3><div class="zk-grid">${surf.map(it => `<div class="zk-item have"><span class="thumb">${thumbHTML(it)}</span><b>${esc(it.name)}</b></div>`).join('')}</div>` : ''}
+    ` : `
+      <div class="bag-items">${items.map(([k, n, art, desc]) => `
+        <div class="bag-row ${n ? '' : 'zero'}"><span class="bag-art">${art}</span><span class="bag-t"><b>${NAMES[k]}</b><small>${desc}</small></span><b class="bag-cnt">×${n}</b></div>`).join('')}</div>
+    `}`);
+  el.querySelector('.back').onclick = showMenu;
+  el.querySelectorAll('.bagtabs button').forEach(b => b.onclick = () => showBag(b.dataset.t));
+  el.querySelectorAll('.zk-tabs button').forEach(b => b.onclick = () => showBag('furniture', b.dataset.g));
+}
+
 // =========================== 週間ランキング ===========================
 async function showRanking() {
   const wk = S.weekKey();
@@ -854,8 +889,8 @@ async function showRanking() {
 
 // =========================== 図鑑 ===========================
 function showZukan(genre = null) {
-  const all = ITEMS.filter(i => !i.special || S.owned(i.id));
-  const total = ITEMS.length, have = ITEMS.filter(i => S.owned(i.id)).length;
+  const all = ITEMS.filter(i => !i.special || S.collected(i.id));
+  const total = ITEMS.length, have = ITEMS.filter(i => S.collected(i.id)).length;
   const shown = genre ? (genre === 'special' ? ITEMS.filter(i => i.special) : all.filter(i => i.genre === genre && !i.special)) : null;
   const el = screenWithTabs('zukan', `<h2>図鑑</h2><span class="zk-total"><b>${have}</b> / ${total}</span>`, 'zukan', `
     <div class="zk-progress"><i style="width:${have / total * 100}%"></i></div>
@@ -866,7 +901,7 @@ function showZukan(genre = null) {
     </div>
     ${genre ? zukanGrid(shown) : GENRES.map(g => {
       const items = ITEMS.filter(i => i.genre === g.id && !i.special);
-      const n = items.filter(i => S.owned(i.id)).length;
+      const n = items.filter(i => S.collected(i.id)).length;
       return `<button class="zk-genre" data-g="${g.id}"><span class="g-ic">${icon(GENRE_ICON[g.id] || 'box')}</span><b>${g.name}</b>
         <span class="zk-bar"><i style="width:${n / items.length * 100}%"></i></span><small>${n} / ${items.length}${n >= items.length ? ' コンプリート' : ''}</small></button>`;
     }).join('')}`);
@@ -878,7 +913,7 @@ function showZukan(genre = null) {
 }
 function zukanGrid(items) {
   return `<div class="zk-grid">${items.map(it => {
-    const have = S.owned(it.id) > 0;
+    const have = S.collected(it.id);
     return `<button class="zk-item ${have ? 'have' : 'locked'} ${it.rare ? 'rare' : ''}" data-id="${it.id}">
       <span class="thumb">${thumbHTML(it)}</span>${have ? '' : `<span class="lock">${icon('lock')}</span>`}
       <b>${have ? esc(it.name) : '？？？'}</b></button>`;
@@ -1129,7 +1164,7 @@ function showSettings() {
 function startSet() {
   const st = sub();
   if (!(st.session && st.session.idx < st.session.set.length)) {
-    st.session = { set: S.buildSet(st, PROBLEMS), idx: 0, results: [], gained: 0, xp: 0, rankUp: false, startedAt: Date.now(), bonus: !S.playedToday() };
+    st.session = { set: S.buildSet(st, PROBLEMS), idx: 0, results: [], gained: 0, xp: 0, rankUp: false, startedAt: Date.now(), bonus: S.solvedToday() < S.BONUS_PER_DAY };
     S.save();
   }
   room3d.setActive(false);
@@ -1140,7 +1175,7 @@ function startSet() {
 function nextProblem() {
   const st = sub();
   const ss = st.session;
-  if (ss.idx >= ss.set.length) return finishSet();
+  if (ss.idx >= ss.set.length) return endOne(true);
   const item = ss.set[ss.idx];
   const p = byId[item.id];
   if (!p) { ss.idx++; return nextProblem(); }
@@ -1296,16 +1331,19 @@ function runProblem(p, isReview, retry) {
       stepEl.innerHTML = `
         <div class="res ok">
           <div class="ttl">${retry ? '確認できました' : perfect ? '正解！' : '正解（文字は1回まちがい）'}</div>
-          ${!retry ? `<div class="pts">+${pts}<small>ゲージ ${perfect && secs <= 20 ? '・早い！ボーナス' : ''}${ss.bonus && pts ? '・今日のはじめ ×1.5' : ''}</small></div>` : ''}
+          ${!retry ? `<div class="pts">+${pts}<small>ゲージ ${perfect && secs <= 20 ? '・早い！ボーナス' : ''}${ss.bonus && pts ? '・今日の最初の5問 ×1.5' : ''}</small></div>` : ''}
           ${xpLine}
           ${mastered ? `<div class="master">${icon('trophy')}克服しました！ 特別な家具がもらえます</div>` : ''}
           <div class="formula">${fx}<small>${esc(p.formula.name)}</small></div>
           <button class="link why">なぜこの公式？</button>
           <p class="reason hide">${esc(p.reason)}</p>
-          <button class="btn primary big next">次へ</button>
+          ${ss.rewards && (ss.rewards.ticket || ss.rewards.ticket4 || ss.rewards.ticket5) ? `<div class="ru-tickets">${['ticket', 'ticket4', 'ticket5'].filter(k => ss.rewards[k]).map(k => `<span>${ticketSVG(k, 'mini')}<b>×${ss.rewards[k]}</b></span>`).join('')}</div>` : ''}
+          ${HS().gauge >= S.gaugeMax(HS()) ? `<div class="gold-t">${icon('gift')}ゲージ満タン！ 家具が買えます</div>` : ''}
+          <div class="row2 after"><button class="btn ghost home">${icon('home')}部屋にもどる</button><button class="btn primary more">${icon('pencil')}もう1問</button></div>
         </div>`;
       stepEl.querySelector('.why').onclick = (e) => { stepEl.querySelector('.reason').classList.toggle('hide'); e.target.remove(); };
-      stepEl.querySelector('.next').onclick = () => { ss.idx++; S.save(); nextProblem(); };
+      stepEl.querySelector('.home').onclick = () => endOne(true);
+      stepEl.querySelector('.more').onclick = () => endOne(false);
     } else {
       vibrate([60, 40, 60]);
       const legend = [...p.quantities, p.target, ...p.formulaSymbols]
@@ -1324,6 +1362,17 @@ function runProblem(p, isReview, retry) {
   }
 
   step1();
+}
+
+// 1問おわったあと：部屋へ戻るか、もう1問
+function endOne(goHome) {
+  const st = sub();
+  st.session = null;
+  const added = ensureRooms();
+  S.save();
+  if (added.length) toast(`新しい部屋「${added.map(r => r.name).join('・')}」が開きました`, 3200);
+  if (goHome) { showHome(); receiveSpecials(); }
+  else startSet();
 }
 
 function finishSet() {

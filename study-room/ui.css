@@ -378,3 +378,27 @@ h3.sec { font-size: 14px; color: var(--muted); margin: 18px 4px 8px; font-weight
 .ru-tickets { display: flex; gap: 10px; justify-content: center; margin-top: 8px; flex-wrap: wrap; }
 .ru-tickets span { display: grid; justify-items: center; gap: 2px; width: 92px; }
 .ru-tickets b { font-size: 14px; color: #fff; }
+
+/* 持ち物 */
+.seg.bagtabs { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; background: rgba(255,255,255,.06); padding: 4px; border-radius: 14px; margin-bottom: 12px; }
+.seg.bagtabs button { display: inline-flex; gap: 6px; justify-content: center; align-items: center; border: 0; background: none; padding: 10px; border-radius: 11px; color: var(--muted); font-size: 14px; }
+.seg.bagtabs button.on { background: linear-gradient(180deg, var(--gold1), var(--gold2)); color: #3a2400; font-weight: 700; }
+.bag-n { font-size: 10.5px; color: var(--accent2); }
+.bag-n.full { color: var(--muted); }
+.bag-items { display: grid; gap: 8px; }
+.bag-row { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-radius: 16px; border: 1px solid var(--card-line); background: var(--card); }
+.bag-row.zero { opacity: .45; }
+.bag-art { width: 84px; flex: none; display: grid; place-items: center; }
+.bag-art .ticket-svg.mini { width: 100%; }
+.bag-t { flex: 1; display: grid; }
+.bag-t small { font-size: 11.5px; color: var(--muted); }
+.bag-cnt { font-size: 20px; color: var(--gold1); }
+.shard { width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; font-size: 24px; transform: rotate(45deg); }
+.shard .ic { transform: rotate(-45deg); }
+.shard.s4 { background: linear-gradient(135deg, #e7d4ff, #8e63e6); color: #2e1650; box-shadow: 0 0 14px rgba(180,140,255,.5); }
+.shard.s5 { background: linear-gradient(135deg, #fff1b8, #e3a92f); color: #4a2c00; box-shadow: 0 0 14px rgba(240,190,70,.6); }
+.shard.ex { background: linear-gradient(135deg, #ffe0b0, #d98c43); color: #3a2400; transform: none; border-radius: 14px; }
+.shard.ex .ic { transform: none; }
+
+.res .row2.after { margin-top: 4px; }
+.res .row2.after .btn { padding: 14px 8px; font-size: 15px; }
