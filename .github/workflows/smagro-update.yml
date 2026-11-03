@@ -1,0 +1,35 @@
+name: スマグロ データ更新
+
+on:
+  schedule:
+    - cron: '17 19 * * *'   # 毎日 日本時間 4:17
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: smagro-update
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: データを集める
+        run: python smagro-memory/tools/update.py
+      - name: 変わっていたら保存する
+        run: |
+          if git diff --quiet -- smagro-memory/data.json smagro-memory/tools/cache.json; then
+            echo "変化なし"; exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898+github-actions[bot]@users.noreply.github.com"
+          git add smagro-memory/data.json smagro-memory/tools/cache.json
+          git commit -m "スマグロ: データを自動更新"
+          git push
