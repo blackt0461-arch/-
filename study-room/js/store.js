@@ -297,6 +297,7 @@ export function collected(itemId) { if (unlimited) return true; const h = house(
 export function owned(itemId) { return unlimited ? 99 : (house().inventory[itemId] || 0); }
 // 管理者：すべての家具・壁紙などを、いくつでも持っている扱いにする（保存はしない）
 let unlimited = false;
+export function realOwned(itemId) { return house().inventory[itemId] || 0; } // 管理者の無限を除いた、本当に持っている数
 export function setUnlimited(on) { unlimited = !!on; }
 export function isUnlimited() { return unlimited; }
 // 部屋に置いている数（持ち物の個数より多くは置けない）

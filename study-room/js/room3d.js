@@ -49,8 +49,8 @@ const MOODS = {
     env: 0.3, exp: 0.95, ray: '#ffc27a', rayI: 0.22, lampI: 1.0, bg: 1.0, fog: '#e7b48e', hill: '#5c5a48',
     gradeWarm: '#ff9a50', gradeCool: '#40507a', split: 0.2, sat: 1.18, vig: 0.38, bloom: 0.75, bloomTh: 0.72 },
   night: { photo: 'night', sun: '#8fa8ff', sunI: 0.6, dir: [0.3, -0.5, 1], hemiSky: '#33405e', hemiGround: '#3a3026', hemiI: 0.3,
-    env: 0.1, exp: 1.1, ray: '#9fb4ff', rayI: 0.02, lampI: 3.0, bg: 0.12, fog: '#0f1420', hill: '#1d2430',
-    gradeWarm: '#ffb86a', gradeCool: '#2a4070', split: 0.22, sat: 1.1, vig: 0.42, bloom: 0.9, bloomTh: 0.6 },
+    env: 0.1, exp: 1.1, ray: '#9fb4ff', rayI: 0.02, lampI: 2.2, bg: 0.12, fog: '#0f1420', hill: '#1d2430',
+    gradeWarm: '#ffb86a', gradeCool: '#2a4070', split: 0.22, sat: 1.1, vig: 0.42, bloom: 0.5, bloomTh: 0.88 },
 };
 
 // 現実の時刻で時間帯を決める

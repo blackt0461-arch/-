@@ -10,6 +10,7 @@ import * as G from './gacha.js';
 import { thumbHTML, hydrateThumbs } from './thumbs.js';
 import { loadModel } from './loaders.js';
 import { validProblems, SYMBOLS } from './problems.js';
+import { SUBJECT_PROBLEMS } from './subjects/index.js';
 import * as S from './store.js';
 import * as Auth from './auth.js';
 import * as DL from './download.js';
@@ -25,7 +26,9 @@ const SUBJECTS = [
   { id: 'social', name: '社会' },
 ];
 const PROBLEMS = validProblems();
-const byId = Object.fromEntries(PROBLEMS.map(p => [p.id, p]));
+const ALLP = { physics: PROBLEMS, ...SUBJECT_PROBLEMS };
+const byId = Object.fromEntries(Object.values(ALLP).flat().map(p => [p.id, p]));
+function probs(id = subjectId) { return ALLP[id] || []; }
 const UNITS = ['力学', '熱', '波動', '電磁気'];
 const COLORS = ['#ff8a5b', '#4fc3f7', '#c792ea', '#9ccc65', '#ffd54f', '#f06292', '#4db6ac'];
 const SURFACE_KINDS = [['wall', '壁'], ['floor', '床'], ['door', 'ドア'], ['window', '窓'], ['curtain', 'カーテン']];
@@ -109,7 +112,7 @@ function startAs(u) {
 function tabbar(active) {
   const st = sub();
   const resume = st.session && st.session.idx < st.session.set.length;
-  const due = S.stats(st, PROBLEMS).due;
+  const due = S.stats(st, probs()).due;
   const tabs = [['room', 'home', '部屋'], ['furn', 'sofa', '家具'], ['play', 'pencil', resume ? '続きから' : '解く'], ['social', 'users', 'みんな'], ['menu', 'gear', 'メニュー']];
   const el = h(`<nav class="tabbar">${tabs.map(([k, ic, n]) => `
     <button data-t="${k}" class="${k === active ? 'on' : ''} ${k === 'play' ? 'center' : ''}">
@@ -167,7 +170,7 @@ function bindSocialTabs(el) {
 }
 
 // =========================== レアガチャ ===========================
-function gachaOwned(id) { return S.owned(id); }
+function gachaOwned(id) { return S.realOwned(id); }
 function showGacha(banner = null) {
   const hs = HS();
   const act = G.activeSeries();
@@ -298,7 +301,7 @@ function ensureRooms() {
   const has = (id) => hs.rooms.some(x => x.id === id);
   const addRoom = (d) => {
     // 部屋ごとの最初の壁・床（お風呂のタイルなど）は持ち物にも入れる
-    for (const id of Object.values(d.surf || {})) if (id && !S.owned(id)) S.own(id);
+    for (const id of Object.values(d.surf || {})) if (id && !S.realOwned(id)) S.own(id);
     hs.rooms.push({ id: d.id, style: null, surf: { ...STARTER, ...(d.surf || {}) }, placed: [] });
     added.push(d);
   };
@@ -314,7 +317,7 @@ function ensureRooms() {
   const order = (id) => { const i = ROOMS.findIndex(x => x.id === id); return i < 0 ? 999 : i; };
   hs.rooms.sort((x, y) => order(x.id) - order(y.id));
   // 最初から持っている物
-  for (const id of Object.values(STARTER)) if (id && !S.owned(id)) S.own(id);
+  for (const id of Object.values(STARTER)) if (id && !S.realOwned(id)) S.own(id);
   if (!hs.started) {
     hs.started = true;
     hs.gauge = Math.max(hs.gauge, S.gaugeMax(hs)); // 最初の1つはプレゼント
@@ -564,7 +567,7 @@ function matchSurface(kind, src) {
 
 // =========================== 家具を買う ===========================
 function pickCandidates(genre, style) {
-  const pool = itemsOf(genre).filter(i => !i.special && !i.rare && !S.owned(i.id)); // レアな物はガチャだけ
+  const pool = itemsOf(genre).filter(i => !i.special && !i.rare && !S.realOwned(i.id)); // レアな物はガチャだけ
   const match = S.shuffle(pool.filter(i => style && i.styles?.includes(style)));
   const other = S.shuffle(pool.filter(i => !(style && i.styles?.includes(style))));
   // 3つのうち2つは部屋の雰囲気に合う物（足りなければほかから）
@@ -614,7 +617,7 @@ function buyFlow() {
     <div class="genrelist">${o.genres.map(gid => {
       const g = GENRES.find(x => x.id === gid);
       const all = itemsOf(gid).filter(i => !i.special && !i.rare);
-      const have = all.filter(i => S.owned(i.id)).length;
+      const have = all.filter(i => S.realOwned(i.id)).length;
       const fresh = !curRoom().placed.some(p => itemById(p.item)?.genre === gid);
       const peek = offerCands(gid);
       return `<button class="genre-row" data-g="${gid}">
@@ -987,10 +990,11 @@ function chooseSubject() {
   if (!app.querySelector('.home')) showHome();
   const el = sheet(`
     <div class="sh-head"><span class="sh-ic">${icon('pencil')}</span><div><h3>どの科目を解く？</h3><p>どの科目を解いても、同じ家が育ちます</p></div></div>
-    <div class="subjgrid">${SUBJECTS.map(s => {
+    <div class="subjgrid">${SUBJECTS.map(s0 => {
+      const s = { ...s0, ready: probs(s0.id).length > 0 };
       const st = s.ready ? S.subject(s.id) : null;
       const resume = st && st.session && st.session.idx < st.session.set.length;
-      const stats = st ? S.stats(st, PROBLEMS) : null;
+      const stats = st ? S.stats(st, probs(s.id)) : null;
       const meta = !s.ready ? '準備中' : resume ? '続きから' : stats.due ? `復習 ${stats.due}問` : (S.solvedToday() < S.BONUS_PER_DAY ? 'ゲージ1.5倍' : '1問ずつ');
       return `<button class="subj ${s.ready ? '' : 'soon'}" data-s="${s.id}" ${s.ready ? '' : 'disabled'}>
         <span class="s-ic">${icon(SUBJECT_ICON[s.id] || 'book')}</span><b>${s.name}</b><small>${meta}</small></button>`;
@@ -1279,7 +1283,7 @@ async function showNews() {
   const day = (t) => new Date(t).toLocaleDateString('ja-JP', { year: 'numeric', month: 'numeric', day: 'numeric' });
   el.querySelector('.nlist').innerHTML = list.length ? list.map(n => `
     <article class="news-card ${n.id > seen ? 'unread' : ''}">
-      <div class="nc-top">${n.id > seen ? '<i class="nc-new">NEW</i>' : ''}<small>${day(n.created_at)}</small></div>
+      <div class="nc-top">${n.id > seen ? '<i class="nc-new">NEW</i>' : ''}${n.admin_only ? '<i class="nc-new" style="background:#6f4bd8;color:#fff">管理者だけ</i>' : ''}<small>${day(n.created_at)}</small></div>
       <h3>${esc(n.title)}</h3>
       <p>${esc(n.body).replace(/\n/g, '<br>')}</p>
     </article>`).join('') : '<p class="empty">お知らせはまだありません。</p>';
@@ -1293,21 +1297,22 @@ function composeNews(after) {
     <form class="news-form">
       <input name="t" maxlength="40" placeholder="タイトル（例：新しい部屋が増えました）" required>
       <textarea name="b" rows="5" maxlength="600" placeholder="本文"></textarea>
+      <label class="nf-adm"><input type="checkbox" name="adm"> 管理者だけに送る（ためし用）</label>
       <button class="btn gold big">${icon('check')}内容を確認する</button>
     </form>
     <button class="link close">やめる</button>`, 'news-sheet');
   el.querySelector('.close').onclick = () => el.remove();
   el.querySelector('form').onsubmit = (e) => {
     e.preventDefault();
-    const t = e.target.t.value.trim(), b = e.target.b.value.trim();
+    const t = e.target.t.value.trim(), b = e.target.b.value.trim(), adm = e.target.adm.checked;
     if (!t) return;
     const cf = sheet(`
-      <div class="sh-head"><span class="sh-ic gold">${icon('alert')}</span><div><h3>この内容で送りますか？</h3><p>送ると、すぐにみんなに届きます</p></div></div>
+      <div class="sh-head"><span class="sh-ic gold">${icon('alert')}</span><div><h3>この内容で送りますか？</h3><p>${adm ? '管理者だけに届きます' : '送ると、すぐにみんなに届きます'}</p></div></div>
       <article class="news-card unread"><h3>${esc(t)}</h3><p>${esc(b).replace(/\n/g, '<br>')}</p></article>
       <div class="row2"><button class="btn ghost back2">書きなおす</button><button class="btn gold send">${icon('check')}送る</button></div>`, 'news-sheet');
     cf.querySelector('.back2').onclick = () => { cf.remove(); composeNews(after); };
     cf.querySelector('.send').onclick = async () => {
-      try { await rpc('sr_news_post', { p_token: Auth.currentUser().token, p_title: t, p_body: b }); toast('お知らせを送りました'); cf.remove(); after && after(); }
+      try { await rpc('sr_news_post2', { p_token: Auth.currentUser().token, p_title: t, p_body: b, p_admin_only: adm }); toast('お知らせを送りました'); cf.remove(); after && after(); }
       catch (ex) { toast(ex.message); }
     };
   };
@@ -1502,7 +1507,7 @@ function showSettings() {
 function startSet() {
   const st = sub();
   if (!(st.session && st.session.idx < st.session.set.length)) {
-    st.session = { set: S.buildSet(st, PROBLEMS), idx: 0, results: [], gained: 0, xp: 0, rankUp: false, startedAt: Date.now(), bonus: S.solvedToday() < S.BONUS_PER_DAY };
+    st.session = { set: S.buildSet(st, probs()), idx: 0, results: [], gained: 0, xp: 0, rankUp: false, startedAt: Date.now(), bonus: S.solvedToday() < S.BONUS_PER_DAY };
     S.save();
   }
   room3d.setActive(false);
@@ -1517,6 +1522,7 @@ function nextProblem() {
   const item = ss.set[ss.idx];
   const p = byId[item.id];
   if (!p) { ss.idx++; return nextProblem(); }
+  if (p.choices) return runChoice(p, item.review);
   runProblem(p, item.review, false);
 }
 
@@ -1643,31 +1649,7 @@ function runProblem(p, isReview, retry) {
     const perfect = ok && !step1Miss;
     let pts = 0, mastered = false, xp = null;
     if (!retry) {
-      pts = S.gaugePoints(perfect, ok && step1Miss, secs);
-      if (ss.bonus) pts = Math.round(pts * 1.5);
-      HS().gauge += pts;
-      ss.gained += pts;
-      const tBefore = { solved: S.profile().solved, streak: S.currentStreak(), mastered: S.stats(st, PROBLEMS).mastered };
-      ({ mastered } = S.recordResult(st, p.id, perfect, isReview));
-      if (mastered) HS().pendingSpecials++;
-      xp = S.addAnswer(st, p.unit, perfect ? 'perfect' : ok ? 'ok' : 'wrong');
-      const firstPlay = S.markPlayedToday();
-      // 50問ごと・連続7日ごと・克服でたまにレアチケット
-      const earned = G.ticketsEarned(tBefore, { solved: S.profile().solved, streak: S.currentStreak(), mastered: S.stats(st, PROBLEMS).mastered });
-      if (earned > 0) {
-        HS().rareTickets = (HS().rareTickets || 0) + earned;
-        xp.rewards = xp.rewards || { ticket: 0, ticket4: 0, ticket5: 0 };
-        xp.rewards.ticket += earned;
-      }
-      if (xp.rewards) {
-        const sr = ss.rewards || (ss.rewards = { ticket: 0, ticket4: 0, ticket5: 0 });
-        for (const k of Object.keys(sr)) sr[k] += xp.rewards[k] || 0;
-      }
-      ss.xp = (ss.xp || 0) + xp.gained;
-      if (xp.rankUp) ss.rankUp = true;
-      ss.results.push({ id: p.id, perfect, ok, mastered });
-      const first = firstPlay;
-      if (first) toast(`連続 ${S.currentStreak()}日目！`);
+      ({ pts, xp, mastered } = awardResult(st, ss, p, perfect, ok, isReview, secs));
       S.save();
     }
     renderText(!ok || retry);
@@ -1709,6 +1691,89 @@ function runProblem(p, isReview, retry) {
   }
 
   step1();
+}
+
+// 1問の結果から、ゲージ・経験値・チケットなどのごほうびを出して記録する（物理も4択も共通）
+function awardResult(st, ss, p, perfect, ok, isReview, secs) {
+  let pts = 0, mastered = false, xp = null;
+      pts = S.gaugePoints(perfect, ok && !perfect, secs);
+      if (ss.bonus) pts = Math.round(pts * 1.5);
+      HS().gauge += pts;
+      ss.gained += pts;
+      const tBefore = { solved: S.profile().solved, streak: S.currentStreak(), mastered: S.stats(st, probs()).mastered };
+      ({ mastered } = S.recordResult(st, p.id, perfect, isReview));
+      if (mastered) HS().pendingSpecials++;
+      xp = S.addAnswer(st, p.unit, perfect ? 'perfect' : ok ? 'ok' : 'wrong');
+      const firstPlay = S.markPlayedToday();
+      // 50問ごと・連続7日ごと・克服でたまにレアチケット
+      const earned = G.ticketsEarned(tBefore, { solved: S.profile().solved, streak: S.currentStreak(), mastered: S.stats(st, probs()).mastered });
+      if (earned > 0) {
+        HS().rareTickets = (HS().rareTickets || 0) + earned;
+        xp.rewards = xp.rewards || { ticket: 0, ticket4: 0, ticket5: 0 };
+        xp.rewards.ticket += earned;
+      }
+      if (xp.rewards) {
+        const sr = ss.rewards || (ss.rewards = { ticket: 0, ticket4: 0, ticket5: 0 });
+        for (const k of Object.keys(sr)) sr[k] += xp.rewards[k] || 0;
+      }
+      ss.xp = (ss.xp || 0) + xp.gained;
+      if (xp.rankUp) ss.rankUp = true;
+      ss.results.push({ id: p.id, perfect, ok, mastered });
+      const first = firstPlay;
+      if (first) toast(`連続 ${S.currentStreak()}日目！`);
+      S.save();
+  return { pts, xp, mastered };
+}
+
+// 4択の問題（物理以外の教科）
+function runChoice(p, isReview) {
+  const st = sub();
+  const ss = st.session;
+  const t0 = Date.now();
+  const order = S.shuffle([0, 1, 2, 3]);
+  app.innerHTML = '';
+  const el = h(`
+    <div class="screen quiz choice">
+      <header class="bar">
+        <button class="icon back" aria-label="部屋にもどる">${icon('x')}</button>
+        <div class="qprog"><i style="width:${ss.idx / ss.set.length * 100}%"></i></div>
+        <span class="tag">${isReview ? `${icon('refresh')}復習` : esc(p.unit)}</span>
+      </header>
+      <div class="problem">${esc(p.text).replace(/\n/g, '<br>')}</div>
+      <div class="step">
+        <p class="ask">正しいものを <b>1つ</b> 選ぼう</p>
+        <div class="cards ch4">${order.map(i => `<button class="fcard" data-i="${i}">${esc(p.choices[i])}</button>`).join('')}</div>
+      </div>
+    </div>`);
+  app.append(el);
+  el.querySelector('.back').onclick = () => { S.save(); showHome(); };
+  const stepEl = el.querySelector('.step');
+  stepEl.querySelectorAll('.fcard').forEach(b => b.onclick = () => {
+    const ok = +b.dataset.i === p.answer;
+    stepEl.querySelectorAll('.fcard').forEach(x => { x.disabled = true; if (+x.dataset.i === p.answer) x.classList.add('right'); });
+    if (!ok) b.classList.add('wrong');
+    setTimeout(() => result(ok), ok ? 400 : 700);
+  });
+  function result(ok) {
+    const secs = (Date.now() - t0) / 1000;
+    const { pts, xp, mastered } = awardResult(st, ss, p, ok, ok, isReview, secs);
+    vibrate(ok ? [20, 30, 20] : [60, 40, 60]);
+    const xpLine = xp ? `<div class="xpgain">${icon('level')}+${xp.gained} XP${xp.rankUp ? `<b>Lv${xp.rank}にアップ！</b>` : ''}</div>` : '';
+    stepEl.innerHTML = `
+      <div class="res ${ok ? 'ok' : 'ng'}">
+        <div class="ttl">${ok ? '正解！' : 'おしい！'}</div>
+        ${ok ? `<div class="pts">+${pts}<small>ゲージ${secs <= 20 ? '・早い！ボーナス' : ''}${ss.bonus && pts ? '・今日の最初の5問 ×1.5' : ''}</small></div>` : ''}
+        ${xpLine}
+        ${mastered ? `<div class="master">${icon('trophy')}克服しました！ 特別な家具がもらえます</div>` : ''}
+        <div class="formula">${esc(p.choices[p.answer])}<small>正解</small></div>
+        <p class="reason">${esc(p.explain || '')}</p>
+        ${ss.rewards && (ss.rewards.ticket || ss.rewards.ticket4 || ss.rewards.ticket5) ? `<div class="ru-tickets">${['ticket', 'ticket4', 'ticket5'].filter(k => ss.rewards[k]).map(k => `<span>${ticketSVG(k, 'mini')}<b>×${ss.rewards[k]}</b></span>`).join('')}</div>` : ''}
+        ${HS().gauge >= S.gaugeMax(HS()) ? `<div class="gold-t">${icon('gift')}ゲージ満タン！ 家具が買えます</div>` : ''}
+        <div class="row2 after"><button class="btn ghost home">${icon('home')}部屋にもどる</button><button class="btn primary more">${icon('pencil')}もう1問</button></div>
+      </div>`;
+    stepEl.querySelector('.home').onclick = () => endOne(true);
+    stepEl.querySelector('.more').onclick = () => endOne(false);
+  }
 }
 
 // 1問おわったあと：部屋へ戻るか、もう1問
