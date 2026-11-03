@@ -713,10 +713,19 @@ h3.sec { font-size: 14px; color: var(--muted); margin: 18px 4px 8px; font-weight
 .bn-sample { position: relative; z-index: 2; display: inline-flex; align-items: center; gap: 6px; margin: 4px 0 8px; padding: 8px 14px; border-radius: 99px; border: 1px solid rgba(255,255,255,.35); background: rgba(0,0,0,.35); color: #fff; font-size: 13px; font-weight: 700; backdrop-filter: blur(6px); }
 .bn-sample svg { width: 16px; height: 16px; }
 
-/* 更新のための再起動 */
-.restart-ov { position: fixed; inset: 0; z-index: 999; display: grid; place-items: center; background: rgba(8,6,4,.88); backdrop-filter: blur(8px); animation: fadeUp .3s both; }
-.rs-box { display: grid; justify-items: center; gap: 10px; text-align: center; color: #fff; padding: 24px; }
-.rs-box b { font-size: 18px; }
-.rs-box p { margin: 0; color: rgba(255,255,255,.7); font-size: 13px; }
-.rs-spin { width: 36px; height: 36px; border-radius: 50%; border: 3px solid rgba(255,255,255,.2); border-top-color: var(--gold1, #f0b44c); animation: rsSpin .8s linear infinite; }
-@keyframes rsSpin { to { transform: rotate(360deg); } }
+/* 更新のための再起動（アップデート画面） */
+.update-ov { position: fixed; inset: 0; z-index: 999; display: grid; place-items: center; align-content: center; gap: 12px; padding: 24px; text-align: center; color: #fff; background: radial-gradient(circle at 50% 38%, #3a2a18, #0b0806 72%); opacity: 0; transition: opacity .35s; }
+.update-ov.show { opacity: 1; }
+.up-glow { position: absolute; left: 50%; top: 36%; width: 120vmax; height: 120vmax; transform: translate(-50%, -50%); background: repeating-conic-gradient(rgba(255,210,140,.08) 0 6deg, transparent 6deg 18deg); animation: spin 24s linear infinite; pointer-events: none; }
+.up-logo { position: relative; margin: 0; font-family: "Cormorant Garamond", serif; font-size: 52px; letter-spacing: .28em; padding-left: .28em; font-weight: 600; text-shadow: 0 0 30px rgba(255,200,120,.55); }
+.up-ver { position: relative; margin: 0; font-size: 13px; color: rgba(255,255,255,.6); }
+.up-ver span { margin: 0 4px; }
+.up-ver b { color: var(--gold1, #f0b44c); }
+.up-bar { position: relative; width: min(260px, 70vw); height: 6px; border-radius: 99px; background: rgba(255,255,255,.12); overflow: hidden; margin-top: 10px; }
+.up-bar i { position: absolute; inset: 0; width: 0; border-radius: inherit; background: linear-gradient(90deg, var(--gold2, #d98a2b), var(--gold1, #f0b44c)); box-shadow: 0 0 12px rgba(240,180,76,.7); animation: upFill 2.8s cubic-bezier(.4,0,.2,1) forwards; }
+@keyframes upFill { to { width: 100%; } }
+.up-t { position: relative; margin: 0; font-size: 15px; font-weight: 700; }
+.up-notes { position: relative; list-style: none; margin: 8px 0 0; padding: 12px 16px; display: grid; gap: 6px; text-align: left; border-radius: 14px; background: rgba(255,255,255,.06); border: 1px solid rgba(255,220,160,.18); font-size: 13px; }
+.up-notes li { display: flex; align-items: center; gap: 8px; }
+.up-notes svg { width: 14px; height: 14px; color: var(--gold1, #f0b44c); }
+.up-s { position: relative; margin: 6px 0 0; font-size: 11.5px; color: rgba(255,255,255,.5); }

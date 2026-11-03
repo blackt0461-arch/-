@@ -924,14 +924,15 @@ function photoMode() {
 
 // =========================== 更新のお知らせ ===========================
 // このプログラムの版（version.json と同じにする。公開のたびに上げる）
-const APP_VERSION = '2.4.2';
+const APP_VERSION = '2.4.3';
 // 新しい版が出たら、みんな同じタイミングでそろうように強制で再起動する。
 // 開いた時・画面に戻った時・1分ごとに version.json を見る
 async function latestVersion() {
-  try { return (await (await fetch('version.json', { cache: 'no-store' })).json()).version; } catch (e) { return null; }
+  try { return await (await fetch('version.json', { cache: 'no-store' })).json(); } catch (e) { return null; }
 }
 let restarting = false;
-function forceRestart(ver) {
+function forceRestart(info) {
+  const ver = info.version;
   if (restarting) return;
   // 同じ版で何度も再起動をくり返さない（読みこみ直しても古いままのときの安全装置。3回まで）
   const key = 'studyroom.restart.' + ver;
@@ -941,19 +942,28 @@ function forceRestart(ver) {
   restarting = true;
   try { S.save(); } catch (e) { /* まだログイン前 */ }
   try { Sync.push?.(true); } catch (e) { /* なし */ }
+  document.querySelectorAll('.pfx, .lb-screen').forEach(e => e.remove());
   const el = h(`
-    <div class="restart-ov">
-      <div class="rs-box"><div class="rs-spin"></div><b>アップデートがあります</b><p>新しい版にするため、再起動します</p></div>
+    <div class="update-ov">
+      <div class="up-glow"></div>
+      <h1 class="up-logo">ROOMIN</h1>
+      <p class="up-ver">ver ${esc(APP_VERSION)} <span>→</span> <b>ver ${esc(ver)}</b></p>
+      <div class="up-bar"><i></i></div>
+      <p class="up-t">アップデートしています…</p>
+      ${info.notes?.length ? `<ul class="up-notes">${info.notes.map(t => `<li>${icon('sparkle')}${esc(t)}</li>`).join('')}</ul>` : ''}
+      <p class="up-s">記録は保存しました。すぐに再起動します</p>
     </div>`);
   document.body.append(el);
+  requestAnimationFrame(() => el.classList.add('show'));
   setTimeout(async () => {
     try { const regs = await navigator.serviceWorker?.getRegistrations?.(); for (const r of regs || []) await r.update(); } catch (e) { /* なし */ }
-    location.reload();
-  }, 2200);
+    el.querySelector('.up-t').textContent = '再起動します';
+    setTimeout(() => location.reload(), 400);
+  }, 2600);
 }
 async function watchVersion() {
   const v = await latestVersion();
-  if (v && v !== APP_VERSION) forceRestart(v);
+  if (v?.version && v.version !== APP_VERSION) forceRestart(v);
 }
 setInterval(watchVersion, 60000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) watchVersion(); });
@@ -963,7 +973,7 @@ async function checkUpdateNotes() {
   try {
     const v = await (await fetch('version.json', { cache: 'no-store' })).json();
     // 手元のプログラムが古いまま（スマホが前の版を覚えている）なら、1回だけ読みこみ直す
-    if (v.version !== APP_VERSION) return forceRestart(v.version);
+    if (v.version !== APP_VERSION) return forceRestart(v);
     const seen = localStorage.getItem('studyroom.version');
     localStorage.setItem('studyroom.version', v.version);
     if (!seen || seen === v.version || !v.notes?.length) return;
