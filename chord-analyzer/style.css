@@ -748,3 +748,7 @@ select, input[type="text"] {
   .bottom-nav, .banner { display: none !important; }
   @page { size: A4; margin: 0; }
 }
+
+/* よく使う「鳴らす」ボタンは、プレイヤーのすぐ下に大きく */
+.quick-play { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.quick-play .secondary-button { min-height: 48px; font-weight: 700; font-size: 0.92rem; white-space: normal; line-height: 1.2; }

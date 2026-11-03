@@ -12,7 +12,7 @@ import { renderSheetPages, toPng } from './export-sheet.js';
 import { estimateKey, suggestCapo, easiestVoicing } from './practice.js';
 
 // version.json と同じ値にする（新しいバージョンを公開したら両方を上げる）
-const APP_VERSION = '1.18.0';
+const APP_VERSION = '1.18.1';
 const APP_FILES = ['index.html', 'style.css', 'app.js', 'chord-engine.js', 'audio.js', 'fretboard.js', 'sound.js', 'song.js', 'dsp.js', 'chart.js', 'live.js', 'practice.js', 'transcribe.js', 'transcribe-worker.js', 'tab-staff.js', 'learned.js', 'synth-check.js', 'vocal-remove.js', 'ai-vocal.js', 'ai-loader.js', 'ai-pitch.js', 'models/basic-pitch.onnx', 'lyrics.js', 'songbook.js', 'feedback.js', 'export-sheet.js', 'sw.js', 'manifest.webmanifest'];
 const HOLD_MS = 150;      // マイク：別のコードがこの時間続いたら表示を切り替える
 const HISTORY_SIZE = 16;  // マイク：覚えておくコードの数
@@ -606,8 +606,8 @@ let synth = null;
 function stopSynth() {
   synth?.stop();
   synth = null;
-  playTabButton.textContent = '▶ タブ譜どおりに鳴らす';
-  playChartButton.textContent = '▶ コード譜を鳴らす';
+  playTabButton.textContent = '▶ タブ譜で鳴らす';
+  playChartButton.textContent = '▶ コードで鳴らす';
 }
 
 // タブ譜どおり：弾いた瞬間ごとの音を、その時刻に鳴らす（和音は低い弦から少しずつずらす）
