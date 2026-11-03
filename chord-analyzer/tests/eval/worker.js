@@ -9,6 +9,7 @@ import { makeSong } from '../mix.js';
 import { chartPlayback } from '../../song.js';
 import { TUNINGS } from '../../fretboard.js';
 import { easiestVoicing } from '../../practice.js';
+import { runPitchAI, PITCH_FPS } from '../../ai-pitch.js';
 
 /** WAV（16bit・24bit・32bit float）を読む */
 function readWav(path) {
@@ -187,7 +188,30 @@ function onsetScore(onsets, truthNotes, tol = 0.05) {
   return { onsetF1: precision + recall ? (2 * precision * recall) / (precision + recall) : 0, onsetMs: errs.length ? errs[Math.floor(errs.length / 2)] * 1000 : null, onsetPrecision: precision, onsetRecall: recall };
 }
 
-parentPort.on('message', ({ job, options }) => {
+// AI で音を聞き取る（Basic Pitch）：PITCH_AI にモデル（nmp.onnx）、ORT_NODE に onnxruntime-node の場所を入れると使う。
+// 聞き取った結果は PITCH_AI_CACHE（既定 /tmp/claude-0/pitch-ai）に保存して、2回目からは読み直すだけにする
+let pitchSession = null;
+async function pitchAIFor(key, audio) {
+  const dir = process.env.PITCH_AI_CACHE || '/tmp/claude-0/pitch-ai';
+  const file = path.join(dir, `${key}.bin`);
+  if (fs.existsSync(file)) {
+    const buf = fs.readFileSync(file);
+    const f = new Float32Array(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.length));
+    const frames = f.length / 176;
+    return { fps: PITCH_FPS, frames, note: f.subarray(0, frames * 88), onset: f.subarray(frames * 88) };
+  }
+  const { createRequire } = await import('node:module');
+  const ort = createRequire(path.join(process.env.ORT_NODE || '/tmp/claude-0/ort', 'x.js'))('onnxruntime-node');
+  pitchSession ??= await ort.InferenceSession.create(process.env.PITCH_AI);
+  const ai = await runPitchAI(audio.channels, audio.sampleRate, { ort, session: pitchSession });
+  fs.mkdirSync(dir, { recursive: true });
+  const out = new Float32Array(ai.frames * 176);
+  out.set(ai.note); out.set(ai.onset, ai.frames * 88);
+  fs.writeFileSync(file, Buffer.from(out.buffer));
+  return ai;
+}
+
+parentPort.on('message', async ({ job, options }) => {
   try {
     let audio, truth;
     if (job.kind === 'guitarset') { audio = readWav(job.audio); truth = job.truth; if (job.solo) truth = { ...truth, chords: null }; }
@@ -210,6 +234,7 @@ parentPort.on('message', ({ job, options }) => {
       const ts = (t) => t / s;
       truth = { ...truth, chords: truth.chords?.map(([t, n]) => [ts(t), n]), notes: truth.notes?.map((g) => ({ ...g, t: ts(g.t), ...(g.dur != null ? { dur: ts(g.dur) } : {}) })), tempo: truth.tempo ? truth.tempo * s : truth.tempo, duration: truth.duration ? ts(truth.duration) : truth.duration };
     }
+    if (process.env.PITCH_AI) options = { ...options, pitchAI: await pitchAIFor(`${job.id}${job.detune ? `_d${job.detune}` : ''}`, audio) };
     const t0 = Date.now();
     const r = transcribe(audio.channels, audio.sampleRate, options);
     const duration = truth.duration ?? audio.channels[0].length / audio.sampleRate;

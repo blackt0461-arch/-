@@ -10,8 +10,8 @@ import { aiReady, downloadAI, deleteAI, AI_TOTAL } from './ai-loader.js';
 import { estimateKey, suggestCapo, easiestVoicing } from './practice.js';
 
 // version.json と同じ値にする（新しいバージョンを公開したら両方を上げる）
-const APP_VERSION = '1.14.1';
-const APP_FILES = ['index.html', 'style.css', 'app.js', 'chord-engine.js', 'audio.js', 'fretboard.js', 'sound.js', 'song.js', 'dsp.js', 'chart.js', 'live.js', 'practice.js', 'transcribe.js', 'transcribe-worker.js', 'tab-staff.js', 'learned.js', 'synth-check.js', 'vocal-remove.js', 'ai-vocal.js', 'ai-loader.js', 'sw.js', 'manifest.webmanifest'];
+const APP_VERSION = '1.15.0';
+const APP_FILES = ['index.html', 'style.css', 'app.js', 'chord-engine.js', 'audio.js', 'fretboard.js', 'sound.js', 'song.js', 'dsp.js', 'chart.js', 'live.js', 'practice.js', 'transcribe.js', 'transcribe-worker.js', 'tab-staff.js', 'learned.js', 'synth-check.js', 'vocal-remove.js', 'ai-vocal.js', 'ai-loader.js', 'ai-pitch.js', 'models/basic-pitch.onnx', 'sw.js', 'manifest.webmanifest'];
 const HOLD_MS = 150;      // マイク：別のコードがこの時間続いたら表示を切り替える
 const HISTORY_SIZE = 16;  // マイク：覚えておくコードの数
 const HISTORY_STABLE_MS = 400; // マイク：この時間続いたコードを履歴に入れる
@@ -725,7 +725,8 @@ songFile.addEventListener('change', async () => {
     const how = result.aiVocal?.used ? 'AI で歌声を取り除いて解析しました'
       : result.useSide ? '左右の差で歌を弱めて解析しました'
       : result.chartInfo?.method === '歌を除く' ? '歌のメロディを取り除いて解析しました' : 'ギターの音をそのまま解析しました（歌は見つかりませんでした）';
-    const aiNote = result.aiError ? `・AI は使えませんでした（${result.aiError}）` : result.aiVocal && !result.aiVocal.used ? '・歌がほとんど無いので AI は使いませんでした' : '';
+    const pitchNote = result.aiPitch ? '・AI で音を聞き取りました' : result.pitchError ? `・音を聞き取る AI は使えませんでした（${result.pitchError}。今までの方法で解析しました）` : '';
+    const aiNote = pitchNote + (result.aiError ? `・AI は使えませんでした（${result.aiError}）` : result.aiVocal && !result.aiVocal.used ? '・歌がほとんど無いので AI は使いませんでした' : '');
     songInfo.textContent = `${file.name}（${formatTime(duration)}）・テンポ ${Math.round(result.bpm || 0)}・${how}・解析 ${Math.round(result.seconds ?? 0)}秒（${songQuality.selectedOptions[0].textContent.split('（')[0]}）${aiNote}`;
     renderAnalysis();
     renderStrip(duration);
