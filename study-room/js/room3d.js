@@ -1,25 +1,36 @@
 // 立体の部屋。部屋の真ん中に立って、スワイプで見回す。
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { ROOM, WINDOW, kindsOf, variantsOf, SPECIALS } from './catalog.js';
 import { loadTex, texturedMaterial, loadModel, fitMaterial, shadowAll } from './loaders.js';
 import { buildExterior } from './exterior.js';
 
 const HW = ROOM.w / 2, HD = ROOM.d / 2, H = ROOM.h;
 const WALL_T = 0.14;
+const DOOR = { x: 1.75, w: 0.86, h: 2.05 }; // 手前の壁(+z)のドア
 
 // 時間帯・天気ごとの光
 // 時間帯・天気ごとの光。sky = 空の写真（Poly Haven の puresky を、太陽が窓の外に来るよう回したもの）
 // dir = 日の光の進む向き（空の写真の太陽の位置から計算）
 const MOODS = {
   morning: { photo: 'morning', sun: '#fff1dc', sunI: 6.5, dir: [-0.208, -0.741, 0.639], hemiSky: '#dce9ff', hemiGround: '#d9c6ad', hemiI: 0.9,
-    env: 0.45, exp: 1.0, ray: '#fff4dc', rayI: 0.09, lampI: 0.6, bg: 1.0, fog: '#c9d8e8', hill: '#6f8a5c' },
+    env: 0.45, exp: 1.0, ray: '#fff4dc', rayI: 0.14, lampI: 0.6, bg: 1.0, fog: '#c9d8e8', hill: '#6f8a5c',
+    gradeWarm: '#ffc890', gradeCool: '#46688c', split: 0.12, sat: 1.12, vig: 0.28, bloom: 0.5, bloomTh: 0.85 },
   overcast: { photo: 'overcast', sun: '#e6edf6', sunI: 2.2, dir: [0.25, -0.75, 1], hemiSky: '#e3e8f0', hemiGround: '#bdb6ac', hemiI: 1.3,
-    env: 0.5, exp: 1.05, ray: '#e8eef8', rayI: 0.03, lampI: 0.8, bg: 1.0, fog: '#c3c7cd', hill: '#6b7766' },
+    env: 0.5, exp: 1.05, ray: '#e8eef8', rayI: 0.03, lampI: 0.8, bg: 1.0, fog: '#c3c7cd', hill: '#6b7766',
+    gradeWarm: '#f0d8b8', gradeCool: '#4a6078', split: 0.1, sat: 1.0, vig: 0.3, bloom: 0.35, bloomTh: 0.9 },
   sunset: { photo: 'sunset', sun: '#ffa65a', sunI: 7.5, dir: [0.365, -0.122, 0.923], hemiSky: '#ffd2a6', hemiGround: '#b98e6c', hemiI: 0.6,
-    env: 0.3, exp: 0.95, ray: '#ffc27a', rayI: 0.15, lampI: 1.0, bg: 1.0, fog: '#e7b48e', hill: '#5c5a48' },
+    env: 0.3, exp: 0.95, ray: '#ffc27a', rayI: 0.22, lampI: 1.0, bg: 1.0, fog: '#e7b48e', hill: '#5c5a48',
+    gradeWarm: '#ff9a50', gradeCool: '#40507a', split: 0.2, sat: 1.18, vig: 0.38, bloom: 0.75, bloomTh: 0.72 },
   night: { photo: 'night', sun: '#8fa8ff', sunI: 0.6, dir: [0.3, -0.5, 1], hemiSky: '#33405e', hemiGround: '#3a3026', hemiI: 0.3,
-    env: 0.1, exp: 1.1, ray: '#9fb4ff', rayI: 0.02, lampI: 3.0, bg: 0.12, fog: '#0f1420', hill: '#1d2430' },
+    env: 0.1, exp: 1.1, ray: '#9fb4ff', rayI: 0.02, lampI: 3.0, bg: 0.12, fog: '#0f1420', hill: '#1d2430',
+    gradeWarm: '#ffb86a', gradeCool: '#2a4070', split: 0.22, sat: 1.1, vig: 0.42, bloom: 0.9, bloomTh: 0.6 },
 };
 
 export class Room3D {
@@ -67,6 +78,7 @@ export class Room3D {
     this.active = true;
     this.clock = new THREE.Clock();
 
+    this.setupEffects();
     this.bindControls();
     this.resize();
     window.addEventListener('resize', () => this.resize());
@@ -77,6 +89,10 @@ export class Room3D {
     const w = this.canvas.clientWidth || window.innerWidth;
     const h = this.canvas.clientHeight || window.innerHeight;
     this.renderer.setSize(w, h, false);
+    if (this.composer) {
+      this.composer.setPixelRatio(this.renderer.getPixelRatio());
+      this.composer.setSize(w, h);
+    }
     this.camera.aspect = w / h;
     // 縦長の画面では横の視野が狭くなるので少し広げる
     this.baseFov = w < h ? 88 : 62;
@@ -92,8 +108,10 @@ export class Room3D {
     const pts = new Map();
     let lastX = 0, lastY = 0, pinch0 = 0, zoom0 = 1;
     this.zoom = 1;
+    let tap = null;
     el.addEventListener('pointerdown', e => {
       el.setPointerCapture(e.pointerId);
+      tap = pts.size === 0 ? { x: e.clientX, y: e.clientY, t: performance.now() } : null;
       pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
       lastX = e.clientX; lastY = e.clientY;
       this.targetLook = null;
@@ -119,11 +137,68 @@ export class Room3D {
       this.vyaw = dx * k; this.vpitch = dy * k;
       this.clampPitch();
     });
-    const up = e => { pts.delete(e.pointerId); if (!pts.size) this.dragging = false; };
+    const up = e => {
+      pts.delete(e.pointerId);
+      if (!pts.size) this.dragging = false;
+      // 動かさずに短く触った = タップ
+      if (tap && e.type === 'pointerup' && Math.hypot(e.clientX - tap.x, e.clientY - tap.y) < 9 && performance.now() - tap.t < 350) {
+        this.vyaw = this.vpitch = 0;
+        this.handleTap(e.clientX, e.clientY);
+      }
+      tap = null;
+    };
     el.addEventListener('pointerup', up);
     el.addEventListener('pointercancel', up);
     el.addEventListener('wheel', e => { e.preventDefault(); this.setZoom(this.zoom * (1 + e.deltaY * 0.001)); }, { passive: false });
   }
+  // タップした所へ歩く／ドアなら onDoor を呼ぶ
+  handleTap(cx, cy) {
+    const r = this.canvas.getBoundingClientRect();
+    const ndc = new THREE.Vector2(((cx - r.left) / r.width) * 2 - 1, -((cy - r.top) / r.height) * 2 + 1);
+    const ray = new THREE.Raycaster();
+    ray.setFromCamera(ndc, this.camera);
+    const hits = ray.intersectObjects([this.shell, this.items], true).filter(h => h.object.visible && !h.object.isPoints);
+    const h = hits[0];
+    if (!h) return;
+    if (h.object.userData.door) { this.onDoor && this.onDoor(); return; }
+    // 床なら当たった所、家具なら家具の足もと
+    const p = h.point.clone(); p.y = 0;
+    this.walkTo(p);
+  }
+  walkTo(p) {
+    const m = 0.35;
+    p.x = Math.max(-HW + m, Math.min(HW - m, p.x));
+    p.z = Math.max(-HD + m, Math.min(HD - m, p.z));
+    // 家具の中に入らないように押し出す
+    for (const o of this.items.children) {
+      const bb = new THREE.Box3().setFromObject(o);
+      if (bb.max.y < 0.15 || bb.min.y > 1.6) continue; // ラグや天井の照明は気にしない
+      bb.expandByScalar(0.3);
+      if (p.x > bb.min.x && p.x < bb.max.x && p.z > bb.min.z && p.z < bb.max.z) {
+        const opts = [[bb.min.x - p.x, 0], [bb.max.x - p.x, 0], [0, bb.min.z - p.z], [0, bb.max.z - p.z]];
+        opts.sort((a, b) => Math.hypot(...a) - Math.hypot(...b));
+        p.x += opts[0][0]; p.z += opts[0][1];
+      }
+    }
+    p.x = Math.max(-HW + m, Math.min(HW - m, p.x));
+    p.z = Math.max(-HD + m, Math.min(HD - m, p.z));
+    const from = this.camera.position.clone();
+    const to = new THREE.Vector3(p.x, 1.5, p.z);
+    const dist = from.distanceTo(to);
+    if (dist < 0.05) return;
+    this.walk = { from, to, t: 0, dur: Math.max(0.35, dist / 1.3) };
+    this.showMarker(p);
+  }
+  showMarker(p) {
+    if (!this.marker) {
+      this.marker = new THREE.Mesh(new THREE.RingGeometry(0.12, 0.16, 40), new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.8, depthWrite: false }));
+      this.marker.rotation.x = -Math.PI / 2;
+      this.scene.add(this.marker);
+    }
+    this.marker.position.set(p.x, 0.012, p.z);
+    this.marker.userData.life = 1;
+  }
+
   setZoom(z) {
     this.zoom = Math.min(1.15, Math.max(0.55, z));
     this.camera.fov = this.baseFov * this.zoom;
@@ -161,6 +236,19 @@ export class Room3D {
       this.clampPitch();
     }
     this.camera.rotation.set(this.pitch, this.yaw, 0);
+    if (this.walk) {
+      const w = this.walk;
+      w.t = Math.min(1, w.t + dt / w.dur);
+      const e = w.t < 0.5 ? 2 * w.t * w.t : 1 - Math.pow(-2 * w.t + 2, 2) / 2;
+      this.camera.position.lerpVectors(w.from, w.to, e);
+      this.camera.position.y = 1.5 + Math.sin(w.t * Math.PI * 2 * Math.max(1, w.dur * 1.6)) * 0.015 * Math.sin(w.t * Math.PI);
+      if (w.t >= 1) this.walk = null;
+    }
+    if (this.marker && this.marker.userData.life > 0) {
+      this.marker.userData.life -= dt * 1.2;
+      this.marker.material.opacity = Math.max(0, this.marker.userData.life) * 0.8;
+      this.marker.scale.setScalar(1 + (1 - this.marker.userData.life) * 0.6);
+    }
     // 新しく置いた物のアニメーション
     for (const o of this.items.children) {
       const a = o.userData.appear;
@@ -180,13 +268,87 @@ export class Room3D {
       }
       p.needsUpdate = true;
     }
-    this.renderer.render(this.scene, this.camera);
+    if (this.composer && this.effectsOn !== false) {
+      this.grade.uniforms.uTime.value = t;
+      this.composer.render(dt);
+      this.watchSpeed(dt);
+    } else this.renderer.render(this.scene, this.camera);
+  }
+
+  // --- 画面の雰囲気（影MODのような、光のにじみ・すき間の影・色の味付け） ---
+  setupEffects() {
+    let q = 'high';
+    try { q = localStorage.getItem('studyroom.quality') || 'high'; } catch (e) { /* なし */ }
+    this.quality = q;
+    const c = this.composer = new EffectComposer(this.renderer);
+    c.addPass(new RenderPass(this.scene, this.camera));
+    const w = this.canvas.clientWidth || window.innerWidth, h = this.canvas.clientHeight || window.innerHeight;
+    this.ao = new GTAOPass(this.scene, this.camera, w, h);
+    this.ao.updateGtaoMaterial({ radius: 0.35, distanceExponent: 1.5, thickness: 1, scale: 1.2, samples: 12 });
+    this.ao.blendIntensity = 0.85;
+    this.ao.enabled = q === 'high';
+    this.effectsOn = q !== 'low';
+    c.addPass(this.ao);
+    this.bloom = new UnrealBloomPass(new THREE.Vector2(w / 2, h / 2), 0.45, 0.65, 0.82);
+    c.addPass(this.bloom);
+    c.addPass(new OutputPass());
+    this.grade = new ShaderPass({
+      uniforms: {
+        tDiffuse: { value: null }, uTime: { value: 0 },
+        uWarm: { value: new THREE.Color('#ffb070') }, uCool: { value: new THREE.Color('#3a5a80') },
+        uSplit: { value: 0.12 }, uSat: { value: 1.12 }, uVig: { value: 0.32 }, uGrain: { value: 0.025 },
+      },
+      vertexShader: 'varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);} ',
+      fragmentShader: `
+        uniform sampler2D tDiffuse; uniform float uTime, uSplit, uSat, uVig, uGrain; uniform vec3 uWarm, uCool; varying vec2 vUv;
+        float hash(vec2 p){ return fract(sin(dot(p, vec2(12.9898,78.233))) * 43758.5453); }
+        void main(){
+          vec3 c = texture2D(tDiffuse, vUv).rgb;
+          float l = dot(c, vec3(0.299,0.587,0.114));
+          // 明るい所はあたたかく、暗い所は青っぽく（スプリットトーン）
+          c = mix(c, c * mix(uCool * 1.6, uWarm * 1.25, smoothstep(0.15, 0.85, l)), uSplit);
+          // 彩度を少し上げる
+          c = mix(vec3(l), c, uSat);
+          // 画面のふちを暗く
+          vec2 d = vUv - 0.5; c *= 1.0 - uVig * smoothstep(0.25, 0.85, length(d * vec2(1.0, 1.25)));
+          // フィルムの粒
+          c += (hash(vUv * 1000.0 + uTime) - 0.5) * uGrain;
+          gl_FragColor = vec4(c, 1.0);
+        }`,
+    });
+    c.addPass(this.grade);
+    this.slowTime = 0;
+  }
+  // 時間帯ごとの味付け
+  applyGrade(m) {
+    if (!this.grade) return;
+    const u = this.grade.uniforms;
+    u.uWarm.value.set(m.gradeWarm || '#ffb070');
+    u.uCool.value.set(m.gradeCool || '#3a5a80');
+    u.uSplit.value = m.split ?? 0.12;
+    u.uSat.value = m.sat ?? 1.12;
+    u.uVig.value = m.vig ?? 0.32;
+    this.bloom.strength = m.bloom ?? 0.45;
+    this.bloom.threshold = m.bloomTh ?? 0.82;
+  }
+  setQuality(q) {
+    this.quality = q;
+    try { localStorage.setItem('studyroom.quality', q); } catch (e) { /* なし */ }
+    if (this.ao) this.ao.enabled = q === 'high';
+    this.effectsOn = q !== 'low';
+  }
+  // 重くてカクカクするときは、すき間の影を自動で切る
+  watchSpeed(dt) {
+    if (this.quality !== 'high' || !this.ao.enabled) return;
+    this.slowTime = dt > 1 / 24 ? this.slowTime + dt : Math.max(0, this.slowTime - dt);
+    if (this.slowTime > 3) { this.ao.enabled = false; this.autoLowered = true; }
   }
 
   // --- 部屋の組み立て ---
   // roomDef: catalog の部屋 / st: { dir, items: {kindId: variantIndex}, specials: [] }
   async show(roomDef, st) {
     const token = (this.token = {});
+    if (this.roomDef !== roomDef) { this.camera.position.set(0.2, 1.5, 1.2); this.walk = null; }
     this.roomDef = roomDef;
     this.st = st;
     this.applyMood(MOODS[(roomDef.directions.find(d => d.id === st.dir) || {}).sun || 'morning']);
@@ -210,6 +372,7 @@ export class Room3D {
 
   applyMood(m) {
     this.mood = m;
+    this.applyGrade(m);
     this.renderer.toneMappingExposure = m.exp;
     this.scene.environmentIntensity = m.env;
     this.hemi.color.set(m.hemiSky); this.hemi.groundColor.set(m.hemiGround); this.hemi.intensity = m.hemiI;
@@ -266,7 +429,11 @@ export class Room3D {
     // 左右と手前の壁
     box(WALL_T, H, ROOM.d + 0.3, -HW - WALL_T / 2, H / 2, 0, wallM, ROOM.d, H);
     box(WALL_T, H, ROOM.d + 0.3, HW + WALL_T / 2, H / 2, 0, wallM, ROOM.d, H);
-    box(ROOM.w + 0.3, H, WALL_T, 0, H / 2, HD + WALL_T / 2, wallM, ROOM.w, H);
+    // 手前の壁（ドアの穴をあける）
+    const dx0 = DOOR.x - DOOR.w / 2, dx1 = DOOR.x + DOOR.w / 2, zf = HD + WALL_T / 2;
+    box(dx0 + HW + 0.15, H, WALL_T, (-HW - 0.15 + dx0) / 2, H / 2, zf, wallM);
+    box(HW + 0.15 - dx1, H, WALL_T, (dx1 + HW + 0.15) / 2, H / 2, zf, wallM);
+    box(DOOR.w, H - DOOR.h, WALL_T, DOOR.x, (H + DOOR.h) / 2, zf, wallM);
     // 奥の壁（窓の穴をあける）
     const x0 = WINDOW.x - WINDOW.w / 2, x1 = WINDOW.x + WINDOW.w / 2;
     const zb = -HD - WALL_T / 2;
@@ -278,7 +445,8 @@ export class Room3D {
     // 幅木（壁の下の板）
     const skirt = new THREE.MeshStandardMaterial({ color: wallV && /黒|コンクリ/.test(wallV.name) ? '#2b2724' : '#efe9df', roughness: 0.6 });
     const sk = (w, d, x, z) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, 0.08, d), skirt); m.position.set(x, 0.04, z); m.receiveShadow = true; g.add(m); };
-    sk(0.015, ROOM.d, -HW + 0.008, 0); sk(0.015, ROOM.d, HW - 0.008, 0); sk(ROOM.w, 0.015, 0, HD - 0.008);
+    sk(0.015, ROOM.d, -HW + 0.008, 0); sk(0.015, ROOM.d, HW - 0.008, 0);
+    sk(dx0 + HW, 0.015, (-HW + dx0) / 2, HD - 0.008); sk(HW - dx1, 0.015, (dx1 + HW) / 2, HD - 0.008);
     sk(x0 + HW, 0.015, (-HW + x0) / 2, -HD + 0.008); sk(HW - x1, 0.015, (x1 + HW) / 2, -HD + 0.008);
     sk(WINDOW.w, 0.015, WINDOW.x, -HD + 0.008);
 
@@ -295,6 +463,13 @@ export class Room3D {
     const glass = new THREE.Mesh(new THREE.PlaneGeometry(WINDOW.w, WINDOW.y1 - WINDOW.y0),
       new THREE.MeshPhysicalMaterial({ color: '#ffffff', roughness: 0.05, transmission: 0, transparent: true, opacity: 0.08, metalness: 0 }));
     glass.position.set(WINDOW.x, ym, -HD - 0.03); g.add(glass);
+
+    // ドア・スイッチ・コンセント・エアコン・天井の縁
+    this.door = makeDoor(wallV && /黒|コンクリ/.test(wallV.name) ? '#3a3633' : '#f1ece4');
+    g.add(this.door);
+    g.add(makeFixtures(skirt.color));
+    this.floorMesh = floor;
+    floor.userData.floor = true;
 
     // 家の外（2階の部屋は3m上から見る）
     const level = this.roomDef.level || 0;
@@ -495,6 +670,106 @@ function recolor(obj, v) {
     });
     o.material = Array.isArray(o.material) ? out : out[0];
   });
+}
+
+// --- 家のつくり ---
+// ドア（木目の凹凸を残した塗装の開き戸・枠・レバーハンドル）
+function makeDoor(color) {
+  const g = new THREE.Group();
+  const paint = new THREE.MeshStandardMaterial({ color, roughness: 0.55 });
+  const zIn = HD;
+  // 枠
+  const frame = (w, h, x, y) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, WALL_T + 0.04), paint); m.position.set(x, y, zIn + WALL_T / 2); m.castShadow = m.receiveShadow = true; g.add(m); };
+  frame(0.05, DOOR.h + 0.05, DOOR.x - DOOR.w / 2 - 0.02, DOOR.h / 2);
+  frame(0.05, DOOR.h + 0.05, DOOR.x + DOOR.w / 2 + 0.02, DOOR.h / 2);
+  frame(DOOR.w + 0.14, 0.05, DOOR.x, DOOR.h + 0.02);
+  // 扉の板（ふちの溝つき）
+  const leaf = new THREE.Mesh(new THREE.BoxGeometry(DOOR.w - 0.02, DOOR.h - 0.02, 0.04), paint);
+  leaf.position.set(DOOR.x, DOOR.h / 2, zIn + 0.03); leaf.castShadow = leaf.receiveShadow = true;
+  leaf.userData.door = true; g.add(leaf);
+  const groove = new THREE.MeshStandardMaterial({ color: new THREE.Color(color).multiplyScalar(0.82), roughness: 0.6 });
+  for (const [w, h, y] of [[DOOR.w - 0.24, 0.9, 1.45], [DOOR.w - 0.24, 0.8, 0.55]]) {
+    const p = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.006), groove);
+    p.position.set(DOOR.x, y, zIn + 0.008); p.userData.door = true; g.add(p);
+    const p2 = new THREE.Mesh(new THREE.BoxGeometry(w - 0.03, h - 0.03, 0.008), paint);
+    p2.position.set(DOOR.x, y, zIn + 0.006); p2.userData.door = true; g.add(p2);
+  }
+  // レバーハンドル
+  const metal = new THREE.MeshStandardMaterial({ color: '#b9b6b0', metalness: 1, roughness: 0.25 });
+  const rose = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.028, 0.012, 24), metal);
+  rose.rotation.x = Math.PI / 2; rose.position.set(DOOR.x - DOOR.w / 2 + 0.08, 0.95, zIn + 0.004); g.add(rose);
+  const lever = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.018, 0.018), metal);
+  lever.position.set(DOOR.x - DOOR.w / 2 + 0.13, 0.95, zIn - 0.035); lever.castShadow = true; g.add(lever);
+  const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.04, 12), metal);
+  neck.rotation.x = Math.PI / 2; neck.position.set(DOOR.x - DOOR.w / 2 + 0.08, 0.95, zIn - 0.018); g.add(neck);
+  // ちょうつがい
+  for (const y of [0.25, 1.8]) {
+    const hg = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.09, 0.012), metal);
+    hg.position.set(DOOR.x + DOOR.w / 2 - 0.005, y, zIn - 0.002); g.add(hg);
+  }
+  // 敷居
+  const sill = new THREE.Mesh(new THREE.BoxGeometry(DOOR.w + 0.1, 0.012, WALL_T + 0.04), new THREE.MeshStandardMaterial({ color: '#8b735a', roughness: 0.5 }));
+  sill.position.set(DOOR.x, 0.006, zIn + WALL_T / 2); sill.receiveShadow = true; g.add(sill);
+  g.traverse(o => { if (o.isMesh) o.userData.door = true; });
+  return g;
+}
+
+// スイッチ・コンセント・エアコン・天井の縁（廻り縁）
+function makeFixtures(trimColor) {
+  const g = new THREE.Group();
+  const white = new THREE.MeshStandardMaterial({ color: '#f4f2ee', roughness: 0.35 });
+  const grey = new THREE.MeshStandardMaterial({ color: '#d9d6d0', roughness: 0.4 });
+  const dark = new THREE.MeshStandardMaterial({ color: '#2a2a2a', roughness: 0.6 });
+  // 壁に付ける小物：wall = 'x-' / 'x+' / 'z-' / 'z+'
+  const onWall = (mesh, wall, a, y) => {
+    const o = new THREE.Group(); o.add(mesh);
+    if (wall === 'z+') { o.position.set(a, y, HD); o.rotation.y = Math.PI; }
+    if (wall === 'z-') { o.position.set(a, y, -HD); }
+    if (wall === 'x-') { o.position.set(-HW, y, a); o.rotation.y = Math.PI / 2; }
+    if (wall === 'x+') { o.position.set(HW, y, a); o.rotation.y = -Math.PI / 2; }
+    g.add(o); return o;
+  };
+  // 照明スイッチ（ドアの横）
+  const sw = new THREE.Group();
+  const plate = new THREE.Mesh(new THREE.BoxGeometry(0.075, 0.12, 0.008), white); plate.position.z = 0.004; sw.add(plate);
+  for (const y of [0.022, -0.022]) {
+    const r = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.035, 0.01), grey); r.position.set(0, y, 0.01); r.rotation.x = y > 0 ? 0.08 : -0.08; sw.add(r);
+  }
+  onWall(sw, 'z+', DOOR.x - DOOR.w / 2 - 0.22, 1.2);
+  // コンセント
+  const outlet = () => {
+    const o = new THREE.Group();
+    const p = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.115, 0.007), white); p.position.z = 0.0035; o.add(p);
+    for (const y of [0.025, -0.025]) for (const x of [-0.0065, 0.0065]) {
+      const slot = new THREE.Mesh(new THREE.BoxGeometry(0.003, 0.011, 0.002), dark); slot.position.set(x, y, 0.0075); o.add(slot);
+    }
+    return o;
+  };
+  onWall(outlet(), 'z+', -1.6, 0.25);
+  onWall(outlet(), 'x-', -1.4, 0.25);
+  onWall(outlet(), 'x+', 1.6, 0.25);
+  onWall(outlet(), 'z-', 1.0, 0.25);
+  // エアコン（左の壁の上）
+  const ac = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.28, 0.22), white); body.position.z = 0.11; body.castShadow = true; ac.add(body);
+  const front = new THREE.Mesh(new THREE.BoxGeometry(0.78, 0.2, 0.01), new THREE.MeshStandardMaterial({ color: '#fbfaf8', roughness: 0.2 }));
+  front.position.set(0, 0.03, 0.222); ac.add(front);
+  const vent = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.04, 0.02), new THREE.MeshStandardMaterial({ color: '#c9c6c0', roughness: 0.5 }));
+  vent.position.set(0, -0.115, 0.2); vent.rotation.x = 0.4; ac.add(vent);
+  const led = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.006, 0.004), new THREE.MeshStandardMaterial({ color: '#000', emissive: '#58e07a', emissiveIntensity: 1.5 }));
+  led.position.set(0.3, -0.07, 0.228); ac.add(led);
+  onWall(ac, 'x-', -1.0, 2.45);
+  // エアコンの配管カバー
+  const pipe = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.06, 0.05), white);
+  pipe.position.set(-HW + 0.03, 2.4, -1.47); g.add(pipe);
+  // 天井の縁（廻り縁）
+  const trim = new THREE.MeshStandardMaterial({ color: trimColor, roughness: 0.6 });
+  const t = (w, d, x, z) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, 0.035, d), trim); m.position.set(x, H - 0.018, z); g.add(m); };
+  t(ROOM.w, 0.02, 0, -HD + 0.01); t(ROOM.w, 0.02, 0, HD - 0.01); t(0.02, ROOM.d, -HW + 0.01, 0); t(0.02, ROOM.d, HW - 0.01, 0);
+  // 火災報知器
+  const smoke = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.065, 0.035, 32), white);
+  smoke.position.set(-0.8, H - 0.018, 0.9); g.add(smoke);
+  return g;
 }
 
 // --- 自作の形 ---

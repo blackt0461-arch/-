@@ -18,7 +18,7 @@ for t in texs:
     d=get(f'https://api.polyhaven.com/files/{t}')
     r={}
     for k,n in [('Diffuse','map'),('col_01','map'),('col_1','map'),('nor_gl','normal'),('Rough','rough'),('AO','ao')]:
-      if k in d and n not in r: r[n]=d[k]['1k']['jpg']['url']
+      if k in d and n not in r: r[n]=d[k]['1k']['jpg']['url']; r.setdefault('sizes',{})[n]=d[k]['1k']['jpg']['size']
     if 'map' not in r: bad.append(('tex-nodiff',t,list(d.keys())))
     out['textures'][t]=r
   except Exception as e: bad.append(('tex',t,str(e)))

@@ -9,17 +9,23 @@ function blank() {
     version: 1,
     streak: { count: 0, last: null, total: 0 },
     subjects: {},
+    house: blankHouse(),
   };
 }
-function blankSubject() {
+// 家はどの科目でも共通（どの科目を解いても同じ家が育つ）
+function blankHouse() {
   return {
-    srs: {},        // 問題ID → { stage, due, wrongs, rights, mastered, seen }
     gauge: 0,
     unlocks: 0,     // これまでに解放した数（ゲージの大きさに使う）
     rooms: [],      // [{ id, dir, items: { kindId: variantIndex }, specials: [index] }]
     current: 0,     // いま見ている部屋
     specialsGiven: 0,
     pendingSpecials: 0, // まだ置いていない特別な家具
+  };
+}
+function blankSubject() {
+  return {
+    srs: {},        // 問題ID → { stage, due, wrongs, rights, mastered, seen }
     session: null,  // 途中のセット（アプリを閉じても続きから）
   };
 }
@@ -35,10 +41,25 @@ export function useUser(name) {
 function load() {
   try {
     const s = JSON.parse(localStorage.getItem(KEY));
-    if (s && s.version === 1) return s;
+    if (s && s.version === 1) return migrate(s);
   } catch (e) { /* 読めないときは新しく作る */ }
   return blank();
 }
+// 以前は科目ごとに家があったので、1つの家にまとめる
+function migrate(s) {
+  if (!s.house) {
+    const old = Object.values(s.subjects || {}).find(x => x.rooms && x.rooms.length);
+    s.house = blankHouse();
+    if (old) for (const k of Object.keys(s.house)) if (old[k] !== undefined) s.house[k] = old[k];
+  }
+  for (const x of Object.values(s.subjects || {})) {
+    for (const k of ['gauge', 'unlocks', 'rooms', 'current', 'specialsGiven', 'pendingSpecials']) delete x[k];
+  }
+  return s;
+}
+export function house() { return state.house || (state.house = blankHouse()); }
+export function replaceState(s) { state = migrate(s); save(); }
+
 export function save() {
   if (!KEY) return;
   try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { /* 保存できない環境 */ }
