@@ -13,11 +13,11 @@ function defaults() {
   const ex = {};
   for (const n of ['ロトのつるぎ', 'はやぶさの剣', 'りゅうおうの杖', 'メタスラの盾', 'ロトの盾', 'メタスラヘルム', 'メタスラよろい下', '炎のイヤリング', 'インテリのうでわ']) { const it = byName(n); if (it) ex[it.id] = { n: 1, lv: 1, t: 0 }; }
   return {
-    v: 1, example: true, tab: 'result', eqTab: 'w', memColor: '', memQ: '', eqQ: '', eqOwned: false,
+    v: 2, example: true, tab: 'result', eqTab: 'w', memColor: '', memQ: '', eqQ: '', eqOwned: false,
     party: [
-      { job: '戦士', cap: 185, base: { atk: 150, matk: 150 }, w: [0, 1, 0, 0, 0, 0, 0] },
-      { job: '僧侶', cap: 150, base: { atk: 100, matk: 100 }, w: [0, 0, 0, 1, 0, 0, 0] },
-      { job: '魔法使い', cap: 150, base: { atk: 100, matk: 100 }, w: [0, 0, 1, 0, 0, 0, 0] }
+      { job: '戦士', cap: 185, base: { atk: 150, matk: 150 }, w: [0, 1, 1, 0, 0, 0, 0] },
+      { job: '僧侶', cap: 150, base: { atk: 100, matk: 100 }, w: [0, 1, 1, 0, 0, 0, 0] },
+      { job: '魔法使い', cap: 150, base: { atk: 100, matk: 100 }, w: [0, 1, 1, 0, 0, 0, 0] }
     ],
     main: 0, fixW: '', need: [],
     enemy: { mode: 'boss', boss: (BOSSES.find(b => b.boss === 'スライムナイト') || BOSSES[0] || {}).n || '', fam: 'スライム系', weak: {} },
@@ -29,6 +29,8 @@ try { const raw = localStorage.getItem(KEY); if (raw) S = Object.assign(defaults
 // 1人目を いつも メインにする（前の保存で ちがう人が メインだったら 先頭へ）
 if (S.main && S.party[S.main]) { const m = S.party.splice(S.main, 1)[0]; S.party.unshift(m); }
 S.main = 0;
+// v2: サブは「こうげき力＋こうげき魔力」を たいせつにするのが 初期設定
+if (!(S.v >= 2)) { for (const p of S.party) p.w = [0, 1, 1, 0, 0, 0, 0]; S.v = 2; }
 for (const p of S.party) { p.base = p.base || { atk: 100, matk: 100 }; p.w = p.w || [0, 0, 0, 0, 0, 0, 0]; }
 let lastResult = null;
 function save() {
@@ -97,7 +99,7 @@ function slotDots(job) { const j = JOBS.find(x => x.n === job); return j ? `<spa
 
 function vParty() {
   return `<div class="win"><span class="tag">パーティ</span>
-    <div class="note" style="margin-top:4px">1人目（★メイン）の 火力が いちばん高くなるように えらびます。2人目・3人目は、チェックした のうりょくが 高くなるように、のこりから えらびます。「⇅ メインと入れかえ」で 入れかえられます。</div></div>` +
+    <div class="note" style="margin-top:4px">1人目（★メイン）の 火力が いちばん高くなるように えらびます。2人目・3人目（サブ）は、のこりの そうびと メモリで、チェックした のうりょく（はじめは こうげき力＋こうげき魔力）の 合計が 高くなるように えらびます。「⇅ メインと入れかえ」で 入れかえられます。</div></div>` +
     S.party.map((p, i) => {
       const main = i === S.main;
       return `<section class="win member"><span class="tag">${i + 1}人め${main ? '　★メイン' : ''}</span>
