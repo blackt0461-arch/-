@@ -657,3 +657,4 @@ select, input[type="text"] {
 .ai-buttons { display: flex; gap: 8px; flex-wrap: wrap; }
 .ai-buttons .secondary-button { min-height: 40px; padding: 0 14px; }
 .ai-buttons [hidden] { display: none; }
+.song-chord .real-name { display: block; font-size: 0.6rem; }
