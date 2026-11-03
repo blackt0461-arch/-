@@ -657,6 +657,7 @@ select, input[type="text"] {
 .ai-buttons { display: flex; gap: 8px; flex-wrap: wrap; }
 .ai-buttons .secondary-button { min-height: 40px; padding: 0 14px; }
 .ai-buttons [hidden] { display: none; }
+.song-chord .real-name { display: block; font-size: 0.6rem; }
 
 /* 歌本（歌詞の上にコード） */
 #lyrics-input { width: 100%; box-sizing: border-box; font-size: 1rem; padding: 8px; border-radius: 8px; background: var(--surface); color: inherit; border: 1px solid var(--surface); }
