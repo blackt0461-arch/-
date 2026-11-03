@@ -924,17 +924,46 @@ function photoMode() {
 
 // =========================== 更新のお知らせ ===========================
 // このプログラムの版（version.json と同じにする。公開のたびに上げる）
-const APP_VERSION = '2.4.1';
+const APP_VERSION = '2.4.2';
+// 新しい版が出たら、みんな同じタイミングでそろうように強制で再起動する。
+// 開いた時・画面に戻った時・1分ごとに version.json を見る
+async function latestVersion() {
+  try { return (await (await fetch('version.json', { cache: 'no-store' })).json()).version; } catch (e) { return null; }
+}
+let restarting = false;
+function forceRestart(ver) {
+  if (restarting) return;
+  // 同じ版で何度も再起動をくり返さない（読みこみ直しても古いままのときの安全装置。3回まで）
+  const key = 'studyroom.restart.' + ver;
+  const n = +(sessionStorage.getItem(key) || 0);
+  if (n >= 3) return;
+  sessionStorage.setItem(key, n + 1);
+  restarting = true;
+  try { S.save(); } catch (e) { /* まだログイン前 */ }
+  try { Sync.push?.(true); } catch (e) { /* なし */ }
+  const el = h(`
+    <div class="restart-ov">
+      <div class="rs-box"><div class="rs-spin"></div><b>アップデートがあります</b><p>新しい版にするため、再起動します</p></div>
+    </div>`);
+  document.body.append(el);
+  setTimeout(async () => {
+    try { const regs = await navigator.serviceWorker?.getRegistrations?.(); for (const r of regs || []) await r.update(); } catch (e) { /* なし */ }
+    location.reload();
+  }, 2200);
+}
+async function watchVersion() {
+  const v = await latestVersion();
+  if (v && v !== APP_VERSION) forceRestart(v);
+}
+setInterval(watchVersion, 60000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) watchVersion(); });
+addEventListener('focus', watchVersion);
+watchVersion();
 async function checkUpdateNotes() {
   try {
     const v = await (await fetch('version.json', { cache: 'no-store' })).json();
     // 手元のプログラムが古いまま（スマホが前の版を覚えている）なら、1回だけ読みこみ直す
-    if (v.version !== APP_VERSION && sessionStorage.getItem('studyroom.reloaded') !== v.version) {
-      sessionStorage.setItem('studyroom.reloaded', v.version);
-      S.save();
-      location.reload();
-      return;
-    }
+    if (v.version !== APP_VERSION) return forceRestart(v.version);
     const seen = localStorage.getItem('studyroom.version');
     localStorage.setItem('studyroom.version', v.version);
     if (!seen || seen === v.version || !v.notes?.length) return;
