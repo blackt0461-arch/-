@@ -316,8 +316,8 @@ h3.sec { font-size: 14px; color: var(--muted); margin: 18px 4px 8px; font-weight
 .lb-day b { font-size: 54px; color: #fff; text-shadow: 0 0 24px rgba(255,210,120,.7); margin-right: 4px; }
 .lb-reward { display: grid; gap: 10px; justify-items: center; animation: pop .7s .2s cubic-bezier(.3,1.5,.5,1) both; }
 .lb-reward p { margin: 0; font-size: 16px; }
-.lb-reward.ticket4 .ticket-svg { filter: drop-shadow(0 0 22px rgba(180,140,255,.7)); }
-.lb-reward.ticket .ticket-svg { filter: drop-shadow(0 0 22px rgba(240,180,76,.6)); }
+.lb-reward.lbk-ticket4 .ticket-svg { filter: drop-shadow(0 0 22px rgba(180,140,255,.7)); }
+.lb-reward.lbk-ticket .ticket-svg { filter: drop-shadow(0 0 22px rgba(240,180,76,.6)); }
 .lb-gbig { display: flex; align-items: center; gap: 10px; font-size: 44px; color: var(--gold1); }
 .lb-gbig span { font-size: 34px; font-weight: 900; color: #fff; }
 @keyframes pop { from { transform: scale(.6); opacity: 0; } to { transform: none; opacity: 1; } }
@@ -752,3 +752,15 @@ h3.sec { font-size: 14px; color: var(--muted); margin: 18px 4px 8px; font-weight
 .rec-subj button.on { background: linear-gradient(180deg, var(--gold1), var(--gold2)); color: #3a2400; border-color: transparent; }
 .rec-subj button.on .ic2, .rec-subj button.on small { color: #4a2c00; }
 .unit-row { grid-template-columns: minmax(56px, 8.5em) 1fr auto; } .unit-row > b { font-size: 13px; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+/* ログボ：スマホの画面に入りきらないとき、上のごほうびが下のカレンダーに隠れないように。
+   入りきらなければ画面ごとスクロール（光の筋は画面に固定して、スクロールの大きさに入れない） */
+.lb-screen { overflow-y: auto; align-items: safe center; place-items: safe center; }
+.lb-screen .lb-rays { position: fixed; }
+.lb-inner > * { flex: none; min-height: min-content; }
+.lb-reward { min-height: max-content; }
+.lb-screen .lb-grid { gap: 5px; margin-bottom: 4px; }
+.lb-screen .lb-cell { aspect-ratio: 1.45; border-radius: 10px; }
+.lb-screen .lb-cell .ticket-svg.mini { width: 78%; height: auto; }
+.lb-day b { font-size: 46px; }
+.lb-gbig { padding: 10px 22px; }
+.lb-gbig svg { width: 40px; height: 40px; }
