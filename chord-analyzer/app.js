@@ -8,11 +8,12 @@ import { formatTime, assignTab, formatTab, chartPlayback } from './song.js';
 import { buildStaffRows } from './tab-staff.js';
 import { aiReady, downloadAI, deleteAI, AI_TOTAL } from './ai-loader.js';
 import { initSongbook } from './songbook.js';
+import { renderSheetPages, toPng } from './export-sheet.js';
 import { estimateKey, suggestCapo, easiestVoicing } from './practice.js';
 
 // version.json と同じ値にする（新しいバージョンを公開したら両方を上げる）
-const APP_VERSION = '1.17.3';
-const APP_FILES = ['index.html', 'style.css', 'app.js', 'chord-engine.js', 'audio.js', 'fretboard.js', 'sound.js', 'song.js', 'dsp.js', 'chart.js', 'live.js', 'practice.js', 'transcribe.js', 'transcribe-worker.js', 'tab-staff.js', 'learned.js', 'synth-check.js', 'vocal-remove.js', 'ai-vocal.js', 'ai-loader.js', 'ai-pitch.js', 'models/basic-pitch.onnx', 'lyrics.js', 'songbook.js', 'feedback.js', 'sw.js', 'manifest.webmanifest'];
+const APP_VERSION = '1.18.0';
+const APP_FILES = ['index.html', 'style.css', 'app.js', 'chord-engine.js', 'audio.js', 'fretboard.js', 'sound.js', 'song.js', 'dsp.js', 'chart.js', 'live.js', 'practice.js', 'transcribe.js', 'transcribe-worker.js', 'tab-staff.js', 'learned.js', 'synth-check.js', 'vocal-remove.js', 'ai-vocal.js', 'ai-loader.js', 'ai-pitch.js', 'models/basic-pitch.onnx', 'lyrics.js', 'songbook.js', 'feedback.js', 'export-sheet.js', 'sw.js', 'manifest.webmanifest'];
 const HOLD_MS = 150;      // マイク：別のコードがこの時間続いたら表示を切り替える
 const HISTORY_SIZE = 16;  // マイク：覚えておくコードの数
 const HISTORY_STABLE_MS = 400; // マイク：この時間続いたコードを履歴に入れる
@@ -778,7 +779,70 @@ const songbook = initSongbook({
   media: songMedia,
   appVersion: APP_VERSION,
   playFrom: (t) => playFrom(t),
+  displayName: (name) => shapeName(name),
   rerender: () => { pendingBeats.timeline = analysis.timeline; renderAnalysis(); renderStrip(stripDuration); highlightNow(); },
+});
+
+// ---- 直した譜面を、印刷できる紙の形の画像にする ----
+const sheetDialog = document.getElementById('sheet-dialog');
+const sheetTitle = document.getElementById('sheet-title');
+const sheetPagesEl = document.getElementById('sheet-pages');
+let sheetCanvases = [];
+let songTitle = '';
+function barsOf(a) {
+  // 小節ごとに、その小節で鳴っているコード（押さえ方の名前）を並べる
+  const beats = a.beats ?? [];
+  if (beats.length < 4) return [];
+  const period = (beats.at(-1) - beats[0]) / (beats.length - 1);
+  const first = ((a.downbeat ?? 0) % 4 + 4) % 4;
+  const starts = [];
+  for (let k = first; k < beats.length; k += 4) starts.push(beats[k]);
+  if (starts[0] > period) starts.unshift(Math.max(0, starts[0] - 4 * period));
+  return starts.map((s, i) => {
+    const e = starts[i + 1] ?? s + 4 * period;
+    const names = a.timeline.filter((seg) => seg.end - Math.max(seg.start, s) > period * 0.6 && seg.start < e - period * 0.4).map((seg) => shapeName(seg.name));
+    return names.filter((n, j) => j === 0 || n !== names[j - 1]);
+  }).filter((names, i, all) => names.length || all.slice(i).some((x) => x.length));
+}
+function buildSheet() {
+  const a = analysis;
+  const capo = Number(capoSelect.value);
+  const used = [...new Set(a.timeline.filter((s) => s.end - s.start > 0.3).map((s) => s.name))];
+  const keyText = (document.getElementById('song-key')?.textContent ?? '').match(/キー[：:]\s*([A-G][#♯b♭]?m?)/)?.[0]?.replace(/\s+/g, '') ?? '';
+  return {
+    title: sheetTitle.value.trim() || songTitle,
+    info: [capo > 0 ? `カポ ${capo}` : 'カポなし', a.bpm ? `テンポ ${Math.round(a.bpm)}` : '', keyText].filter(Boolean).join('　'),
+    chords: used.slice(0, 24).map((n) => ({ name: shapeName(n), frets: parseShape(voicingFor(n)) })),
+    lines: songbook.getSheet(),
+    bars: barsOf(a),
+  };
+}
+function drawSheet() {
+  sheetCanvases = renderSheetPages(buildSheet());
+  sheetPagesEl.innerHTML = '';
+  sheetCanvases.forEach((c) => { const img = document.createElement('img'); img.src = c.toDataURL('image/png'); img.alt = '譜面'; sheetPagesEl.append(img); });
+}
+document.getElementById('sheet-open').addEventListener('click', () => {
+  if (!analysis) return;
+  if (!sheetTitle.value) sheetTitle.value = songTitle;
+  drawSheet();
+  sheetDialog.showModal ? sheetDialog.showModal() : sheetDialog.setAttribute('open', '');
+});
+sheetTitle.addEventListener('change', drawSheet);
+document.getElementById('sheet-close').addEventListener('click', () => (sheetDialog.close ? sheetDialog.close() : sheetDialog.removeAttribute('open')));
+document.getElementById('sheet-save').addEventListener('click', async () => {
+  const name = (sheetTitle.value.trim() || '譜面').replace(/[\\/:*?"<>|]/g, '_');
+  const files = await Promise.all(sheetCanvases.map(async (c, i) => new File([await toPng(c)], `${name}${sheetCanvases.length > 1 ? `-${i + 1}` : ''}.png`, { type: 'image/png' })));
+  // スマホでは「共有」から「画像を保存」で写真に入れられる。できない環境ではダウンロードする
+  if (navigator.canShare?.({ files })) {
+    try { await navigator.share({ files, title: name }); return; } catch (err) { if (err?.name === 'AbortError') return; }
+  }
+  files.forEach((f) => { const a = document.createElement('a'); a.href = URL.createObjectURL(f); a.download = f.name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 5000); });
+});
+document.getElementById('sheet-print').addEventListener('click', () => {
+  const area = document.getElementById('print-area');
+  area.innerHTML = sheetCanvases.map((c) => `<img src="${c.toDataURL('image/png')}" alt="">`).join('');
+  window.print();
 });
 
 songFile.addEventListener('change', async () => {
@@ -797,6 +861,8 @@ songFile.addEventListener('change', async () => {
     pendingBeats = { beats: result.beats, downbeat: result.downbeat, duration: result.duration, timeline: result.timeline };
     analysis = { timeline: result.timeline, tabBlocks: buildTabBlocks(result.events), events: result.events, beats: result.beats, downbeat: result.downbeat, duration: result.duration, bpm: result.bpm, onsets: result.onsets, chordFrames: result.chordFrames };
     songbook.onAnalysis(`${file.name}|${Math.round(duration)}`);
+    songTitle = file.name.replace(/\.[^.]+$/, '');
+    sheetTitle.value = '';
     const how = result.aiVocal?.used ? 'AI で歌声を取り除いて解析しました'
       : result.useSide ? '左右の差で歌を弱めて解析しました'
       : result.chartInfo?.method === '歌を除く' ? '歌のメロディを取り除いて解析しました' : 'ギターの音をそのまま解析しました（歌は見つかりませんでした）';

@@ -21,6 +21,8 @@ export function initSongbook(app) {
   const dialog = $('chord-edit'), editName = $('chord-edit-name'), editCands = $('chord-edit-cands');
   let song = null; // { key, id, lines, times, original, edits }
   let syncing = false, moving = null, editing = null, sendTimer = null;
+  // 画面に出すコード名（カポを付けているときは押さえ方の名前）
+  const show = (name) => (app.displayName ? app.displayName(name) : name);
 
   const save = () => { if (song) store.set(`songbook:${song.key}`, { id: song.id, text: song.text, times: song.times, edits: song.edits }); };
   const timeline = () => app.getAnalysis()?.timeline ?? [];
@@ -84,9 +86,9 @@ export function initSongbook(app) {
         const to = k + 1 < cuts.length ? cuts[k + 1] : chars.length;
         const m = marks.find((x) => x.pos === from);
         const text = chars.slice(from, to).map((c, j) => `<span class="sb-char" data-line="${i}" data-pos="${from + j}">${esc(c)}</span>`).join('');
-        return `<span class="sb-seg">${m ? `<button type="button" class="sb-chord" data-seg="${m.seg}">${esc(m.name)}</button>` : '<span class="sb-chord sb-none"></span>'}<span class="sb-text">${text}</span></span>`;
+        return `<span class="sb-seg">${m ? `<button type="button" class="sb-chord" data-seg="${m.seg}">${esc(show(m.name))}</button>` : '<span class="sb-chord sb-none"></span>'}<span class="sb-text">${text}</span></span>`;
       }).join('');
-      const after = (p?.after ?? []).map((m) => `<button type="button" class="sb-chord sb-after" data-seg="${m.seg}">${esc(m.name)}</button>`).join('');
+      const after = (p?.after ?? []).map((m) => `<button type="button" class="sb-chord sb-after" data-seg="${m.seg}">${esc(show(m.name))}</button>`).join('');
       return `<div class="sb-line${p ? '' : ' untimed'}" data-line="${i}">${body}${after ? `<span class="sb-tail">${after}</span>` : ''}</div>`;
     }).join('');
     highlight(app.media.currentTime);
@@ -257,5 +259,13 @@ export function initSongbook(app) {
   // 帯やコード一覧から直すとき
   const editSeg = (i) => { if (song) openEditor(i); };
   const editAt = (t) => { const i = timeline().findIndex((s) => t >= s.start && t < s.end); if (i >= 0) editSeg(i); };
-  return { onAnalysis, render, editSeg, editAt };
+  // 印刷・画像用：歌詞の各行と、その上に載せるコード（表示する名前で）。タイミングが無ければ null
+  function getSheet() {
+    const a = app.getAnalysis();
+    if (!a || !song?.lines?.some((l) => l.text)) return null;
+    if (!sungLines(song.lines).some((i) => typeof song.times[i] === 'number')) return null;
+    const placed = placeChords(song.lines, song.times, a.timeline, { duration: a.duration });
+    return song.lines.map((l, i) => ({ text: l.text, marks: (placed[i]?.marks ?? []).map((m) => ({ pos: m.pos, name: show(m.name) })), after: (placed[i]?.after ?? []).map((m) => show(m.name)) }));
+  }
+  return { onAnalysis, render, editSeg, editAt, getSheet };
 }

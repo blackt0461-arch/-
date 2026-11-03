@@ -727,3 +727,24 @@ select, input[type="text"] {
 .song-capo { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 4px 0 8px; color: var(--muted); font-size: 0.85rem; }
 .song-capo b { color: var(--text); }
 .song-capo .secondary-button { padding: 4px 10px; font-size: 0.8rem; }
+
+/* 譜面を保存・印刷 */
+.icon-button { flex: none; min-width: 46px; min-height: 44px; border-radius: 22px; border: 1px solid var(--line); background: transparent; color: var(--text); font-size: 1.2rem; }
+.sheet-dialog { border: 0; border-radius: 16px; background: var(--surface); color: inherit; width: min(560px, 94vw); max-height: 92vh; padding: 14px; }
+.sheet-dialog::backdrop { background: rgba(0,0,0,0.6); }
+.sheet-head { display: flex; gap: 8px; }
+.sheet-head input { flex: 1; font-size: 1.05rem; padding: 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: inherit; }
+.sheet-pages { display: flex; flex-direction: column; gap: 10px; max-height: 58vh; overflow: auto; margin: 8px 0; }
+.sheet-pages img { width: 100%; border-radius: 4px; box-shadow: 0 2px 10px rgba(0,0,0,0.4); }
+.sheet-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.sheet-actions button { min-height: 50px; }
+.print-area { display: none; }
+@media print {
+  body { padding: 0 !important; background: #fff !important; }
+  body * { visibility: hidden !important; }
+  .print-area, .print-area * { visibility: visible !important; }
+  .print-area { display: block !important; position: absolute; left: 0; top: 0; width: 100%; }
+  .print-area img { display: block; width: 100%; page-break-after: always; break-after: page; }
+  .bottom-nav, .banner { display: none !important; }
+  @page { size: A4; margin: 0; }
+}

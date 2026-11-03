@@ -162,6 +162,7 @@
         <div class="now-row">
           <div id="song-now" class="song-now">―</div>
           <label class="edit-toggle"><input type="checkbox" id="fix-mode"><span>✏️ 直す</span></label>
+          <button type="button" id="sheet-open" class="icon-button" aria-label="譜面を保存・印刷" title="譜面を保存・印刷">📄</button>
         </div>
         <div id="song-capo" class="song-capo" hidden></div>
         </div>
@@ -232,7 +233,20 @@
         </div>
       </div>
 
-          <dialog id="chord-edit" class="chord-edit">
+          <dialog id="sheet-dialog" class="sheet-dialog">
+        <div class="sheet-head">
+          <input id="sheet-title" type="text" autocomplete="off" placeholder="曲名">
+          <button type="button" id="sheet-close" class="secondary-button">閉じる</button>
+        </div>
+        <p class="hint">歌本に歌詞があれば歌詞とコード、無ければ小節ごとのコードを、A4の紙の形にします。</p>
+        <div id="sheet-pages" class="sheet-pages"></div>
+        <div class="sheet-actions">
+          <button type="button" id="sheet-save" class="primary-button">📷 画像で保存</button>
+          <button type="button" id="sheet-print" class="secondary-button">🖨 印刷・PDF</button>
+        </div>
+      </dialog>
+      <div id="print-area" class="print-area" aria-hidden="true"></div>
+      <dialog id="chord-edit" class="chord-edit">
         <h3 id="chord-edit-title">コードを直す</h3>
         <input id="chord-edit-name" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="例：C、Am7、F/G">
         <div id="chord-edit-cands" class="chord-edit-cands"></div>
