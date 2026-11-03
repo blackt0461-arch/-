@@ -165,6 +165,23 @@ add(5, [
   ['g5-makie-table', '蒔絵の座卓とお茶', 'table', 'nr', { gacha: 'lacquerTable' }, 1.1],
 ], { series: 'wa' });
 
+// ───────── 着せ替え（画面の見た目）：★4 はいつでも、バンドの5つはバンドシリーズ限定 ─────────
+const SK = { place: 'skin' };
+add(4, [
+  ['skin-b', '着せ替え：木のぬくもり', 'skin', 'n', { skin: 'b' }, 1, SK],
+  ['skin-c', '着せ替え：ミニマル・ライト', 'skin', 'm', { skin: 'c' }, 1, SK],
+  ['skin-d', '着せ替え：スタイリッシュ', 'skin', 'i', { skin: 'd' }, 1, SK],
+]);
+add(4, [
+  ['skin-e1', '着せ替え：ネオン', 'skin', 'i', { skin: 'e1' }, 1, SK],
+  ['skin-e2', '着せ替え：ヴィンテージアンプ', 'skin', 'r', { skin: 'e2' }, 1, SK],
+  ['skin-e3', '着せ替え：ライブフライヤー', 'skin', 'i', { skin: 'e3' }, 1, SK],
+  ['skin-e4', '着せ替え：フェスステージ', 'skin', 'm', { skin: 'e4' }, 1, SK],
+], { series: 'band' });
+add(5, [
+  ['skin-e5', '着せ替え：バンドルーム', 'skin', 'i', { skin: 'e5' }, 1, SK],
+], { series: 'band' });
+
 export const GACHA_BY_ID = Object.fromEntries(GACHA_ITEMS.map((it) => [it.id, it]));
 export const gachaById = (id) => GACHA_BY_ID[id] || null;
 export const seriesById = (id) => SERIES.find((s) => s.id === id) || null;

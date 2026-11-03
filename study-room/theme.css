@@ -160,7 +160,7 @@ b, strong { font-weight: 700; }
 .hotbar .sl-t { font-size: 8.5px; font-weight: 500; letter-spacing: .02em; color: var(--sk-muted); line-height: 1; }
 .hotbar .sl.on { background: var(--sk-sel-bg); color: var(--sk-sel-fg); border-color: transparent; }
 .hotbar .sl.on .sl-t { color: inherit; opacity: .7; }
-.hotbar .sl.hot { background: var(--sk-accent); color: var(--sk-btn-fg); border-color: transparent; box-shadow: 0 0 0 3px color-mix(in srgb, var(--sk-accent) 30%, transparent), 0 0 18px color-mix(in srgb, var(--sk-accent) 60%, transparent); animation: slotHot 1.8s ease-in-out infinite; }
+.hotbar .sl.hot { background: var(--sk-accent); color: var(--sk-hot-fg, var(--sk-btn-fg)); border-color: transparent; box-shadow: 0 0 0 3px color-mix(in srgb, var(--sk-accent) 30%, transparent), 0 0 18px color-mix(in srgb, var(--sk-accent) 60%, transparent); animation: slotHot 1.8s ease-in-out infinite; }
 .hotbar .sl.hot .sl-t { color: inherit; opacity: .75; }
 @keyframes slotHot { 50% { box-shadow: 0 0 0 5px color-mix(in srgb, var(--sk-accent) 18%, transparent), 0 0 24px color-mix(in srgb, var(--sk-accent) 70%, transparent); } }
 .hotbar .dot { position: absolute; top: -3px; right: -3px; width: 10px; height: 10px; border-radius: 50%; background: var(--sk-dot); box-shadow: 0 0 0 2px rgba(0,0,0,.55); }
@@ -194,3 +194,21 @@ b, strong { font-weight: 700; }
 .rankchip .lv b, .pc-lv b, .stats4 b, .lb-day b, .res .pts, .rr-now b, .rr-lv, .qn, .fcard { font-variant-numeric: lining-nums tabular-nums; }
 .half-sheet .hc.hot svg { color: var(--sk-sel-fg); opacity: 1; }
 .menu-list button > .ic { flex: none; width: auto; } .menu-list button > span:not(.ic) { flex: 1; min-width: 0; }
+/* 明るい着せ替えでは、全体の画面にうすい地の色を敷いて、文字を読みやすくする */
+.screen { background: var(--sk-screen-bg, transparent); }
+.tabbar.hotbar:not(.on-room) { background: linear-gradient(180deg, transparent, var(--sk-fade, rgba(0,0,0,.55)) 45%); }
+[data-skin="b"] { --sk-fade: rgba(255,246,232,.95); }
+[data-skin="c"] { --sk-fade: rgba(244,244,246,.95); }
+[data-skin="e3"] { --sk-fade: rgba(244,241,234,.95); }
+/* 着せ替えの画面 */
+.skin-grid { display: grid; gap: 10px; padding-bottom: 20px; }
+.skin-card { display: grid; grid-template-columns: 64px 1fr auto; gap: 12px; align-items: center; padding: 10px 14px 10px 10px; border-radius: var(--sk-radius); background: var(--sk-card); border: 1px solid var(--sk-card-line); color: var(--sk-text); text-align: left; }
+.skin-card img { width: 64px; height: 64px; border-radius: 12px; background: rgba(0,0,0,.25); }
+.skin-card .sk-t { display: grid; gap: 2px; min-width: 0; }
+.skin-card .sk-t b { font-size: 15px; } .skin-card .sk-t i { font-style: normal; font-size: 11px; color: var(--sk-accent); letter-spacing: .04em; }
+.skin-card .sk-t small { font-size: 11.5px; color: var(--sk-muted); }
+.skin-card em { font-style: normal; font-size: 12px; font-weight: 700; padding: 6px 10px; border-radius: 99px; background: var(--sk-icon-bg); color: var(--sk-text); white-space: nowrap; }
+.skin-card.on em { background: var(--sk-btn-bg); color: var(--sk-btn-fg); }
+.skin-card.locked { opacity: .5; } .skin-card.locked img { filter: grayscale(1); }
+.skins .note { color: var(--sk-muted); font-size: 13px; line-height: 1.7; margin: 0 2px 12px; }
+.sk-count { font-size: 13px; color: var(--sk-muted); } .sk-count b { color: var(--sk-text); font-family: var(--sk-num); font-size: 17px; }
