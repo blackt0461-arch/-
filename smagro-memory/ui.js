@@ -26,6 +26,10 @@ function defaults() {
 }
 let S = defaults();
 try { const raw = localStorage.getItem(KEY); if (raw) S = Object.assign(defaults(), JSON.parse(raw)); } catch (e) { }
+// 1人目を いつも メインにする（前の保存で ちがう人が メインだったら 先頭へ）
+if (S.main && S.party[S.main]) { const m = S.party.splice(S.main, 1)[0]; S.party.unshift(m); }
+S.main = 0;
+for (const p of S.party) { p.base = p.base || { atk: 100, matk: 100 }; p.w = p.w || [0, 0, 0, 0, 0, 0, 0]; }
 let lastResult = null;
 function save() {
   try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { }
@@ -93,12 +97,12 @@ function slotDots(job) { const j = JOBS.find(x => x.n === job); return j ? `<spa
 
 function vParty() {
   return `<div class="win"><span class="tag">パーティ</span>
-    <div class="note" style="margin-top:4px">★の人の 火力が いちばん高くなるように えらびます。ほかの2人は、チェックした のうりょくが 高くなるように、のこりから えらびます。</div></div>` +
+    <div class="note" style="margin-top:4px">1人目（★メイン）の 火力が いちばん高くなるように えらびます。2人目・3人目は、チェックした のうりょくが 高くなるように、のこりから えらびます。「⇅ メインと入れかえ」で 入れかえられます。</div></div>` +
     S.party.map((p, i) => {
       const main = i === S.main;
       return `<section class="win member"><span class="tag">${i + 1}人め${main ? '　★メイン' : ''}</span>
       <div class="head" style="margin-top:6px"><div class="row">${slotDots(p.job)}</div>
-        ${main ? '<span class="chip on">★ メインで たたかう</span>' : `<button class="chip" data-act="setmain" data-i="${i}">★ メインにする</button>`}</div>
+        ${main ? '<span class="chip on">★ メインで たたかう</span>' : `<button class="chip" data-act="swap" data-i="${i}">⇅ メインと入れかえ</button>`}</div>
       <div class="grid2">
         <label class="f">しょくぎょう<select id="job${i}" data-act="job" data-i="${i}">${JOBS.map(j => `<option ${j.n === p.job ? 'selected' : ''}>${j.n}</option>`).join('')}</select></label>
         <label class="f">コストの じょうげん<input id="cap${i}" type="number" inputmode="numeric" min="0" max="999" value="${esc(p.cap)}" data-act="cap" data-i="${i}"></label>
@@ -228,7 +232,8 @@ function vResultBody() {
   </section>`;
   if (R.alts.length) html += `<section class="win"><span class="tag">べつの あん（武器ちがい）</span><div class="lines" style="margin-top:6px">${R.alts.map((a, i) => `<details class="alt-d"><summary class="alt" style="list-style:none"><span>${esc(a.r.W ? a.r.W.it.n : '武器なし')}</span><span class="altnum">${fmt(a.r.parts.total)} <span class="sub">(${Math.round(a.r.parts.total / pt.total * 100)}%)</span></span></summary><div style="padding:8px 4px">${loadout(a.r, a.p)}</div></details>`).join('')}</div></section>`;
   for (const s of R.subs) html += `<section class="win"><span class="tag">${s.idx + 1}人め ${esc(s.p.job)}</span>
-    <div class="note" style="margin-top:6px">たいせつ：${STAT_KEYS.filter((k, j) => s.p.w[j]).join('・') || '（えらんでいません）'}</div>
+    <div class="row" style="justify-content:flex-end;margin-top:6px"><button class="chip" data-act="swap" data-i="${s.idx}">⇅ メインと入れかえて けいさん</button></div>
+    <div class="note">たいせつ：${STAT_KEYS.filter((k, j) => s.p.w[j]).join('・') || '（えらんでいません）'}</div>
     <div style="margin-top:8px">${loadout(s.r, s.p)}</div>${statsLine(s.r.V)}</section>`;
   html += `<div class="note">※ 火力は ゲームの 正しい計算式ではなく、くらべるための めやすです。メモリの S以外のランクの数字も めやすです。</div>`;
   return html;
@@ -253,7 +258,7 @@ document.addEventListener('click', ev => {
   const a = b.dataset.act, i = +b.dataset.i;
   if (b.dataset.tab) { S.tab = b.dataset.tab; save(); $('#sheet').hidden = true; render(); window.scrollTo({ top: 0 }); return; }
   switch (a) {
-    case 'setmain': S.main = i; break;
+    case 'swap': { const P = S.party; [P[0], P[i]] = [P[i], P[0]]; S.main = 0; if (S.tab === 'result') window.scrollTo({ top: 0 }); break; }
     case 'w': S.party[i].w[+b.dataset.j] = S.party[i].w[+b.dataset.j] ? 0 : 1; break;
     case 'needdel': S.need = S.need.filter(x => x !== b.dataset.s); break;
     case 'emode': S.enemy.mode = b.dataset.m; break;
