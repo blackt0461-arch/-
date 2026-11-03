@@ -328,3 +328,18 @@ h3.sec { font-size: 14px; color: var(--muted); margin: 18px 4px 8px; font-weight
 .lb-next { margin: 0; color: var(--muted); font-size: 13px; }
 .lb-next b { color: var(--gold1); }
 .lb-screen .btn.big { width: 100%; }
+/* カレンダーは1行5日（5日ごとのチケットの日が、どの行もいちばん右に来る） */
+.lb-screen .lb-grid { grid-template-columns: repeat(5, 1fr); }
+
+/* お知らせ */
+.news-card { padding: 14px; border-radius: 16px; border: 1px solid var(--card-line); background: var(--card); margin-bottom: 10px; }
+.news-card.unread { box-shadow: 0 0 0 1.5px var(--gold2); }
+.news-card h3 { margin: 4px 0 6px; font-size: 16px; }
+.news-card p { margin: 0; font-size: 14px; line-height: 1.7; color: var(--text); opacity: .9; }
+.nc-top { display: flex; gap: 8px; align-items: center; }
+.nc-top small { color: var(--muted); font-size: 12px; }
+.nc-new { font-style: normal; font-size: 10px; font-weight: 900; padding: 2px 7px; border-radius: 99px; background: #ff6b5a; color: #fff; }
+.news-form { display: grid; gap: 10px; }
+.news-form input, .news-form textarea { background: rgba(255,255,255,.07); border: 1px solid var(--line); border-radius: 12px; padding: 12px; color: var(--text); font: inherit; font-size: 16px; resize: vertical; }
+.row2 { display: grid; grid-template-columns: 1fr 1.4fr; gap: 10px; }
+.admin .compose { width: 100%; margin-bottom: 14px; flex-direction: row; }

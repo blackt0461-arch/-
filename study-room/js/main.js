@@ -113,7 +113,7 @@ function tabbar(active) {
   const tabs = [['room', 'home', '部屋'], ['edit', 'sofa', '模様がえ'], ['play', 'pencil', resume ? '続きから' : '解く'], ['zukan', 'book', '図鑑'], ['menu', 'gear', 'メニュー']];
   const el = h(`<nav class="tabbar">${tabs.map(([k, ic, n]) => `
     <button data-t="${k}" class="${k === active ? 'on' : ''} ${k === 'play' ? 'center' : ''}">
-      <span class="ti">${icon(ic)}${k === 'play' && (resume || due || !S.playedToday()) ? '<i class="dot"></i>' : ''}${k === 'menu' && friendBadge ? '<i class="dot"></i>' : ''}</span><span class="tl">${n}</span>
+      <span class="ti">${icon(ic)}${k === 'play' && (resume || due || !S.playedToday()) ? '<i class="dot"></i>' : ''}${k === 'menu' && (friendBadge || newsBadge) ? '<i class="dot"></i>' : ''}</span><span class="tl">${n}</span>
     </button>`).join('')}</nav>`);
   el.querySelectorAll('button').forEach(b => b.onclick = () => goTab(b.dataset.t));
   return el;
@@ -759,6 +759,7 @@ function chooseSubject() {
 
 // =========================== メニュー ===========================
 let friendBadge = 0;
+let newsBadge = 0;
 function screenWithTabs(cls, title, active, body) {
   room3d?.setActive(false);
   canvas.classList.add('dim');
@@ -779,12 +780,13 @@ function showMenu() {
     </section>
     <nav class="menu-list">
       <button data-m="records">${icon('chart')}<span>記録<small>分野ごとの成績・連続日数</small></span>${icon('chevronRight')}</button>
+      <button data-m="news">${icon('bell')}<span>お知らせ<small>アップデートや運営からのお知らせ</small></span>${newsBadge ? `<i class="badge">${newsBadge}</i>` : ''}${icon('chevronRight')}</button>
       <button data-m="ranking">${icon('trophy')}<span>週間ランキング<small>今週解いた問題の数（月曜の朝6時で区切り）</small></span>${icon('chevronRight')}</button>
       <button data-m="friends">${icon('users')}<span>フレンド<small>申請・フレンドの部屋を見に行く</small></span>${friendBadge ? `<i class="badge">${friendBadge}</i>` : ''}${icon('chevronRight')}</button>
       <button data-m="settings">${icon('gear')}<span>設定<small>画質・データ・ログアウト</small></span>${icon('chevronRight')}</button>
       ${isAdmin() ? `<button data-m="admin">${icon('shield')}<span>管理者<small>みんなの記録と部屋</small></span>${icon('chevronRight')}</button>` : ''}
     </nav>`);
-  el.querySelectorAll('.menu-list button').forEach(b => b.onclick = () => ({ records: showRecords, ranking: showRanking, friends: showFriends, settings: showSettings, admin: showAdmin })[b.dataset.m]());
+  el.querySelectorAll('.menu-list button').forEach(b => b.onclick = () => ({ records: showRecords, news: showNews, ranking: showRanking, friends: showFriends, settings: showSettings, admin: showAdmin })[b.dataset.m]());
   paintSync();
 }
 
@@ -883,7 +885,63 @@ function zukanGrid(items) {
 }
 
 // =========================== フレンド ===========================
+// =========================== お知らせ ===========================
+const NEWS_SEEN = 'studyroom.newsSeen';
+async function refreshNewsBadge() {
+  const u = Auth.currentUser();
+  if (!u) return;
+  try {
+    const list = await rpc('sr_news_list', { p_token: u.token });
+    const seen = +(localStorage.getItem(NEWS_SEEN) || 0);
+    newsBadge = list.filter(n => n.id > seen).length;
+  } catch (e) { /* オフライン */ }
+}
+async function showNews() {
+  const el = screenWithTabs('news', `<button class="icon back">${icon('back')}</button><h2>お知らせ</h2><span></span>`, 'menu', `<div class="nlist"><p class="empty">読み込み中…</p></div>`);
+  el.querySelector('.back').onclick = showMenu;
+  let list = [];
+  try { list = await rpc('sr_news_list', { p_token: Auth.currentUser().token }); }
+  catch (e) { el.querySelector('.nlist').innerHTML = `<p class="empty">${esc(e.message)}</p>`; return; }
+  const seen = +(localStorage.getItem(NEWS_SEEN) || 0);
+  const day = (t) => new Date(t).toLocaleDateString('ja-JP', { year: 'numeric', month: 'numeric', day: 'numeric' });
+  el.querySelector('.nlist').innerHTML = list.length ? list.map(n => `
+    <article class="news-card ${n.id > seen ? 'unread' : ''}">
+      <div class="nc-top">${n.id > seen ? '<i class="nc-new">NEW</i>' : ''}<small>${day(n.created_at)}</small></div>
+      <h3>${esc(n.title)}</h3>
+      <p>${esc(n.body).replace(/\n/g, '<br>')}</p>
+    </article>`).join('') : '<p class="empty">お知らせはまだありません。</p>';
+  if (list.length) { try { localStorage.setItem(NEWS_SEEN, String(Math.max(...list.map(n => n.id)))); } catch (e) { /* なし */ } }
+  newsBadge = 0;
+}
+// 管理者：お知らせを書いて送る（送る前に確認）
+function composeNews(after) {
+  const el = sheet(`
+    <div class="sh-head"><span class="sh-ic">${icon('bell')}</span><div><h3>お知らせを書く</h3><p>送ると、みんなのメニューに届きます</p></div></div>
+    <form class="news-form">
+      <input name="t" maxlength="40" placeholder="タイトル（例：新しい部屋が増えました）" required>
+      <textarea name="b" rows="5" maxlength="600" placeholder="本文"></textarea>
+      <button class="btn gold big">${icon('check')}内容を確認する</button>
+    </form>
+    <button class="link close">やめる</button>`, 'news-sheet');
+  el.querySelector('.close').onclick = () => el.remove();
+  el.querySelector('form').onsubmit = (e) => {
+    e.preventDefault();
+    const t = e.target.t.value.trim(), b = e.target.b.value.trim();
+    if (!t) return;
+    const cf = sheet(`
+      <div class="sh-head"><span class="sh-ic gold">${icon('alert')}</span><div><h3>この内容で送りますか？</h3><p>送ると、すぐにみんなに届きます</p></div></div>
+      <article class="news-card unread"><h3>${esc(t)}</h3><p>${esc(b).replace(/\n/g, '<br>')}</p></article>
+      <div class="row2"><button class="btn ghost back2">書きなおす</button><button class="btn gold send">${icon('check')}送る</button></div>`, 'news-sheet');
+    cf.querySelector('.back2').onclick = () => { cf.remove(); composeNews(after); };
+    cf.querySelector('.send').onclick = async () => {
+      try { await rpc('sr_news_post', { p_token: Auth.currentUser().token, p_title: t, p_body: b }); toast('お知らせを送りました'); cf.remove(); after && after(); }
+      catch (ex) { toast(ex.message); }
+    };
+  };
+}
+
 async function refreshFriendBadge() {
+  refreshNewsBadge();
   const u = Auth.currentUser();
   if (!u) return;
   try {
@@ -984,8 +1042,9 @@ async function leaveVisit(goBack) {
 // =========================== 管理者 ===========================
 async function showAdmin() {
   if (!isAdmin()) return showMenu();
-  const el = screenWithTabs('admin', `<button class="icon back">${icon('back')}</button><h2>管理者</h2><span></span>`, 'menu', `<div class="alist"><p class="empty">読み込み中…</p></div>`);
+  const el = screenWithTabs('admin', `<button class="icon back">${icon('back')}</button><h2>管理者</h2><span></span>`, 'menu', `<button class="btn primary big compose">${icon('bell')}お知らせを書いて送る</button><div class="alist"><p class="empty">読み込み中…</p></div>`);
   el.querySelector('.back').onclick = showMenu;
+  el.querySelector('.compose').onclick = () => composeNews(showNews);
   const u = Auth.currentUser();
   let list = [];
   try { list = await rpc('sr_admin_users', { p_token: u.token }); } catch (e) { el.querySelector('.alist').innerHTML = `<p class="empty">${esc(e.message)}</p>`; return; }
