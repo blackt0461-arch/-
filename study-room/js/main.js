@@ -393,16 +393,51 @@ function pickCandidates(genre, style) {
   return S.shuffle(out);
 }
 
-function buyFlow() {
+// 買える1回分の候補：ジャンル3つ（その部屋にまだ無いジャンルほど出やすい）と、ジャンルごとの家具3つ。
+// 画面を閉じたり開き直したりしても変わらない（買うまで保存しておく）
+function buyable(i) { return !i.special && !i.rare && !S.owned(i.id); }
+function currentOffer() {
   const hs = HS();
+  const ok = (o) => o && o.genres?.length && o.genres.every(g => itemsOf(g).some(buyable));
+  if (ok(hs.offer)) return hs.offer;
+  const room = curRoom();
+  const inRoom = new Set((room.placed || []).map(p => itemById(p.item)?.genre).concat(Object.values(room.surf || {}).filter(Boolean).map(id => itemById(id)?.genre)));
+  let pool = GENRES.filter(g => itemsOf(g.id).some(buyable)).map(g => ({ g: g.id, w: inRoom.has(g.id) ? 1 : 3 }));
+  const genres = [];
+  while (genres.length < 3 && pool.length) {
+    const total = pool.reduce((a, x) => a + x.w, 0);
+    let r = Math.random() * total;
+    const k = pool.findIndex(x => (r -= x.w) < 0);
+    genres.push(pool[k].g);
+    pool.splice(k, 1);
+  }
+  hs.offer = { genres, cands: {} };
+  S.save();
+  return hs.offer;
+}
+function offerCands(genre) {
+  const o = currentOffer();
+  let ids = (o.cands[genre] || []).filter(id => { const it = itemById(id); return it && buyable(it); });
+  if (!ids.length) {
+    ids = pickCandidates(genre, curRoom().style).map(i => i.id);
+    o.cands[genre] = ids;
+    S.save();
+  }
+  return ids.map(itemById);
+}
+
+function buyFlow() {
+  const o = currentOffer();
+  if (!o.genres.length) return toast('買える家具はもう全部そろっています');
   const el = sheet(`
-    <div class="sh-head"><span class="sh-ic gold">${icon('gift')}</span><div><h3>何を買いますか？</h3><p>ジャンルを選ぶと、3つの中から1つ選べます</p></div></div>
-    <div class="genregrid">${GENRES.map(g => {
-      const all = itemsOf(g.id).filter(i => !i.special);
+    <div class="sh-head"><span class="sh-ic gold">${icon('gift')}</span><div><h3>何を買いますか？</h3><p>ジャンルを1つ選ぶと、3つの中から1つ選べます</p></div></div>
+    <div class="genregrid three">${o.genres.map(gid => {
+      const g = GENRES.find(x => x.id === gid);
+      const all = itemsOf(gid).filter(i => !i.special && !i.rare);
       const have = all.filter(i => S.owned(i.id)).length;
-      const done = have >= all.length;
-      return `<button class="genre ${done ? 'done' : ''}" data-g="${g.id}" ${done ? 'disabled' : ''}>
-        <span class="g-ic">${icon(GENRE_ICON[g.id] || 'box')}</span><b>${g.name}</b><small>${have}/${all.length}</small></button>`;
+      const fresh = !curRoom().placed.some(p => itemById(p.item)?.genre === gid);
+      return `<button class="genre" data-g="${gid}">
+        <span class="g-ic">${icon(GENRE_ICON[gid] || 'box')}</span><b>${g.name}</b><small>${have}/${all.length}</small>${fresh ? '<i class="g-new">この部屋にまだない</i>' : ''}</button>`;
     }).join('')}</div>
     <button class="link close">あとで</button>`, 'buy-sheet');
   app.querySelector('.tabbar')?.classList.add('hide');
@@ -412,7 +447,7 @@ function buyFlow() {
 
 function chooseCandidate(genreId) {
   const g = GENRES.find(x => x.id === genreId);
-  const cands = pickCandidates(genreId, curRoom().style);
+  const cands = offerCands(genreId);
   if (!cands.length) return toast('このジャンルは全部そろっています');
   // 選ぶ前から、3つのデータを裏で読み込んでおく（置くときに待たない）
   for (const it of cands) if (it.src.model) loadModel(it.src.model).catch(() => {});
@@ -439,6 +474,7 @@ function chooseCandidate(genreId) {
     const hs = HS();
     const max = S.gaugeMax(hs);
     if (hs.gauge >= max) { hs.gauge -= max; hs.unlocks++; } else if (hs.tickets > 0) hs.tickets--; else return;
+    hs.offer = null; // 次に買うときは、新しい候補
     S.own(picked.id);
     el.remove();
     vibrate([30, 40, 60]);

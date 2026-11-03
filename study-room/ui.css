@@ -258,3 +258,8 @@ h3.sec { font-size: 14px; color: var(--muted); margin: 18px 4px 8px; font-weight
 .rooms button.homebtn { border-color: var(--gold1); color: var(--gold1); font-weight: 700; }
 .rooms button.homebtn.villa { background: linear-gradient(180deg, rgba(64,150,170,.85), rgba(30,96,120,.85)); color: #fff; border-color: rgba(255,255,255,.35); }
 .t-sub { display: none; } /* タイトルの説明文は出さない（本人の希望） */
+.genregrid.three { grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.genregrid.three .genre { padding: 16px 6px 14px; position: relative; }
+.genregrid.three .g-ic { width: 52px; height: 52px; font-size: 28px; border-radius: 16px; }
+.genregrid.three b { font-size: 14px; }
+.g-new { font-style: normal; font-size: 10px; font-weight: 700; color: #3a2400; background: linear-gradient(180deg, var(--gold1), var(--gold2)); padding: 2px 7px; border-radius: 99px; margin-top: 2px; }
