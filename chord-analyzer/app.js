@@ -13,7 +13,7 @@ import { initEditor } from './editor.js';
 import { estimateKey, suggestCapo, easiestVoicing } from './practice.js';
 
 // version.json と同じ値にする（新しいバージョンを公開したら両方を上げる）
-const APP_VERSION = '1.21.0';
+const APP_VERSION = '1.21.1';
 const APP_FILES = ['index.html', 'style.css', 'app.js', 'chord-engine.js', 'audio.js', 'fretboard.js', 'sound.js', 'song.js', 'dsp.js', 'chart.js', 'live.js', 'practice.js', 'transcribe.js', 'transcribe-worker.js', 'tab-staff.js', 'learned.js', 'synth-check.js', 'vocal-remove.js', 'ai-vocal.js', 'ai-loader.js', 'ai-pitch.js', 'models/basic-pitch.onnx', 'lyrics.js', 'songbook.js', 'feedback.js', 'export-sheet.js', 'editor.js', 'lyrics-ocr.js', 'sheet-editor.js', 'sw.js', 'manifest.webmanifest'];
 const HOLD_MS = 150;      // マイク：別のコードがこの時間続いたら表示を切り替える
 const HISTORY_SIZE = 16;  // マイク：覚えておくコードの数
@@ -781,6 +781,7 @@ const songbook = initSongbook({
   appVersion: APP_VERSION,
   playFrom: (t) => playFrom(t),
   displayName: (name) => shapeName(name),
+  editorPause: () => editor?.pause(),
   keyOf: () => estimateKey(analysis?.timeline ?? []),
   // 押さえ方の名前（カポを付けているときはカポからの形）のコードを鳴らす
   playChord: (name) => {

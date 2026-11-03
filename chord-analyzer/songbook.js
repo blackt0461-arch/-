@@ -146,10 +146,22 @@ export function initSongbook(app) {
     song.times = {};
     save();
     render();
-    app.media.currentTime = 0;
-    app.media.play().catch(() => {});
+    playFromTop();
     sync.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   });
+  // タイミング合わせ用の再生：元の曲を必ず音ありで鳴らす（編集画面で「コードだけ」にしていても）
+  function playMedia() {
+    app.editorPause?.();
+    app.media.muted = false;
+    try { app.media.volume = 1; } catch { /* iPhone では音量を変えられない */ }
+    return app.media.play().then(() => updateSyncButtons(), () => { updateSyncButtons(); nextLabel.textContent = '「▶ 再生」を押してください'; });
+  }
+  function playFromTop() { app.media.currentTime = 0; playMedia(); }
+  function updateSyncButtons() { $('sync-play').textContent = app.media.paused ? '▶ 再生' : '⏸ 止める'; }
+  $('sync-play').addEventListener('click', () => { if (app.media.paused) playMedia(); else { app.media.pause(); updateSyncButtons(); } });
+  $('sync-back').addEventListener('click', () => { app.media.currentTime = Math.max(0, app.media.currentTime - 3); });
+  app.media.addEventListener('play', updateSyncButtons);
+  app.media.addEventListener('pause', updateSyncButtons);
   tapBtn.addEventListener('click', () => {
     const next = sungLines(song.lines).find((i) => typeof song.times[i] !== 'number');
     if (next === undefined) return;

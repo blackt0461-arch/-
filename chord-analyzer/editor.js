@@ -154,6 +154,7 @@ export function initEditor(app) {
   }
   function pause() {
     playing = false;
+    app.media.muted = false; // 「コードだけ」で消音にしていても、ほかの画面で元の曲が鳴るように戻す
     el.play.textContent = '▶';
     el.play.setAttribute('aria-label', '再生');
     app.media.pause();
