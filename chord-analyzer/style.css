@@ -724,3 +724,6 @@ select, input[type="text"] {
 .mic-card { padding: 10px; gap: 8px; }
 .mic-card:not(.listening) #mic-result, .mic-card:not(.listening) #mic-to-fret, .mic-card:not(.listening) #mic-status { display: none; }
 .mic-card:not(.listening) .history-row { display: none; }
+.song-capo { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 4px 0 8px; color: var(--muted); font-size: 0.85rem; }
+.song-capo b { color: var(--text); }
+.song-capo .secondary-button { padding: 4px 10px; font-size: 0.8rem; }

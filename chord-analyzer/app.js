@@ -11,7 +11,7 @@ import { initSongbook } from './songbook.js';
 import { estimateKey, suggestCapo, easiestVoicing } from './practice.js';
 
 // version.json と同じ値にする（新しいバージョンを公開したら両方を上げる）
-const APP_VERSION = '1.17.1';
+const APP_VERSION = '1.17.2';
 const APP_FILES = ['index.html', 'style.css', 'app.js', 'chord-engine.js', 'audio.js', 'fretboard.js', 'sound.js', 'song.js', 'dsp.js', 'chart.js', 'live.js', 'practice.js', 'transcribe.js', 'transcribe-worker.js', 'tab-staff.js', 'learned.js', 'synth-check.js', 'vocal-remove.js', 'ai-vocal.js', 'ai-loader.js', 'ai-pitch.js', 'models/basic-pitch.onnx', 'lyrics.js', 'songbook.js', 'feedback.js', 'sw.js', 'manifest.webmanifest'];
 const HOLD_MS = 150;      // マイク：別のコードがこの時間続いたら表示を切り替える
 const HISTORY_SIZE = 16;  // マイク：覚えておくコードの数
@@ -142,7 +142,8 @@ labelButtons.forEach((b) => b.addEventListener('click', () => {
 }));
 tuningSelect.addEventListener('change', () => { updateFret(); updateSearch(); });
 let songViewReady = () => false; // 曲の画面の準備ができたら、下（曲の解析のところ）で差しかえる
-capoSelect.addEventListener('change', () => {
+capoSelect.addEventListener('change', (e) => {
+  if (e.isTrusted) storage.set('capoAuto', ''); // 自分で選んだカポは、次の曲でも外さない
   updateFret();
   updateSearch();
   // 曲の解析結果を表示中なら、コード名とタブ譜をカポに合わせて作り直す
@@ -572,8 +573,12 @@ function highlightNow(time) {
   if (!analysis) return;
   const t = typeof time === 'number' ? time : songMedia.currentTime;
   updateStrip(t);
-  const index = analysis.timeline.findIndex((seg) => t >= seg.start && t <= seg.end + 0.3);
+  // いまの時刻を含むコードを出す。コードとコードの間のすき間（無音など）だけ、直前のコードを少し（0.3秒）残す
+  let index = analysis.timeline.findIndex((seg) => t >= seg.start && t < seg.end);
+  if (index < 0) index = analysis.timeline.findIndex((seg) => t >= seg.start && t <= seg.end + 0.3);
   songNow.textContent = index >= 0 ? shapeName(analysis.timeline[index].name) : '―';
+  const real = document.getElementById('song-real');
+  if (real) real.textContent = index >= 0 ? analysis.timeline[index].name : '―';
   songChords.querySelectorAll('.song-chord').forEach((el) => el.classList.toggle('active', Number(el.dataset.index) === index));
   const blockIndex = analysis.tabBlocks.findLastIndex((b) => t >= b.t - 0.1);
   songTab.querySelectorAll('.tab-block').forEach((el) => {
@@ -692,9 +697,34 @@ function refreshSongView() {
   highlightNow();
 }
 
+// 大きなコード名の下のカポの案内：カポの形で表示しているときは実際の音の名前も出し、切り替えボタンを置く
+const songCapo = document.getElementById('song-capo');
+let suggestedCapo = 0;
+function renderSongCapo() {
+  const capo = Number(capoSelect.value);
+  if (capo > 0) {
+    songCapo.innerHTML = `<span>カポ${capo}の形で表示中・実際の音 <b id="song-real">―</b></span><button type="button" class="secondary-button" data-capo="0">実際の音で表示</button>`;
+  } else if (suggestedCapo > 0) {
+    songCapo.innerHTML = `<span>カポ${suggestedCapo}で弾くと簡単な形になります</span><button type="button" class="secondary-button" data-capo="${suggestedCapo}">カポ${suggestedCapo}の形で表示</button>`;
+  } else {
+    songCapo.hidden = true;
+    return;
+  }
+  songCapo.hidden = false;
+}
+songCapo.addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-capo]');
+  if (!b) return;
+  capoSelect.value = b.dataset.capo;
+  storage.set('capoAuto', '');
+  capoSelect.dispatchEvent(new Event('change'));
+});
+
 function renderKey() {
   const key = estimateKey(analysis.timeline);
   const capo = suggestCapo(analysis.timeline, currentTuning());
+  suggestedCapo = capo && capo.capo > 0 && capo.saving >= 0.15 ? capo.capo : 0;
+  renderSongCapo();
   if (!key) { songKey.hidden = true; return; }
   const current = Number(capoSelect.value);
   const capoText = !capo || capo.capo === 0 || capo.saving < 0.15
@@ -704,6 +734,7 @@ function renderKey() {
   songKey.innerHTML = `<span>キー：<b>${key.name}</b></span><span>${capoText}</span>${capo && capo.capo > 0 && capo.saving >= 0.15 && capo.capo !== current ? `<button type="button" id="apply-capo" class="secondary-button">カポ${capo.capo}にする</button>` : ''}`;
   document.getElementById('apply-capo')?.addEventListener('click', () => {
     capoSelect.value = String(capo.capo);
+    storage.set('capoAuto', '');
     capoSelect.dispatchEvent(new Event('change'));
   });
 }
@@ -772,9 +803,24 @@ songFile.addEventListener('change', async () => {
     const pitchNote = result.aiPitch ? '・AI で音を聞き取りました' : result.pitchError ? `・音を聞き取る AI は使えませんでした（${result.pitchError}。今までの方法で解析しました）` : '';
     const aiNote = pitchNote + (result.aiError ? `・AI は使えませんでした（${result.aiError}）` : result.aiVocal && !result.aiVocal.used ? '・歌がほとんど無いので AI は使いませんでした' : '');
     songInfo.textContent = `${file.name}（${formatTime(duration)}）・テンポ ${Math.round(result.bpm || 0)}・${how}・解析 ${Math.round(result.seconds ?? 0)}秒（${songQuality.selectedOptions[0].textContent.split('（')[0]}）${aiNote}`;
+    // カポを使う曲（カポをつけると簡単な形で弾ける曲）は、自動でカポの形のコード名にする。
+    // カポを自分で選んでいるときはそのまま（下の案内から、いつでも切り替えられる）
+    // 前の曲で自動でつけたカポ（自分で変えていないもの）は、いったん外してから決め直す
+    const auto = storage.get('capoAuto');
+    let capoNow = capoSelect.value;
+    if (auto && auto === capoNow) capoNow = '0';
+    const suggested = suggestCapo(result.timeline, currentTuning());
+    const autoSet = suggested && suggested.capo > 0 && suggested.saving >= 0.15 && capoNow === '0';
+    const want = autoSet ? String(suggested.capo) : capoNow;
+    storage.set('capoAuto', autoSet ? want : '');
+    if (want !== capoSelect.value) {
+      capoSelect.value = want;
+      capoSelect.dispatchEvent(new Event('change'));
+    }
     renderAnalysis();
     renderStrip(duration);
     renderKey();
+    highlightNow(0);
     loop = { a: null, b: null };
     renderLoop();
     songMedia.playbackRate = Number(songSpeed.value);
