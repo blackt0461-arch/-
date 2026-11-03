@@ -192,7 +192,7 @@ function showGacha(banner = null) {
       ${b.limited ? '<span class="bn-tag">期間限定</span>' : ''}
       <h3>${esc(b.name.replace('限定：', ''))}</h3>
       <p>${esc(b.desc)}</p>
-      ${b.limited && SAMPLE_ROOMS[b.id] ? `<button class="bn-sample">${icon('eye')}全部そろえた部屋を見る</button>` : ''}
+      ${b.limited && SAMPLE_ROOMS[b.id] ? `<button class="bn-sample">${icon('home')}モデルハウスを見る</button>` : ''}
       <div class="bn-picks">${(b.limited ? G.bySeries(b.id) : G.byRarity(5).filter(i => !i.limited)).slice(0, 4).map(it => `<span class="thumb">${thumbHTML(it)}</span>`).join('')}</div>
     </div>
     <div class="pull-btns">
@@ -223,10 +223,10 @@ function showGacha(banner = null) {
 const SAMPLE_ROOMS = { band: () => import('./bandsample.js').then(m => m.BAND_SAMPLE) };
 async function showSampleRoom(seriesId) {
   let room;
-  try { room = await SAMPLE_ROOMS[seriesId](); } catch (e) { return toast('見本の部屋はまだ準備中です'); }
-  if (!room) return toast('見本の部屋はまだ準備中です');
+  try { room = await SAMPLE_ROOMS[seriesId](); } catch (e) { return toast('モデルハウスはまだ準備中です'); }
+  if (!room) return toast('モデルハウスはまだ準備中です');
   const ser = G.SERIES.find(x => x.id === seriesId);
-  visiting = { username: '見本', sample: `${ser?.name || ''}の部屋`, house: { v: 2, rooms: [JSON.parse(JSON.stringify(room))] }, current: 0, summary: {}, back: () => showGacha(seriesId) };
+  visiting = { username: '見本', sample: `${ser?.name || ''}のモデルハウス`, house: { v: 2, rooms: [JSON.parse(JSON.stringify(room))] }, current: 0, summary: {}, back: () => showGacha(seriesId) };
   showVisit();
 }
 // チケットを使って引き、結果を持ち物へ（かぶりはかけら）
@@ -1440,7 +1440,7 @@ async function showVisit() {
     <div class="home visiting">
       <header class="hud">
         <button class="round back" aria-label="もどる">${icon('back')}</button>
-        <div class="room-name"><span class="rn-ic">${icon('user')}</span><span class="rn-t">${v.sample ? esc(v.sample) : `${esc(v.username)}さんの${esc(roomLabel(room))}`}<small>${v.sample ? `全部そろえた部屋の見本 ・ 家具 ${room.placed.length}個` : `Lv${S.rankInfo(v.summary?.xp || 0).rank} ・ 家具 ${room.placed.length}個`}</small></span></div>
+        <div class="room-name"><span class="rn-ic">${icon('user')}</span><span class="rn-t">${v.sample ? esc(v.sample) : `${esc(v.username)}さんの${esc(roomLabel(room))}`}<small>${v.sample ? `全部そろえるとこうなる ・ 家具 ${room.placed.length}個` : `Lv${S.rankInfo(v.summary?.xp || 0).rank} ・ 家具 ${room.placed.length}個`}</small></span></div>
         <button class="round photo" aria-label="写真をとる">${icon('camera')}</button>
       </header>
       ${navHTML}
