@@ -374,3 +374,7 @@ h3.sec { font-size: 14px; color: var(--muted); margin: 18px 4px 8px; font-weight
 .lvctl .lvv { min-width: 56px; text-align: center; font-size: 18px; color: var(--gold1); }
 .lvctl .lvin { width: 64px; background: rgba(255,255,255,.07); border: 1px solid var(--line); border-radius: 10px; padding: 8px; color: var(--text); font-size: 16px; }
 .admin-only .lbl { display: inline-flex; gap: 6px; align-items: center; color: var(--accent2); }
+
+.ru-tickets { display: flex; gap: 10px; justify-content: center; margin-top: 8px; flex-wrap: wrap; }
+.ru-tickets span { display: grid; justify-items: center; gap: 2px; width: 92px; }
+.ru-tickets b { font-size: 14px; color: #fff; }

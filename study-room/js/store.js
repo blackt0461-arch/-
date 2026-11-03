@@ -203,14 +203,35 @@ export function recordResult(sub, id, perfect, wasReview) {
 export const XP = { perfect: 12, ok: 8, wrong: 4 };
 // ランク L から L+1 に必要な経験値（だんだん増える）
 export function xpToNext(rank) { return 30 + (rank - 1) * 20; }
+export const MAX_RANK = 100; // いったん Lv100 で頭打ち
 export function rankInfo(xp = state.profile?.xp || 0) {
   let rank = 1, rest = xp;
-  while (rest >= xpToNext(rank)) { rest -= xpToNext(rank); rank++; }
+  while (rank < MAX_RANK && rest >= xpToNext(rank)) { rest -= xpToNext(rank); rank++; }
+  if (rank >= MAX_RANK) return { rank: MAX_RANK, into: xpToNext(MAX_RANK), need: xpToNext(MAX_RANK), xp, max: true };
   return { rank, into: rest, need: xpToNext(rank), xp };
+}
+// Lv が上がったときのごほうび：毎回レアチケット、5ごとに★4以上確定、50と100で★5限定チケット
+export function rankRewards(L) {
+  const r = { ticket: 1, ticket4: 0, ticket5: 0 };
+  if (L % 5 === 0) r.ticket4 = 1;
+  if (L === 50 || L === 100) r.ticket5 = 1;
+  return r;
+}
+function giveRankRewards(from, to) {
+  const h = house();
+  const sum = { ticket: 0, ticket4: 0, ticket5: 0 };
+  for (let L = from + 1; L <= to; L++) {
+    const r = rankRewards(L);
+    sum.ticket += r.ticket; sum.ticket4 += r.ticket4; sum.ticket5 += r.ticket5;
+  }
+  h.rareTickets = (h.rareTickets || 0) + sum.ticket;
+  h.rareTickets4 = (h.rareTickets4 || 0) + sum.ticket4;
+  h.rareTickets5 = (h.rareTickets5 || 0) + sum.ticket5;
+  return sum;
 }
 // ランク L のちょうど始まりの経験値（管理者がレベルを変えるときに使う）
 export function xpAtRank(L) { let x = 0; for (let r = 1; r < L; r++) x += xpToNext(r); return x; }
-export function setRank(L) { const p = profile(); p.xp = xpAtRank(Math.max(1, Math.min(99, L))); }
+export function setRank(L) { const p = profile(); p.xp = xpAtRank(Math.max(1, Math.min(MAX_RANK, L))); } // 管理者のためし用（ごほうびは出さない）
 // 1つの部屋に置ける家具の数
 export function capacity(rank = rankInfo().rank) { return 6 + (rank - 1) * 2; }
 // 1問の結果を記録（分野ごとの数・経験値）。戻り値 { gained, rankUp, rank }
@@ -232,7 +253,8 @@ export function addAnswer(sub, unit, kind) {
   p.week.solved += 1;
   if (kind !== 'wrong') p.week.correct += 1;
   const after = rankInfo(p.xp).rank;
-  return { gained, rankUp: after > before, rank: after };
+  const rewards = after > before ? giveRankRewards(before, after) : null;
+  return { gained, rankUp: after > before, rank: after, rewards };
 }
 export function profile() { return state.profile || (state.profile = blankProfile()); }
 

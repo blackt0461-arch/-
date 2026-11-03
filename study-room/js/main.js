@@ -1277,6 +1277,10 @@ function runProblem(p, isReview, retry) {
       ({ mastered } = S.recordResult(st, p.id, perfect, isReview));
       if (mastered) HS().pendingSpecials++;
       xp = S.addAnswer(st, p.unit, perfect ? 'perfect' : ok ? 'ok' : 'wrong');
+      if (xp.rewards) {
+        const sr = ss.rewards || (ss.rewards = { ticket: 0, ticket4: 0, ticket5: 0 });
+        for (const k of Object.keys(sr)) sr[k] += xp.rewards[k] || 0;
+      }
       ss.xp = (ss.xp || 0) + xp.gained;
       if (xp.rankUp) ss.rankUp = true;
       ss.results.push({ id: p.id, perfect, ok, mastered });
@@ -1338,7 +1342,8 @@ function finishSet() {
       <div class="card done">
         <h2>おつかれさま！</h2>
         <div class="score"><b>${perfect}</b> / ${ss.results.length} 問 ノーミス</div>
-        ${ss.rankUp ? `<div class="rankup">${icon('level')}<b>Lv${rk.rank}</b>にアップ！<small>置ける家具が ${S.capacity()}個 に</small></div>` : ''}
+        ${ss.rankUp ? `<div class="rankup">${icon('level')}<b>Lv${rk.rank}</b>にアップ！<small>置ける家具が ${S.capacity()}個 に</small>
+          <div class="ru-tickets">${['ticket', 'ticket4', 'ticket5'].filter(k => ss.rewards?.[k]).map(k => `<span>${ticketSVG(k, 'mini')}<b>×${ss.rewards[k]}</b></span>`).join('')}</div></div>` : ''}
         <div class="xp-line">${icon('level')}+${ss.xp || 0} XP<span class="xpbar"><i style="width:${Math.round(rk.into / rk.need * 100)}%"></i></span></div>
         <div class="gauge big ${HS().gauge >= max ? 'full' : ''}"><div class="fill" style="width:${Math.min(100, HS().gauge / max * 100)}%"></div>
           <span>ゲージ +${ss.gained}</span></div>
