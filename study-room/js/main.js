@@ -383,7 +383,6 @@ function showHome() {
           <span class="lv">Lv<b>${rk.rank}</b></span>
           <span class="xpbar"><i style="width:${Math.round(rk.into / rk.need * 100)}%"></i></span>
         </button>
-        <div class="streak ${S.playedToday() ? 'on' : ''}">${icon('flame')}<b>${S.currentStreak()}</b></div>
       </header>
       <div class="side-tools">
         <button class="round photo" aria-label="写真をとる">${icon('camera')}</button>
