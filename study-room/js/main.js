@@ -1119,12 +1119,19 @@ function showRankRoad() {
     if (road && nx) road.scrollTop = nx.offsetTop - road.clientHeight * 0.55;
   }, 30);
 }
-function showRecords() {
-  const rk = rankNow(), pf = S.profile(), st = sub();
-  const s = S.stats(st, PROBLEMS);
+function showRecords(subj = subjectId) {
+  const rk = rankNow(), pf = S.profile();
   const today = S.dayKey();
-  const units = UNITS.map(u => ({ u, ...(st.units?.[u] || { solved: 0, correct: 0, perfect: 0 }), total: PROBLEMS.filter(p => p.unit === u).length }));
+  const list = probs(subj);
+  const st = S.subject(subj);
+  // 全教科を合わせた克服の数
+  const mastered = SUBJECTS.reduce((n, x) => n + (probs(x.id).length ? S.stats(S.subject(x.id), probs(x.id)).mastered : 0), 0);
+  const solvedOf = (id) => Object.values(S.subject(id).units || {}).reduce((n, u) => n + (u.solved || 0), 0);
+  // 単元は問題の並び順で
+  const unitNames = [...new Set(list.map(p => p.unit))];
+  const units = unitNames.map(u => ({ u, ...(st.units?.[u] || { solved: 0, correct: 0, perfect: 0 }), total: list.filter(p => p.unit === u).length }));
   const maxSolved = Math.max(1, ...units.map(x => x.solved));
+  const subjName = SUBJECTS.find(x => x.id === subj)?.name || '';
   const el = screenWithTabs('records', `<button class="icon back">${icon('back')}</button><h2>記録</h2><span></span>`, 'menu', `
     <section class="profile-card">
       <div class="pc-lv"><span>Lv</span><b>${rk.rank}</b></div>
@@ -1136,23 +1143,26 @@ function showRecords() {
       <div>${icon('flame')}<b>${S.currentStreak()}</b><span>連続日数</span></div>
       <div>${icon('pencil')}<b>${pf.solved}</b><span>解いた数</span></div>
       <div>${icon('check')}<b>${pf.solved ? Math.round(pf.correct / pf.solved * 100) : 0}%</b><span>正解率</span></div>
-      <div>${icon('trophy')}<b>${s.mastered}</b><span>克服</span></div>
+      <div>${icon('trophy')}<b>${mastered}</b><span>克服</span></div>
     </div>
-    <h3 class="sec">分野ごと（物理）</h3>
+    <div class="rec-subj">${SUBJECTS.filter(x => probs(x.id).length).map(x => `
+      <button data-s="${x.id}" class="${x.id === subj ? 'on' : ''}"><span class="ic2">${icon(SUBJECT_ICON[x.id] || 'book')}</span><b>${x.name}</b><small>${solvedOf(x.id)}問</small></button>`).join('')}</div>
+    <h3 class="sec">分野ごと（${subjName}）</h3>
     <div class="unit-list">${units.map(x => `
-      <div class="unit-row"><b>${x.u}</b>
+      <div class="unit-row"><b>${esc(x.u)}</b>
         <div class="ubar"><i class="all" style="width:${x.solved / maxSolved * 100}%"></i><i class="ok" style="width:${x.correct / maxSolved * 100}%"></i></div>
         <span>${x.solved}問<small>正解 ${x.correct}</small></span></div>`).join('')}</div>
-    <h3 class="sec">問題ごと</h3>
-    <ul class="plist">${PROBLEMS.map(p => {
+    <h3 class="sec">問題ごと（${list.length}問）</h3>
+    <ul class="plist">${list.map(p => {
       const r = st.srs[p.id];
       let badge = '<i class="b new">まだ</i>';
       if (r?.mastered) badge = '<i class="b ok">克服</i>';
       else if (r?.due) badge = `<i class="b due">${r.due <= today ? '今日復習' : '復習 ' + r.due.slice(5).replace('-', '/')}</i>`;
       else if (r?.seen) badge = '<i class="b done">正解</i>';
-      return `<li><span class="unit">${p.unit}</span><span class="tx">${esc(p.text)}</span>${badge}</li>`;
+      return `<li><span class="unit">${esc(p.unit)}</span><span class="tx">${esc(p.text.replace(/\n/g, ' '))}</span>${badge}</li>`;
     }).join('')}</ul>`);
   el.querySelector('.back').onclick = showMenu;
+  el.querySelectorAll('.rec-subj button').forEach(b => b.onclick = () => showRecords(b.dataset.s));
 }
 
 // =========================== 要望・バグ報告 ===========================

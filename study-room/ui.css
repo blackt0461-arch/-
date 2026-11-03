@@ -742,3 +742,13 @@ h3.sec { font-size: 14px; color: var(--muted); margin: 18px 4px 8px; font-weight
 .bt-rib { position: absolute; top: 5px; left: 5px; display: inline-flex; align-items: center; gap: 2px; padding: 1px 6px 1px 4px; border-radius: 99px; font-style: normal; font-size: 9px; font-weight: 800; color: #fff; background: linear-gradient(180deg, #ff5a6e, #c8233c); box-shadow: 0 2px 6px rgba(0,0,0,.4); }
 .bt-rib svg { width: 9px; height: 9px; }
 .bn-tab b { font-size: 11.5px; }
+
+/* 記録：教科の切りかえ */
+.rec-subj { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 14px 0 4px; }
+.rec-subj button { display: grid; justify-items: center; gap: 2px; padding: 10px 4px 8px; border-radius: 14px; border: 1px solid var(--card-line); background: var(--card); color: inherit; }
+.rec-subj .ic2 { font-size: 20px; color: var(--gold1); }
+.rec-subj b { font-size: 13px; }
+.rec-subj small { font-size: 10.5px; color: var(--muted); }
+.rec-subj button.on { background: linear-gradient(180deg, var(--gold1), var(--gold2)); color: #3a2400; border-color: transparent; }
+.rec-subj button.on .ic2, .rec-subj button.on small { color: #4a2c00; }
+.unit-row { grid-template-columns: minmax(56px, 8.5em) 1fr auto; } .unit-row > b { font-size: 13px; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
