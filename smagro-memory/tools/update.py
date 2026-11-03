@@ -77,12 +77,17 @@ def strip(x):
 # ---------- 一覧ページ ----------
 def parse_sim(p):
     mem = []
-    for m in re.finditer(r'\{id:`(\d+)`,n:`([^`]+)`,c:`([^`]+)`,ct:(\d+),i:`([^`]*)`,r:`([^`]*)`,aId:`\d*`,s:\{(.*?)\},get:\{t:`([^`]*)`', p):
-        mid, n, c, ct, img, r, sblk, gt = m.groups()
+    for m in re.finditer(r'\{id:`(\d+)`,n:`([^`]+)`,c:`([^`]+)`,ct:(\d+),i:`([^`]*)`,r:`([^`]*)`,aId:`\d*`,s:\{(.*?)\},get:\{([^}]*)\}', p):
+        mid, n, c, ct, img, r, sblk, gblk = m.groups()
+        gt = (re.search(r't:`([^`]*)`', gblk) or [None, ''])[1]
+        stage = (re.search(r's:"([^"]*)"', gblk) or [None, ''])[1]
+        past = 'isPast:true' in gblk
         sm = re.search(r's:\{h:(\d+),a:(\d+),ma:(\d+),mh:(\d+),d:(\d+),md:(\d+),dx:(\d+),s:\[(.*?)\]', sblk)
         if not sm:
             continue
-        mem.append(dict(id=int(mid), n=n, c=c, ct=int(ct), r=r, img=img, st=list(map(int, sm.groups()[:7])),
+        # 入手先: now=いま開催中のイベント / hokora=いつでも行けるほこら / story=ストーリー / shop=交換所 / past=終わったイベント
+        src = {'ストーリー': 'story', '交換所': 'shop', 'チャレンジ': 'hokora'}.get(gt) or ('past' if past else ('now' if gt == 'イベント' else 'other'))
+        mem.append(dict(id=int(mid), n=n, c=c, ct=int(ct), r=r, img=img, src=src, stage=stage, st=list(map(int, sm.groups()[:7])),
                         e=[norm(x) for x in re.findall(r'"([^"]*)"', sm.group(8))], get=gt))
     jobs = [dict(n=n, c=json.loads('[' + c + ']')) for n, c in re.findall(r'\{id:`\d+`,n:`([^`]+)`,c:\[([^\]]*)\]\}', p)]
     bosses = []
