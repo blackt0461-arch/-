@@ -192,6 +192,7 @@ function showGacha(banner = null) {
       ${b.limited ? '<span class="bn-tag">期間限定</span>' : ''}
       <h3>${esc(b.name.replace('限定：', ''))}</h3>
       <p>${esc(b.desc)}</p>
+      ${b.limited && SAMPLE_ROOMS[b.id] ? `<button class="bn-sample">${icon('eye')}全部そろえた部屋を見る</button>` : ''}
       <div class="bn-picks">${(b.limited ? G.bySeries(b.id) : G.byRarity(5).filter(i => !i.limited)).slice(0, 4).map(it => `<span class="thumb">${thumbHTML(it)}</span>`).join('')}</div>
     </div>
     <div class="pull-btns">
@@ -210,12 +211,23 @@ function showGacha(banner = null) {
       <p>★4・★5がかぶったら、それぞれのかけら1個になります。★3がかぶったら、もう1つ持てます。</p></details>`);
   el.querySelector('.back').onclick = showFurnitureHub;
   el.querySelectorAll('.bn-tabs button').forEach(x => x.onclick = () => showGacha(x.dataset.b));
+  el.querySelector('.bn-sample')?.addEventListener('click', () => showSampleRoom(b.id));
   const opts = { banner: b.id };
   el.querySelector('.pull1')?.addEventListener('click', () => doPull(() => [G.pullWithTicket('ticket', gachaOwned, Math.random, opts)], { ticket: 1 }, b.id));
   el.querySelector('.pull10')?.addEventListener('click', () => doPull(() => G.pullTen(gachaOwned, Math.random, opts), { ticket: 10 }, b.id));
   el.querySelector('.pull4')?.addEventListener('click', () => doPull(() => [G.pullWithTicket('ticket4', gachaOwned, Math.random, opts)], { ticket4: 1 }, b.id));
   el.querySelector('.pull5')?.addEventListener('click', () => doPull(() => [G.pullWithTicket('ticket5', gachaOwned, Math.random, { ...opts, series: act[0]?.id })], { ticket5: 1 }, b.id));
   el.querySelectorAll('.shard-btn').forEach(x => x.onclick = () => shardExchange(+x.dataset.r, b.id));
+}
+// 限定シリーズの「全部そろえた部屋」の見本（見るだけ。フレンドの部屋と同じしくみで見せる）
+const SAMPLE_ROOMS = { band: () => import('./bandsample.js').then(m => m.BAND_SAMPLE) };
+async function showSampleRoom(seriesId) {
+  let room;
+  try { room = await SAMPLE_ROOMS[seriesId](); } catch (e) { return toast('見本の部屋はまだ準備中です'); }
+  if (!room) return toast('見本の部屋はまだ準備中です');
+  const ser = G.SERIES.find(x => x.id === seriesId);
+  visiting = { username: '見本', sample: `${ser?.name || ''}の部屋`, house: { v: 2, rooms: [JSON.parse(JSON.stringify(room))] }, current: 0, summary: {}, back: () => showGacha(seriesId) };
+  showVisit();
 }
 // チケットを使って引き、結果を持ち物へ（かぶりはかけら）
 function doPull(roll, cost, bannerId) {
@@ -1389,12 +1401,13 @@ async function showVisit() {
     <div class="home visiting">
       <header class="hud">
         <button class="round back" aria-label="もどる">${icon('back')}</button>
-        <div class="room-name"><span class="rn-ic">${icon('user')}</span><span class="rn-t">${esc(v.username)}さんの${esc(roomLabel(room))}<small>Lv${S.rankInfo(v.summary?.xp || 0).rank} ・ 家具 ${room.placed.length}個</small></span></div>
+        <div class="room-name"><span class="rn-ic">${icon('user')}</span><span class="rn-t">${v.sample ? esc(v.sample) : `${esc(v.username)}さんの${esc(roomLabel(room))}`}<small>${v.sample ? `全部そろえた部屋の見本 ・ 家具 ${room.placed.length}個` : `Lv${S.rankInfo(v.summary?.xp || 0).rank} ・ 家具 ${room.placed.length}個`}</small></span></div>
         <button class="round photo" aria-label="写真をとる">${icon('camera')}</button>
       </header>
       ${navHTML}
       <div class="hint">見るだけの部屋です。なぞって見回せます</div>
     </div>`);
+  if (v.sample) el.querySelector('.rn-ic').innerHTML = icon('star');
   el.querySelector('.back').onclick = () => leaveVisit(true);
   el.querySelector('.photo').onclick = photoMode;
   el.querySelectorAll('.rooms button').forEach(b => b.onclick = () => { v.current = +b.dataset.i; showVisit(); });
