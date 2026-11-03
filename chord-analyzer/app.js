@@ -945,7 +945,7 @@ async function announceIfUpdated() {
   try {
     const info = await (await fetch('version.json', { cache: 'no-store' })).json();
     if (info.version !== APP_VERSION) return;
-    showBanner(`バージョン ${APP_VERSION} に更新しました：${info.notes.join(' / ')}`, '閉じる', () => { banner.hidden = true; });
+    showBanner(`更新しました：${info.notes.slice(0, 3).join('・')}`, '閉じる', () => { banner.hidden = true; });
   } catch { /* 取得できなければ何もしない */ }
 }
 
