@@ -5,6 +5,7 @@ import { validProblems, SYMBOLS } from './problems.js';
 import * as S from './store.js';
 import * as Auth from './auth.js';
 import * as DL from './download.js';
+import * as Sync from './sync.js';
 
 const SUBJECTS = [
   { id: 'physics', name: '物理', icon: '🧲', ready: true },
@@ -57,7 +58,7 @@ function showLogin(mode = 'login') {
           <button class="btn primary big" type="submit">${mode === 'login' ? 'ログイン' : '登録してはじめる'}</button>
         </form>
         <button class="link swap">${mode === 'login' ? 'はじめての人は、こちらで登録' : 'もう登録している人は、ログイン'}</button>
-        <p class="note">いまは、この端末の中だけに保存されます。</p>
+        <p class="note">記録はネット上に保存されます。どのスマホ・パソコンからでも、同じユーザー名とパスワードで続きから遊べます。</p>
       </div>
     </div>`);
   app.append(el);
@@ -67,16 +68,22 @@ function showLogin(mode = 'login') {
     const f = e.target;
     const err = el.querySelector('.err');
     err.textContent = '';
+    const btn = f.querySelector('button[type=submit]');
+    btn.disabled = true;
     try {
-      const id = mode === 'login' ? await Auth.logIn(f.name.value, f.pw.value) : await Auth.signUp(f.name.value, f.pw.value);
-      startAs(Auth.currentUser() || { id, name: f.name.value });
-    } catch (ex) { err.textContent = ex.message; vibrate(80); }
+      const r = mode === 'login' ? await Auth.logIn(f.name.value, f.pw.value) : await Auth.signUp(f.name.value, f.pw.value);
+      S.useUser(r.id);
+      await Sync.adopt(r.data);
+      if (r.moved) toast('この端末の記録を、ネットに引っ越しました', 3000);
+      startAs(Auth.currentUser());
+    } catch (ex) { err.textContent = ex.message; vibrate(80); btn.disabled = false; }
   };
 }
 
 function startAs(u) {
   user = u;
   S.useUser(u.id);
+  room3d && (room3d.roomDef = null); // 別の人の家を出しっぱなしにしない
   if (DL.canDownload() && !DL.downloadState()) showDownload(); else showSubjects();
 }
 
@@ -145,7 +152,7 @@ function showSubjects() {
   const el = h(`
     <div class="screen subjects">
       <header class="bar">
-        <div class="who">👤 ${esc(user.name)}</div>
+        <div class="who">👤 ${esc(user.name)} <span class="sync"></span></div>
         <div class="streak ${S.playedToday() ? 'on' : ''}">🔥 ${streak}日</div>
       </header>
       <h2>どの科目を解く？</h2><p class="lead">どの科目を解いても、同じ家が育ちます</p>
@@ -162,7 +169,7 @@ function showSubjects() {
     if (s.ready) b.onclick = () => { subjectId = s.id; enterHouse(); };
     grid.append(b);
   }
-  el.querySelector('.logout').onclick = () => { Auth.logOut(); showLogin(); };
+  el.querySelector('.logout').onclick = async () => { await Sync.push(); Auth.logOut(); showLogin(); };
   // 画質（すき間の影・光のにじみ）
   let q = 'high';
   try { q = localStorage.getItem('studyroom.quality') || 'high'; } catch (e) { /* なし */ }
@@ -712,8 +719,24 @@ function finishSet() {
 }
 
 // =========================== はじまり ===========================
-const u = Auth.currentUser();
-if (u) startAs(u); else showLogin();
+let syncState = 'saved';
+const SYNC_LABEL = { saved: '☁️ 保存ずみ', pending: '☁️ 保存中…', offline: '⚠️ オフライン（あとで保存）' };
+function paintSync() { document.querySelectorAll('.sync').forEach(e => { e.textContent = SYNC_LABEL[syncState] || ''; e.dataset.s = syncState; }); }
+Sync.setHandlers({
+  onStatus: (s) => { syncState = s; paintSync(); },
+  onExpired: () => { Auth.logOut(); toast('ログインが切れました。もう一度ログインしてください', 3500); showLogin(); },
+});
+new MutationObserver(paintSync).observe(app, { childList: true, subtree: false });
+
+(async () => {
+  const u = Auth.currentUser();
+  if (!u) return showLogin();
+  // 前に使っていた端末内の記録をすぐ出しつつ、ネットの新しい記録を取りにいく（最大3秒待つ）
+  S.useUser(u.id);
+  await Promise.race([Sync.pull(), new Promise(r => setTimeout(r, 3000))]);
+  startAs(u);
+  // 3秒で間に合わなかったときは、届いたら家に反映する
+})();
 
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
   navigator.serviceWorker.register('sw.js').catch(() => {});
