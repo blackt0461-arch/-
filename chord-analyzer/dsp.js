@@ -109,3 +109,27 @@ export function removeHarmonics(mags, binHz, f0, { count = 12, widthCents = 60 }
     for (let k = Math.max(0, lo); k <= hi && k < mags.length; k++) mags[k] = 0;
   }
 }
+
+/**
+ * 音の細かさ（1秒あたりの数）を変える。スマホは 48000、パソコンの曲は 44100 のことが多い。
+ * 解析のしくみは 44100 で調整してあるので、最初にそろえる。
+ * となりの数点から、なめらかな曲線（窓をかけた sinc）で間の値を求める（高い音が削れにくい）
+ */
+export function resampleTo(x, from, to, taps = 16) {
+  if (from === to) return x;
+  const ratio = from / to, n = Math.floor((x.length * to) / from), y = new Float32Array(n);
+  const cutoff = Math.min(1, to / from); // 下げるときは、元より高い音を先に落とす（折り返しの雑音を防ぐ）
+  for (let i = 0; i < n; i++) {
+    const p = i * ratio, k0 = Math.floor(p);
+    let sum = 0, wsum = 0;
+    for (let k = k0 - taps + 1; k <= k0 + taps; k++) {
+      if (k < 0 || k >= x.length) continue;
+      const d = p - k;
+      const s = d === 0 ? 1 : Math.sin(Math.PI * d * cutoff) / (Math.PI * d * cutoff);
+      const w = 0.5 + 0.5 * Math.cos((Math.PI * d) / taps);
+      sum += x[k] * s * w; wsum += s * w;
+    }
+    y[i] = wsum ? sum / wsum : 0;
+  }
+  return y;
+}

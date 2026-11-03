@@ -1,7 +1,8 @@
 // 録音（画面収録など）の音から、ギターのコード進行とタブ譜の材料を作る
 // ブラウザのワーカー（画面を固めずに裏で計算する仕組み）でも、テストでも動くように、画面の部品は使わない
 
-import { magnitudeSpectrum, peakNear, noteEnergy, predominantPitch, removeHarmonics } from './dsp.js';
+import { magnitudeSpectrum, peakNear, noteEnergy, predominantPitch, removeHarmonics, resampleTo } from './dsp.js';
+export const ANALYSIS_RATE = 44100;
 import { analyzeSpectrum } from './audio.js';
 import { identifyFromChroma, CHORD_TYPES, parseChordName } from './chord-engine.js';
 import { TUNINGS, findVoicings, soundingNotes } from './fretboard.js';
@@ -957,6 +958,12 @@ export function estimateTuning(signal, sampleRate, { frame = 8192, frames = 60, 
  * やり方：音の高さの目盛りをずれの分だけ動かして解析し、時刻は元に戻す
  */
 export function transcribe(channels, sampleRate, options = {}) {
+  // 解析のしくみは 1秒あたり 44100 の細かさで調整してあるので、ほかの細かさ（iPhone は 48000）の音はそろえてから解析する。
+  // そろえないと、テンポや拍の位置がずれて、コードが早く出るなどの間違いが起きる
+  if (sampleRate !== ANALYSIS_RATE) {
+    const conv = (ch) => ch && ch.map((x) => resampleTo(x, sampleRate, ANALYSIS_RATE));
+    return transcribe(conv(channels), ANALYSIS_RATE, { ...options, ...(options.aiChannels ? { aiChannels: conv(options.aiChannels) } : {}), ...(options.noteChannels ? { noteChannels: conv(options.noteChannels) } : {}) });
+  }
   // AI で歌を除いた音（aiChannels）があり、歌がはっきり入っている曲（取り除いた音の量が aiGate 以上）で、
   // 左右に分かれていない曲（弾き語りなど）は、歌を除いた音で解析する
   const { aiChannels = null, aiGate = 0.08 } = options;

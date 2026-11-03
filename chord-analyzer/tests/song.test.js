@@ -172,3 +172,16 @@ test('コード譜の再生：拍ごとではなく、実際に弾いた瞬間�
   assert.ok(r.now.precision >= 0.95, `余計に鳴らさない ${(r.now.precision * 100).toFixed(0)}%`);
   assert.ok(r.now.recall > r.before.recall + 0.3, `以前 ${(r.before.recall * 100).toFixed(0)}% → 今回 ${(r.now.recall * 100).toFixed(0)}%`);
 });
+
+test('スマホ（1秒あたり 48000）で読み込んだ音でも、44100 のときと同じテンポ・コード譜になる', async () => {
+  const { makeSong } = await import('./mix.js');
+  const { transcribe } = await import('../transcribe.js');
+  const { resampleTo } = await import('../dsp.js');
+  const song = makeSong({ stereo: true, seed: 3 });
+  const a = transcribe(song.channels, song.sampleRate);
+  const b = transcribe(song.channels.map((x) => resampleTo(x, song.sampleRate, 48000)), 48000);
+  assert.ok(Math.abs(a.bpm - b.bpm) < 1, `テンポ ${a.bpm} と ${b.bpm}`);
+  const names = (r) => r.timeline.filter((s) => s.end - s.start > 0).map((s) => s.name).join(' ');
+  assert.equal(names(b), names(a));
+  a.timeline.forEach((s, i) => assert.ok(Math.abs(s.start - b.timeline[i].start) < 0.06, `切り替わり ${s.start} と ${b.timeline[i].start}`));
+});
