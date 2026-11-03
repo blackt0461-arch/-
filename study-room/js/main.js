@@ -11,6 +11,7 @@ import { thumbHTML, hydrateThumbs } from './thumbs.js';
 import { loadModel } from './loaders.js';
 import { validProblems, SYMBOLS } from './problems.js';
 import { SUBJECT_PROBLEMS } from './subjects/index.js';
+import { playPullFX } from './pullfx.js';
 import * as S from './store.js';
 import * as Auth from './auth.js';
 import * as DL from './download.js';
@@ -231,41 +232,13 @@ function doPull(roll, cost, bannerId) {
     else S.own(r.item.id);
   }
   S.save();
-  playPull(res, bannerId);
+  const kind = cost.ticket5 ? 'ticket5' : cost.ticket4 ? 'ticket4' : 'ticket';
+  playPull(res, bannerId, kind, () => doPull(roll, cost, bannerId));
 }
-// 引いたときの演出：光る箱 → タップで開く → カードがめくれる
-function playPull(res, bannerId) {
-  const top = Math.max(...res.map(r => r.rarity));
-  const ov = h(`
-    <div class="pull-ov r${top}">
-      <div class="po-rays"></div>
-      <div class="po-box"><div class="po-lid"></div><div class="po-body"></div><div class="po-light"></div></div>
-      <p class="po-tap">タップして開ける</p>
-      <div class="po-cards ${res.length > 1 ? 'ten' : 'one'}"></div>
-      <div class="po-btns hide"><button class="btn ghost again">もう一度</button><button class="btn gold ok">${icon('check')}OK</button></div>
-    </div>`);
-  document.body.append(ov);
-  requestAnimationFrame(() => ov.classList.add('show'));
-  vibrate([20, 60, 20]);
-  let opened = false;
-  ov.addEventListener('click', (e) => {
-    if (opened || e.target.closest('.po-btns')) return;
-    opened = true;
-    ov.classList.add('open');
-    vibrate(top >= 5 ? [40, 40, 120] : top >= 4 ? [30, 40, 60] : 30);
-    const cards = ov.querySelector('.po-cards');
-    cards.innerHTML = res.map((r, i) => `
-      <div class="po-card r${r.rarity}" style="animation-delay:${0.5 + i * (res.length > 1 ? 0.12 : 0)}s">
-        <span class="stars">${'★'.repeat(r.rarity)}</span>
-        <span class="thumb">${thumbHTML(r.item)}</span>
-        <b>${esc(r.item.name)}</b>
-        ${r.shard ? `<i class="po-dup">かぶり → ★${r.shard}のかけら</i>` : r.dup ? '<i class="po-dup">もう1つ</i>' : '<i class="po-new">NEW</i>'}
-      </div>`).join('');
-    hydrateThumbs(cards);
-    setTimeout(() => ov.querySelector('.po-btns').classList.remove('hide'), 600 + res.length * 120);
-  });
-  ov.querySelector('.ok').onclick = () => { ov.remove(); showGacha(bannerId); };
-  ov.querySelector('.again').onclick = () => { ov.remove(); showGacha(bannerId); };
+// 引いたときの演出（js/pullfx.js）。「もう一度」は同じ引き方をもう1回
+function playPull(res, bannerId, kind = 'ticket', again = null) {
+  playPullFX(res, { thumbHTML, hydrateThumbs, esc, vibrate, icon, ticketSVG, kind,
+    onDone: (more) => { showGacha(bannerId); if (more && again) again(); } });
 }
 // かけらで交換
 function shardExchange(rarity, bannerId) {
