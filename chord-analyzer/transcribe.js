@@ -470,9 +470,13 @@ function refineWithChart(events, onsetList, timeline, tuning, { strumStrength = 
  * - chords: 0.1秒ごとのコードの判定（buildChordTimeline でコード進行にまとめる）
  * - events: 弾いた瞬間ごとの、新しく鳴った音（タブ譜の材料）
  */
-function transcribeOnce(channels, sampleRate, { mode = 'auto', voiceFilter = true, method = 'peel', riseRatio = 1.3, minStrength = 0.2, harmonicRatio = 4, tuning = TUNINGS[0], snapStrums = true, snapMin = 3, peelOptions = {}, useChart = true, chartOptions = {}, noteWeight = null, chromaMethod = 'auto', harmonicResidual = 0.35, vocalOptions = {}, vocalPresence = 0.35, minBeats = 1, precise = true, highWeight = 0.6, useContext = true, contextOptions = {}, dropVocalNotes = true, estimateDurations = true, stopRatio = 0.25, voiceOptions = { wobbleCents: 60, useSwell: false }, attackRatio = 0, chordWindow = 16384, chordMinDuration = 0.5, segmentChroma = 0, segmentBass = false, prevSubtract = 0, attackChroma = 0, changeGate = 0, fuseAttack = 0, fuseSubtract = 0, changeBonus = 0, exportFeatures = false, learned = 0, learnedConfidence = false, onsetOptions = {}, noteOnsetOptions = null, legatoNotes = false, synthCheck = false, strumCheck = { perNote: 0.01 }, vocalRemove = false, onProgress = () => {} } = {}) {
+function transcribeOnce(channels, sampleRate, { mode = 'auto', voiceFilter = true, method = 'peel', riseRatio = 1.3, minStrength = 0.2, harmonicRatio = 4, tuning = TUNINGS[0], snapStrums = true, snapMin = 3, peelOptions = {}, useChart = true, chartOptions = {}, noteWeight = null, chromaMethod = 'auto', harmonicResidual = 0.35, vocalOptions = {}, vocalPresence = 0.35, minBeats = 1, precise = true, highWeight = 0.6, useContext = true, contextOptions = {}, dropVocalNotes = true, estimateDurations = true, stopRatio = 0.25, voiceOptions = { wobbleCents: 60, useSwell: false }, attackRatio = 0, chordWindow = 16384, chordMinDuration = 0.5, segmentChroma = 0, segmentBass = false, prevSubtract = 0, attackChroma = 0, changeGate = 0, fuseAttack = 0, fuseSubtract = 0, changeBonus = 0, exportFeatures = false, learned = 0, learnedConfidence = false, onsetOptions = {}, noteOnsetOptions = null, legatoNotes = false, synthCheck = false, strumCheck = { perNote: 0.01 }, vocalRemove = false, noteChannels = null, onProgress = () => {} } = {}) {
   const chosen = chooseSignal(channels, mode, sampleRate, vocalRemove);
   const { guitar, mid, useSide, sideRatio } = chosen;
+  // AI で歌を除いた音（noteChannels）があれば、左右に分かれていない曲では、1音ずつ（弾いた瞬間と音の高さ）をその音で探す。
+  // コードと拍は元の音で決める（AI で分けた音は、コードの響きが少し崩れるため）
+  const aiNotes = noteChannels && !useSide ? (noteChannels.length > 1 ? Float32Array.from(noteChannels[0], (v, i) => (v + noteChannels[1][i]) / 2) : noteChannels[0]) : null;
+  if (aiNotes) { chosen.noteSignal = aiNotes; chosen.noteOnsetSignal = aiNotes; }
   const noteSignal = chosen.noteSignal ?? guitar;
   const duration = guitar.length / sampleRate;
   // コードを決めるときに聞く音（歌声を消す設定で chordsOnly のときは、歌声を消した音）
@@ -950,6 +954,18 @@ export function estimateTuning(signal, sampleRate, { frame = 8192, frames = 60, 
  * やり方：音の高さの目盛りをずれの分だけ動かして解析し、時刻は元に戻す
  */
 export function transcribe(channels, sampleRate, options = {}) {
+  // AI で歌を除いた音（aiChannels）があり、歌がはっきり入っている曲（取り除いた音の量が aiGate 以上）で、
+  // 左右に分かれていない曲（弾き語りなど）は、歌を除いた音で解析する
+  const { aiChannels = null, aiGate = 0.08 } = options;
+  if (aiChannels) {
+    let removed = 0, total = 0;
+    channels.forEach((x, c) => { const y = aiChannels[c] ?? aiChannels[0]; for (let i = 0; i < x.length; i++) { total += x[i] * x[i]; removed += (x[i] - (y[i] ?? 0)) ** 2; } });
+    const vocalEnergy = total ? removed / total : 0;
+    const { useSide } = chooseSignal(channels, options.mode ?? 'auto', sampleRate);
+    const use = !useSide && vocalEnergy >= aiGate;
+    const res = transcribe(use ? aiChannels : channels, sampleRate, { ...options, aiChannels: null });
+    return { ...res, aiVocal: { energy: vocalEnergy, used: use } };
+  }
   const { tuneCorrect = false, tuneMinCents = 20 } = options;
   if (!tuneCorrect) return transcribeInTune(channels, sampleRate, options);
   const mono = channels.length > 1 ? Float32Array.from(channels[0], (v, i) => (v + channels[1][i]) / 2) : channels[0];

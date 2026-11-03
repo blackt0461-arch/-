@@ -201,7 +201,7 @@ parentPort.on('message', ({ job, options }) => {
     // AI で分けた音で試す（調べもの用）：STEM_DIR に「曲名.STEM.f32」があれば、元の音の代わりに使う
     if (process.env.STEM_DIR && process.env.STEM) {
       const f = path.join(process.env.STEM_DIR, `${job.id}.${process.env.STEM}.f32`);
-      if (fs.existsSync(f)) audio = readF32Stereo(f, audio.sampleRate);
+      if (fs.existsSync(f)) { if (process.env.STEM_AI) options = { ...options, aiChannels: readF32Stereo(f, audio.sampleRate).channels }; else if (process.env.STEM_NOTES) options = { ...options, noteChannels: readF32Stereo(f, audio.sampleRate).channels }; else audio = readF32Stereo(f, audio.sampleRate); }
     }
     // 音の高さがずれた曲：音を少し速く（遅く）読み直して、全体の高さを detune セントずらす（そのぶん時刻も縮む）
     if (job.detune) {
