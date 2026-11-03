@@ -7,10 +7,11 @@ GitHub Actions で1日1回動く（GameWith から公開・自動収集の許可
   - 1ページごとに WAIT 秒あける
 読んだ結果は cache.json に入れておき、次の日に使い回す。
 """
-import re, json, html, os, sys, time, datetime, urllib.request
+import re, json, html, os, sys, time, datetime, urllib.request, io
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(HERE, '..', 'data.json')
+FEATS = os.path.join(HERE, '..', 'feats.json')
 CACHE = os.path.join(HERE, 'cache.json')
 BASE = 'https://gamewith.jp/dq-smashgrow/'
 UA = 'Mozilla/5.0 (compatible; smagro-saitekika/1.0; personal tool)'
@@ -18,6 +19,37 @@ WAIT = 2.0
 MAX_REFRESH = int(os.environ.get('MAX_REFRESH', '30'))
 PAGES = dict(sim='558001', memlist='555869', weapons='555827', armor='555859', acc='555866')
 BOSS_SECTIONS = ('チャレンジクエスト', '遺跡', '強敵マッチ', 'マルチクエスト')
+
+
+def get_bytes(url):
+    req = urllib.request.Request(url, headers={'User-Agent': UA})
+    with urllib.request.urlopen(req, timeout=40) as r:
+        return r.read()
+
+
+def make_feats(mem, equip, cache):
+    """スクショ読みとり用に、アイコンの「見分けるための特徴」を作る（新しい絵だけ取りに行く）"""
+    from PIL import Image
+    import iconfeat
+    fc = cache.setdefault('_feat', {})
+    out = {}
+    items = [('m' + str(m['id']), 'm', m.get('img')) for m in mem] + [(e['id'], 'e', e.get('img')) for e in equip]
+    for k, kind, url in items:
+        if not url:
+            continue
+        key = kind + '|' + url
+        if key not in fc:
+            try:
+                fc[key] = iconfeat.pack(iconfeat.feat_image(Image.open(io.BytesIO(get_bytes(url))), kind))
+            except Exception as e:  # noqa
+                print('icon failed', k, e, file=sys.stderr)
+                continue
+            time.sleep(0.5)
+        out[k] = fc[key]
+    used = {kind + '|' + url for k, kind, url in items if url}
+    for key in [x for x in fc if x not in used]:
+        del fc[key]
+    return dict(n=iconfeat.N, blur=iconfeat.BLUR, base_w=iconfeat.BASE_W, items=out)
 
 
 def get(pid):
@@ -207,7 +239,7 @@ def main():
             print('parse failed', pid, e, file=sys.stderr)
         time.sleep(WAIT)
     print(f'detail pages: new {len(new)}, refreshed {len(old)}')
-    for pid in [p for p in cache if p not in want]:
+    for pid in [p for p in cache if p not in want and not p.startswith('_')]:
         del cache[pid]  # 一覧から消えたページは記録からも消す
 
     for e in equip:
@@ -240,6 +272,10 @@ def main():
         if {k: v for k, v in prev.items() if k != 'updated'} == {k: v for k, v in data.items() if k != 'updated'}:
             data['updated'] = prev.get('updated', today)  # 中身が同じなら日付も変えない
     json.dump(data, open(OUT, 'w', encoding='utf-8'), ensure_ascii=False, separators=(',', ':'))
+    feats = make_feats(mem, equip, cache)
+    old = json.load(open(FEATS, encoding='utf-8')) if os.path.exists(FEATS) else None
+    if old != feats:
+        json.dump(feats, open(FEATS, 'w', encoding='utf-8'), ensure_ascii=False, separators=(',', ':'), sort_keys=True)
     json.dump(cache, open(CACHE, 'w', encoding='utf-8'), ensure_ascii=False, separators=(',', ':'), sort_keys=True)
     print(f'mem {len(mem)} jobs {len(jobs)} equip {len(equip)} boss {len(bosses)}')
 
