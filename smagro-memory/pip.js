@@ -9,7 +9,7 @@ const Pip = (() => {
 
   function lines(entry) {
     const r = entry.r;
-    const eq = [['武器', r.W], ...PARTS.map(p => [p.replace('防具', ''), r.eq[p]]), ['アクセ', r.eq.c0]];
+    const eq = [['武器', r.W], ...PARTS.map(p => [p.replace('防具', ''), r.eq[p]]), ['アクセ', r.eq.c0], ['アクセ', r.eq.c1]];
     return {
       title: `${entry.idx === 0 ? '★' : ''}${entry.idx + 1}人め ${entry.p.job}`,
       eq: eq.map(([k, x]) => [k, x ? x.it.n : 'なし']),
@@ -32,7 +32,7 @@ const Pip = (() => {
     x.font = '30px "DotGothic16", sans-serif'; x.fillStyle = '#f6c945';
     x.fillText(fit(x, L.title, W - 90), 30, 44);
     x.font = '40px "DotGothic16", sans-serif';
-    const y0 = 104, lh = 56;
+    const y0 = 104, lh = Math.min(56, Math.floor((H - 130) / Math.max(1, L.eq.filter(([, v]) => v !== 'なし').length - 1)));
     // 左：そうび（つけるものだけ）
     const eq = L.eq.filter(([, v]) => v !== 'なし');
     eq.forEach(([, v], i) => { x.fillStyle = '#f3efe0'; x.fillText(fit(x, v, 370), 30, y0 + i * lh); });

@@ -65,7 +65,15 @@ function runAll() {
     const weapons = pool('w');
     let fixW = null;
     if (isMain && S.fixW) fixW = weapons.find(x => x.it.id === S.fixW) || null;
-    const pins = isMain ? { eq: Object.fromEntries(ownedEq().filter(x => x.pin && x.it.kind !== 'w' && avail[x.it.id] > 0).map(x => [x.it.kind === 'c' ? 'c' : x.it.t, x])), mem: Object.keys(S.memPin).filter(k => S.memPin[k] && !S.memNo[k]) } : null;
+    let pins = null;
+    if (isMain) {
+      const pe = {}; let ci = 0;   // アクセは 2つまで（c0, c1）
+      for (const x of ownedEq().filter(x => x.pin && x.it.kind !== 'w' && avail[x.it.id] > 0)) {
+        if (x.it.kind === 'c') { for (let k = 0; k < Math.min(x.n, 2) && ci < ACC_SLOTS; k++) pe['c' + ci++] = x; }
+        else pe[x.it.t] = x;
+      }
+      pins = { eq: pe, mem: Object.keys(S.memPin).filter(k => S.memPin[k] && !S.memNo[k]) };
+    }
     if (isMain && !fixW) { const pw = ownedEq().find(x => x.pin && x.it.kind === 'w'); if (pw) fixW = weapons.find(x => x.it.id === pw.it.id) || null; }
     const res = searchChar({
       job: p.job, cap: +p.cap || 0, slots: job.c, weapons, fixWeapon: fixW, eqAvail: pool, memAvail: mems(+p.cap || 0), pins,
@@ -140,9 +148,11 @@ function vEnemy() {
   ${e.mode === 'boss' ? Object.entries(groups).map(([g, bs]) => `<div class="win"><span class="tag">${g}</span><div class="bosslist" style="margin-top:6px">${bs.map(b => `<button class="chip ${b.n === e.boss ? 'on' : ''}" data-act="boss" data-n="${esc(b.n)}">${esc(b.n)}</button>`).join('')}</div></div>`).join('') : ''}`;
 }
 
+const SRC = [['', 'ぜんぶ'], ['now', 'いまのイベント'], ['hokora', 'いつものほこら'], ['story', 'ストーリー'], ['shop', '交換所'], ['past', 'おわったイベント']];
+const SRCNAME = Object.fromEntries(SRC);
 function vMem() {
-  const qq = S.memQ.trim();
-  const list = MEMS.filter(m => (!S.memColor || m.c === S.memColor) && (!qq || m.n.includes(qq) || m.effs.some(e => e.text.includes(qq)))).sort((a, b) => b.ct - a.ct);
+  const qq = S.memQ.trim(), src = S.memSrc || '';
+  const list = MEMS.filter(m => (!src || m.src === src) && (!S.memColor || m.c === S.memColor) && (!qq || m.n.includes(qq) || m.effs.some(e => e.text.includes(qq)))).sort((a, b) => b.ct - a.ct);
   const nOff = MEMS.filter(m => S.memNo[m.id]).length;
   return `<div class="win"><span class="tag">メモリ</span>
     <div class="note" style="margin-top:6px">ぜんぶ もっている あつかいです。<b style="color:var(--line)">もっていない メモリを タップ</b>して はずしてください。右の ランクを おすと ランクや「かならず使う」を かえられます。</div>
@@ -150,18 +160,22 @@ function vMem() {
     <div class="note">ゲームの メモリ一覧を スクロールしながら スクショを 何まいか 撮って、まとめて えらんでください。</div>
     <div class="row" style="margin-top:8px"><input id="memq" type="search" placeholder="なまえ・こうかで さがす" value="${esc(S.memQ)}" data-act="memq" style="flex:1 1 180px">
     <span class="sub">もってない ${nOff} / ${MEMS.length}</span></div>
+    <div class="note" style="margin-top:10px">手に入る ところで しぼる</div>
+    <div class="row" style="margin-top:4px">${SRC.map(([k, l]) => `<button class="chip ${src === k ? 'on' : ''}" data-act="msrc" data-s="${k}">${l}${k ? ' ' + MEMS.filter(m => m.src === k).length : ''}</button>`).join('')}</div>
+    ${src ? `<div class="row" style="margin-top:8px"><button class="btn" data-act="msrcall" data-v="1">この ${list.length}こを ぜんぶ「もっている」に</button><button class="btn" data-act="msrcall" data-v="0">ぜんぶ「もっていない」に</button></div>
+      <div class="note">${src === 'now' ? 'いま 開催中の ほこら・強敵・マルチなどで 手に入る メモリです。' : src === 'hokora' ? 'いつでも 行ける ほこらで 手に入る メモリです。' : src === 'past' ? 'おわった イベントの メモリです。いまは 手に入りません。' : ''}色や 検索で しぼっていると、見えている ものだけが かわります。</div>` : ''}
     <div class="row" style="margin-top:8px"><button class="chip ${!S.memColor ? 'on' : ''}" data-act="mcol" data-c="">ぜんぶ</button>${['赤', '青', '黄', '緑', '紫'].map(c => `<button class="chip ${S.memColor === c ? 'on' : ''}" data-act="mcol" data-c="${c}"><span class="cdot c-${c}"></span> ${c}</button>`).join('')}</div></div>
   <div class="tiles">${list.map(m => `<div class="tile ${S.memNo[m.id] ? 'off' : ''} ${S.memPin[m.id] ? 'pin' : ''}" role="button" tabindex="0" data-act="memtog" data-id="${m.id}" aria-pressed="${!S.memNo[m.id]}">
       <span class="icow">${ico(m, 44)}<span class="cdot c-${m.c} icodot"></span></span><span class="nm">${esc(m.n)}</span>
       <button class="rk" data-act="memsheet" data-id="${m.id}" aria-label="${esc(m.n)}の くわしく">${S.memRank[m.id] || 'S'}</button>
-      <span class="ct">コスト${m.ct}${S.memPin[m.id] ? '　★かならず' : ''}</span></div>`).join('')}</div>`;
+      <span class="ct">コスト${m.ct}${S.memPin[m.id] ? '　★かならず' : ''}${m.src === 'now' ? '　<span style="color:var(--ok)">いま入手</span>' : ''}</span></div>`).join('')}</div>`;
 }
 function memSheet(id) {
   const m = ITEMS[id];
   const sh = $('#sheet');
   sh.innerHTML = `<div class="win"><span class="tag">メモリ</span>
     <div class="row" style="justify-content:space-between;margin-top:6px"><h2 style="margin:0;display:flex;gap:10px;align-items:center">${ico(m, 64)}<span><span class="cdot c-${m.c}"></span> ${esc(m.n)}</span></h2><button class="btn" data-act="close">とじる</button></div>
-    <div class="sub">${esc(m.f || '')}　コスト${m.ct}　${esc(m.r)}</div>
+    <div class="sub">${esc(m.f || '')}　コスト${m.ct}　${esc(m.r)}　入手：${esc(SRCNAME[m.src] || '')}${m.stage ? ' ' + esc(m.stage) : ''}</div>
     <div class="calc" style="margin:8px 0">${STAT_KEYS.map((k, i) => `<span>${k}</span><span>${Math.round(m.st[i] * (RANKF[S.memRank[id] || 'S']))}</span>`).join('')}</div>
     <div class="eff">${m.effs.map(e => esc(e.text)).join('<br>')}</div>
     <div class="note" style="margin-top:8px">ランク（S以外の数字は Sの数字からの めやす）</div>
@@ -274,6 +288,12 @@ document.addEventListener('click', ev => {
     case 'boss': S.enemy.boss = b.dataset.n; break;
     case 'weak': { const cur = S.enemy.weak[b.dataset.el] || ''; S.enemy.weak[b.dataset.el] = WEAK_ORDER[(WEAK_ORDER.indexOf(cur) + 1) % WEAK_ORDER.length]; break; }
     case 'mcol': S.memColor = b.dataset.c; break;
+    case 'msrc': S.memSrc = b.dataset.s; break;
+    case 'msrcall': {
+      const qq = S.memQ.trim(), src = S.memSrc || '';
+      for (const m of MEMS) if ((!src || m.src === src) && (!S.memColor || m.c === S.memColor) && (!qq || m.n.includes(qq) || m.effs.some(e => e.text.includes(qq)))) S.memNo[m.id] = b.dataset.v !== '1';
+      break;
+    }
     case 'memsheet': ev.stopPropagation(); memSheet(b.dataset.id); return;
     case 'memtog': S.memNo[b.dataset.id] = !S.memNo[b.dataset.id]; break;
     case 'memtog2': S.memNo[b.dataset.id] = !S.memNo[b.dataset.id]; invalidate(); save(); render(); memSheet(b.dataset.id); return;
