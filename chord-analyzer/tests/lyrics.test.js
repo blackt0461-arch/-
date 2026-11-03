@@ -35,3 +35,8 @@ test('コードの名前・位置の訂正と、訂正の一覧・くせ', () =>
   assert.equal(merged.length, TL.length - 1);
   assert.equal(lineSpans([{ text: 'a' }], { 0: 2 }, 10)[0].start, 2);
 });
+
+test('写真から読み取った歌詞を整える（日本語の間の空白・数字の前後の空白を消す）', async () => {
+  const { cleanLyrics } = await import('../lyrics-ocr.js');
+  assert.equal(cleanLyrics('僕 の 時価総額 400 円の 心臓と\n\n\n\n絵 に 描いた'), '僕の時価総額400円の心臓と\n\n絵に描いた');
+});

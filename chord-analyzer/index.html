@@ -225,7 +225,11 @@
           <h2>歌本（歌詞とコード） <small>歌詞を貼ると、歌詞の上にコードを載せます</small></h2>
           <div id="lyrics-setup">
             <textarea id="lyrics-input" rows="6" placeholder="ここに歌詞を貼り付けてください（自分の練習用に）"></textarea>
-            <div class="song-actions"><button type="button" id="lyrics-use" class="secondary-button">この歌詞で歌本を作る</button></div>
+            <div class="song-actions">
+              <label class="secondary-button ocr-button">📷 写真・スクショから読み取る<input id="lyrics-photo" type="file" accept="image/*" multiple hidden></label>
+              <button type="button" id="lyrics-use" class="secondary-button">この歌詞で歌本を作る</button>
+            </div>
+            <p id="lyrics-ocr-status" class="hint"></p>
           </div>
           <div id="lyrics-sync" class="sb-sync" hidden>
             <p class="hint">曲が流れます。歌の各行が始まったら「次の行」を押してください。</p>

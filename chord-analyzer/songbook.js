@@ -3,6 +3,7 @@
 import { parseLyrics, sungLines, lineSpans, placeChords, timeAtPos, applyEdit, diffTimelines, habitKey } from './lyrics.js';
 import { parseChordName } from './chord-engine.js';
 import { FEEDBACK_URL, sendFeedback } from './feedback.js';
+import { readLyricsFromImages } from './lyrics-ocr.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
@@ -114,6 +115,21 @@ export function initSongbook(app) {
     delete $('lyrics-edit').dataset.open;
     save();
     render();
+  });
+  // 写真・スクリーンショットから歌詞を読み取って、歌詞の欄に足す（読み取りまちがいは手で直してもらう）
+  $('lyrics-photo').addEventListener('change', async (e) => {
+    const files = [...e.target.files];
+    e.target.value = '';
+    if (!files.length) return;
+    const status = $('lyrics-ocr-status');
+    try {
+      const text = await readLyricsFromImages(files, (p, label) => { status.textContent = `${label}…（${Math.round(p * 100)}%）`; });
+      input.value = [input.value.trim(), text].filter(Boolean).join('\n\n');
+      status.textContent = text ? '読み取りました。まちがいがあれば直してから「この歌詞で歌本を作る」を押してください' : '文字が見つかりませんでした。歌詞が大きく写った写真で試してください';
+      input.focus();
+    } catch (err) {
+      status.textContent = `読み取れませんでした：${err?.message || err}`;
+    }
   });
   $('lyrics-edit').addEventListener('click', () => { $('lyrics-edit').dataset.open = '1'; render(); input.focus(); });
 

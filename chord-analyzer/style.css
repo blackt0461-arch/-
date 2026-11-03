@@ -802,3 +802,4 @@ select, input[type="text"] {
 .ed-tools small { display: block; font-size: 0.65rem; color: var(--muted); }
 .tab-play { min-height: 46px; width: 100%; margin-bottom: 8px; font-weight: 700; }
 #song-result .song-media:not(.audio-only) { max-height: 22vh; }
+.ocr-button { display: inline-flex; align-items: center; min-height: 44px; padding: 0 12px; cursor: pointer; }
