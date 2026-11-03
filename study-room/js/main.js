@@ -231,7 +231,7 @@ async function showSampleRoom(seriesId) {
   try { room = await SAMPLE_ROOMS[seriesId](); } catch (e) { return toast('モデルハウスはまだ準備中です'); }
   if (!room) return toast('モデルハウスはまだ準備中です');
   const ser = G.SERIES.find(x => x.id === seriesId);
-  visiting = { username: '見本', sample: `${ser?.name || ''}のモデルハウス`, house: { v: 2, rooms: [JSON.parse(JSON.stringify(room))] }, current: 0, summary: {}, back: () => showGacha(seriesId) };
+  visiting = { username: '見本', sample: `${(ser?.name || '').replace('シリーズ', '')}のモデルハウス`, house: { v: 2, rooms: [JSON.parse(JSON.stringify(room))] }, current: 0, summary: {}, back: () => showGacha(seriesId) };
   showVisit();
 }
 // チケットを使って引き、結果を持ち物へ（かぶりはかけら）
@@ -854,7 +854,7 @@ function showInventory() {
 function showSurfaces(kind = 'wall') {
   const r = curRoom();
   if (kind === 'fix') return showFixtures();
-  const owned = ITEMS.filter(i => i.place === 'surface' && i.surface === kind && S.owned(i.id));
+  const owned = [...ITEMS, ...G.GACHA_ITEMS.filter(i => !ITEMS.includes(i))].filter(i => i.place === 'surface' && i.surface === kind && S.owned(i.id));
   const el = sheet(`
     <div class="sh-head"><span class="sh-ic">${icon('brush')}</span><div><h3>壁・床・ドア・窓</h3><p>持っている物から選べます</p></div></div>
     <div class="seg kinds">${surfKinds().map(([k, n]) => `<button data-k="${k}" class="${k === kind ? 'on' : ''}">${n}</button>`).join('')}</div>
@@ -929,7 +929,7 @@ function photoMode() {
 
 // =========================== 更新のお知らせ ===========================
 // このプログラムの版（version.json と同じにする。公開のたびに上げる）
-const APP_VERSION = '2.4.3';
+const APP_VERSION = '2.5.0';
 // 新しい版が出たら、みんな同じタイミングでそろうように強制で再起動する。
 // 開いた時・画面に戻った時・1分ごとに version.json を見る
 async function latestVersion() {
