@@ -1954,7 +1954,7 @@ function stageTruss(s) {
     const lm = new THREE.MeshStandardMaterial({ color: '#111', emissive: color, emissiveIntensity: 3.2, roughness: 0.3 });
     mk(p, CIRC(0.094, 24), lm, 0, -0.325, 0, PI / 2).castShadow = false;
     lenses.push(lm);
-    beams.push(beamCone(p, 2.1, 0.09, 0.42, color, 0.8));
+    beams.push(beamCone(p, 2.1, 0.09, 0.42, color, 0.45));
     beams[beams.length - 1].position.y = -0.33;
   };
   par(-0.65, '#ff2a3a', -0.35, -0.15);
@@ -1974,14 +1974,14 @@ function stageTruss(s) {
     mk(head, CIRC(0.06, 20), lm, 0, 0, 0.101).castShadow = false;
     lenses.push(lm);
     const bh = new THREE.Group(); bh.position.z = 0.1; bh.rotation.x = -PI / 2; head.add(bh);
-    beams.push(beamCone(bh, 2.3, 0.05, 0.3, '#fff0d8', 0.6));
+    beams.push(beamCone(bh, 2.3, 0.05, 0.3, '#fff0d8', 0.32));
     heads.push({ yoke, head, sx });
   }
   for (const h of heads) { h.yoke.rotation.y = h.sx * 0.5; h.head.rotation.x = 0.9; }
   addTick(g, t => {
     for (const h of heads) { h.yoke.rotation.y = h.sx * (0.5 + 0.45 * Math.sin(t * 0.5 + h.sx)); h.head.rotation.x = 0.85 + 0.3 * Math.sin(t * 0.7 + h.sx * 2); }
     lenses.forEach((m, i) => { if (i < 4) setE(m, 2.6 + 0.9 * Math.sin(t * 1.7 + i * 1.3)); });
-    beams.forEach((b, i) => setE(b.material, (i < 4 ? 0.75 : 0.55) + 0.2 * Math.sin(t * 1.7 + i * 1.3)));
+    beams.forEach((b, i) => setE(b.material, (i < 4 ? 0.45 : 0.32) + 0.12 * Math.sin(t * 1.7 + i * 1.3)));
   });
   setLight(g, ty, 1.1, '#ff6a5a');
   return g;
@@ -2185,7 +2185,7 @@ function kickPlanter(s) {
   drumShell(g, r, h, sparkle('#8e0c18'), 0, h / 2 + 0.012, 0, 0, 0.3, { top: paintG('#2e2016', 1), hoop: sparkle('#8e0c18'), hoopR: 0.014 });
   for (let k = 0; k < 4; k++) { const a = k / 4 * TAU + 0.4; mk(g, C(0.018, 0.022, 0.012, 10), paintG('#111', 0.6), Math.cos(a) * (r - 0.03), 0.006, Math.sin(a) * (r - 0.03)); }
   if (PROC) {
-    const p = PROC({ type: 'plant', foliage: 'monstera', pot: 'round', potColor: '#2e2016', size: 1.15 });
+    const p = PROC({ type: 'plant', foliage: 'monstera', pot: 'round', potColor: '#2e2016', size: 0.8 });
     p.position.y = h - 0.05;
     p.traverse(o => { if (o.isMesh && !o.isInstancedMesh && o.position.y < 0.3 && o.geometry.type === 'LatheGeometry') o.visible = false; });
     g.add(p);
@@ -2300,10 +2300,10 @@ function spotLamp(s) {
     mk(d, B(0.2, 0.004, 0.13, 0.002), M, 0, 0, 0.065);
   }
   const bm = new THREE.Group(); bm.position.z = 0.13; bm.rotation.x = -PI / 2; head.add(bm);
-  const beam = beamCone(bm, 1.3, 0.1, 0.34, '#ffd9a0', 0.6);
+  const beam = beamCone(bm, 1.3, 0.1, 0.34, '#ffd9a0', 0.35);
   // 床のケーブル
   tube(g, [V3(0.01, 1.3, -0.02), V3(0.02, 0.7, -0.03), V3(0.03, 0.3, -0.02), V3(0.1, 0.01, -0.1), V3(0.25, 0.006, -0.2)], 0.005, paintG('#0c0c0c', 0.5), 40, 5);
-  addTick(g, t => { setE(lens, 3.3 + 0.2 * Math.sin(t * 1.1)); setE(beam.material, 0.58 + 0.06 * Math.sin(t * 1.1)); });
+  addTick(g, t => { setE(lens, 3.3 + 0.2 * Math.sin(t * 1.1)); setE(beam.material, 0.34 + 0.04 * Math.sin(t * 1.1)); });
   setLight(g, 1.3, 1.0, '#ffd29a');
   return g;
 }

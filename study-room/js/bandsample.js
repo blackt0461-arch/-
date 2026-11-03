@@ -24,7 +24,7 @@ export const BAND_SAMPLE = {
     { uid: 'bs-spot', item: 'g4-band-spot', x: 0.35, z: -2.05, rot: 1.35 },
     // 右の壁：アンプとギター
     { uid: 'bs-amp', item: 'g5-amp-stack', x: 3.0, z: 0.4, rot: -Math.PI / 2 },
-    { uid: 'bs-guitar', item: 'g5-neon-guitar', x: 2.38, z: 0.72, rot: -0.9 },
+    { uid: 'bs-guitar', item: 'g5-neon-guitar', x: 2.3, z: 0.72, rot: -0.9 },
     { uid: 'bs-pedals', item: 'g4-band-pedals', x: 1.42, z: 0.78, rot: -0.35 },
     // 窓の前：キーボード
     { uid: 'bs-keys', item: 'g4-band-keys', x: -0.75, z: -2.05, rot: 0 },
