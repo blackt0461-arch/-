@@ -337,6 +337,7 @@ async function enterHouse() {
   room3d.onDoor = goThroughDoor;
   room3d.onSelect = onSelectItem;
   room3d.onPlacedChange = () => S.save();
+  room3d.onLights = (off) => { S.save(); toast(off ? '電気を消しました' : '電気をつけました', 1400); vibrate(15); };
   room3d.onInvalid = () => { toast('そこには置けません（ほかの家具や壁と重なります）'); vibrate(40); };
   canvas.classList.remove('dim');
   room3d.setActive(true);

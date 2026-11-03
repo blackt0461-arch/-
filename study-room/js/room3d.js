@@ -227,9 +227,10 @@ export class Room3D {
       return;
     }
     const ray = this.ray(cx, cy);
-    const hits = ray.intersectObjects([this.shell, this.items], true).filter(h => h.object.visible && !h.object.isPoints);
+    const hits = ray.intersectObjects([this.shell, this.items], true).filter(h => (h.object.visible || h.object.userData.lightSwitch) && !h.object.isPoints);
     const h = hits[0];
     if (!h) return;
+    if (h.object.userData.lightSwitch) { this.toggleLights(); return; }
     if (h.object.userData.door) { this.onDoor && this.onDoor(); return; }
     // 床なら当たった所、家具なら家具の足もと
     const p = h.point.clone(); p.y = 0;
@@ -334,6 +335,7 @@ export class Room3D {
       this.marker.material.opacity = Math.max(0, this.marker.userData.life) * 0.8;
       this.marker.scale.setScalar(1 + (1 - this.marker.userData.life) * 0.6);
     }
+    if (this.stars && this.stars.visible) { this.stars.position.copy(this.camera.position); this.stars.material.uniforms.uTime.value = t; }
     // ガチャの家具の動き（炎・星・水など）
     for (const o of this.items.children) { const f = o.children[0]?.userData.tick; if (f) f(t, dt); }
     // 新しく置いた物のアニメーション
@@ -727,6 +729,30 @@ export class Room3D {
       this.scene.add(l);
       this.lamps.push(l);
     });
+    this.applyLightsOff();
+  }
+
+  // 照明スイッチ：部屋の明かりを消す／つける（部屋ごとに覚えておく）
+  toggleLights() {
+    if (!this.st) return;
+    this.st.lightsOff = !this.st.lightsOff;
+    this.applyLightsOff();
+    this.onLights && this.onLights(this.st.lightsOff);
+  }
+  applyLightsOff() {
+    const off = !!this.st?.lightsOff;
+    for (const l of this.lamps) l.visible = !off;
+    // 光っている部分（電球・かさの内側など）も暗くする
+    const seen = new Set();
+    this.items.traverse(o => {
+      if (!o.isMesh) return;
+      for (const m of Array.isArray(o.material) ? o.material : [o.material]) {
+        if (!m || !m.emissive || seen.has(m)) continue;
+        seen.add(m);
+        if (m.userData.baseEmissive === undefined) m.userData.baseEmissive = m.emissiveIntensity;
+        if (m.userData.baseEmissive > 0) m.emissiveIntensity = off ? 0 : m.userData.baseEmissive;
+      }
+    });
   }
 
   // --- 模様がえ ---
@@ -911,6 +937,38 @@ export class Room3D {
       this.scene.backgroundIntensity = m.bg;
     });
     this.scene.fog = new THREE.Fog(m.fog, 60, 520);
+    this.setStars(m.photo === 'night');
+  }
+  // 夜だけ、窓の外にまたたく星
+  setStars(on) {
+    if (on && !this.stars) {
+      const n = 1400, pos = new Float32Array(n * 3), seed = new Float32Array(n), size = new Float32Array(n);
+      let s = 11; const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
+      for (let i = 0; i < n; i++) {
+        const az = rnd() * Math.PI * 2, el = Math.asin(0.06 + rnd() * 0.94); // 地平線より上
+        const r = 380;
+        pos.set([Math.cos(el) * Math.cos(az) * r, Math.sin(el) * r, Math.cos(el) * Math.sin(az) * r], i * 3);
+        seed[i] = rnd() * 10; size[i] = 1.2 + Math.pow(rnd(), 4) * 4.5;
+      }
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+      g.setAttribute('seed', new THREE.BufferAttribute(seed, 1));
+      g.setAttribute('size', new THREE.BufferAttribute(size, 1));
+      const mat = new THREE.ShaderMaterial({
+        uniforms: { uTime: { value: 0 }, uPR: { value: this.renderer.getPixelRatio() } },
+        vertexShader: `attribute float seed; attribute float size; uniform float uTime; uniform float uPR; varying float vA;
+          void main(){ vA = 0.55 + 0.45 * sin(uTime * (1.2 + fract(seed) * 2.5) + seed * 6.0);
+            gl_PointSize = size * uPR; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+        fragmentShader: `varying float vA; void main(){ vec2 c = gl_PointCoord - 0.5; float d = length(c);
+            float a = smoothstep(0.5, 0.0, d); gl_FragColor = vec4(vec3(1.0, 0.97, 0.9) * a * vA * 1.6, 1.0); }`,
+        transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false,
+      });
+      this.stars = new THREE.Points(g, mat);
+      this.stars.frustumCulled = false;
+      this.stars.renderOrder = -1;
+      this.scene.add(this.stars);
+    }
+    if (this.stars) this.stars.visible = on;
   }
 
   async buildShell() {
@@ -1311,6 +1369,9 @@ function makeFixtures(sh, trimColor) {
   }
   const D = sh.door;
   const swA = free(D.wall, D.a - D.w / 2 - 0.22, 1.2) ? D.a - D.w / 2 - 0.22 : D.a + D.w / 2 + 0.22;
+  const hit = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.26, 0.04), new THREE.MeshBasicMaterial({ visible: false }));
+  hit.position.z = 0.02; sw.add(hit);
+  sw.traverse(o => { o.userData.lightSwitch = true; });
   onWall(sw, D.wall, swA, 1.2);
   if (sh.plain) return g;
   // コンセント
