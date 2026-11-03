@@ -15,7 +15,7 @@ export const BAND_SAMPLE = {
   placed: [
     // 天井・壁
     { uid: 'bs-truss', item: 'g5-stage-truss', x: 1.35, z: -0.55, rot: Math.PI },
-    { uid: 'bs-neon', item: 'g5-neon-rock', wall: '-z', a: 2.05, y: 2.3 },
+    { uid: 'bs-neon', item: 'g5-neon-rock', wall: '+x', a: 0.4, y: 2.45 },
     { uid: 'bs-posters', item: 'g4-band-posters', wall: '-x', a: -0.05, y: 1.62 },
     // ステージ（奥の右すみ）
     { uid: 'bs-rug', item: 'g4-band-rug', x: 2.0, z: -1.5, rot: -0.3 },
