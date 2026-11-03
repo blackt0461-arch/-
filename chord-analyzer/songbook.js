@@ -254,5 +254,8 @@ export function initSongbook(app) {
     }, 15000);
   }
 
-  return { onAnalysis, render };
+  // 帯やコード一覧から直すとき
+  const editSeg = (i) => { if (song) openEditor(i); };
+  const editAt = (t) => { const i = timeline().findIndex((s) => t >= s.start && t < s.end); if (i >= 0) editSeg(i); };
+  return { onAnalysis, render, editSeg, editAt };
 }

@@ -67,26 +67,54 @@ button { cursor: pointer; -webkit-tap-highlight-color: transparent; font: inheri
 
 h1 { font-size: 1rem; margin: 0 0 10px; text-align: center; color: var(--muted); font-weight: 600; }
 
-.tabs {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 4px;
-  background: var(--surface);
-  border-radius: 12px;
-  padding: 4px;
+/* 下のメニュー（アイコン付き）：親指で押しやすいように画面の下に固定 */
+.bottom-nav {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  border-top: 1px solid var(--surface-2);
+  padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
 }
-
 .tab {
-  border: 0;
-  border-radius: 9px;
-  padding: 10px 0;
-  white-space: nowrap;
-  font-size: clamp(0.8rem, 3.8vw, 1rem);
-  background: transparent;
-  color: var(--muted);
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  border: 0; border-radius: 12px; padding: 6px 0; background: transparent; color: var(--muted);
+  font-size: 0.75rem; font-weight: 600;
 }
+.tab svg { width: 26px; height: 26px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.tab[aria-selected="true"] { color: var(--accent); }
+.tab[aria-selected="true"] svg { stroke-width: 2.2; }
+body { padding-bottom: calc(84px + env(safe-area-inset-bottom)); }
 
-.tab[aria-selected="true"] { background: var(--surface-2); color: var(--text); font-weight: 700; }
+/* カード（ひとまとまりの機能） */
+.card { background: var(--surface); border-radius: 16px; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+.card-title { font-size: 1rem; margin: 0; }
+.open-card .file-button { min-height: 64px; font-size: 1.1rem; display: flex; align-items: center; justify-content: center; }
+.open-card.compact .hint, .open-card.compact .song-help { display: none; }
+.open-card.compact .file-button { min-height: 46px; font-size: 0.95rem; }
+.settings-card { border-top: 1px solid var(--surface-2); padding-top: 8px; }
+.settings-card summary, .song-help summary, .mini-help summary { cursor: pointer; color: var(--muted); font-size: 0.9rem; padding: 4px 0; }
+.settings-card[open] { display: flex; flex-direction: column; gap: 10px; }
+
+/* 曲のプレイヤー（動画・コードの帯・今のコード・操作）：スクロールしても上に残す */
+.player { position: sticky; top: 0; z-index: 20; background: var(--bg); padding: calc(4px + env(safe-area-inset-top)) 0 6px; display: flex; flex-direction: column; gap: 6px; }
+#song-result .song-media { max-height: 28vh; }
+#song-result .song-media.audio-only { height: 54px; background: transparent; }
+.now-row { display: flex; align-items: center; gap: 10px; }
+.now-row .song-now { flex: 1; text-align: left; margin: 0; }
+.edit-toggle { flex: none; }
+.edit-toggle input { position: absolute; opacity: 0; pointer-events: none; }
+.edit-toggle span { display: inline-flex; align-items: center; min-height: 44px; padding: 0 16px; border-radius: 22px; border: 1px solid var(--line); font-weight: 700; color: var(--text); }
+.edit-toggle input:checked + span { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+.edit-toggle input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
+#song-result.fixing .chord-strip, #song-result.fixing .song-chords, #song-result.fixing .sb-view { outline: 2px dashed var(--accent); outline-offset: 3px; border-radius: 10px; }
+.mini-help .hint { margin: 4px 0; }
+
+/* 曲の画面の切り替え（コード・歌本・タブ譜） */
+.subtabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; background: var(--surface); border-radius: 12px; padding: 4px; }
+.subtab { border: 0; border-radius: 9px; padding: 10px 0; background: transparent; color: var(--muted); font-size: 0.95rem; font-weight: 600; }
+.subtab[aria-selected="true"] { background: var(--surface-2); color: var(--text); font-weight: 700; }
+#song-result .song-section[hidden] { display: none; }
 
 main { max-width: 560px; margin: 12px auto 0; }
 
@@ -559,7 +587,6 @@ select, input[type="text"] {
 .song-help summary { cursor: pointer; color: var(--text); }
 .song-help ol { padding-left: 1.4em; }
 
-.tabs { grid-template-columns: repeat(4, 1fr); }
 
 /* ---------- 全弦チューナー ---------- */
 .tuner-mode { align-self: center; }
@@ -685,3 +712,10 @@ select, input[type="text"] {
 .chord-edit input { width: 100%; box-sizing: border-box; font-size: 1.1rem; padding: 8px; border-radius: 8px; border: 1px solid var(--surface); background: var(--surface); color: inherit; }
 .chord-edit-cands { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
 .chord-edit-cands .secondary-button { min-height: 36px; padding: 0 10px; }
+
+/* コードを直す窓：画面の下から出す（指で押しやすいように） */
+.chord-edit[open] { position: fixed; inset: auto 0 0 0; margin: 0; width: 100%; max-width: none; border-radius: 18px 18px 0 0; padding: 16px 16px calc(16px + env(safe-area-inset-bottom)); }
+.chord-edit h3 { margin: 0 0 10px; }
+.chord-edit .song-actions { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+.chord-edit .song-actions .secondary-button { min-height: 46px; }
+#chord-edit-ok { background: var(--accent); color: var(--accent-text); border-color: var(--accent); font-weight: 700; }

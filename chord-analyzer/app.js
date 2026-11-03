@@ -11,7 +11,7 @@ import { initSongbook } from './songbook.js';
 import { estimateKey, suggestCapo, easiestVoicing } from './practice.js';
 
 // version.json と同じ値にする（新しいバージョンを公開したら両方を上げる）
-const APP_VERSION = '1.16.0';
+const APP_VERSION = '1.17.0';
 const APP_FILES = ['index.html', 'style.css', 'app.js', 'chord-engine.js', 'audio.js', 'fretboard.js', 'sound.js', 'song.js', 'dsp.js', 'chart.js', 'live.js', 'practice.js', 'transcribe.js', 'transcribe-worker.js', 'tab-staff.js', 'learned.js', 'synth-check.js', 'vocal-remove.js', 'ai-vocal.js', 'ai-loader.js', 'ai-pitch.js', 'models/basic-pitch.onnx', 'lyrics.js', 'songbook.js', 'feedback.js', 'sw.js', 'manifest.webmanifest'];
 const HOLD_MS = 150;      // マイク：別のコードがこの時間続いたら表示を切り替える
 const HISTORY_SIZE = 16;  // マイク：覚えておくコードの数
@@ -26,7 +26,7 @@ const storage = {
 const escapeHtml = (s) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 
 // ---------- タブ ----------
-const tabs = ['fret', 'mic', 'song', 'tuner'].map((id) => ({
+const tabs = ['song', 'fret', 'tuner'].map((id) => ({
   id,
   tab: document.getElementById(`tab-${id}`),
   panel: document.getElementById(`panel-${id}`),
@@ -38,8 +38,7 @@ tabs.forEach(({ id, tab }) => {
       t.panel.hidden = t.id !== id;
     });
     // 別のタブに移ったらマイクを止める（電池の節約。マイクとチューナーは同時に使えない）
-    if (id !== 'fret') stopCheck();
-    if (id !== 'mic') stopMic();
+    if (id !== 'fret') { stopCheck(); stopMic(); }
     if (id !== 'song') pauseSongMedia();
     if (id !== 'tuner') stopTuner();
   });
@@ -562,7 +561,10 @@ chordStrip.addEventListener('click', (e) => {
   const inner = chordStrip.querySelector('.strip-inner');
   if (!inner) return;
   const x = e.clientX - inner.getBoundingClientRect().left;
-  playFrom(Math.max(0, Math.min(stripDuration, x / STRIP_PX_PER_SEC)) + 0.2);
+  const t = Math.max(0, Math.min(stripDuration, x / STRIP_PX_PER_SEC));
+  // 「直す」がオンのときは、押したところのコードを直す。オフのときはそこから再生する
+  if (fixMode.checked) songbook.editAt(t);
+  else playFrom(t + 0.2);
 });
 
 // 再生に合わせて、今のコードとタブ譜の段を光らせる
@@ -721,12 +723,23 @@ songChords.addEventListener('click', (e) => {
   if (!chip) return;
   const seg = analysis.timeline[Number(chip.dataset.index)];
   if (e.target.closest('.to-fret')) showOnFretboard(seg.name);
+  else if (fixMode.checked) songbook.editSeg(Number(chip.dataset.index));
   else playFrom(seg.start);
 });
 songTab.addEventListener('click', (e) => {
   const block = e.target.closest('.tab-block');
   if (block) playFrom(analysis.tabBlocks[Number(block.dataset.index)].t);
 });
+
+// 曲の画面の切り替え（コード・歌本・タブ譜を1つずつ表示）
+const fixMode = document.getElementById('fix-mode');
+// 音声だけのファイルは、黒い画面を出さずに再生の操作だけを出す
+songMedia.addEventListener('loadedmetadata', () => songMedia.classList.toggle('audio-only', !songMedia.videoWidth));
+document.querySelectorAll('.subtab').forEach((btn) => btn.addEventListener('click', () => {
+  document.querySelectorAll('.subtab').forEach((b) => b.setAttribute('aria-selected', String(b === btn)));
+  document.querySelectorAll('#song-result .song-section[data-sub]').forEach((sec) => { sec.hidden = sec.dataset.sub !== btn.dataset.sub; });
+}));
+fixMode.addEventListener('change', () => document.getElementById('song-result').classList.toggle('fixing', fixMode.checked));
 
 // 歌本（歌詞とコード）と、コードの訂正
 const songbook = initSongbook({
@@ -766,6 +779,7 @@ songFile.addEventListener('change', async () => {
     renderLoop();
     songMedia.playbackRate = Number(songSpeed.value);
     songResult.hidden = false;
+    document.getElementById('song-open').classList.add('compact');
     highlightNow();
   } catch (err) {
     showSongError(err?.name === 'EncodingError' || /decode/i.test(err?.message || '')
