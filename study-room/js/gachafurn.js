@@ -1122,10 +1122,11 @@ function bigPlant(s) {
   return g;
 }
 // 手織りのラグ（床に敷く）
+const RUG_PAL = { persian: ['#7b1f24', '#1d2a44', '#e5d2b0', '#c39a4a'], stage: ['#4a0c12', '#111012', '#7a1a1c', '#c08a3a'] };
 function rugTex(kind) {
   return canvasTex('rug' + kind, 1024, 768, (ctx, w, h) => {
-    if (kind === 'persian') {
-      const R = hexRGB('#7b1f24'), N = hexRGB('#1d2a44'), C2 = hexRGB('#e5d2b0'), G = hexRGB('#c39a4a');
+    if (RUG_PAL[kind]) {
+      const [R, N, C2, G] = RUG_PAL[kind].map(hexRGB);
       pixels(ctx, w, h, (u, v, o) => {
         const x = Math.abs(u - 0.5) * 2, y = Math.abs(v - 0.5) * 2;
         let c = R;
@@ -1617,7 +1618,7 @@ function moonTable(s) {
   return g;
 }
 
-// ---------------- ロックシリーズ（黒・クローム・ネオン） ----------------
+// ---------------- バンドシリーズ（もとロックシリーズ。黒・クローム・ネオン） ----------------
 const neonMat = (c, i = 3) => new THREE.MeshStandardMaterial({ color: '#000000', emissive: c, emissiveIntensity: i, roughness: 0.4 });
 const LETTERS = {
   R: [[[0, 0], [0, 1], [0.5, 1], [0.72, 0.88], [0.72, 0.62], [0.5, 0.5], [0, 0.5]], [[0.32, 0.5], [0.75, 0]]],
@@ -1754,6 +1755,559 @@ function studSofa(s) {
   addTick(g, t => { const k = 0.5 + 0.5 * Math.sin(t * 0.6); led.emissive.copy(ca).lerp(cb, k); hl.material.uniforms.uColor.value.copy(led.emissive); hl.material.uniforms.uTime.value = t; });
   return g;
 }
+// ---------------- バンドシリーズの新しい家具（黒・クローム・スパークルレッド・ステージの光） ----------------
+// 消灯中（部屋が emissiveIntensity を 0 にした材質）は、動きで光を戻さない
+const setE = (m, v) => { if (m.userData.baseEmissive !== undefined && m.emissiveIntensity === 0) return; m.emissiveIntensity = Math.max(0.02, v); };
+const VCOL = () => cm('vcol', () => std({ color: '#ffffff', vertexColors: true, roughness: 0.55 }));
+const MATTE_BLACK = () => paintG('#141414', 0.55, 0.2);
+const TOLEX = () => cm('tolex', () => phys({ color: '#141414', roughness: 0.75, sheen: 0.3 }));
+const CIRC = (r, seg = 40) => cg('circ' + r4(r) + ',' + seg, () => new THREE.CircleGeometry(r, seg));
+// ラメ入りの塗装（ドラムの胴）
+function sparkleTex(base) {
+  return canvasTex('spk' + base, 256, 256, (ctx, w, h) => {
+    const B0 = hexRGB(base);
+    pixels(ctx, w, h, (u, v, o) => {
+      const n = h2(Math.floor(u * w), Math.floor(v * h), 9);
+      const f = n > 0.9 ? 1.6 + (n - 0.9) * 14 : 0.72 + 0.35 * vn(u * 24, v * 24, 24, 24, 4);
+      o[0] = clamp(B0[0] * f, 0, 255); o[1] = clamp(B0[1] * f + (n > 0.97 ? 60 : 0), 0, 255); o[2] = clamp(B0[2] * f + (n > 0.97 ? 50 : 0), 0, 255);
+    });
+  }, { rep: 3 });
+}
+const sparkle = c => cm('spl' + c, () => phys({ color: '#ffffff', map: sparkleTex(c), metalness: 0.45, roughness: 0.28, clearcoat: 1, clearcoatRoughness: 0.03 }));
+// 文字や絵をキャンバスに描いた板（ポスター・ロゴ）
+function drawTex(key, w, h, draw) { return canvasTex(key, w, h, (ctx) => draw(ctx, w, h)); }
+const texMat = (key, w, h, draw, o = {}) => cm('tm' + key, () => std({ color: '#ffffff', map: drawTex(key, w, h, draw), roughness: 0.75, ...o }));
+const FONT = (px, w = 900) => `${w} ${px}px "Arial Black", Impact, "Helvetica Neue", Arial, sans-serif`;
+// シンバルの細い溝
+function cymbalTex() {
+  return canvasTex('cymt', 8, 512, (ctx, w, h) => pixels(ctx, w, h, (u, v, o) => {
+    const f = 0.62 + 0.2 * Math.sin(v * TAU * 70) + 0.1 * vn(0, v * 220, 1e6, 1e6, 5) + (v > 0.86 ? 0.18 : 0);
+    const c = mixRGB([105, 70, 22], [255, 214, 130], clamp(f, 0, 1));
+    o[0] = c[0]; o[1] = c[1]; o[2] = c[2];
+  }));
+}
+const CYM = () => cm('cym', () => phys({ color: '#ffffff', map: cymbalTex(), metalness: 1, roughness: 0.26, side: THREE.DoubleSide }));
+const HEAD = () => cm('drumhead', () => std({ color: '#efebe2', roughness: 0.75 }));
+// ドラムの胴（軸は y。上下に皮・クロームのフープ・ラグ）。rot は 'YXZ'（ry で向き、rx で傾き）
+function drumShell(parent, r, h, shellM, x, y, z, rx = 0, ry = 0, o = {}) {
+  const d = new THREE.Group(); d.position.set(x, y, z); d.rotation.set(rx, ry, 0, 'YXZ'); parent.add(d);
+  mk(d, C(r, r, h, 40, true), shellM);
+  mk(d, C(r - 0.004, r - 0.004, h - 0.004, 32, true), cm('drumin', () => std({ color: '#2a1a14', roughness: 0.8, side: THREE.BackSide })));
+  mk(d, CIRC(r), o.top || HEAD(), 0, h / 2 + 0.003, 0, -PI / 2).castShadow = false;
+  mk(d, CIRC(r), o.bottom || HEAD(), 0, -h / 2 - 0.003, 0, PI / 2).castShadow = false;
+  const hoop = o.hoop || CHROME();
+  for (const sy of [-1, 1]) mk(d, T(r + 0.004, o.hoopR || 0.007, 6, 48), hoop, 0, sy * (h / 2 + 0.002), 0, PI / 2);
+  const nl = Math.max(5, Math.round(r * 34)), lb = new Bag();
+  for (let i = 0; i < nl; i++) {
+    const a = (i + 0.5) / nl * TAU, cx = Math.cos(a) * (r + 0.008), cz = Math.sin(a) * (r + 0.008);
+    for (const sy of h > 0.3 ? [-1, 1] : [0]) lb.add(B(0.014, 0.05, 0.018, 0.005), cx, sy * h * 0.27, cz, 0, -a);
+    lb.add(C(0.0025, 0.0025, h + 0.02, 5), Math.cos(a) * (r + 0.01), 0, Math.sin(a) * (r + 0.01));
+  }
+  lb.mesh(d, CHROME());
+  return d;
+}
+// クロームのスタンド（三脚＋柱）
+function tripodStand(g, x, z, h, legR = 0.2, mat = CHROME()) {
+  const ty = Math.min(0.32, h * 0.45);
+  rod(g, V3(x, 0.03, z), V3(x, h, z), 0.009, mat);
+  const bag = new Bag();
+  for (let k = 0; k < 3; k++) {
+    const a = k / 3 * TAU + 0.5, fx = x + Math.cos(a) * legR, fz = z + Math.sin(a) * legR;
+    bag.rod(V3(fx, 0.012, fz), V3(x, ty, z), 0.007, 6);
+    bag.rod(V3(x + Math.cos(a) * legR * 0.5, 0.006 + ty * 0.5, z + Math.sin(a) * legR * 0.5), V3(x, ty * 0.35, z), 0.005, 6);
+    bag.add(S(0.012, 8, 6), fx, 0.012, fz, 0, 0, 0, 1, 0.6, 1);
+  }
+  bag.mesh(g, mat);
+  mk(g, C(0.016, 0.016, 0.05, 12), MATTE_BLACK(), x, ty, z);
+}
+// シンバル（中心が y、傾きは tx / tz）
+function cymbal(g, r, x, y, z, tx = 0, tz = 0) {
+  const pts = [[0.002, 0.03], [0.022, 0.03], [0.034, 0.024], [0.045, 0.016], [r * 0.4, 0.01], [r * 0.8, 0.004], [r, 0]];
+  const c = mk(g, LA(smooth(pts, 18), 48), CYM(), x, y, z, tx, 0, tz);
+  mk(g, C(0.012, 0.012, 0.02, 10), paintG('#7a1220', 0.9), x, y + 0.035, z, tx, 0, tz).castShadow = false;
+  return c;
+}
+// バスドラの前の皮のロゴ
+function kickLogo() {
+  return texMat('kicklogo', 512, 512, (ctx, w, h) => {
+    ctx.fillStyle = '#0d0c0d'; ctx.fillRect(0, 0, w, h);
+    ctx.strokeStyle = '#d4202c'; ctx.lineWidth = 26; ctx.beginPath(); ctx.arc(w / 2, h / 2, w * 0.42, 0, TAU); ctx.stroke();
+    ctx.strokeStyle = '#d4a94a'; ctx.lineWidth = 5; ctx.beginPath(); ctx.arc(w / 2, h / 2, w * 0.375, 0, TAU); ctx.stroke();
+    ctx.fillStyle = '#f4efe6'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.font = FONT(92); ctx.fillText('ROOMIN', w / 2, h * 0.47);
+    ctx.font = FONT(30, 700); ctx.fillStyle = '#d4a94a'; ctx.fillText('★ LIVE ★', w / 2, h * 0.6);
+    ctx.fillStyle = '#000'; ctx.beginPath(); ctx.arc(w * 0.66, h * 0.73, 34, 0, TAU); ctx.fill();
+    ctx.strokeStyle = '#888'; ctx.lineWidth = 4; ctx.stroke();
+  }, { roughness: 0.6 });
+}
+
+// スパークルレッドのドラムセット（叩く人は -Z 側に座り、+Z を向く）
+function drumKit(s) {
+  const g = new THREE.Group();
+  const shellM = sparkle(s.color || '#8e0c18');
+  const ch = CHROME();
+  // バスドラム（前の皮にロゴ）
+  const kr = 0.28, kd = 0.42, ky = kr + 0.025, kz = 0.12;
+  drumShell(g, kr, kd, shellM, 0, ky, kz, PI / 2, 0, { top: kickLogo(), hoop: shellM, hoopR: 0.016 });
+  for (const sx of [-1, 1]) rod(g, V3(sx * 0.2, 0.2, kz + 0.12), V3(sx * 0.36, 0.005, kz + 0.3), 0.007, ch);
+  // ペダル
+  mk(g, B(0.09, 0.012, 0.26, 0.004), ch, 0, 0.04, kz - kd / 2 - 0.16, -0.22);
+  mk(g, B(0.16, 0.02, 0.05, 0.005), MATTE_BLACK(), 0, 0.015, kz - kd / 2 - 0.04);
+  rod(g, V3(0, 0.12, kz - kd / 2 - 0.05), V3(0, 0.3, kz - kd / 2 - 0.03), 0.004, ch);
+  mk(g, S(0.022, 12, 8), paintG('#e8e2d6', 0.6), 0, 0.3, kz - kd / 2 - 0.025);
+  // タム（バスドラの上に2つ）
+  const ty = ky + kr + 0.17;
+  rod(g, V3(0, ky + kr - 0.02, kz - 0.02), V3(0, ty - 0.05, kz - 0.06), 0.012, ch);
+  for (const sx of [-1, 1]) {
+    const r = sx > 0 ? 0.125 : 0.15, h = sx > 0 ? 0.2 : 0.23;
+    rod(g, V3(0, ty - 0.05, kz - 0.06), V3(sx * 0.16, ty - 0.04, kz - 0.06), 0.009, ch);
+    drumShell(g, r, h, shellM, sx * (0.13 + r), ty + 0.02, kz - 0.06, -0.42, sx * 0.4);
+  }
+  // スネア（左ひざの前・クロームの胴）とスタンド
+  const snx = 0.36, snz = -0.3, sny = 0.62;
+  drumShell(g, 0.178, 0.13, cm('snare', () => phys({ color: '#e8eaec', metalness: 1, roughness: 0.12 })), snx, sny, snz, -0.12, 0.6);
+  tripodStand(g, snx, snz, sny - 0.07, 0.2);
+  // フロアタム（右）
+  const ftx = -0.5, ftz = -0.25, ftr = 0.2, fth = 0.38, fty = 0.46;
+  drumShell(g, ftr, fth, shellM, ftx, fty, ftz);
+  for (let k = 0; k < 3; k++) { const a = k / 3 * TAU + 0.9; rod(g, V3(ftx + Math.cos(a) * (ftr + 0.03), 0.01, ftz + Math.sin(a) * (ftr + 0.03)), V3(ftx + Math.cos(a) * (ftr + 0.025), fty + 0.05, ftz + Math.sin(a) * (ftr + 0.025)), 0.006, ch); }
+  // ハイハット（左）
+  const hhx = 0.68, hhz = -0.26;
+  tripodStand(g, hhx, hhz, 1.0, 0.2);
+  cymbal(g, 0.18, hhx, 0.93, hhz); const top = cymbal(g, 0.18, hhx, 0.945, hhz); top.rotation.x = PI; top.position.y = 0.975;
+  mk(g, B(0.08, 0.012, 0.24, 0.004), ch, hhx, 0.04, hhz - 0.2, -0.18);
+  // クラッシュ（左上）とライド（右）：ブームのスタンド
+  const boom = (x, z, h, cx, cy, cz, r, tx, tz) => {
+    tripodStand(g, x, z, h, 0.24);
+    rod(g, V3(x, h, z), V3(cx, cy - 0.04, cz), 0.007, ch);
+    cymbal(g, r, cx, cy, cz, tx, tz);
+  };
+  boom(0.6, 0.18, 1.0, 0.42, 1.3, 0.05, 0.23, -0.3, 0.2);
+  boom(-0.8, 0.25, 0.95, -0.55, 1.12, 0.02, 0.27, -0.25, -0.18);
+  // いす（スローン）
+  const thz = -0.78;
+  tripodStand(g, 0, thz, 0.46, 0.22, MATTE_BLACK());
+  mk(g, LA(smooth([[0.001, 0], [0.17, 0], [0.185, 0.03], [0.175, 0.075], [0.12, 0.095], [0.001, 0.1]], 14), 36), leather('#121212'), 0, 0.46, thz);
+  mk(g, T(0.183, 0.006, 6, 48), paintG('#b0101c', 0.5), 0, 0.49, thz, PI / 2);
+  // スティック（スネアの上で交差）
+  const stick = cm('stick', () => phys({ color: '#e0c08a', roughness: 0.45, clearcoat: 0.6 }));
+  rod(g, V3(snx - 0.17, sny + 0.09, snz - 0.07), V3(snx + 0.2, sny + 0.075, snz + 0.08), 0.0065, stick, 0.004);
+  rod(g, V3(snx - 0.1, sny + 0.085, snz + 0.12), V3(snx + 0.17, sny + 0.09, snz - 0.15), 0.0065, stick, 0.004);
+  return g;
+}
+
+// ステージのトラス照明（天井から吊る。色の光の筋が動く）
+function beamTex() {
+  return canvasTex('beamg', 16, 256, (ctx, w, h) => {
+    const gr = ctx.createLinearGradient(0, 0, 0, h);
+    gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.25, 'rgba(150,150,150,1)'); gr.addColorStop(0.7, 'rgba(40,40,40,1)'); gr.addColorStop(1, 'rgba(0,0,0,1)');
+    ctx.fillStyle = gr; ctx.fillRect(0, 0, w, h);
+  });
+}
+// 光の筋（円すい）。家具の大きさには入れない。消灯で消えるように emissive で光らせる
+function beamCone(parent, len, r0, r1, color, i = 0.55) {
+  const geo = cg(`beam${r4(len)},${r4(r0)},${r4(r1)}`, () => {
+    const gg = new THREE.CylinderGeometry(r0, r1, len, 28, 1, true); gg.translate(0, -len / 2, 0);
+    gg.boundingBox = new THREE.Box3(); gg.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, -len / 2, 0), len);
+    return gg;
+  });
+  const mat = new THREE.MeshStandardMaterial({ color: '#000000', emissive: color, emissiveMap: beamTex(), emissiveIntensity: i, roughness: 1, metalness: 0, envMapIntensity: 0, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide });
+  // ふちほど薄く（正面から見た所だけ光る）→ やわらかい光の筋に見える
+  mat.onBeforeCompile = (sh) => {
+    sh.fragmentShader = sh.fragmentShader.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n totalEmissiveRadiance *= pow(abs(dot(normal, normalize(vViewPosition))), 2.0);');
+  };
+  mat.customProgramCacheKey = () => 'beamfade';
+  const m = noRay(new THREE.Mesh(geo, mat));
+  m.frustumCulled = false; m.receiveShadow = false;
+  parent.add(m);
+  return m;
+}
+function stageTruss(s) {
+  const g = new THREE.Group();
+  const L = 2.4, Q = 0.29, ty = -0.62;
+  const AL = cm('alu', () => phys({ color: '#d4d8db', metalness: 1, roughness: 0.3 }));
+  const bag = new Bag();
+  const ys = [ty - Q / 2, ty + Q / 2], zs = [-Q / 2, Q / 2];
+  for (const y of ys) for (const z of zs) bag.add(C(0.022, 0.022, L, 10), 0, y, z, 0, 0, PI / 2);
+  const n = 10, dx = L / n;
+  for (let i = 0; i < n; i++) {
+    const x0 = -L / 2 + i * dx, x1 = x0 + dx, k0 = i % 2, k1 = 1 - k0;
+    for (const y of ys) bag.rod(V3(x0, y, zs[k0]), V3(x1, y, zs[k1]), 0.008, 6);
+    for (const z of zs) bag.rod(V3(x0, ys[k0], z), V3(x1, ys[k1], z), 0.008, 6);
+  }
+  for (const x of [-L / 2, L / 2]) bag.add(B(0.012, Q + 0.06, Q + 0.06, 0.004), x, ty, 0);
+  bag.mesh(g, AL);
+  // 吊りワイヤーと天井の金具
+  for (const x of [-0.85, 0.85]) {
+    mk(g, C(0.05, 0.05, 0.02, 16), MATTE_BLACK(), x, -0.01, 0);
+    rod(g, V3(x, -0.02, 0), V3(x, ys[1], 0), 0.005, paintG('#2a2a2a', 0.4, 0.8));
+    mk(g, B(0.06, 0.05, 0.08, 0.01), MATTE_BLACK(), x, ys[1] + 0.06, 0);
+  }
+  const beams = [], lenses = [];
+  // PAR ライト（下の弦に吊る）
+  const par = (x, color, rx, rz) => {
+    const p = new THREE.Group(); p.position.set(x, ys[0] - 0.03, 0.02); p.rotation.set(rx, 0, rz); g.add(p);
+    mk(p, B(0.02, 0.05, 0.05, 0.004), MATTE_BLACK(), 0, 0.02, 0);
+    mk(p, T(0.1, 0.008, 6, 20, PI), MATTE_BLACK(), 0, -0.1, 0, 0, PI / 2, 0);
+    const body = LA([[0.001, 0.0], [0.07, 0.0], [0.09, -0.06], [0.1, -0.26], [0.108, -0.27], [0.108, -0.29], [0.095, -0.29]], 24);
+    mk(p, body, cm('parbody', () => phys({ color: '#0e0e0f', metalness: 0.6, roughness: 0.35 })), 0, -0.04, 0);
+    const lm = new THREE.MeshStandardMaterial({ color: '#111', emissive: color, emissiveIntensity: 3.2, roughness: 0.3 });
+    mk(p, CIRC(0.094, 24), lm, 0, -0.325, 0, PI / 2).castShadow = false;
+    lenses.push(lm);
+    beams.push(beamCone(p, 2.1, 0.09, 0.42, color, 0.8));
+    beams[beams.length - 1].position.y = -0.33;
+  };
+  par(-0.65, '#ff2a3a', -0.35, -0.15);
+  par(-0.22, '#ffb030', -0.5, 0.05);
+  par(0.22, '#ff3ab0', -0.5, -0.05);
+  par(0.65, '#2ad0ff', -0.35, 0.15);
+  // 動くムービングライト（両はし）
+  const heads = [];
+  for (const sx of [-1, 1]) {
+    const base = new THREE.Group(); base.position.set(sx * 1.05, ys[0] - 0.02, 0); g.add(base);
+    mk(base, B(0.2, 0.08, 0.2, 0.02), MATTE_BLACK(), 0, -0.04, 0);
+    const yoke = new THREE.Group(); yoke.position.y = -0.08; base.add(yoke);
+    for (const k of [-1, 1]) mk(yoke, B(0.025, 0.16, 0.06, 0.008), MATTE_BLACK(), k * 0.1, -0.08, 0);
+    const head = new THREE.Group(); head.position.y = -0.15; yoke.add(head);
+    mk(head, C(0.075, 0.08, 0.2, 20), cm('mhhead', () => phys({ color: '#141416', metalness: 0.4, roughness: 0.4 })), 0, 0, 0, PI / 2);
+    const lm = new THREE.MeshStandardMaterial({ color: '#111', emissive: '#fff0d8', emissiveIntensity: 3.5, roughness: 0.3 });
+    mk(head, CIRC(0.06, 20), lm, 0, 0, 0.101).castShadow = false;
+    lenses.push(lm);
+    const bh = new THREE.Group(); bh.position.z = 0.1; bh.rotation.x = -PI / 2; head.add(bh);
+    beams.push(beamCone(bh, 2.3, 0.05, 0.3, '#fff0d8', 0.6));
+    heads.push({ yoke, head, sx });
+  }
+  for (const h of heads) { h.yoke.rotation.y = h.sx * 0.5; h.head.rotation.x = 0.9; }
+  addTick(g, t => {
+    for (const h of heads) { h.yoke.rotation.y = h.sx * (0.5 + 0.45 * Math.sin(t * 0.5 + h.sx)); h.head.rotation.x = 0.85 + 0.3 * Math.sin(t * 0.7 + h.sx * 2); }
+    lenses.forEach((m, i) => { if (i < 4) setE(m, 2.6 + 0.9 * Math.sin(t * 1.7 + i * 1.3)); });
+    beams.forEach((b, i) => setE(b.material, (i < 4 ? 0.75 : 0.55) + 0.2 * Math.sin(t * 1.7 + i * 1.3)));
+  });
+  setLight(g, ty, 1.1, '#ff6a5a');
+  return g;
+}
+
+// ヴィンテージのスタンドマイク（ケーブルが床でとぐろを巻く）
+function micGrill() {
+  return canvasTex('micgrill', 128, 128, (ctx, w, h) => pixels(ctx, w, h, (u, v, o) => {
+    const a = Math.abs(Math.sin(u * 40 * PI)), b = Math.abs(Math.sin(v * 24 * PI));
+    const f = 0.35 + 0.65 * Math.min(1, (a + b) * 0.7);
+    o[0] = o[1] = o[2] = 70 + 170 * f;
+  }));
+}
+function micStand(s) {
+  const g = new THREE.Group();
+  const ch = CHROME();
+  mk(g, LA(smooth([[0.001, 0], [0.15, 0], [0.155, 0.01], [0.13, 0.03], [0.03, 0.04], [0.02, 0.045]], 16), 48), ch, 0, 0, 0);
+  rod(g, V3(0, 0.04, 0), V3(0, 1.0, 0), 0.012, ch);
+  mk(g, C(0.02, 0.02, 0.05, 14), MATTE_BLACK(), 0, 1.0, 0);
+  rod(g, V3(0, 1.0, 0), V3(0, 1.38, 0), 0.0075, ch);
+  // マイク（SM58 風：黒い持ち手と銀の網の頭）
+  const mic = new THREE.Group(); mic.position.set(0, 1.42, 0.02); mic.rotation.x = 1.15; g.add(mic);
+  mk(mic, B(0.012, 0.06, 0.03, 0.004), MATTE_BLACK(), 0, -0.02, -0.02);
+  mk(mic, LA(smooth([[0.001, -0.1], [0.012, -0.1], [0.014, -0.08], [0.019, 0.02], [0.022, 0.05], [0.001, 0.05]], 16), 24), cm('michandle', () => phys({ color: '#1a1a1c', metalness: 0.3, roughness: 0.45 })), 0, 0, 0);
+  mk(mic, C(0.0235, 0.0235, 0.01, 24), SILVER(), 0, 0.055, 0);
+  mk(mic, S(0.03, 24, 16), cm('micgrillm', () => std({ color: '#ffffff', map: micGrill(), metalness: 0.9, roughness: 0.35 })), 0, 0.085, 0).scale.set(1, 1.05, 1);
+  // ケーブル：マイクのおしりから柱にそって床へ。床で2重に巻く
+  mic.updateMatrix();
+  const tail = V3(0, -0.1, 0).applyMatrix4(mic.matrix);
+  const pts = [tail, V3(0.0, tail.y - 0.06, tail.z - 0.03), V3(0.02, 1.2, -0.02), V3(0.022, 0.9, -0.018), V3(0.025, 0.5, -0.02), V3(0.04, 0.15, -0.03), V3(0.12, 0.012, -0.1)];
+  const cx = 0.36, cz = 0.08;
+  for (let i = 0; i <= 28; i++) { const a = -PI * 0.75 + i / 28 * TAU * 1.8, r = 0.13 + i * 0.0015; pts.push(V3(cx + Math.cos(a) * r, 0.007 + (i % 9 === 0 ? 0.004 : 0), cz + Math.sin(a) * r)); }
+  pts.push(V3(cx + 0.2, 0.007, cz + 0.2));
+  tube(g, pts, 0.0055, paintG('#0c0c0c', 0.45), 220, 6);
+  mk(g, C(0.011, 0.011, 0.07, 12), SILVER(), cx + 0.23, 0.011, cz + 0.23, PI / 2, 0, -PI / 4);
+  // 床にテープでとめたセットリスト
+  mk(g, cg('setpl', () => new THREE.PlaneGeometry(0.21, 0.297)), setlistMat(), -0.24, 0.002, 0.16, -PI / 2, 0, 0.25).castShadow = false;
+  return g;
+}
+function setlistMat() {
+  return texMat('setlist', 256, 362, (ctx, w, h) => {
+    ctx.fillStyle = '#f3efe6'; ctx.fillRect(0, 0, w, h);
+    ctx.fillStyle = '#111'; ctx.font = FONT(30); ctx.textAlign = 'center'; ctx.fillText('SET LIST', w / 2, 44);
+    ctx.textAlign = 'left'; ctx.font = 'bold 22px "Comic Sans MS", "Marker Felt", cursive';
+    ['1. Opening', '2. Neon Night', '3. Room 404', '4. Study Hard', '5. Red Sparkle', '6. Ballad', '7. Encore!'].forEach((t, i) => { ctx.fillStyle = i === 6 ? '#c01020' : '#1a1a1a'; ctx.fillText(t, 22, 92 + i * 38); });
+    ctx.fillStyle = 'rgba(220,200,150,0.75)'; ctx.fillRect(w / 2 - 40, -6, 80, 26); ctx.fillRect(w / 2 - 40, h - 20, 80, 26);
+  }, { roughness: 0.9 });
+}
+
+// 2段のキーボードスタンド（下は赤いステージピアノ、上は光る画面のシンセ）。弾く人は +Z 側
+function keysInto(white, black, nw, kw, y, z, depth, startNote = 0) {
+  const W = nw * kw;
+  for (let i = 0; i < nw; i++) {
+    const x = -W / 2 + (i + 0.5) * kw;
+    white.add(B(kw - 0.0016, 0.016, depth, 0.0015), x, y, z);
+    const n = (i + startNote) % 7;
+    if (i < nw - 1 && n !== 2 && n !== 6) black.add(B(kw * 0.56, 0.014, depth * 0.62, 0.0015), x + kw / 2, y + 0.012, z - depth * 0.19);
+  }
+  return W;
+}
+function keyboard(g, W, nw, bodyM, x, y, z, rx, opts = {}) {
+  const k = new THREE.Group(); k.position.set(x, y, z); k.rotation.x = rx; g.add(k);
+  const D = 0.32, kw = 0.0228, kd = 0.15;
+  mk(k, B(W, 0.07, D, 0.012), bodyM, 0, 0.035, 0);
+  mk(k, B(W - 0.04, 0.012, kd + 0.02, 0.002), paintG('#0b0b0b', 0.6), 0, 0.066, D / 2 - kd / 2 - 0.01);
+  const wb = new Bag(), bb = new Bag();
+  keysInto(wb, bb, nw, kw, 0.078, D / 2 - kd / 2 - 0.004, kd);
+  wb.mesh(k, cm('keyw', () => phys({ color: '#f4f2ec', roughness: 0.25, clearcoat: 0.5 })));
+  bb.mesh(k, cm('keyb', () => phys({ color: '#0a0a0a', roughness: 0.3, clearcoat: 0.6 })));
+  // つまみ・画面
+  const kn = new Bag();
+  for (let i = 0; i < opts.knobs; i++) kn.add(C(0.009, 0.01, 0.014, 12), -W / 2 + 0.2 + i * 0.045, 0.077, -D / 2 + 0.06);
+  for (let i = 0; i < opts.knobs; i++) kn.add(C(0.007, 0.008, 0.012, 12), -W / 2 + 0.2 + i * 0.045, 0.076, -D / 2 + 0.1);
+  kn.mesh(k, paintG('#1c1c1c', 0.4));
+  const wave = drawTex('synscr', 128, 48, (ctx, w, h) => {
+    ctx.fillStyle = '#1a1a1a'; ctx.fillRect(0, 0, w, h); ctx.strokeStyle = '#fff'; ctx.lineWidth = 3; ctx.beginPath();
+    for (let i = 0; i <= w; i += 2) { const yy = h / 2 + Math.sin(i * 0.196) * h * 0.32 * Math.sin(i * 0.049 + 1); i ? ctx.lineTo(i, yy) : ctx.moveTo(i, yy); } ctx.stroke();
+  });
+  const scr = new THREE.MeshStandardMaterial({ color: '#04090b', emissive: opts.screen || '#38d8ff', emissiveIntensity: 1.6, roughness: 0.3, emissiveMap: wave });
+  mk(k, B(0.14, 0.004, 0.05, 0.001), scr, W / 2 - 0.12, 0.072, -D / 2 + 0.08).castShadow = false;
+  // ロゴの白い文字の帯
+  mk(k, B(0.12, 0.003, 0.02, 0.001), paintG('#f2f2f2', 0.4), -W / 2 + 0.09, 0.071, -D / 2 + 0.06);
+  // ピッチホイール
+  if (opts.wheels) for (const i of [0, 1]) mk(k, C(0.022, 0.022, 0.012, 16), paintG('#1a1a1a', 0.5), -W / 2 + 0.03 + i * 0.022 - 0.005, 0.07, D / 2 - 0.08, 0, 0, PI / 2);
+  return { k, scr };
+}
+function keyboardRig(s) {
+  const g = new THREE.Group();
+  const M = MATTE_BLACK();
+  // スタンド（両側にコの字の脚、2段の腕）
+  for (const sx of [-1, 1]) {
+    const x = sx * 0.48;
+    rod(g, V3(x, 0.02, -0.26), V3(x, 0.02, 0.26), 0.016, M);
+    rod(g, V3(x, 0.02, -0.18), V3(x, 1.06, -0.18), 0.016, M);
+    rod(g, V3(x, 0.74, -0.2), V3(x, 0.74, 0.18), 0.014, M);
+    rod(g, V3(x, 1.0, -0.22), V3(x, 1.08, 0.08), 0.012, M);
+    for (const z of [-0.26, 0.26]) mk(g, C(0.02, 0.02, 0.012, 10), paintG('#222', 0.8), x, 0.006, z);
+  }
+  rod(g, V3(-0.48, 0.32, -0.18), V3(0.48, 0.32, -0.18), 0.014, M);
+  const piano = keyboard(g, 1.12, 43, lacquer('#c4161c', 0.2), 0, 0.755, 0.0, 0, { knobs: 8, screen: '#ff7a3a', wheels: true });
+  const synth = keyboard(g, 0.8, 29, cm('synthbody', () => phys({ color: '#18181a', metalness: 0.5, roughness: 0.35 })), 0, 1.06, -0.08, 0.32, { knobs: 7, screen: '#38d8ff' });
+  // 木の側板（シンセ）
+  for (const sx of [-1, 1]) mk(synth.k, B(0.02, 0.09, 0.33, 0.006), wood('walnut'), sx * 0.41, 0.04, 0);
+  // サステインペダルとケーブル
+  mk(g, B(0.08, 0.025, 0.17, 0.008), MATTE_BLACK(), 0.25, 0.013, 0.42, -0.08);
+  tube(g, [V3(0.25, 0.015, 0.33), V3(0.3, 0.008, 0.2), V3(0.4, 0.05, 0.02), V3(0.45, 0.65, -0.05), V3(0.44, 0.76, -0.1)], 0.004, paintG('#0c0c0c', 0.5), 40, 5);
+  addTick(g, t => { setE(synth.scr, 1.4 + 0.3 * Math.sin(t * 2.3));  });
+  setLight(g, 1.1, 0.35, '#4adfff');
+  return g;
+}
+
+// フライトケースのテーブル（黒い箱・アルミのふち・クロームの角）
+function flightCase(s) {
+  const g = new THREE.Group();
+  const W = 0.95, H = 0.5, D = 0.6, y0 = 0.025;
+  const body = cm('fcbody', () => phys({ color: '#161617', roughness: 0.6, clearcoat: 0.2 }));
+  const AL = cm('alu2', () => phys({ color: '#c9ced2', metalness: 1, roughness: 0.38 }));
+  mk(g, B(W, H, D, 0.006), body, 0, y0 + H / 2, 0);
+  // アルミのふち
+  const bag = new Bag(), e = 0.022;
+  for (const y of [y0 + e / 2, y0 + H - e / 2]) for (const z of [-D / 2 + e / 2, D / 2 - e / 2]) bag.add(B(W, e, e, 0.003), 0, y, z);
+  for (const y of [y0 + e / 2, y0 + H - e / 2]) for (const x of [-W / 2 + e / 2, W / 2 - e / 2]) bag.add(B(e, e, D, 0.003), x, y, 0);
+  for (const x of [-W / 2 + e / 2, W / 2 - e / 2]) for (const z of [-D / 2 + e / 2, D / 2 - e / 2]) bag.add(B(e, H, e, 0.003), x, y0 + H / 2, z);
+  // ふたの合わせ目
+  const sy = y0 + H - 0.13;
+  bag.add(B(W + 0.004, 0.018, 0.006, 0.002), 0, sy, D / 2 + 0.001); bag.add(B(W + 0.004, 0.018, 0.006, 0.002), 0, sy, -D / 2 - 0.001);
+  bag.add(B(0.006, 0.018, D + 0.004, 0.002), W / 2 + 0.001, sy, 0); bag.add(B(0.006, 0.018, D + 0.004, 0.002), -W / 2 - 0.001, sy, 0);
+  bag.mesh(g, AL);
+  // 角の金具（下の角は足になる）
+  const cb = new Bag();
+  for (const x of [-1, 1]) for (const y of [0, 1]) for (const z of [-1, 1]) { cb.add(S(0.028, 12, 8), x * (W / 2 - 0.01), y0 + y * H + (y ? -0.008 : 0.0), z * (D / 2 - 0.01)); }
+  // 留め金とハンドル
+  for (const x of [-0.28, 0.28]) { cb.add(B(0.07, 0.07, 0.012, 0.006), x, sy, D / 2 + 0.006); cb.add(C(0.02, 0.02, 0.012, 16), x, sy, D / 2 + 0.013, PI / 2); }
+  for (const x of [-1, 1]) { cb.add(B(0.012, 0.06, 0.16, 0.004), x * (W / 2 + 0.006), y0 + H * 0.5, 0); cb.add(C(0.009, 0.009, 0.14, 10), x * (W / 2 + 0.03), y0 + H * 0.5 + 0.02, 0, PI / 2); }
+  cb.mesh(g, CHROME());
+  // 白いステンシル文字
+  const stencil = (key, txt, sub) => cm('stc' + key, () => std({ color: '#ffffff', transparent: true, alphaTest: 0.3, roughness: 0.7, map: drawTex('stc' + key, 512, 192, (ctx, w, h) => {
+    ctx.clearRect(0, 0, w, h); ctx.fillStyle = 'rgba(240,236,228,0.95)'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.font = FONT(84); ctx.fillText(txt, w / 2, h * 0.38); ctx.font = FONT(34, 700); ctx.fillText(sub, w / 2, h * 0.8);
+    for (let i = 0; i < 260; i++) { ctx.clearRect(h2(i, 1) * w, h2(i, 2) * h, 3 + h2(i, 3) * 6, 2); }
+  }) }));
+  const fp = mk(g, cg('fcplane', () => new THREE.PlaneGeometry(0.7, 0.26)), stencil('f', 'ROOMIN', 'STAGE CREW · FRAGILE'), 0, y0 + 0.17, D / 2 + 0.002); fp.castShadow = false;
+  const sp = mk(g, cg('fcplane2', () => new THREE.PlaneGeometry(0.45, 0.17)), stencil('s', 'TOUR 2026', '↑ THIS SIDE UP ↑'), W / 2 + 0.002, y0 + 0.17, -0.15, 0, PI / 2, 0); sp.castShadow = false;
+  // 天板のステッカー
+  mk(g, cg('fcstk', () => new THREE.CircleGeometry(0.06, 24)), paintG('#d4202c', 0.5), 0.3, y0 + H + 0.001, -0.18, -PI / 2).castShadow = false;
+  mk(g, B(0.16, 0.001, 0.07, 0), paintG('#f2c230', 0.6), -0.3, y0 + H + 0.001, 0.2, 0, 0.3, 0).castShadow = false;
+  return g;
+}
+
+// ドラムスローン（丸い革の座面・クロームの三脚）
+function drumThrone(s) {
+  const g = new THREE.Group();
+  tripodStand(g, 0, 0, 0.44, 0.24);
+  mk(g, C(0.05, 0.05, 0.03, 16), CHROME(), 0, 0.44, 0);
+  mk(g, LA(smooth([[0.001, 0], [0.18, 0], [0.198, 0.035], [0.19, 0.085], [0.13, 0.108], [0.001, 0.113]], 16), 48), leather('#111111'), 0, 0.455, 0);
+  mk(g, T(0.197, 0.007, 6, 48), paintG('#b0101c', 0.45), 0, 0.49, 0, PI / 2);
+  const st = new Bag();
+  for (let i = 0; i < 24; i++) { const a = i / 24 * TAU; st.add(S(0.005, 6, 4), Math.cos(a) * 0.199, 0.47, Math.sin(a) * 0.199); }
+  st.mesh(g, CHROME());
+  return g;
+}
+
+// アンプ型のレコード棚（上はレコード、下はスピーカーの網）
+function ampShelf(s) {
+  const g = new THREE.Group();
+  const W = 0.92, H = 1.0, D = 0.42, y0 = 0.05, t = 0.03, T_ = TOLEX();
+  mk(g, B(W, t, D, 0.01), T_, 0, y0 + t / 2, 0);
+  mk(g, B(W, t, D, 0.01), T_, 0, y0 + H - t / 2, 0);
+  for (const sx of [-1, 1]) mk(g, B(t, H, D, 0.01), T_, sx * (W / 2 - t / 2), y0 + H / 2, 0);
+  mk(g, B(W - 0.02, H - 0.02, 0.02), paintG('#0e0e0e', 0.8), 0, y0 + H / 2, -D / 2 + 0.01);
+  const midY = y0 + 0.47;
+  mk(g, B(W - 2 * t, 0.025, D - 0.02, 0.004), T_, 0, midY, 0.0);
+  // 下：網とパイピングとロゴ
+  mk(g, B(W - 2 * t, midY - y0 - t, 0.01, 0.002), cm('grillm', () => std({ color: '#ffffff', map: grillTex(), roughness: 0.9 })), 0, (y0 + t + midY) / 2, D / 2 - 0.02);
+  tube(g, [V3(-W / 2 + t + 0.01, y0 + t + 0.01, D / 2 - 0.012), V3(W / 2 - t - 0.01, y0 + t + 0.01, D / 2 - 0.012), V3(W / 2 - t - 0.01, midY - 0.015, D / 2 - 0.012), V3(-W / 2 + t + 0.01, midY - 0.015, D / 2 - 0.012)], 0.004, GOLD(), 32, 6, true);
+  mk(g, B(0.2, 0.05, 0.006, 0.003), GOLD(), W / 2 - 0.2, midY - 0.06, D / 2 - 0.012);
+  mk(g, B(0.17, 0.028, 0.004, 0.002), paintG('#111', 0.4), W / 2 - 0.2, midY - 0.06, D / 2 - 0.008);
+  // 上：レコード（背を手前に、少しかたむけて並べる）
+  const rec = new Bag(), cols = ['#d4202c', '#f2c230', '#1a1a1a', '#2a5ad0', '#e8e2d6', '#7a3ab0', '#3a9a4a', '#e8752a', '#111111', '#c8a878'];
+  let x = -W / 2 + t + 0.012, i = 0;
+  const sh = midY + 0.0125;
+  while (x < W / 2 - t - 0.35) {
+    rec.add(B(0.007, 0.31, 0.31, 0.002), x, sh + 0.155, 0.02, 0, 0, 0, 1, 1, 1, cols[Math.floor(h2(i, 7) * cols.length)]);
+    x += 0.0095 + (h2(i, 3) > 0.85 ? 0.004 : 0); i++;
+  }
+  // 右はしは横に寝かせたレコードの山
+  for (let k = 0; k < 6; k++) rec.add(B(0.31, 0.007, 0.31, 0.002), W / 2 - t - 0.175, sh + 0.004 + k * 0.008, 0.02, 0, h2(k, 5) * 0.12 - 0.06, 0, 1, 1, 1, cols[(k * 3) % cols.length]);
+  rec.mesh(g, VCOL());
+  // 角の金具と足
+  const cb = new Bag();
+  for (const sx of [-1, 1]) for (const yy of [y0, y0 + H]) for (const sz of [-1, 1]) cb.add(B(0.05, 0.05, 0.05, 0.012), sx * (W / 2 - 0.02), yy + (yy > y0 ? -0.02 : 0.02), sz * (D / 2 - 0.02));
+  cb.mesh(g, CHROME());
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) mk(g, C(0.025, 0.03, y0, 12), paintG('#111', 0.6), sx * (W / 2 - 0.08), y0 / 2, sz * (D / 2 - 0.07));
+  return g;
+}
+
+// バスドラムの鉢植え（立てたバスドラムにモンステラ）
+function kickPlanter(s) {
+  const g = new THREE.Group();
+  const r = 0.26, h = 0.4;
+  drumShell(g, r, h, sparkle('#8e0c18'), 0, h / 2 + 0.012, 0, 0, 0.3, { top: paintG('#2e2016', 1), hoop: sparkle('#8e0c18'), hoopR: 0.014 });
+  for (let k = 0; k < 4; k++) { const a = k / 4 * TAU + 0.4; mk(g, C(0.018, 0.022, 0.012, 10), paintG('#111', 0.6), Math.cos(a) * (r - 0.03), 0.006, Math.sin(a) * (r - 0.03)); }
+  if (PROC) {
+    const p = PROC({ type: 'plant', foliage: 'monstera', pot: 'round', potColor: '#2e2016', size: 1.15 });
+    p.position.y = h - 0.05;
+    p.traverse(o => { if (o.isMesh && !o.isInstancedMesh && o.position.y < 0.3 && o.geometry.type === 'LatheGeometry') o.visible = false; });
+    g.add(p);
+  }
+  // 前に、クロームのバッジ
+  mk(g, C(0.03, 0.03, 0.006, 20), CHROME(), 0, h / 2 + 0.012, r + 0.004, PI / 2);
+  return g;
+}
+
+// 光るエフェクターボード（色とりどりのペダル・赤い LED・パッチケーブル）
+function pedalboard(s) {
+  const g = new THREE.Group();
+  const W = 0.62, D = 0.3;
+  mk(g, B(W, 0.04, D, 0.008), cm('pbboard', () => phys({ color: '#0f0f10', roughness: 0.8 })), 0, 0.03, 0, 0.12);
+  for (const sx of [-1, 1]) mk(g, B(0.016, 0.06, D, 0.004), CHROME(), sx * (W / 2 + 0.008), 0.03, 0, 0.12);
+  const led = new THREE.MeshStandardMaterial({ color: '#300', emissive: '#ff2020', emissiveIntensity: 3, roughness: 0.3 });
+  const ledB = new THREE.MeshStandardMaterial({ color: '#002', emissive: '#40a0ff', emissiveIntensity: 3, roughness: 0.3 });
+  const P = new THREE.Group(); P.position.y = 0.05; P.rotation.x = 0.12; g.add(P);
+  const ped = [['#e8752a', -0.24, 0.05], ['#3a9a4a', -0.13, 0.05], ['#c81e28', -0.02, 0.05], ['#2a5ad0', 0.09, 0.05], ['#7a3ab0', 0.2, 0.05], ['#d8d8d8', -0.18, -0.09], ['#f2c230', 0.04, -0.09], ['#18181a', 0.22, -0.09]];
+  const knobs = new Bag(), sw = new Bag();
+  ped.forEach(([c, x, z], i) => {
+    const w = i === 7 ? 0.13 : 0.075, d = i >= 5 ? 0.09 : 0.12;
+    mk(P, B(w, 0.045, d, 0.006), lacquer(c, 0.3), x, 0.0225, z);
+    for (let k = 0; k < (i === 7 ? 4 : 3); k++) knobs.add(C(0.008, 0.009, 0.012, 12), x - w / 2 + 0.017 + k * (w - 0.034) / ((i === 7 ? 4 : 3) - 1), 0.05, z - d / 2 + 0.022);
+    sw.add(C(0.009, 0.009, 0.016, 12), x, 0.052, z + d / 2 - 0.022);
+    mk(P, S(0.0045, 8, 6), i % 3 === 1 ? ledB : led, x, 0.047, z - d / 2 + 0.045).castShadow = false;
+  });
+  knobs.mesh(P, paintG('#f2ece0', 0.4));
+  sw.mesh(P, CHROME());
+  // パッチケーブル
+  const cab = paintG('#1a1a1a', 0.5), cab2 = paintG('#f2c230', 0.5);
+  for (let i = 0; i < 4; i++) { const x0 = -0.24 + i * 0.11 + 0.04, x1 = x0 + 0.03; tube(P, [V3(x0, 0.03, 0.0), V3((x0 + x1) / 2, 0.075, -0.01), V3(x1, 0.03, 0.0)], 0.0035, i % 2 ? cab2 : cab, 12, 5); }
+  tube(g, [V3(-W / 2 - 0.01, 0.04, 0.05), V3(-W / 2 - 0.08, 0.01, 0.06), V3(-W / 2 - 0.05, 0.006, 0.16)], 0.004, cab, 16, 5);
+  addTick(g, t => { setE(led, Math.sin(t * 4) > -0.6 ? 3 : 0.4); setE(ledB, 2.6 + Math.sin(t * 1.5)); });
+  return g;
+}
+
+// ライブポスターとセットリスト（テープでとめた紙）
+function posterMat(kind) {
+  return texMat('poster' + kind, 360, 512, (ctx, w, h) => {
+    if (kind === 0) {
+      ctx.fillStyle = '#121012'; ctx.fillRect(0, 0, w, h);
+      const gr = ctx.createRadialGradient(w / 2, h * 0.46, 10, w / 2, h * 0.46, w * 0.42); gr.addColorStop(0, '#ffb040'); gr.addColorStop(0.6, '#e0262e'); gr.addColorStop(1, '#5a0810');
+      ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(w / 2, h * 0.46, w * 0.36, 0, TAU); ctx.fill();
+      // ギターのかげ
+      ctx.save(); ctx.translate(w / 2, h * 0.5); ctx.rotate(-0.5); ctx.fillStyle = '#121012';
+      ctx.beginPath(); ctx.ellipse(0, 50, 46, 56, 0, 0, TAU); ctx.fill(); ctx.beginPath(); ctx.ellipse(0, -4, 34, 40, 0, 0, TAU); ctx.fill();
+      ctx.fillRect(-7, -190, 14, 190); ctx.fillRect(-12, -226, 24, 40); ctx.restore();
+      ctx.fillStyle = '#f4efe6'; ctx.textAlign = 'center'; ctx.font = FONT(70); ctx.fillText('LIVE', w / 2, 82);
+      ctx.font = FONT(24, 700); ctx.fillStyle = '#ffb040'; ctx.fillText('ROOMIN TOUR 2026', w / 2, h - 58); ctx.fillStyle = '#ccc'; ctx.font = FONT(16, 700); ctx.fillText('OPEN 18:00 / START 18:30', w / 2, h - 30);
+    } else if (kind === 1) {
+      ctx.fillStyle = '#f2c230'; ctx.fillRect(0, 0, w, h);
+      ctx.fillStyle = '#111';
+      for (let y = 0; y < h; y += 14) for (let x = 0; x < w; x += 14) { const r = 5.5 * (y / h); ctx.beginPath(); ctx.arc(x + (y / 14 % 2) * 7, y, r, 0, TAU); ctx.fill(); }
+      ctx.fillStyle = '#f2c230'; ctx.fillRect(18, 40, w - 36, 150);
+      ctx.fillStyle = '#111'; ctx.textAlign = 'center'; ctx.font = FONT(78); ctx.fillText('ROCK', w / 2, 112); ctx.font = FONT(58); ctx.fillText('FES', w / 2, 172);
+      ctx.fillStyle = '#d4202c'; ctx.font = FONT(30); ctx.fillText('SAT · NIGHT', w / 2, 236);
+      ctx.fillStyle = '#f2c230'; ctx.fillRect(18, h - 92, w - 36, 64); ctx.fillStyle = '#111'; ctx.font = FONT(22, 700); ctx.fillText('THE STUDY ROOMS', w / 2, h - 66); ctx.fillText('+ NEON KIDS', w / 2, h - 38);
+    } else {
+      ctx.fillStyle = '#e9e3d6'; ctx.fillRect(0, 0, w, h);
+      ctx.fillStyle = '#1b2a6a'; ctx.fillRect(0, 0, w, h * 0.55);
+      ctx.strokeStyle = '#f4efe6'; ctx.lineWidth = 4;
+      for (let i = 0; i < 9; i++) { ctx.beginPath(); ctx.arc(w / 2, h * 0.55, 30 + i * 22, PI, TAU); ctx.stroke(); }
+      ctx.fillStyle = '#d4202c'; ctx.beginPath(); ctx.arc(w / 2, h * 0.55, 26, PI, TAU); ctx.fill();
+      ctx.fillStyle = '#1b2a6a'; ctx.textAlign = 'center'; ctx.font = FONT(40); ctx.fillText('MIDNIGHT', w / 2, h * 0.68); ctx.fillText('SESSION', w / 2, h * 0.77);
+      ctx.font = FONT(18, 700); ctx.fillStyle = '#d4202c'; ctx.fillText('ACOUSTIC & ELECTRIC', w / 2, h * 0.87);
+    }
+    // 紙の古び
+    for (let i = 0; i < 400; i++) { ctx.fillStyle = `rgba(255,255,255,${h2(i, kind) * 0.06})`; ctx.fillRect(h2(i, 3) * w, h2(i, 4) * h, 2 + h2(i, 5) * 8, 1 + h2(i, 6) * 3); }
+  }, { roughness: 0.85 });
+}
+function posterWall(s) {
+  const g = new THREE.Group();
+  const tape = cm('tape', () => std({ color: '#e8dcb8', roughness: 0.8, transparent: true, opacity: 0.85 }));
+  const paper = (mat, w, h, x, y, rz, z = 0.004) => {
+    const p = new THREE.Group(); p.position.set(x, y, z); p.rotation.z = rz; g.add(p);
+    mk(p, cg('pp' + r4(w) + r4(h), () => new THREE.PlaneGeometry(w, h)), mat).castShadow = false;
+    for (const [tx, ty, tr] of [[-w / 2 + 0.02, h / 2 - 0.01, 0.6], [w / 2 - 0.02, h / 2 - 0.01, -0.6], [-w / 2 + 0.02, -h / 2 + 0.01, -0.5], [w / 2 - 0.02, -h / 2 + 0.01, 0.5]]) mk(p, cg('tapeg', () => new THREE.PlaneGeometry(0.07, 0.022)), tape, tx, ty, 0.001, 0, 0, tr).castShadow = false;
+  };
+  paper(posterMat(0), 0.42, 0.6, -0.38, 0.04, 0.03);
+  paper(posterMat(1), 0.4, 0.57, 0.08, 0.0, -0.035, 0.005);
+  paper(posterMat(2), 0.3, 0.43, 0.46, 0.1, 0.05, 0.006);
+  paper(setlistMat(), 0.2, 0.28, 0.43, -0.26, -0.08, 0.007);
+  // ピック
+  const pick = cg('pickg', () => { const sh = new THREE.Shape(); sh.moveTo(0, -0.016); sh.quadraticCurveTo(0.017, 0.006, 0.012, 0.013); sh.quadraticCurveTo(0, 0.019, -0.012, 0.013); sh.quadraticCurveTo(-0.017, 0.006, 0, -0.016); return new THREE.ShapeGeometry(sh, 6); });
+  [['#d4202c', 0.24, -0.22, 0.4], ['#f2ece0', 0.29, -0.3, -0.3], ['#2a5ad0', 0.22, -0.34, 0.9]].forEach(([c, x, y, r]) => mk(g, pick, lacquer(c, 0.2), x, y, 0.009, 0, 0, r));
+  // 裏の当たり（壁に付く面）
+  mk(g, B(1.15, 0.86, 0.003, 0), cm('posterback', () => std({ color: '#000', transparent: true, opacity: 0, depthWrite: false })), 0, -0.02, 0.0015).castShadow = false;
+  return g;
+}
+
+// 三脚のステージスポットライト（床置き）
+function spotLamp(s) {
+  const g = new THREE.Group();
+  const M = MATTE_BLACK();
+  tripodStand(g, 0, 0, 1.25, 0.34, M);
+  rod(g, V3(0, 1.0, 0), V3(0, 1.3, 0), 0.012, CHROME());
+  const yoke = new THREE.Group(); yoke.position.y = 1.36; g.add(yoke);
+  mk(yoke, B(0.3, 0.02, 0.04, 0.006), M, 0, -0.06, 0);
+  for (const sx of [-1, 1]) { mk(yoke, B(0.02, 0.14, 0.04, 0.006), M, sx * 0.14, 0, 0); mk(yoke, C(0.025, 0.025, 0.02, 14), CHROME(), sx * 0.16, 0.04, 0, 0, 0, PI / 2); }
+  const head = new THREE.Group(); head.position.y = 0.04; head.rotation.x = 0.42; yoke.add(head);
+  mk(head, LA([[0.001, -0.17], [0.07, -0.17], [0.11, -0.12], [0.12, 0.1], [0.125, 0.12], [0.12, 0.125]], 32), cm('spotbody', () => phys({ color: '#101012', metalness: 0.55, roughness: 0.32 })), 0, 0, 0, PI / 2);
+  const bag = new Bag();
+  for (let i = 0; i < 6; i++) bag.add(B(0.2, 0.004, 0.02, 0), 0, 0.09, -0.14 + i * 0.024, 0, 0, 0);
+  bag.mesh(head, M);
+  const lens = new THREE.MeshStandardMaterial({ color: '#2a2010', emissive: '#ffd9a0', emissiveIntensity: 3.5, roughness: 0.2 });
+  mk(head, CIRC(0.105, 32), lens, 0, 0, 0.126).castShadow = false;
+  // 四枚の羽根（バーンドア）
+  for (let k = 0; k < 4; k++) {
+    const f = new THREE.Group(); f.rotation.z = k * PI / 2; head.add(f);
+    const d = new THREE.Group(); d.position.set(0, 0.125, 0.13); d.rotation.x = -0.45; f.add(d);
+    mk(d, B(0.2, 0.004, 0.13, 0.002), M, 0, 0, 0.065);
+  }
+  const bm = new THREE.Group(); bm.position.z = 0.13; bm.rotation.x = -PI / 2; head.add(bm);
+  const beam = beamCone(bm, 1.3, 0.1, 0.34, '#ffd9a0', 0.6);
+  // 床のケーブル
+  tube(g, [V3(0.01, 1.3, -0.02), V3(0.02, 0.7, -0.03), V3(0.03, 0.3, -0.02), V3(0.1, 0.01, -0.1), V3(0.25, 0.006, -0.2)], 0.005, paintG('#0c0c0c', 0.5), 40, 5);
+  addTick(g, t => { setE(lens, 3.3 + 0.2 * Math.sin(t * 1.1)); setE(beam.material, 0.58 + 0.06 * Math.sin(t * 1.1)); });
+  setLight(g, 1.3, 1.0, '#ffd29a');
+  return g;
+}
+
 // ジュークボックス（泡の管が色を変えて光る）
 function jukebox(s) {
   const g = new THREE.Group();
@@ -2949,8 +3503,11 @@ const BUILDERS = {
   grandPiano: [grandPiano, 'floor'], aquarium: [aquarium, 'floor'], canopyBed: [canopyBed, 'floor'],
   // ★5 限定：星空
   starPendant: [starPendant, 'ceiling'], planetarium: [planetarium, 'floor'], moonSofa: [moonSofa, 'floor'], constellation: [constellation, 'wall'], moonTable: [moonTable, 'floor'],
-  // ★5 限定：ロック
+  // 限定：バンド（★5 ＋ ★4）
   neonRock: [neonRock, 'wall'], ampStack: [ampStack, 'floor'], guitarStand: [guitarStand, 'floor'], studSofa: [studSofa, 'floor'],
+  drumKit: [drumKit, 'floor'], stageTruss: [stageTruss, 'ceiling'], micStand: [micStand, 'floor'], keyboardRig: [keyboardRig, 'floor'],
+  spotLamp: [spotLamp, 'floor'], drumThrone: [drumThrone, 'floor'], flightCase: [flightCase, 'floor'], ampShelf: [ampShelf, 'floor'],
+  kickPlanter: [kickPlanter, 'floor'], pedalboard: [pedalboard, 'floor'], posterWall: [posterWall, 'wall'],
   // ★5 限定：ゴシック
   gothChandelier: [gothChandelier, 'ceiling'], roseWindow: [roseWindow, 'wall'], gothThrone: [gothThrone, 'floor'], candleTree: [candleTree, 'floor'], gothCabinet: [gothCabinet, 'floor'],
   // ★5 限定：和の雅
