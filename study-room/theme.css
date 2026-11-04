@@ -219,3 +219,13 @@ b, strong { font-weight: 700; }
 .pc-lv { width: 52px; height: 52px; border-radius: 14px; }
 .pc-lv span { font-size: 10px; } .pc-lv b { font-size: 22px; }
 .profile-card { padding: 12px 14px; }
+/* ガチャ・ログボ・アップデート・タイトルなど「いつも暗い背景」の画面では、
+   明るい着せ替えでも文字が見えるよう、色を暗い画面用にもどす */
+.pfx, .lb-screen, .update-ov, .title-screen, .photo-ui, .photo-preview {
+  --sk-text: #f2efe9; --sk-muted: rgba(242, 239, 233, .6);
+  --sk-card: rgba(255, 255, 255, .06); --sk-card-line: rgba(255, 255, 255, .12);
+  --sk-icon-bg: rgba(255, 255, 255, .08);
+  --text: #f2efe9; --muted: rgba(242, 239, 233, .6);
+  color: #f2efe9;
+}
+.pfx .btn.ghost, .lb-screen .btn.ghost { background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.28); color: #fff; }
