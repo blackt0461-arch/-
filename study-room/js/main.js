@@ -1315,7 +1315,7 @@ function photoMode() {
 
 // =========================== 更新のお知らせ ===========================
 // このプログラムの版（version.json と同じにする。公開のたびに上げる）
-const APP_VERSION = '1.2.0';
+const APP_VERSION = '1.2.1';
 // 新しい版が出たら、みんな同じタイミングでそろうように強制で再起動する。
 // 開いた時・画面に戻った時・1分ごとに version.json を見る
 async function latestVersion() {
@@ -1930,6 +1930,22 @@ async function showAdmin() {
   el.querySelectorAll('.ac-del').forEach(b => b.onclick = () => confirmDeleteUser(b.dataset.u));
   el.querySelectorAll('.ac-give').forEach(b => b.onclick = () => givePack(b.dataset.u));
 }
+// ---- 式の見せ方（問題集用）----
+// V_GS・I_D・g_m のような記号を、教科書と同じ添え字にする（文字はすでに esc したあとに当てる）
+const SUBS = 'GS|GD|DS|SB|BS|THN|TH0|TH|DD|SS|in|out|sub|mb|ox|gs|gd|ds|sb|closed|eff|be|ce|A|B|C|D|S|G|T|L|m|o|0|1|2|d|g|s|b|v';
+const SUB_RE = new RegExp(`(^|[^A-Za-z0-9_])([VIRgrACvi])(${SUBS})(\\*?)(?![A-Za-z0-9])`, 'g');
+function fmtMath(t) {
+  return esc(t)
+    .replace(SUB_RE, (m0, pre, b, sub, star) => `${pre}<i class="mv">${b}<sub>${sub}</sub>${star}</i>`)
+    .replace(/φF/g, '<i class="mv">φ<sub>F</sub></i>').replace(/ε0/g, '<i class="mv">ε<sub>0</sub></i>')
+    .replace(/\^\(([^)]{1,12})\)/g, '<sup>$1</sup>').replace(/\^(-?[0-9a-zA-Zωφθ.]{1,6})/g, '<sup>$1</sup>');
+}
+// 解説：1文ずつ行に分け、式（＝をふくむ文）は色を変えて目立たせる
+function explainHTML(text) {
+  const parts = String(text || '').split(/(?<=。)/).map(x => x.trim()).filter(Boolean);
+  return `<ul class="ex-list">${parts.map(x => `<li class="${/[＝=≈]/.test(x) ? 'eq' : ''}">${fmtMath(x)}</li>`).join('')}</ul>`;
+}
+
 // 管理者：自分が開いている問題集を、ほかの人に渡す（その人がコードを入れたのと同じになる）
 function givePack(name) {
   const sids = Object.keys(packCode);
@@ -1945,7 +1961,7 @@ function givePack(name) {
       toast(`「${name}」に「${packOf[b.dataset.s].name}」を渡しました`); cf.remove();
     } catch (ex) {
       const m = String(ex.message || ex);
-      toast(/not_found/.test(m) ? 'そのアカウントは見つかりません' : /sr_admin_grant_code|function|404/.test(m) ? '渡すしくみがまだ準備できていません' : m, 3000);
+      toast(m, 3400);
       b.disabled = false;
     }
   });
@@ -1967,7 +1983,7 @@ function confirmDeleteUser(name) {
       toast(`「${name}」を消しました`); cf.remove(); showAdmin();
     } catch (ex) {
       const m = String(ex.message || ex);
-      toast(/cannot_delete_admin/.test(m) ? '管理者のアカウントは消せません' : /not_found/.test(m) ? 'そのアカウントは見つかりません' : /sr_admin_delete_user|function|404/.test(m) ? '消すしくみがまだ準備できていません' : m, 3000);
+      toast(m, 3400);
       go.disabled = false;
     }
   };
@@ -2284,6 +2300,9 @@ function awardResult(st, ss, p, perfect, ok, isReview, secs) {
 
 // 4択の問題（物理以外の教科）
 function runChoice(p, isReview) {
+  // テスト勉強の問題集（電子回路など）は、記号を添え字にして・解説を1文ずつにして見やすくする
+  const fx = !!SUBJECTS.find(x => x.id === subjectId)?.pack;
+  const fm = fx ? fmtMath : esc;
   const st = sub();
   const ss = st.session;
   const t0 = Date.now();
@@ -2296,10 +2315,10 @@ function runChoice(p, isReview) {
         <div class="qprog"><i style="width:${ss.idx / ss.set.length * 100}%"></i></div>
         <span class="tag">${isReview ? `${icon('refresh')}復習` : esc(p.unit)}</span>
       </header>
-      <div class="problem">${esc(p.text).replace(/\n/g, '<br>')}</div>
+      <div class="problem ${fx ? 'fx' : ''}">${fm(p.text).replace(/\n/g, '<br>')}</div>
       <div class="step">
         <p class="ask">正しいものを <b>1つ</b> 選ぼう</p>
-        <div class="cards ch4">${order.map(i => `<button class="fcard" data-i="${i}">${esc(p.choices[i])}</button>`).join('')}</div>
+        <div class="cards ch4">${order.map(i => `<button class="fcard" data-i="${i}">${fm(p.choices[i])}</button>`).join('')}</div>
       </div>
     </div>`);
   app.append(el);
@@ -2322,8 +2341,8 @@ function runChoice(p, isReview) {
         ${ok ? `<div class="pts">+${pts}<small>ゲージ${secs <= 20 ? '・早い！ボーナス' : ''}${ss.bonus && pts ? '・今日の最初の5問 ×1.5' : ''}</small></div>` : ''}
         ${xpLine}
         ${mastered ? `<div class="master">${icon('trophy')}克服しました！ 特別な家具がもらえます</div>` : ''}
-        <div class="formula">${esc(p.choices[p.answer])}<small>正解</small></div>
-        <p class="reason">${esc(p.explain || '')}</p>
+        <div class="formula">${fm(p.choices[p.answer])}<small>正解</small></div>
+        ${fx ? explainHTML(p.explain) : `<p class="reason">${esc(p.explain || '')}</p>`}
         ${ss.rewards && (ss.rewards.ticket || ss.rewards.ticket4 || ss.rewards.ticket5) ? `<div class="ru-tickets">${['ticket', 'ticket4', 'ticket5'].filter(k => ss.rewards[k]).map(k => `<span>${ticketSVG(k, 'mini')}<b>×${ss.rewards[k]}</b></span>`).join('')}<small class="ru-box">${icon('gift')}プレゼントBOXに届きました</small></div>` : ''}
         ${HS().gauge >= S.gaugeMax(HS()) ? `<div class="gold-t">${icon('gift')}ゲージ満タン！ 家具が買えます</div>` : ''}
         <div class="row2 after"><button class="btn ghost home">${icon('home')}部屋にもどる</button><button class="btn primary more">${icon('pencil')}もう1問</button></div>
