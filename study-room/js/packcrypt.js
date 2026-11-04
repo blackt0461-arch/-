@@ -2,7 +2,7 @@
 // コードそのものはどこにも保存しない。コードから鍵を作り（PBKDF2）、AES-GCM で暗号にする。
 const ITER = 150000;
 const enc = new TextEncoder(), dec = new TextDecoder();
-const b64 = (u8) => btoa(String.fromCharCode(...u8));
+const b64 = (u8) => { let s = ''; for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode(...u8.subarray(i, i + 0x8000)); return btoa(s); };
 const unb64 = (s) => Uint8Array.from(atob(s), c => c.charCodeAt(0));
 // 打ちまちがいに強くする：全角→半角、大文字にそろえ、空白とハイフンを無視
 export const normCode = (code) => String(code || '').normalize('NFKC').toUpperCase().replace(/[\s\-ー－]/g, '');
