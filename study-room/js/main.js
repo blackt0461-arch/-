@@ -154,6 +154,68 @@ function goTab(t) {
   if (t === 'social') return halfSocial();
   if (t === 'menu') return showMenu();
 }
+// =========================== プレゼントBOX ===========================
+const GIFT_LABEL = { ticket: 'レアチケット', ticket4: '★4以上確定チケット', ticket5: '★5限定チケット', exchange: '家具の引きかえ券', shards4: '★4のかけら', shards5: '★5のかけら', gauge: 'ゲージ', item: '家具' };
+function giftArt(g) {
+  if (g.kind === 'ticket' || g.kind === 'ticket4' || g.kind === 'ticket5') return ticketSVG(g.kind, 'mini');
+  if (g.kind === 'item') { const it = itemById(g.itemId); return it ? `<span class="thumb">${thumbHTML(it)}</span>` : icon('gift'); }
+  return `<span class="gb-ic">${icon(g.kind === 'gauge' ? 'level' : g.kind.startsWith('shards') ? 'sparkle' : 'gift')}</span>`;
+}
+function giftName(g) { return g.kind === 'item' ? (itemById(g.itemId)?.name || '家具') : GIFT_LABEL[g.kind] || 'プレゼント'; }
+// 運営からのプレゼントを取りに行って、まだならBOXに入れる（1分に1回まで）
+let giftsCheckedAt = 0;
+async function refreshGifts(force = false) {
+  const u = Auth.currentUser();
+  if (!u || (!force && Date.now() - giftsCheckedAt < 60000)) return;
+  giftsCheckedAt = Date.now();
+  let list;
+  try { list = await rpc('sr_gift_list', { p_token: u.token }); } catch (e) { return; }
+  let added = 0;
+  for (const g of list || []) {
+    const id = 'op' + g.id;
+    if (S.giftSeen(id)) continue;
+    S.addGift({ id, kind: g.kind, amount: g.amount, itemId: g.item_id, title: g.title, from: 'operator', at: Date.parse(g.created_at) || Date.now() });
+    S.markGiftSeen(id);
+    added++;
+  }
+  if (added) {
+    S.save();
+    updateGiftBadge();
+    toast(`プレゼントが ${added}件 届きました`, 2400);
+  }
+}
+function updateGiftBadge() {
+  const b = app.querySelector('.home .giftbox'), n = S.gifts().length;
+  if (!b) return;
+  b.querySelector('.gb-n')?.remove();
+  if (n) b.insertAdjacentHTML('beforeend', `<i class="gb-n">${n > 99 ? '99+' : n}</i>`);
+}
+function showGiftBox() {
+  const list = [...S.gifts()].sort((a, b) => (b.at || 0) - (a.at || 0));
+  const from = { rank: 'Lvアップ', play: 'がんばったごほうび', master: '克服', operator: '運営から' };
+  const day = (t) => t ? new Date(t).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' }) : '';
+  const el = screenWithTabs('gifts', `<button class="icon back">${icon('back')}</button><h2>プレゼントBOX</h2><span class="gb-count"><b>${list.length}</b> 件</span>`, 'room', `
+    ${list.length ? `<button class="btn primary big gb-all">${icon('gift')}まとめて受け取る</button>
+    <div class="gb-list">${list.map(g => `
+      <div class="gb-row" data-id="${esc(g.id)}">
+        <span class="gb-art">${giftArt(g)}</span>
+        <span class="gb-t"><b>${esc(giftName(g))}${g.amount > 1 || g.kind !== 'item' ? ` ×${g.amount || 1}` : ''}</b><small>${esc(g.title || from[g.from] || '')}${g.at ? '・' + day(g.at) : ''}</small></span>
+        <button class="btn ghost sm gb-get">受け取る</button>
+      </div>`).join('')}</div>`
+      : `<div class="gb-empty">${icon('gift')}<p>いまは何も届いていません。<br>Lvが上がったときや、運営からのプレゼントがここに届きます。</p></div>`}`);
+  el.querySelector('.back').onclick = () => showHome();
+  const take = (ids) => {
+    const got = ids.map(id => S.claimGift(id)).filter(Boolean);
+    if (!got.length) return;
+    S.save(); vibrate([20, 40, 20]);
+    toast(got.length === 1 ? `${giftName(got[0])}${got[0].kind !== 'item' ? ' ×' + (got[0].amount || 1) : ''}を受け取りました` : `${got.length}件 受け取りました`, 2200);
+    showGiftBox();
+  };
+  el.querySelectorAll('.gb-get').forEach(b => b.onclick = () => take([b.closest('.gb-row').dataset.id]));
+  el.querySelector('.gb-all')?.addEventListener('click', () => take(list.map(g => g.id)));
+  hydrateThumbs(el);
+}
+
 // =========================== 着せ替え ===========================
 function ownsSkin(id) { return id === 'a' || S.owned(skinItemId(id)) > 0; }
 function applySkin() {
@@ -478,9 +540,12 @@ function showHome() {
       </header>
       <div class="side-tools">
         <button class="round photo" aria-label="写真をとる">${icon('camera')}</button>
+        <button class="round giftbox" aria-label="プレゼントBOX">${icon('gift')}${S.gifts().length ? `<i class="gb-n">${S.gifts().length > 99 ? '99+' : S.gifts().length}</i>` : ''}</button>
       </div>
     </div>`);
   el.querySelector('.photo').onclick = photoMode;
+  el.querySelector('.giftbox')?.addEventListener('click', () => showGiftBox());
+  refreshGifts();
   el.querySelector('.rankchip').onclick = showRankRoad;
   el.querySelector('.room-name').onclick = () => showRoomPicker({ hs, r, here, locked, home });
   app.append(el, tabbar('room'));
@@ -866,7 +931,7 @@ function receiveSpecials() {
     const id = SPECIAL_IDS[hs.specialsGiven % SPECIAL_IDS.length];
     hs.specialsGiven++; hs.pendingSpecials--;
     const it = itemById(id);
-    if (it) { S.own(id); toast(`特別な家具「${it.name}」が届きました（持ち物）`, 3200); }
+    if (it) { S.addGift({ kind: 'item', itemId: id, title: '克服のごほうび', from: 'master' }); toast(`特別な家具「${it.name}」がプレゼントBOXに届きました`, 3200); updateGiftBadge(); }
   }
   S.save();
 }
@@ -1079,7 +1144,7 @@ function photoMode() {
 
 // =========================== 更新のお知らせ ===========================
 // このプログラムの版（version.json と同じにする。公開のたびに上げる）
-const APP_VERSION = '2.9.0';
+const APP_VERSION = '2.10.0';
 // 新しい版が出たら、みんな同じタイミングでそろうように強制で再起動する。
 // 開いた時・画面に戻った時・1分ごとに version.json を見る
 async function latestVersion() {
@@ -1533,6 +1598,41 @@ function composeNews(after) {
   };
 }
 
+function composeGift() {
+  const kinds = ['ticket', 'ticket4', 'ticket5', 'exchange', 'item'];
+  const el = sheet(`
+    <div class="sh-head"><span class="sh-ic">${icon('gift')}</span><div><h3>みんなにプレゼントを送る</h3><p>全員のプレゼントBOXに届きます</p></div></div>
+    <form class="news-form gift-form">
+      <input name="t" maxlength="40" placeholder="ひとこと（例：いつもありがとう）" required>
+      <select name="k">${kinds.map(k => `<option value="${k}">${GIFT_LABEL[k]}</option>`).join('')}</select>
+      <input name="n" type="number" min="1" max="99" value="1" placeholder="数">
+      <select name="i" hidden>${ITEMS.filter(it => !it.place || it.place !== 'skin').map(it => `<option value="${it.id}">${esc(it.name)}</option>`).join('')}</select>
+      <label class="nf-adm">受け取れる期間 <input name="d" type="number" min="1" max="365" value="14" style="width:5em"> 日</label>
+      <button class="btn gold big">${icon('check')}内容を確認する</button>
+    </form>
+    <button class="link close">やめる</button>`, 'news-sheet');
+  const f = el.querySelector('form');
+  f.k.onchange = () => { f.i.hidden = f.k.value !== 'item'; f.n.hidden = f.k.value === 'item'; };
+  el.querySelector('.close').onclick = () => el.remove();
+  f.onsubmit = (e) => {
+    e.preventDefault();
+    const g = { title: f.t.value.trim(), kind: f.k.value, amount: f.k.value === 'item' ? 1 : Math.max(1, Math.min(99, +f.n.value || 1)), itemId: f.k.value === 'item' ? f.i.value : null, days: Math.max(1, Math.min(365, +f.d.value || 14)) };
+    if (!g.title) return;
+    const cf = sheet(`
+      <div class="sh-head"><span class="sh-ic gold">${icon('alert')}</span><div><h3>この内容で送りますか？</h3><p>送ると、すぐにみんなに届きます（${g.days}日間）</p></div></div>
+      <div class="gb-row"><span class="gb-art">${giftArt(g)}</span><span class="gb-t"><b>${esc(giftName(g))}${g.kind !== 'item' ? ' ×' + g.amount : ''}</b><small>${esc(g.title)}・運営から</small></span></div>
+      <div class="row2"><button class="btn ghost back2">書きなおす</button><button class="btn gold send">${icon('check')}送る</button></div>`, 'news-sheet');
+    hydrateThumbs(cf);
+    cf.querySelector('.back2').onclick = () => cf.remove();
+    cf.querySelector('.send').onclick = async () => {
+      try {
+        await rpc('sr_gift_send', { p_token: Auth.currentUser().token, p_title: g.title, p_kind: g.kind, p_amount: g.amount, p_item: g.itemId, p_days: g.days });
+        toast('プレゼントを送りました'); cf.remove(); el.remove(); refreshGifts(true);
+      } catch (ex) { toast(ex.message); }
+    };
+  };
+}
+
 async function refreshFriendBadge() {
   refreshNewsBadge();
   const u = Auth.currentUser();
@@ -1636,10 +1736,11 @@ async function leaveVisit(goBack) {
 // =========================== 管理者 ===========================
 async function showAdmin() {
   if (!isAdmin()) return showMenu();
-  const el = screenWithTabs('admin', `<button class="icon back">${icon('back')}</button><h2>管理者</h2><span></span>`, 'menu', `<div class="row2 admin-btns"><button class="btn primary compose">${icon('bell')}お知らせを書く</button><button class="btn ghost inbox">${icon('chat')}要望・バグを見る</button></div><div class="alist"><p class="empty">読み込み中…</p></div>`);
+  const el = screenWithTabs('admin', `<button class="icon back">${icon('back')}</button><h2>管理者</h2><span></span>`, 'menu', `<div class="row2 admin-btns"><button class="btn primary compose">${icon('bell')}お知らせを書く</button><button class="btn ghost inbox">${icon('chat')}要望・バグを見る</button></div><button class="btn ghost big sendgift">${icon('gift')}みんなにプレゼントを送る</button><div class="alist"><p class="empty">読み込み中…</p></div>`);
   el.querySelector('.back').onclick = showMenu;
   el.querySelector('.compose').onclick = () => composeNews(showNews);
   el.querySelector('.inbox').onclick = showFeedbackInbox;
+  el.querySelector('.sendgift').onclick = () => composeGift();
   const u = Auth.currentUser();
   let list = [];
   try { list = await rpc('sr_admin_users', { p_token: u.token }); } catch (e) { el.querySelector('.alist').innerHTML = `<p class="empty">${esc(e.message)}</p>`; return; }
@@ -1882,7 +1983,7 @@ function runProblem(p, isReview, retry) {
           <div class="formula">${fx}<small>${esc(p.formula.name)}</small></div>
           <button class="link why">なぜこの公式？</button>
           <p class="reason hide">${esc(p.reason)}</p>
-          ${ss.rewards && (ss.rewards.ticket || ss.rewards.ticket4 || ss.rewards.ticket5) ? `<div class="ru-tickets">${['ticket', 'ticket4', 'ticket5'].filter(k => ss.rewards[k]).map(k => `<span>${ticketSVG(k, 'mini')}<b>×${ss.rewards[k]}</b></span>`).join('')}</div>` : ''}
+          ${ss.rewards && (ss.rewards.ticket || ss.rewards.ticket4 || ss.rewards.ticket5) ? `<div class="ru-tickets">${['ticket', 'ticket4', 'ticket5'].filter(k => ss.rewards[k]).map(k => `<span>${ticketSVG(k, 'mini')}<b>×${ss.rewards[k]}</b></span>`).join('')}<small class="ru-box">${icon('gift')}プレゼントBOXに届きました</small></div>` : ''}
           ${HS().gauge >= S.gaugeMax(HS()) ? `<div class="gold-t">${icon('gift')}ゲージ満タン！ 家具が買えます</div>` : ''}
           <div class="row2 after"><button class="btn ghost home">${icon('home')}部屋にもどる</button><button class="btn primary more">${icon('pencil')}もう1問</button></div>
         </div>`;
@@ -1924,7 +2025,7 @@ function awardResult(st, ss, p, perfect, ok, isReview, secs) {
       // 50問ごと・連続7日ごと・克服でたまにレアチケット
       const earned = G.ticketsEarned(tBefore, { solved: S.profile().solved, streak: S.currentStreak(), mastered: S.stats(st, probs()).mastered });
       if (earned > 0) {
-        HS().rareTickets = (HS().rareTickets || 0) + earned;
+        S.addGift({ kind: 'ticket', amount: earned, title: 'がんばったごほうび', from: 'play' });
         xp.rewards = xp.rewards || { ticket: 0, ticket4: 0, ticket5: 0 };
         xp.rewards.ticket += earned;
       }
@@ -1983,7 +2084,7 @@ function runChoice(p, isReview) {
         ${mastered ? `<div class="master">${icon('trophy')}克服しました！ 特別な家具がもらえます</div>` : ''}
         <div class="formula">${esc(p.choices[p.answer])}<small>正解</small></div>
         <p class="reason">${esc(p.explain || '')}</p>
-        ${ss.rewards && (ss.rewards.ticket || ss.rewards.ticket4 || ss.rewards.ticket5) ? `<div class="ru-tickets">${['ticket', 'ticket4', 'ticket5'].filter(k => ss.rewards[k]).map(k => `<span>${ticketSVG(k, 'mini')}<b>×${ss.rewards[k]}</b></span>`).join('')}</div>` : ''}
+        ${ss.rewards && (ss.rewards.ticket || ss.rewards.ticket4 || ss.rewards.ticket5) ? `<div class="ru-tickets">${['ticket', 'ticket4', 'ticket5'].filter(k => ss.rewards[k]).map(k => `<span>${ticketSVG(k, 'mini')}<b>×${ss.rewards[k]}</b></span>`).join('')}<small class="ru-box">${icon('gift')}プレゼントBOXに届きました</small></div>` : ''}
         ${HS().gauge >= S.gaugeMax(HS()) ? `<div class="gold-t">${icon('gift')}ゲージ満タン！ 家具が買えます</div>` : ''}
         <div class="row2 after"><button class="btn ghost home">${icon('home')}部屋にもどる</button><button class="btn primary more">${icon('pencil')}もう1問</button></div>
       </div>`;
@@ -2020,7 +2121,7 @@ function finishSet() {
         <h2>おつかれさま！</h2>
         <div class="score"><b>${perfect}</b> / ${ss.results.length} 問 ノーミス</div>
         ${ss.rankUp ? `<div class="rankup">${icon('level')}<b>Lv${rk.rank}</b>にアップ！<small>置ける家具が ${S.capacity()}個 に</small>
-          <div class="ru-tickets">${['ticket', 'ticket4', 'ticket5'].filter(k => ss.rewards?.[k]).map(k => `<span>${ticketSVG(k, 'mini')}<b>×${ss.rewards[k]}</b></span>`).join('')}</div></div>` : ''}
+          <div class="ru-tickets">${['ticket', 'ticket4', 'ticket5'].filter(k => ss.rewards?.[k]).map(k => `<span>${ticketSVG(k, 'mini')}<b>×${ss.rewards[k]}</b></span>`).join('')}<small class="ru-box">${icon('gift')}プレゼントBOXに届きました</small></div></div>` : ''}
         <div class="xp-line">${icon('level')}+${ss.xp || 0} XP<span class="xpbar"><i style="width:${Math.round(rk.into / rk.need * 100)}%"></i></span></div>
         <div class="gauge big ${HS().gauge >= max ? 'full' : ''}"><div class="fill" style="width:${Math.min(100, HS().gauge / max * 100)}%"></div>
           <span>ゲージ +${ss.gained}</span></div>
@@ -2134,4 +2235,4 @@ if ('serviceWorker' in navigator && location.protocol === 'https:') {
   navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(r => r.update()).catch(() => {});
 }
 // テスト用
-window.__app = { putIntoRoom, get room3d() { return room3d; }, S, sub, HS, switchRoom, ensureRooms, goHome, showHome, curRoom, visitFriend, leaveVisit, showLoginBonus };
+window.__app = { putIntoRoom, get room3d() { return room3d; }, S, sub, HS, switchRoom, ensureRooms, goHome, showHome, curRoom, visitFriend, leaveVisit, showLoginBonus, showGiftBox };

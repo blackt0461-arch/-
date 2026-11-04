@@ -273,3 +273,24 @@ b, strong { font-weight: 700; }
 .rr-lv small { opacity: 1; }
 .rr-row:not(.got):not(.next) .rr-lv { color: var(--sk-text); opacity: .8; }
 .rr-row.got .rr-gifts { opacity: .78; }
+
+/* ---------- プレゼントBOX ---------- */
+.round .gb-n { position: absolute; top: -4px; right: -4px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--sk-dot, #ff6b5a); color: #fff; font: 700 11px/18px var(--sk-font, sans-serif); font-style: normal; text-align: center; box-shadow: 0 0 0 2px rgba(0,0,0,.55); }
+.gifts .gb-count { color: var(--sk-muted); font-size: 13px; }
+.gifts .gb-count b { color: var(--sk-text); font-size: 16px; }
+.gb-all { width: 100%; margin: 4px 0 14px; display: flex; align-items: center; justify-content: center; gap: 8px; }
+.gb-list { display: flex; flex-direction: column; gap: 8px; }
+.gb-row { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 14px; background: var(--sk-panel); border: 1px solid var(--sk-panel-line); color: var(--sk-text); }
+.gb-art { width: 52px; height: 52px; flex: none; display: grid; place-items: center; }
+.gb-art .thumb { width: 52px; height: 52px; border-radius: 10px; overflow: hidden; display: block; }
+.gb-art svg { max-width: 52px; max-height: 52px; }
+.gb-ic { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; background: var(--sk-panel-line); }
+.gb-t { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.gb-t b { font-size: 15px; }
+.gb-t small { color: var(--sk-muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gb-get { flex: none; }
+.gb-empty { text-align: center; padding: 60px 20px; color: var(--sk-muted); }
+.gb-empty svg { width: 48px; height: 48px; opacity: .6; margin-bottom: 10px; }
+.ru-box { display: flex; align-items: center; justify-content: center; gap: 4px; width: 100%; margin-top: 6px; font-size: 12px; opacity: .85; }
+.ru-box svg { width: 14px; height: 14px; }
+.gift-form select, .gift-form input[type=number] { width: 100%; }

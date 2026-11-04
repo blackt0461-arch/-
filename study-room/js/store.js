@@ -221,18 +221,42 @@ export function rankRewards(L) {
   if (L === 50 || L === 100) r.ticket5 = 1;
   return r;
 }
+// Lv が上がったごほうびは、プレゼントBOXに届く（自分で受け取る）
 function giveRankRewards(from, to) {
-  const h = house();
   const sum = { ticket: 0, ticket4: 0, ticket5: 0 };
   for (let L = from + 1; L <= to; L++) {
     const r = rankRewards(L);
     sum.ticket += r.ticket; sum.ticket4 += r.ticket4; sum.ticket5 += r.ticket5;
+    for (const k of ['ticket', 'ticket4', 'ticket5']) if (r[k]) addGift({ kind: k, amount: r[k], title: `Lv${L} のごほうび`, from: 'rank' });
   }
-  h.rareTickets = (h.rareTickets || 0) + sum.ticket;
-  h.rareTickets4 = (h.rareTickets4 || 0) + sum.ticket4;
-  h.rareTickets5 = (h.rareTickets5 || 0) + sum.ticket5;
   return sum;
 }
+
+// --- プレゼントBOX ---
+// gift = { id, kind: 'ticket'|'ticket4'|'ticket5'|'exchange'|'shards4'|'shards5'|'gauge'|'item', amount, itemId, title, from, at }
+const GIFT_KEY = { ticket: 'rareTickets', ticket4: 'rareTickets4', ticket5: 'rareTickets5', exchange: 'tickets', shards4: 'shards4', shards5: 'shards5', gauge: 'gauge' };
+export function gifts() { const h = house(); return h.gifts || (h.gifts = []); }
+export function addGift(g) {
+  const list = gifts();
+  if (g.id && list.some(x => x.id === g.id)) return null;
+  const gift = { id: g.id || 'g' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7), at: g.at || Date.now(), amount: 1, ...g };
+  list.push(gift);
+  return gift;
+}
+export function claimGift(id) {
+  const list = gifts();
+  const i = list.findIndex(x => x.id === id);
+  if (i < 0) return null;
+  const g = list[i];
+  const h = house();
+  if (g.kind === 'item') { if (g.itemId) own(g.itemId, g.amount || 1); }
+  else if (GIFT_KEY[g.kind]) h[GIFT_KEY[g.kind]] = (h[GIFT_KEY[g.kind]] || 0) + (g.amount || 1);
+  list.splice(i, 1);
+  return g;
+}
+// 運営からのプレゼントで、もうBOXに入れた物（2回入らないように）
+export function giftSeen(id) { const h = house(); h.giftSeen = h.giftSeen || []; return h.giftSeen.includes(id); }
+export function markGiftSeen(id) { const h = house(); h.giftSeen = h.giftSeen || []; if (!h.giftSeen.includes(id)) h.giftSeen.push(id); if (h.giftSeen.length > 300) h.giftSeen.splice(0, h.giftSeen.length - 300); }
 // ランク L のちょうど始まりの経験値（管理者がレベルを変えるときに使う）
 export function xpAtRank(L) { let x = 0; for (let r = 1; r < L; r++) x += xpToNext(r); return x; }
 export function setRank(L) { const p = profile(); p.xp = xpAtRank(Math.max(1, Math.min(MAX_RANK, L))); } // 管理者のためし用（ごほうびは出さない）
