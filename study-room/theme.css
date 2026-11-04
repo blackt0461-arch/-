@@ -270,3 +270,6 @@ b, strong { font-weight: 700; }
 .ru-tickets b { color: var(--sk-text); }
 .lb-cell small { color: rgba(255,255,255,.85); }
 .pfx .ru-tickets b { color: #fff; }
+.rr-lv small { opacity: 1; }
+.rr-row:not(.got):not(.next) .rr-lv { color: var(--sk-text); opacity: .8; }
+.rr-row.got .rr-gifts { opacity: .78; }
