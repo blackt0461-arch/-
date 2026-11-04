@@ -1,0 +1,17 @@
+[
+  {"id":null,"subject":"english","genre":"文法","unit":"前置詞","grade":"hs1","level":1,"text":"(　)に入る語を選べ。\nThe class starts (　) nine o'clock.","choices":["on","in","for","at"],"answer":3,"explain":"時刻には at を使う。"},
+  {"id":null,"subject":"english","genre":"文法","unit":"前置詞","grade":"hs1","level":1,"text":"(　)に入る語を選べ。\nI go to church (　) Sundays.","choices":["at","in","by","on"],"answer":3,"explain":"曜日や日付には on を使う。"},
+  {"id":null,"subject":"english","genre":"文法","unit":"前置詞","grade":"hs1","level":1,"text":"(　)に入る語を選べ。\nMy birthday is (　) April.","choices":["on","at","in","for"],"answer":2,"explain":"月・季節・年には in を使う。"},
+  {"id":null,"subject":"english","genre":"文法","unit":"前置詞","grade":"hs1","level":1,"text":"(　)に入る語を選べ。\nI go to school (　) bus.","choices":["on","with","in","by"],"answer":3,"explain":"交通手段は by bus のように by＋冠詞なしの名詞。"},
+  {"id":null,"subject":"english","genre":"文法","unit":"前置詞","grade":"hs1","level":1,"text":"(　)に入る語を選べ。\nI have studied English (　) three hours.","choices":["since","for","during","in"],"answer":1,"explain":"for は「〜の間」と期間の長さを表す。since は「〜から（今まで）」。"},
+  {"id":null,"subject":"english","genre":"文法","unit":"前置詞","grade":"hs1","level":1,"text":"(　)に入る語を選べ。\nShe has lived here (　) 2015.","choices":["for","since","from","at"],"answer":1,"explain":"since は過去の起点から今までの継続を表し、現在完了とよくいっしょに使う。"},
+  {"id":null,"subject":"english","genre":"文法","unit":"前置詞","grade":"hs1","level":2,"text":"(　)に入る語を選べ。\nPlease finish the report (　) Friday.","choices":["until","for","by","since"],"answer":2,"explain":"by は「〜までに（期限）」。until は「〜までずっと（継続）」。"},
+  {"id":null,"subject":"english","genre":"文法","unit":"前置詞","grade":"hs1","level":2,"text":"(　)に入る語を選べ。\nI visited my grandmother (　) the summer vacation.","choices":["during","while","for","since"],"answer":0,"explain":"during は前置詞で「〜の間に」。while は接続詞なので後ろに主語と動詞がくる。"},
+  {"id":null,"subject":"english","genre":"文法","unit":"前置詞","grade":"hs1","level":2,"text":"(　)に入る語を選べ。\nThe train will arrive (　) ten minutes.","choices":["after","in","for","by"],"answer":1,"explain":"未来について「今から〜後に」は in を使う。"},
+  {"id":null,"subject":"english","genre":"文法","unit":"前置詞","grade":"hs1","level":2,"text":"(　)に入る語を選べ。\nThe money was divided (　) the two brothers.","choices":["among","with","between","of"],"answer":2,"explain":"2者の間は between、3者以上の間は among。"},
+  {"id":null,"subject":"english","genre":"文法","unit":"前置詞","grade":"hs1","level":2,"text":"(　)に入る語を選べ。\nHe cut the paper (　) scissors.","choices":["with","by","in","of"],"answer":0,"explain":"道具を使って「〜で」というときは with。"},
+  {"id":null,"subject":"english","genre":"文法","unit":"前置詞","grade":"hs1","level":2,"text":"(　)に入る語を選べ。\nThe store is open (　) 9 a.m. to 8 p.m.","choices":["since","at","from","for"],"answer":2,"explain":"from A to B で「A から B まで」。"},
+  {"id":null,"subject":"english","genre":"文法","unit":"前置詞","grade":"hs1","level":3,"text":"(　)に入る語を選べ。\nWine is made (　) grapes.","choices":["of","by","in","from"],"answer":3,"explain":"原料が変化して元の形が分からないときは be made from。材料がそのまま分かるときは be made of。"},
+  {"id":null,"subject":"english","genre":"文法","unit":"前置詞","grade":"hs1","level":3,"text":"(　)に入る語を選べ。\nThis desk is made (　) wood.","choices":["of","from","into","by"],"answer":0,"explain":"木の机は見て材料が木だと分かるので be made of。"},
+  {"id":null,"subject":"english","genre":"文法","unit":"前置詞","grade":"hs1","level":3,"text":"For all his wealth, he is not happy. の For all の意味として正しいものはどれか。","choices":["〜にもかかわらず","〜のために","〜のすべてに対して","〜の代わりに"],"answer":0,"explain":"for all 〜 は「〜にもかかわらず」で in spite of と同じ。"}
+]
