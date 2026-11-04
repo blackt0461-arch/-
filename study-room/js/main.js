@@ -35,6 +35,7 @@ function probs(id = subjectId) { return ALLP[id] || []; }
 // ---- テスト勉強用の問題集（設定でコードを入れると、教科えらびに科目が増える） ----
 // 中身は js/packs.js に暗号で入っていて、コードがないと開けない。入れたコードは記録（profile.codes）に残す
 const packOf = {}; // 科目id → 問題集
+const packCode = {}; // 科目id → 開いたコード（管理者がほかの人に渡す時に使う）
 async function openCode(code) {
   const [{ PACKS }, { openPack }] = await Promise.all([import('./packs.js'), import('./packcrypt.js')]);
   const found = [];
@@ -54,10 +55,26 @@ function addPack(p) {
   packOf[sid] = p;
   return sid;
 }
-// ログインした時に、入れてあるコードの問題集を開く
+// ログインした時に、入れてあるコードの問題集を開く。管理者から渡された問題集も受け取る
 async function loadSavedPacks() {
-  const codes = S.profile().codes || [];
-  for (const c of codes) { try { (await openCode(c)).forEach(addPack); } catch (e) { console.warn('pack', e); } }
+  const pr = S.profile();
+  const { normCode } = await import('./packcrypt.js');
+  const u = Auth.currentUser();
+  let granted = [];
+  if (u) { try { granted = (await rpc('sr_my_codes', { p_token: u.token })) || []; } catch (e) { /* まだ準備できていない・オフライン */ } }
+  const fresh = granted.map(normCode).filter(c => !(pr.codes || []).includes(c));
+  const got = [];
+  for (const c of [...(pr.codes || []), ...fresh]) {
+    try {
+      const found = await openCode(c);
+      for (const p of found) { const sid = addPack(p); if (sid) packCode[sid] = c; if (fresh.includes(c)) got.push(p.name); }
+    } catch (e) { console.warn('pack', e); }
+  }
+  if (fresh.length) {
+    pr.codes = [...new Set([...(pr.codes || []), ...fresh])];
+    S.save(); Sync.push?.();
+    if (got.length) toast(`管理者から「${got.join('」「')}」が届きました。教科えらびに増えています`, 3600);
+  }
 }
 const UNITS = ['力学', '熱', '波動', '電磁気'];
 const COLORS = ['#ff8a5b', '#4fc3f7', '#c792ea', '#9ccc65', '#ffd54f', '#f06292', '#4db6ac'];
@@ -1906,11 +1923,32 @@ async function showAdmin() {
       <div class="ac-top"><span class="av">${icon('user')}</span><b>${esc(a.username)}</b><span class="lvb">Lv${S.rankInfo(s.xp || 0).rank}</span></div>
       <div class="ac-stats"><span>${icon('pencil')}${s.solved || 0}問</span><span>${icon('check')}${s.solved ? Math.round((s.correct || 0) / s.solved * 100) : 0}%</span><span>${icon('flame')}${s.streak || 0}日（合計${s.days || 0}日）</span></div>
       <div class="ac-units">${UNITS.map(un => `<span>${un} ${units[un]?.solved || 0}問</span>`).join('')}</div>
-      <div class="ac-foot"><small>登録 ${day(a.created_at)} ・ 最後 ${day(a.last_login)}</small><span class="ac-btns"><button class="btn ghost sm visit" data-u="${esc(a.username)}">${icon('eye')}部屋</button>${a.username !== u.name ? `<button class="btn ghost sm ac-del" data-u="${esc(a.username)}" aria-label="${esc(a.username)}のアカウントを消す">${icon('trash')}消す</button>` : ''}</span></div>
+      <div class="ac-foot"><small>登録 ${day(a.created_at)} ・ 最後 ${day(a.last_login)}</small><span class="ac-btns"><button class="btn ghost sm visit" data-u="${esc(a.username)}">${icon('eye')}部屋</button>${Object.keys(packCode).length ? `<button class="btn ghost sm ac-give" data-u="${esc(a.username)}">${icon('gift')}問題集</button>` : ''}${a.username !== u.name ? `<button class="btn ghost sm ac-del" data-u="${esc(a.username)}" aria-label="${esc(a.username)}のアカウントを消す">${icon('trash')}消す</button>` : ''}</span></div>
     </div>`;
   }).join('');
   el.querySelectorAll('.visit').forEach(b => b.onclick = () => visitFriend(b.dataset.u, showAdmin));
   el.querySelectorAll('.ac-del').forEach(b => b.onclick = () => confirmDeleteUser(b.dataset.u));
+  el.querySelectorAll('.ac-give').forEach(b => b.onclick = () => givePack(b.dataset.u));
+}
+// 管理者：自分が開いている問題集を、ほかの人に渡す（その人がコードを入れたのと同じになる）
+function givePack(name) {
+  const sids = Object.keys(packCode);
+  const cf = sheet(`
+    <div class="sh-head"><span class="sh-ic">${icon('gift')}</span><div><h3>「${esc(name)}」に問題集を渡す</h3><p>渡すと、次にアプリを開いた時に教科えらびに増えます</p></div></div>
+    <div class="give-list">${sids.map(sid => `<button class="btn ghost give-one" data-s="${sid}">${icon(SUBJECT_ICON[sid] || 'star')}${esc(packOf[sid].name)}<small>${probs(sid).length}問</small></button>`).join('')}</div>
+    <button class="link close">やめる</button>`, 'news-sheet give-sheet');
+  cf.querySelector('.close').onclick = () => cf.remove();
+  cf.querySelectorAll('.give-one').forEach(b => b.onclick = async () => {
+    b.disabled = true;
+    try {
+      await rpc('sr_admin_grant_code', { p_token: Auth.currentUser().token, p_username: name, p_code: packCode[b.dataset.s] });
+      toast(`「${name}」に「${packOf[b.dataset.s].name}」を渡しました`); cf.remove();
+    } catch (ex) {
+      const m = String(ex.message || ex);
+      toast(/not_found/.test(m) ? 'そのアカウントは見つかりません' : /sr_admin_grant_code|function|404/.test(m) ? '渡すしくみがまだ準備できていません' : m, 3000);
+      b.disabled = false;
+    }
+  });
 }
 // 管理者：アカウントを消す。まちがえないよう、名前を打ちこんでから消す
 function confirmDeleteUser(name) {
@@ -1990,7 +2028,7 @@ function showSettings() {
     const pr = S.profile();
     const { normCode } = await import('./packcrypt.js');
     pr.codes = [...new Set([...(pr.codes || []), normCode(code)])];
-    found.forEach(addPack);
+    found.forEach(p => { const sid = addPack(p); if (sid) packCode[sid] = normCode(code); });
     S.save(); Sync.push?.();
     vibrate([20, 40, 20]);
     toast(`「${found.map(p => p.name).join('」「')}」が教科えらびに増えました`, 3200);

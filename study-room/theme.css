@@ -429,3 +429,6 @@ b, strong { font-weight: 700; }
 .code-chip { display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px; border-radius: 99px; background: var(--sk-accent); color: var(--sk-hot-fg, var(--sk-btn-fg)); font-size: 12.5px; font-weight: 700; }
 .code-chip svg { width: 14px; height: 14px; }
 .code-chip small { font-weight: 400; opacity: .8; }
+.give-list { display: grid; gap: 8px; margin: 6px 0 12px; }
+.give-one { display: flex; align-items: center; gap: 8px; justify-content: flex-start; }
+.give-one small { margin-left: auto; opacity: .7; }
