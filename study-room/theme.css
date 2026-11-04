@@ -390,3 +390,17 @@ b, strong { font-weight: 700; }
 .gi-view .gi-prev, .gi-view .gi-next { top: 42%; }
 .gi-view .gi-prev { left: 10px; }
 .gi-view .gi-next { right: 10px; }
+
+/* 買えるようになったことを、はっきり見せる */
+.hotbar .sl { position: relative; }
+.hotbar .sl .buy-tip { position: absolute; left: 50%; bottom: calc(100% + 8px); transform: translateX(-50%); padding: 4px 10px; border-radius: 99px; background: var(--sk-accent); color: var(--sk-hot-fg, var(--sk-btn-fg)); font-size: 12px; font-weight: 700; white-space: nowrap; box-shadow: 0 4px 12px rgba(0,0,0,.35); animation: buyTip 1.2s ease-in-out infinite; pointer-events: none; }
+.hotbar .sl .buy-tip::after { content: ""; position: absolute; left: 50%; top: 100%; transform: translateX(-50%); border: 6px solid transparent; border-top-color: var(--sk-accent); }
+@keyframes buyTip { 50% { transform: translateX(-50%) translateY(-4px); } }
+.hotbar .sl.hot svg { animation: buyIc 1.8s ease-in-out infinite; }
+@keyframes buyIc { 0%, 70%, 100% { transform: none; } 78% { transform: rotate(-12deg) scale(1.12); } 86% { transform: rotate(10deg) scale(1.12); } 94% { transform: rotate(-4deg); } }
+.hotbar .solve-need.full { display: inline-flex; align-items: center; gap: 3px; background: var(--sk-accent); color: var(--sk-hot-fg, var(--sk-btn-fg)); border-color: transparent; font-weight: 700; }
+.hotbar .solve-need.full svg { width: 12px; height: 12px; }
+@media (prefers-reduced-motion: reduce) { .hotbar .sl .buy-tip, .hotbar .sl.hot svg { animation: none; } }
+.hotbar .sl:first-child .buy-tip { left: -2px; transform: none; animation-name: buyTip0; }
+.hotbar .sl:first-child .buy-tip::after { left: 22px; }
+@keyframes buyTip0 { 50% { transform: translateY(-4px); } }
