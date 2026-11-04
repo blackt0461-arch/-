@@ -47,6 +47,7 @@ export function playPullFX(res, opt) {
         <div class="bp-scan"></div>
       </div>
       <div class="bp-grid"></div>
+      <div class="bp-sweep"></div>
       <i class="bp-stamp"></i>
       <div class="bp-name"><i></i><b></b><small>タップでつづける</small></div>
       <div class="bp-tb"><span>図面</span><span>No. ${no}</span><span>品名</span><span class="tb-name">？？？</span><span>縮尺</span><span>1 : 20</span><span>日付</span><span>${now.getFullYear()}.${now.getMonth() + 1}.${now.getDate()}</span></div>
@@ -320,7 +321,7 @@ export function playPullFX(res, opt) {
     }));
     bp.classList.add('real');
     vibrate(top >= 4 ? [30, 40, 70] : 20);
-    cells.forEach((c, i) => setTimeout(() => c.el.classList.add('real'), skipped ? 0 : 120 + Math.floor(i / 5) * 350));
+    cells.forEach((c, i) => setTimeout(() => c.el.classList.add('real'), skipped ? 0 : 250 + Math.floor(i / 5) * 420));
     await wait(1100);
     if (top >= 4) { flash(top === 5 ? 0.5 : 0.3); burst(innerWidth / 2, innerHeight * 0.42, COL[top], top === 5 ? 160 : 80, 9); }
     await wait(700);
@@ -352,26 +353,10 @@ export function playPullFX(res, opt) {
       if (a?.url && im) { im.src = a.url; im.classList.remove('thumb-wait'); }
     }));
     box.classList.remove('hide');
+    // 設計図でもう見せたので、カードは表向きのまま並べる（めくり直さない）
     const cards = [...box.querySelectorAll('.pc')];
-    cards.forEach((c, i) => { c.style.animationDelay = (i * 0.05) + 's'; c.classList.add('deal'); });
-    await wait(ten ? 500 : 250);
-    const flip = (c) => {
-      if (c.classList.contains('flip')) return;
-      c.classList.add('flip');
-      const r = res[+c.dataset.i];
-      if (r.rarity >= 4) {
-        const b = c.getBoundingClientRect();
-        burst(b.left + b.width / 2, b.top + b.height / 2, COL[r.rarity], r.rarity === 5 ? 90 : 50, 6);
-        vibrate(r.rarity === 5 ? 60 : 30);
-      } else vibrate(8);
-    };
-    box.onclick = (e) => { const c = e.target.closest('.pc'); if (c) flip(c); };
-    // 1枚ずつ自動でめくる（★4以上は少しためる）
-    for (const c of cards) {
-      const r = res[+c.dataset.i];
-      flip(c);
-      await wait(ten ? 70 : 100);
-    }
+    cards.forEach((c, i) => { c.classList.add('flip', 'open'); c.style.animationDelay = (i * 0.04) + 's'; c.classList.add('deal'); });
+    await wait(ten ? 450 : 250);
     ov.querySelector('.pfx-skip').remove();
     ov.querySelector('.pfx-btns').classList.remove('hide');
   }

@@ -836,3 +836,8 @@ h3.sec { font-size: 14px; color: var(--muted); margin: 18px 4px 8px; font-weight
 .bg-c.real i { opacity: 1; }
 .bp.ten .bp-tb { opacity: .7; }
 .bp-ghost { display: none !important; }
+.pc.open .pc-in { transition: none; }
+/* 10連：光の線が紙全体をなぞる */
+.bp-sweep { position: absolute; left: 0; right: 0; top: 0; height: 3px; background: var(--c); box-shadow: 0 0 22px 6px var(--c); opacity: 0; pointer-events: none; z-index: 3; }
+.bp.ten.real .bp-sweep { animation: bpSweep 1.1s ease-in-out forwards; }
+@keyframes bpSweep { 0% { top: 18%; opacity: 1; } 92% { opacity: 1; } 100% { top: 68%; opacity: 0; } }
