@@ -4,26 +4,30 @@
 //   rokujo  … 六畳ロジック：6×6 に6種類の家具を、たて・横・ブロックに1つずつ
 //   hikkoshi… おひっこし：家具をすべらせて、ソファを出口へ（手数の上限つき）
 // どの問題も答えが1つに決まり、勘にたよらず解けることを確かめてある（akari・rokujo はその場で作って確かめる）。
-// まちがいは3回まで。クリアするとレベル（強化）が上がって、むずかしくなる。
+// むずかしさは ★1〜★5 を自分で選ぶ（★をクリアすると次の★が選べるようになる）。★が高いほどごほうびが多い。
+// まちがいは3回まで（★5 は2回まで）。
 
 export const PUZZLES = [
-  { id: 'akari', name: 'あかりの間取り', icon: 'light', short: '部屋ごとに照明を1つ', rule: '色の部屋・たての列・横の列に、照明はちょうど1つずつ。照明どうしは、ななめもふくめてとなり合いません。マスを押すと「×」→「照明」→「なし」。' },
+  { id: 'akari', name: 'あかりの間取り', icon: 'lamp', short: '部屋ごとに照明を1つ', rule: '色の部屋・たての列・横の列に、照明はちょうど1つずつ。照明どうしは、ななめもふくめてとなり合いません。マスを押すと「×」→「照明」→「なし」。' },
   { id: 'aburi', name: '家具あぶりだし', icon: 'image', short: '数字からぬって絵を出す', rule: '列と行の数字は、ぬるマスが何個つづくか（「2 1」は2個つづき、あけて1個）。全部ぬると家具の絵があらわれます。「ぬる」と「×」を切りかえて使います。' },
   { id: 'rokujo', name: '六畳ロジック', icon: 'grid', short: '6種類の家具を1つずつ', rule: '6×6のマスに6種類の家具。たての列・横の列・太い線のブロック（2×3）に、同じ家具は1つずつ。マスを選んでから、下の家具を押します。' },
   { id: 'hikkoshi', name: 'おひっこし', icon: 'sofa', short: 'ソファを出口へ運ぶ', rule: '家具をたて・横にすべらせて、赤いソファを下の出口（緑）から出します。家具を押してから、行きたい方向の空きマスか矢印を押します。手数の上限をこえると失敗。' },
 ];
 export const puzzleById = (id) => PUZZLES.find(p => p.id === id);
 
-// レベル（強化）ごとのむずかしさの説明
-export function levelInfo(id, lv) {
-  if (id === 'akari') { const n = akariSize(lv); return `${n}×${n}`; }
-  if (id === 'aburi') return `${PICS[(lv - 1) % PICS.length].m.length}×${PICS[(lv - 1) % PICS.length].m.length}`;
-  if (id === 'rokujo') return `ヒント ${rokujoGiven(lv)}個`;
-  if (id === 'hikkoshi') { const L = slideLevel(lv); return `最短 ${L.min}手・上限 ${L.limit}手`; }
+export const STARS = 5;
+export const livesOf = (star) => star >= 5 ? 2 : 3;
+// ★ごとのむずかしさの説明
+export function levelInfo(id, star) {
+  if (id === 'akari') { const n = akariSize(star); return `${n}×${n}`; }
+  if (id === 'aburi') return ['半分ぬってある', '3割ぬってある', '少しぬってある', 'ヒントなし', 'ヒントなし・まちがい2回まで'][star - 1];
+  if (id === 'rokujo') return `ヒント ${rokujoGiven(star)}個`;
+  if (id === 'hikkoshi') { const p = SLIDE_POOL[star - 1].map(i => SLIDES[i][0]); return `最短 ${Math.min(...p)}〜${Math.max(...p)}手`; }
   return '';
 }
-const akariSize = (lv) => Math.min(9, 5 + Math.ceil(lv / 2));          // Lv1-2:6 Lv3-4:7 Lv5-6:8 Lv7〜:9
-const rokujoGiven = (lv) => Math.max(9, 17 - lv);                       // ヒントの数（少ないほどむずかしい）
+const akariSize = (star) => 4 + star;                                   // ★1:5×5 〜 ★5:9×9
+const rokujoGiven = (star) => [18, 15, 13, 11, 9][star - 1];            // ヒントの数（少ないほどむずかしい）
+const ABURI_REVEAL = [0.5, 0.3, 0.15, 0, 0];                            // はじめからぬってあるマスの割合
 
 const shuffle = (a) => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 
@@ -110,24 +114,41 @@ const SLIDES = [
   [31, [["S",1,0,2,2],["V",3,0,1,2],["V",3,3,1,2],["V",0,1,1,2],["H",1,2,2,1],["s",0,4,1,1],["s",2,4,1,1],["s",1,4,1,1],["s",3,2,1,1]]],
   [34, [["S",0,1,2,2],["V",1,3,1,2],["V",2,3,1,2],["V",3,0,1,2],["H",2,2,2,1],["s",3,4,1,1],["s",3,3,1,1],["s",0,0,1,1],["s",0,4,1,1]]],
 ];
-function slideLevel(lv) {
-  const i = Math.min(SLIDES.length - 1, lv - 1), extra = Math.max(0, lv - SLIDES.length); // 最後の問題のあとは、上限が少しずつきびしく
-  const [min, st] = SLIDES[i];
-  return { min, st, limit: min + Math.max(2, 8 - Math.floor(lv / 2) - extra) };
+// ★ごとに使う段階（SLIDES の番号）と、最短手数にたせる手数のゆとり
+const SLIDE_POOL = [[0, 1], [2, 3], [4, 5], [6, 7], [8]];
+const SLIDE_SPARE = [8, 6, 5, 4, 3];
+function slideLevel(star) {
+  const pool = SLIDE_POOL[star - 1], [min, st] = SLIDES[pool[Math.floor(Math.random() * pool.length)]];
+  return { min, st, limit: min + SLIDE_SPARE[star - 1] };
 }
 
 // ================= 画面に組み立てる =================
-// mountPuzzle(id, lv, host, { onWin({ mistakes, moves }), onLose(), onChange() })
-const FUR = [['ソファ', '#e86f5a'], ['ベッド', '#5b8def'], ['つくえ', '#f2b84b'], ['植物', '#6cbf8a'], ['いす', '#b28ad6'], ['たな', '#5cc4c9']];
+// mountPuzzle(id, star, host, { onWin({ mistakes, moves }), onLose(), onChange() })
+const FUR = [['ソファ', '#e86f5a', 'sofa'], ['ベッド', '#5b8def', 'bed'], ['つくえ', '#f2b84b', 'desk'], ['植物', '#6cbf8a', 'plant'], ['いす', '#b28ad6', 'chair'], ['たな', '#5cc4c9', 'shelf']];
+// 平面的な家具のイラスト（白い面と、こい線）。w×h は形の比（1×1・1×2・2×1）
+const INK = '#2b2a33';
+const ART = {
+  sofa: [40, 40, `<rect x="7" y="9" width="26" height="13" rx="4"/><rect x="3" y="16" width="8" height="15" rx="3"/><rect x="29" y="16" width="8" height="15" rx="3"/><rect x="9" y="21" width="22" height="9" rx="2"/><rect x="6" y="30" width="3" height="4" fill="${INK}"/><rect x="31" y="30" width="3" height="4" fill="${INK}"/>`],
+  bed: [40, 40, `<rect x="4" y="8" width="5" height="26" rx="2"/><rect x="6" y="19" width="31" height="9" rx="2"/><rect x="11" y="13" width="9" height="6" rx="2.5"/><rect x="21" y="16" width="16" height="5" rx="2" fill-opacity=".7"/><rect x="33" y="27" width="3" height="7" fill="${INK}"/>`],
+  desk: [40, 40, `<rect x="3" y="13" width="34" height="5" rx="1.5"/><rect x="6" y="18" width="3" height="16"/><rect x="22" y="18" width="12" height="16" rx="1"/><rect x="25" y="22" width="6" height="2" fill="${INK}"/><rect x="25" y="28" width="6" height="2" fill="${INK}"/><rect x="9" y="6" width="9" height="7" rx="1" fill-opacity=".7"/>`],
+  plant: [40, 40, `<path d="M13 24h14l-2 11H15z"/><ellipse cx="14" cy="15" rx="5" ry="9" transform="rotate(-25 14 15)"/><ellipse cx="26" cy="15" rx="5" ry="9" transform="rotate(25 26 15)"/><ellipse cx="20" cy="11" rx="4.5" ry="9"/><rect x="19" y="18" width="2" height="7" fill="${INK}"/>`],
+  chair: [40, 40, `<rect x="11" y="5" width="5" height="20" rx="2"/><rect x="11" y="20" width="19" height="5" rx="2"/><rect x="12" y="25" width="3" height="11"/><rect x="26" y="25" width="3" height="11"/>`],
+  shelf: [40, 40, `<rect x="8" y="4" width="24" height="32" rx="1.5" fill="none" stroke="#fff" stroke-width="3"/><rect x="8" y="14" width="24" height="2.5"/><rect x="8" y="25" width="24" height="2.5"/><rect x="11" y="7" width="3" height="7"/><rect x="15" y="8" width="3" height="6" fill-opacity=".7"/><rect x="22" y="18" width="3" height="7"/><rect x="26" y="19" width="3" height="6" fill-opacity=".7"/>`],
+  tallshelf: [40, 80, `<rect x="5" y="4" width="30" height="72" rx="2" fill="none" stroke="#fff" stroke-width="3.5"/><rect x="5" y="22" width="30" height="3"/><rect x="5" y="40" width="30" height="3"/><rect x="5" y="58" width="30" height="3"/><rect x="9" y="9" width="4" height="13"/><rect x="14" y="11" width="4" height="11" fill-opacity=".7"/><rect x="24" y="27" width="4" height="13"/><rect x="9" y="45" width="4" height="13" fill-opacity=".7"/><rect x="14" y="47" width="5" height="11"/><rect x="22" y="63" width="9" height="9" rx="1" fill-opacity=".7"/>`],
+  bench: [80, 40, `<rect x="6" y="12" width="68" height="9" rx="3"/><rect x="10" y="21" width="5" height="13"/><rect x="65" y="21" width="5" height="13"/><rect x="10" y="27" width="60" height="3" fill-opacity=".7"/>`],
+  bigsofa: [80, 80, `<rect x="12" y="14" width="56" height="28" rx="7"/><rect x="4" y="30" width="16" height="32" rx="6"/><rect x="60" y="30" width="16" height="32" rx="6"/><rect x="18" y="42" width="44" height="18" rx="4"/><rect x="38" y="42" width="3" height="18" fill="${INK}" fill-opacity=".35"/><rect x="10" y="62" width="5" height="8" fill="${INK}"/><rect x="65" y="62" width="5" height="8" fill="${INK}"/>`],
+  lamp: [40, 40, `<path d="M12 16 L28 16 L32 26 L8 26 Z" fill="${INK}"/><rect x="19" y="4" width="2" height="12" fill="${INK}"/><circle cx="20" cy="29" r="4" fill="#fff7c2" stroke="${INK}" stroke-width="2"/>`],
+};
+const art = (k, cls = 'pz-art') => { const [w, h, body] = ART[k]; return `<svg class="${cls}" viewBox="0 0 ${w} ${h}" fill="#fff" aria-hidden="true">${body}</svg>`; };
 const REG = ['#e86f5a', '#5b8def', '#f2b84b', '#6cbf8a', '#b28ad6', '#f29bb4', '#5cc4c9', '#a6a08f', '#e8a06a'];
 export function mountPuzzle(id, lv, host, cb = {}) {
   host.innerHTML = '';
-  const life = { n: 3 };
+  const LIVES = livesOf(lv), life = { n: LIVES };
   const h = (t) => { const d = document.createElement('div'); d.innerHTML = t.trim(); return d.firstChild; };
   const shake = (el) => { el.classList.remove('pz-shake'); void el.offsetWidth; el.classList.add('pz-shake'); };
   let over = false;
   const miss = (el) => { life.n--; shake(el); cb.onChange?.(life.n); if (!life.n) { over = true; cb.onLose?.(); } };
-  const win = (extra = {}) => { over = true; cb.onWin?.({ mistakes: 3 - life.n, ...extra }); };
+  const win = (extra = {}) => { over = true; cb.onWin?.({ mistakes: LIVES - life.n, ...extra }); };
 
   if (id === 'akari') {
     const N = akariSize(lv); const { reg, sol } = genAkari(N);
@@ -139,7 +160,7 @@ export function mountPuzzle(id, lv, host, cb = {}) {
         const b = document.createElement('button'); b.className = 'pz-cell'; b.style.background = REG[reg[y][x]];
         const bd = (dx, dy) => { const nx = x + dx, ny = y + dy; return nx < 0 || ny < 0 || nx >= N || ny >= N || reg[ny][nx] !== reg[y][x]; };
         b.style.boxShadow = [bd(0, -1) && 'inset 0 3px 0 #2b2a33', bd(0, 1) && 'inset 0 -3px 0 #2b2a33', bd(-1, 0) && 'inset 3px 0 0 #2b2a33', bd(1, 0) && 'inset -3px 0 0 #2b2a33'].filter(Boolean).join(',');
-        b.innerHTML = st[y][x] === 2 ? '<i class="pz-lamp"></i>' : st[y][x] === 1 ? '<span class="pz-x">×</span>' : '';
+        b.innerHTML = st[y][x] === 2 ? art('lamp', 'pz-art pz-lampart') : st[y][x] === 1 ? '<span class="pz-x">×</span>' : '';
         b.setAttribute('aria-label', `${y + 1}行${x + 1}列`);
         b.onclick = () => {
           if (over) return;
@@ -156,8 +177,11 @@ export function mountPuzzle(id, lv, host, cb = {}) {
   }
 
   if (id === 'aburi') {
-    const pic = PICS[(lv - 1) % PICS.length], G = pic.m.map(r => [...r].map(ch => ch === '#' ? 1 : 0)), Hn = G.length, Wn = G[0].length;
+    const pic = PICS[Math.floor(Math.random() * PICS.length)], G = pic.m.map(r => [...r].map(ch => ch === '#' ? 1 : 0)), Hn = G.length, Wn = G[0].length;
     const mark = G.map(r => r.map(() => 0)); let mode = 1;
+    // ★が低いと、はじめからいくつかぬってある
+    const filled = []; G.forEach((r, y) => r.forEach((v, x) => { if (v) filled.push([y, x]); }));
+    shuffle(filled).slice(0, Math.round(filled.length * ABURI_REVEAL[lv - 1])).forEach(([y, x]) => { mark[y][x] = 1; });
     const wrap = h(`<div class="pz-aburi"><div class="pz-nono"></div><div class="pz-tools"><button class="pz-tool on" data-m="1">ぬる</button><button class="pz-tool" data-m="2">×</button></div></div>`); host.appendChild(wrap);
     const board = wrap.querySelector('.pz-nono');
     wrap.querySelectorAll('.pz-tool').forEach(b => b.onclick = () => { mode = +b.dataset.m; wrap.querySelectorAll('.pz-tool').forEach(x => x.classList.toggle('on', x === b)); });
@@ -200,14 +224,14 @@ export function mountPuzzle(id, lv, host, cb = {}) {
       for (let r = 0; r < SD; r++) for (let c = 0; c < SD; c++) {
         const e = document.createElement('button'), v = cur[r][c];
         e.className = 'pz-cell' + (given[r][c] ? ' given' : '') + (sel && sel[0] === r && sel[1] === c ? ' sel' : '');
-        e.style.background = v >= 0 ? FUR[v][1] : '#fff'; e.textContent = v >= 0 ? FUR[v][0] : '';
+        e.style.background = v >= 0 ? FUR[v][1] : '#fff'; e.innerHTML = v >= 0 ? art(FUR[v][2]) : ''; if (v >= 0) e.setAttribute('aria-label', FUR[v][0]);
         const sh = [c === 2 && 'inset -3px 0 0 #2b2a33', c === 3 && 'inset 3px 0 0 #2b2a33', r % 2 === 1 && r < SD - 1 && 'inset 0 -3px 0 #2b2a33', r % 2 === 0 && r > 0 && 'inset 0 3px 0 #2b2a33'].filter(Boolean);
         if (sh.length) e.style.boxShadow = sh.join(',');
         e.onclick = () => { if (over || given[r][c] || v >= 0) return; sel = [r, c]; draw(); };
         board.appendChild(e);
       }
     };
-    FUR.forEach(([n, col], v) => { const b = document.createElement('button'); b.style.background = col; b.textContent = n; b.onclick = () => {
+    FUR.forEach(([n, col, k], v) => { const b = document.createElement('button'); b.style.background = col; b.innerHTML = art(k) + `<small>${n}</small>`; b.onclick = () => {
       if (over || !sel) return; const [r, c] = sel;
       if (sol[r][c] !== v) { miss(board); return; }
       cur[r][c] = v; sel = null; draw();
@@ -219,7 +243,7 @@ export function mountPuzzle(id, lv, host, cb = {}) {
 
   if (id === 'hikkoshi') {
     const L = slideLevel(lv), W = 4, H = 5;
-    const NAME = { S: ['ソファ', '#e86f5a'], V: ['本棚', '#6cbf8a'], H: ['ベンチ', '#b28ad6'], s: ['植物', '#f2b84b'] };
+    const NAME = { S: ['ソファ', '#e86f5a', 'bigsofa'], V: ['本棚', '#6cbf8a', 'tallshelf'], H: ['ベンチ', '#b28ad6', 'bench'], s: ['植物', '#f2b84b', 'plant'] };
     const ps = L.st.map(p => [...p]); let sel = 0, moves = 0;
     const wrap = h(`<div class="pz-slide-wrap"><div class="pz-slide"></div><div class="pz-arrows"><button data-d="0,-1" aria-label="上">↑</button><button data-d="-1,0" aria-label="左">←</button><button data-d="1,0" aria-label="右">→</button><button data-d="0,1" aria-label="下">↓</button></div></div>`); host.appendChild(wrap);
     const board = wrap.querySelector('.pz-slide');
@@ -241,7 +265,7 @@ export function mountPuzzle(id, lv, host, cb = {}) {
         e.onclick = () => { if (sel == null) return; const p = ps[sel]; const dx = x < p[1] ? -1 : x >= p[1] + p[3] ? 1 : 0, dy = y < p[2] ? -1 : y >= p[2] + p[4] ? 1 : 0; if (!dx !== !dy) move(dx, dy); };
         board.appendChild(e);
       }
-      ps.forEach((p, i) => { const b = document.createElement('button'); b.className = 'pz-blk' + (sel === i ? ' sel' : ''); b.style.cssText = `left:${p[1] * U + 3}px;top:${p[2] * U + 3}px;width:${p[3] * U - 6}px;height:${p[4] * U - 6}px;background:${NAME[p[0]][1]}`; b.textContent = NAME[p[0]][0]; b.onclick = () => { sel = i; draw(); }; board.appendChild(b); });
+      ps.forEach((p, i) => { const b = document.createElement('button'); b.className = 'pz-blk' + (sel === i ? ' sel' : ''); b.style.cssText = `left:${p[1] * U + 3}px;top:${p[2] * U + 3}px;width:${p[3] * U - 6}px;height:${p[4] * U - 6}px;background:${NAME[p[0]][1]}`; b.innerHTML = art(NAME[p[0]][2]); b.setAttribute('aria-label', NAME[p[0]][0]); b.onclick = () => { sel = i; draw(); }; board.appendChild(b); });
     };
     wrap.querySelectorAll('.pz-arrows button').forEach(b => b.onclick = () => { const [dx, dy] = b.dataset.d.split(',').map(Number); move(dx, dy); });
     requestAnimationFrame(draw);

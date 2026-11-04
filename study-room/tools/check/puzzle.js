@@ -45,7 +45,7 @@ const serve = () => new Promise(res => { const srv = http.createServer((req, rsp
     await page.evaluate(() => window.__app.showHome()); await page.waitForTimeout(400);
     await page.evaluate(() => document.querySelector('.solve-ring').click()); await page.waitForSelector('.pz-hub');
     if (id === 'akari') await page.screenshot({ path: path.join(OUT, 'puzzle-1-hub.png') });
-    await page.click(`.pz-pick[data-p=${id}]`); await page.waitForSelector('.puzzle-screen .pz-host > *');
+    await page.click(`.pz-star[data-p=${id}][data-s="1"]`); await page.waitForSelector('.puzzle-screen .pz-host > *');
     await page.waitForTimeout(300);
     await page.screenshot({ path: path.join(OUT, `puzzle-2-${id}.png`) });
     const before = await page.evaluate(() => ({ g: window.__app.HS().gauge, xp: window.__app.S.profile().xp }));
@@ -55,7 +55,7 @@ const serve = () => new Promise(res => { const srv = http.createServer((req, rsp
         const host = document.querySelector('.pz-host');
         if (id === 'akari') { for (const b of host.querySelectorAll('.pz-cell')) { b.click(); b.click(); if (document.querySelectorAll('.pz-life i.on').length < 3) break; } }
         if (id === 'aburi') { host.querySelector('.pz-tool[data-m="2"]').click(); for (const b of host.querySelectorAll('.pz-nono .pz-cell')) { b.click(); if (document.querySelectorAll('.pz-life i.on').length < 3) break; } }
-        if (id === 'rokujo') { const empty = [...host.querySelectorAll('.pz-sd .pz-cell')].findIndex(b => !b.textContent); host.querySelectorAll('.pz-sd .pz-cell')[empty].click(); for (const b of host.querySelectorAll('.pz-pal button')) { b.click(); if (document.querySelectorAll('.pz-life i.on').length < 3) break; } }
+        if (id === 'rokujo') { const empty = [...host.querySelectorAll(".pz-sd .pz-cell")].findIndex(b => !b.querySelector("svg")); host.querySelectorAll('.pz-sd .pz-cell')[empty].click(); for (const b of host.querySelectorAll('.pz-pal button')) { b.click(); if (document.querySelectorAll('.pz-life i.on').length < 3) break; } }
       }, id);
       check(await page.locator('.pz-life i.on').count() === 2, `${id}：まちがえるとハートが1つ減る`);
     }
@@ -64,20 +64,33 @@ const serve = () => new Promise(res => { const srv = http.createServer((req, rsp
     await page.waitForTimeout(400);
     const txt = await page.locator('.pz-res-sheet').textContent().catch(() => '');
     check(/クリア/.test(txt), `${id}：解くとクリアになる`);
-    const after = await page.evaluate((id) => ({ g: window.__app.HS().gauge, xp: window.__app.S.profile().xp, lv: window.__app.S.puzzleState(id).lv }), id);
-    check(after.g > before.g && after.xp > before.xp && after.lv === 2, `${id}：ゲージ ${before.g}→${after.g}・XP ${before.xp}→${after.xp}・Lv${after.lv}`);
+    const after = await page.evaluate((id) => ({ g: window.__app.HS().gauge, xp: window.__app.S.profile().xp, open: window.__app.S.puzzleOpen(id) }), id);
+    check(after.g > before.g && after.xp > before.xp && after.open === 2, `${id}：ゲージ ${before.g}→${after.g}・XP ${before.xp}→${after.xp}・★${after.open}まで選べる`);
     await page.screenshot({ path: path.join(OUT, `puzzle-3-${id}-clear.png`) });
     if (id === 'aburi') {
-      // 次の問題も開ける（2枚目の絵）
-      await page.click('.pz-res-sheet .next'); await page.waitForTimeout(300);
-      check(/Lv2/.test(await page.locator('.puzzle-screen h2').textContent()), 'aburi：「次の問題」で Lv2 が始まる');
+      // 「★2 にちょうせん」で ★2 が始まる
+      await page.click('.pz-res-sheet .go-up'); await page.waitForTimeout(300);
+      check(/★2/.test(await page.locator('.puzzle-screen h2').textContent()), 'aburi：「★2 にちょうせん」で ★2 が始まる');
     }
   }
 
-  console.log('3. おひっこしの手数の上限');
+  console.log('3. ゲージのため置き・★5 のまちがい回数');
+  {
+    const r = await page.evaluate(() => { const hs = window.__app.HS(); hs.gauge = 500; return document.querySelector('.solve-ring') ? 1 : 0; });
+    await page.evaluate(() => window.__app.showHome()); await page.waitForTimeout(400);
+    const tip = await page.locator('.buy-tip').textContent().catch(() => '');
+    check(/[2-9]つ買える/.test(tip), `ゲージをためると、いくつも買える（${tip.trim()}）`);
+    await page.evaluate(() => { const ps = window.__app.S.puzzleState('akari'); ps.best = 4; });
+    await page.evaluate(() => document.querySelector('.solve-ring').click()); await page.waitForSelector('.pz-hub');
+    await page.screenshot({ path: path.join(OUT, 'puzzle-1-hub2.png') });
+    await page.click('.pz-star[data-p=akari][data-s="5"]'); await page.waitForSelector('.pz-cell');
+    check(await page.locator('.pz-life i').count() === 2 && await page.locator('.pz-akari .pz-cell').count() === 81, '★5 は 9×9・まちがい2回まで');
+    await page.screenshot({ path: path.join(OUT, 'puzzle-2-akari5.png') });
+  }
+  console.log('4. おひっこしの手数の上限');
   await page.evaluate(() => window.__app.showHome()); await page.waitForTimeout(300);
   await page.evaluate(() => document.querySelector('.solve-ring').click()); await page.waitForSelector('.pz-hub');
-  await page.click('.pz-pick[data-p=hikkoshi]'); await page.waitForSelector('.pz-blk'); await page.waitForTimeout(300);
+  await page.click('.pz-star[data-p=hikkoshi][data-s="2"]'); await page.waitForSelector('.pz-blk'); await page.waitForTimeout(300);
   const limit = +(await page.locator('.pz-moves').textContent()).split('/')[1];
   // 小さい植物を行ったり来たりさせる
   for (let k = 0; k < limit + 2 && !(await page.locator('.pz-res-sheet').count()); k++) {
@@ -91,7 +104,7 @@ const serve = () => new Promise(res => { const srv = http.createServer((req, rsp
   check(/手数の上限/.test(await page.locator('.pz-res-sheet').textContent().catch(() => '')), `上限（${limit}手）をこえると失敗になる`);
   await page.screenshot({ path: path.join(OUT, 'puzzle-4-lose.png') });
 
-  console.log('4. 管理者がモードを変える');
+  console.log('5. 管理者がモードを変える');
   await page.evaluate(async () => { const { rpc } = await import('/js/cloud.js'); await rpc('sr_signup', { p_username: 'admin', p_password: 'x' }); });
   // 管理者として「puzzler」を勉強に（mock なので直接コードを渡す）
   await page.evaluate(async () => { const { rpc } = await import('/js/cloud.js'); await rpc('sr_admin_grant_code', { p_token: 't-admin', p_username: 'puzzler', p_code: 'MODE:study:' + (Date.now() + 1000) }); });
@@ -104,7 +117,7 @@ const serve = () => new Promise(res => { const srv = http.createServer((req, rsp
   check(await page.evaluate(() => window.__app.S.profile().mode === 'study'), '管理者が変えると「勉強」に切りかわる');
   check(!(await page.locator('.mode-sheet').count()), 'もう一度モードをきかれない');
 
-  console.log('5. 画面のエラー');
+  console.log('6. 画面のエラー');
   check(!errors.length, errors.length ? `エラーが ${errors.length} 件：\n      ` + errors.slice(0, 6).join('\n      ') : 'エラーなし');
   await browser.close(); srv.close();
   console.log(fails.length ? `\nだめな所：${fails.length} 件` : '\nぜんぶ OK');
