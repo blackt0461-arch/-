@@ -404,3 +404,12 @@ b, strong { font-weight: 700; }
 .hotbar .sl:first-child .buy-tip { left: -2px; transform: none; animation-name: buyTip0; }
 .hotbar .sl:first-child .buy-tip::after { left: 22px; }
 @keyframes buyTip0 { 50% { transform: translateY(-4px); } }
+
+/* 管理者：アカウントを消す */
+.ac-btns { display: inline-flex; gap: 6px; }
+.ac-del { color: #ff8a80; }
+.btn.danger { background: #c62f2a; color: #fff; border: 0; }
+.btn.danger:disabled { opacity: .4; }
+.sh-ic.danger { background: rgba(198,47,42,.18); color: #ff8a80; }
+.del-lbl { display: grid; gap: 8px; margin: 6px 0 14px; font-size: 13px; color: var(--sk-muted); }
+.del-in { font: inherit; font-size: 16px; padding: 12px; border-radius: 12px; border: 1px solid var(--sk-panel-line); background: rgba(255,255,255,.07); color: var(--sk-text); }

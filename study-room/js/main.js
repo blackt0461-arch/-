@@ -1262,7 +1262,7 @@ function photoMode() {
 
 // =========================== 更新のお知らせ ===========================
 // このプログラムの版（version.json と同じにする。公開のたびに上げる）
-const APP_VERSION = '1.0.1';
+const APP_VERSION = '1.0.2';
 // 新しい版が出たら、みんな同じタイミングでそろうように強制で再起動する。
 // 開いた時・画面に戻った時・1分ごとに version.json を見る
 async function latestVersion() {
@@ -1870,10 +1870,33 @@ async function showAdmin() {
       <div class="ac-top"><span class="av">${icon('user')}</span><b>${esc(a.username)}</b><span class="lvb">Lv${S.rankInfo(s.xp || 0).rank}</span></div>
       <div class="ac-stats"><span>${icon('pencil')}${s.solved || 0}問</span><span>${icon('check')}${s.solved ? Math.round((s.correct || 0) / s.solved * 100) : 0}%</span><span>${icon('flame')}${s.streak || 0}日（合計${s.days || 0}日）</span></div>
       <div class="ac-units">${UNITS.map(un => `<span>${un} ${units[un]?.solved || 0}問</span>`).join('')}</div>
-      <div class="ac-foot"><small>登録 ${day(a.created_at)} ・ 最後 ${day(a.last_login)}</small><button class="btn ghost sm visit" data-u="${esc(a.username)}">${icon('eye')}部屋</button></div>
+      <div class="ac-foot"><small>登録 ${day(a.created_at)} ・ 最後 ${day(a.last_login)}</small><span class="ac-btns"><button class="btn ghost sm visit" data-u="${esc(a.username)}">${icon('eye')}部屋</button>${a.username !== u.name ? `<button class="btn ghost sm ac-del" data-u="${esc(a.username)}" aria-label="${esc(a.username)}のアカウントを消す">${icon('trash')}消す</button>` : ''}</span></div>
     </div>`;
   }).join('');
   el.querySelectorAll('.visit').forEach(b => b.onclick = () => visitFriend(b.dataset.u, showAdmin));
+  el.querySelectorAll('.ac-del').forEach(b => b.onclick = () => confirmDeleteUser(b.dataset.u));
+}
+// 管理者：アカウントを消す。まちがえないよう、名前を打ちこんでから消す
+function confirmDeleteUser(name) {
+  const cf = sheet(`
+    <div class="sh-head"><span class="sh-ic danger">${icon('trash')}</span><div><h3>「${esc(name)}」を消しますか？</h3><p>部屋・記録・フレンドのつながりも消えます。元には戻せません</p></div></div>
+    <label class="del-lbl">確かめのため、名前「${esc(name)}」を打ちこんでください
+      <input class="del-in" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="${esc(name)}"></label>
+    <div class="row2"><button class="btn ghost back2">やめる</button><button class="btn danger go" disabled>${icon('trash')}消す</button></div>`, 'news-sheet del-sheet');
+  const inp = cf.querySelector('.del-in'), go = cf.querySelector('.go');
+  inp.oninput = () => { go.disabled = inp.value.trim() !== name; };
+  cf.querySelector('.back2').onclick = () => cf.remove();
+  go.onclick = async () => {
+    go.disabled = true;
+    try {
+      await rpc('sr_admin_delete_user', { p_token: Auth.currentUser().token, p_username: name });
+      toast(`「${name}」を消しました`); cf.remove(); showAdmin();
+    } catch (ex) {
+      const m = String(ex.message || ex);
+      toast(/cannot_delete_admin/.test(m) ? '管理者のアカウントは消せません' : /not_found/.test(m) ? 'そのアカウントは見つかりません' : /sr_admin_delete_user|function|404/.test(m) ? '消すしくみがまだ準備できていません' : m, 3000);
+      go.disabled = false;
+    }
+  };
 }
 
 // =========================== 設定 ===========================
