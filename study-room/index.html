@@ -11,6 +11,17 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
+<script>
+  // テスト版（study-room-beta/）では、アイコンと名前を「ROOMIN β」に変えて、いつもの版と見分けられるようにする
+  if (/-beta\//.test(location.pathname)) {
+    var q = function (sel) { return document.querySelector(sel); };
+    q('link[rel=manifest]').href = 'manifest-beta.webmanifest';
+    q('link[rel=icon]').href = 'icon-beta.svg';
+    q('link[rel=apple-touch-icon]').href = 'apple-touch-icon-beta.png';
+    q('meta[name=apple-mobile-web-app-title]').content = 'ROOMIN β';
+    document.title = 'ROOMIN β';
+  }
+</script>
 <link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="ui.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
