@@ -117,7 +117,7 @@ async function loadSavedPacks() {
   const { normCode } = await import('./packcrypt.js');
   const u = Auth.currentUser();
   let granted = [];
-  if (u) { try { granted = (await rpc('sr_my_codes', { p_token: u.token })) || []; } catch (e) { /* まだ準備できていない・オフライン */ } }
+  if (u) { try { granted = (await rpc('sr_my_codes', { p_token: u?.token })) || []; } catch (e) { /* まだ準備できていない・オフライン */ } }
   // 「MODE:puzzle:時刻」は、管理者がモードを変えた知らせ（問題集ではない）。いちばん新しいものを使う
   const modes = granted.filter(c => /^MODE:/.test(c)).map(c => c.split(':')).map(([, m, t]) => ({ m, t: +t || 0 })).filter(x => x.m === 'study' || x.m === 'puzzle').sort((a, b) => a.t - b.t);
   granted = granted.filter(c => !/^MODE:/.test(c));
@@ -318,7 +318,7 @@ async function refreshGifts(force = false) {
   if (!u || (!force && Date.now() - giftsCheckedAt < 60000)) return;
   giftsCheckedAt = Date.now();
   let list;
-  try { list = await rpc('sr_gift_list', { p_token: u.token }); } catch (e) { return; }
+  try { list = await rpc('sr_gift_list', { p_token: u?.token }); } catch (e) { return; }
   let added = 0;
   for (const g of list || []) {
     const id = 'op' + g.id;
@@ -757,6 +757,8 @@ function remainCapacity(room = curRoom()) {
 let notesChecked = false;
 function showHome() {
   BGM.duck(false);
+  // ログイン情報がない（ログアウトされた）のに部屋を出そうとしたら、ログイン画面へ（こわれた画面にしない）
+  if (!Auth.currentUser()) return showLogin('login');
   room3d?.clearPreview();
   S.setUnlimited(isAdmin());
   applySkin();
@@ -1421,7 +1423,7 @@ function photoMode() {
 
 // =========================== 更新のお知らせ ===========================
 // このプログラムの版（version.json と同じにする。公開のたびに上げる）
-const APP_VERSION = '1.8.0';
+const APP_VERSION = '1.8.1';
 // 新しい版が出たら、みんな同じタイミングでそろうように強制で再起動する。
 // 開いた時・画面に戻った時・1分ごとに version.json を見る
 async function latestVersion() {
@@ -1852,7 +1854,7 @@ function showFeedback(kind = 'bug') {
     if (!body) return;
     const btn = e.target.querySelector('button'); btn.disabled = true;
     try {
-      await rpc('sr_feedback_send', { p_token: Auth.currentUser().token, p_kind: kind, p_body: body + `\n\n（${navigator.userAgent.slice(0, 120)}）` });
+      await rpc('sr_feedback_send', { p_token: Auth.currentUser()?.token, p_kind: kind, p_body: body + `\n\n（${navigator.userAgent.slice(0, 120)}）` });
       toast('送りました。ありがとう！'); e.target.reset();
     } catch (ex) { toast(ex.message); }
     btn.disabled = false;
@@ -1862,7 +1864,7 @@ function showFeedback(kind = 'bug') {
 async function showFeedbackInbox() {
   const el = screenWithTabs('feedback', `<button class="icon back">${icon('back')}</button><h2>届いた要望・バグ</h2><span></span>`, 'menu', `<div class="fblist"><p class="empty">読み込み中…</p></div>`);
   el.querySelector('.back').onclick = showAdmin;
-  const tk = Auth.currentUser().token;
+  const tk = Auth.currentUser()?.token;
   const load = async () => {
     let list = [];
     try { list = await rpc('sr_feedback_list', { p_token: tk }); } catch (e) { el.querySelector('.fblist').innerHTML = `<p class="empty">${esc(e.message)}</p>`; return; }
@@ -1997,11 +1999,12 @@ async function showRanking() {
   // 自分の最新の数をネットに送ってから見る
   try { await Sync.push(); } catch (e) { /* なし */ }
   let r;
-  try { r = await rpc('sr_weekly_ranking', { p_token: Auth.currentUser().token, p_week: wk }); }
+  const pz = isPuzzle(), unit = pz ? '回' : '問';
+  try { r = await rpc(pz ? 'sr_weekly_puzzle' : 'sr_weekly_ranking', { p_token: Auth.currentUser()?.token, p_week: wk }); }
   catch (e) { el.querySelector('.rk-list').innerHTML = `<p class="empty">${esc(e.message)}</p>`; return; }
-  const mine = S.profile().week?.key === wk ? S.profile().week.solved : 0;
+  const mine = S.profile().week?.key === wk ? (pz ? S.profile().week.puzzle || 0 : S.profile().week.solved) : 0;
   el.querySelector('.rk-me').innerHTML = `<div class="rk-mecard"><span class="rk-pos">${r.me ? r.me.pos + '<small>位</small>' : '—'}</span>
-    <div><b>あなた</b><small>${r.total || 0}人中 ・ 今週 ${mine}問</small></div>${icon('pencil')}</div>`;
+    <div><b>あなた</b><small>${r.total || 0}人中 ・ 今週 ${mine}${unit}</small></div>${icon(pz ? 'grid' : 'pencil')}</div>`;
   const medal = (p) => p <= 3 ? `<span class="medal m${p}">${p}</span>` : `<span class="rk-n">${p}</span>`;
   el.querySelector('.rk-list').innerHTML = (r.top || []).length ? r.top.map(x => `
     <div class="rk-row ${x.me ? 'me' : ''}">${medal(x.pos)}<b>${esc(x.username)}</b><span>${x.solved}${unit}<small>${pz ? 'ノーミス' : '正解'} ${x.correct}</small></span></div>`).join('')
@@ -2066,7 +2069,7 @@ async function refreshNewsBadge() {
   const u = Auth.currentUser();
   if (!u) return;
   try {
-    const list = await rpc('sr_news_list', { p_token: u.token });
+    const list = await rpc('sr_news_list', { p_token: u?.token });
     const seen = +(localStorage.getItem(NEWS_SEEN) || 0);
     newsBadge = list.filter(n => n.id > seen).length;
   } catch (e) { /* オフライン */ }
@@ -2075,7 +2078,7 @@ async function showNews() {
   const el = screenWithTabs('news', `<button class="icon back">${icon('back')}</button><h2>お知らせ</h2><span></span>`, 'menu', `<div class="nlist"><p class="empty">読み込み中…</p></div>`);
   el.querySelector('.back').onclick = showMenu;
   let list = [];
-  try { list = await rpc('sr_news_list', { p_token: Auth.currentUser().token }); }
+  try { list = await rpc('sr_news_list', { p_token: Auth.currentUser()?.token }); }
   catch (e) { el.querySelector('.nlist').innerHTML = `<p class="empty">${esc(e.message)}</p>`; return; }
   const seen = +(localStorage.getItem(NEWS_SEEN) || 0);
   const day = (t) => new Date(t).toLocaleDateString('ja-JP', { year: 'numeric', month: 'numeric', day: 'numeric' });
@@ -2110,7 +2113,7 @@ function composeNews(after) {
       <div class="row2"><button class="btn ghost back2">書きなおす</button><button class="btn gold send">${icon('check')}送る</button></div>`, 'news-sheet');
     cf.querySelector('.back2').onclick = () => { cf.remove(); composeNews(after); };
     cf.querySelector('.send').onclick = async () => {
-      try { await rpc('sr_news_post2', { p_token: Auth.currentUser().token, p_title: t, p_body: b, p_admin_only: adm }); toast('お知らせを送りました'); cf.remove(); after && after(); }
+      try { await rpc('sr_news_post2', { p_token: Auth.currentUser()?.token, p_title: t, p_body: b, p_admin_only: adm }); toast('お知らせを送りました'); cf.remove(); after && after(); }
       catch (ex) { toast(ex.message); }
     };
   };
@@ -2144,7 +2147,7 @@ function composeGift() {
     cf.querySelector('.back2').onclick = () => cf.remove();
     cf.querySelector('.send').onclick = async () => {
       try {
-        await rpc('sr_gift_send', { p_token: Auth.currentUser().token, p_title: g.title, p_kind: g.kind, p_amount: g.amount, p_item: g.itemId, p_days: g.days });
+        await rpc('sr_gift_send', { p_token: Auth.currentUser()?.token, p_title: g.title, p_kind: g.kind, p_amount: g.amount, p_item: g.itemId, p_days: g.days });
         toast('プレゼントを送りました'); cf.remove(); el.remove(); refreshGifts(true);
       } catch (ex) { toast(ex.message); }
     };
@@ -2156,7 +2159,7 @@ async function refreshFriendBadge() {
   const u = Auth.currentUser();
   if (!u) return;
   try {
-    const list = await rpc('sr_friend_list', { p_token: u.token });
+    const list = await rpc('sr_friend_list', { p_token: u?.token });
     friendBadge = list.filter(f => f.status === 'incoming').length;
   } catch (e) { /* オフライン */ }
 }
@@ -2169,7 +2172,7 @@ async function showFriends() {
   const listEl = el.querySelector('.flist');
   const load = async () => {
     let list = [];
-    try { list = await rpc('sr_friend_list', { p_token: u.token }); } catch (e) { listEl.innerHTML = `<p class="empty">${esc(e.message)}</p>`; return; }
+    try { list = await rpc('sr_friend_list', { p_token: u?.token }); } catch (e) { listEl.innerHTML = `<p class="empty">${esc(e.message)}</p>`; return; }
     friendBadge = list.filter(f => f.status === 'incoming').length;
     const sec = (title, arr, row) => arr.length ? `<h3 class="sec">${title}</h3>${arr.map(row).join('')}` : '';
     const lv = f => S.rankInfo(f.summary?.xp || 0).rank;
@@ -2184,9 +2187,9 @@ async function showFriends() {
         <div class="frow"><span class="av">${icon('user')}</span><b>${esc(f.username)}<small>承認を待っています</small></b>
           <button class="btn ghost sm del" data-u="${esc(f.username)}">取り消す</button></div>`) ||
       '<p class="empty">まだフレンドがいません。相手のユーザー名を入れて申請してみましょう。</p>';
-    listEl.querySelectorAll('.acc').forEach(b => b.onclick = async () => { await rpc('sr_friend_respond', { p_token: u.token, p_username: b.dataset.u, p_accept: true }); toast(`${b.dataset.u}さんとフレンドになりました`); load(); });
-    listEl.querySelectorAll('.dec').forEach(b => b.onclick = async () => { await rpc('sr_friend_respond', { p_token: u.token, p_username: b.dataset.u, p_accept: false }); load(); });
-    listEl.querySelectorAll('.del').forEach(b => b.onclick = async () => { if (!confirm(`${b.dataset.u}さんをフレンドから外しますか？`)) return; await rpc('sr_friend_remove', { p_token: u.token, p_username: b.dataset.u }); load(); });
+    listEl.querySelectorAll('.acc').forEach(b => b.onclick = async () => { await rpc('sr_friend_respond', { p_token: u?.token, p_username: b.dataset.u, p_accept: true }); toast(`${b.dataset.u}さんとフレンドになりました`); load(); });
+    listEl.querySelectorAll('.dec').forEach(b => b.onclick = async () => { await rpc('sr_friend_respond', { p_token: u?.token, p_username: b.dataset.u, p_accept: false }); load(); });
+    listEl.querySelectorAll('.del').forEach(b => b.onclick = async () => { if (!confirm(`${b.dataset.u}さんをフレンドから外しますか？`)) return; await rpc('sr_friend_remove', { p_token: u?.token, p_username: b.dataset.u }); load(); });
     listEl.querySelectorAll('.visit').forEach(b => b.onclick = () => visitFriend(b.dataset.u));
   };
   el.querySelector('.addf').onsubmit = async (e) => {
@@ -2194,7 +2197,7 @@ async function showFriends() {
     const n = e.target.n.value.trim();
     if (!n) return;
     try {
-      const r = await rpc('sr_friend_request', { p_token: u.token, p_username: n });
+      const r = await rpc('sr_friend_request', { p_token: u?.token, p_username: n });
       toast(r.status === 'accepted' ? `${n}さんとフレンドになりました` : `${n}さんに申請しました`);
       e.target.reset(); load();
     } catch (ex) { toast(ex.message); }
@@ -2206,7 +2209,7 @@ async function showFriends() {
 async function visitFriend(username, back = showFriends) {
   const u = Auth.currentUser();
   let r;
-  try { r = await rpc('sr_friend_house', { p_token: u.token, p_username: username }); } catch (e) { return toast(e.message); }
+  try { r = await rpc('sr_friend_house', { p_token: u?.token, p_username: username }); } catch (e) { return toast(e.message); }
   const house = r.house;
   if (!house || !house.rooms?.length || house.v !== 2) return toast(`${username}さんの部屋はまだ準備中です`);
   visiting = { username: r.username, house, current: 0, summary: r.summary, back };
@@ -2261,7 +2264,7 @@ async function showAdmin() {
   el.querySelector('.sendgift').onclick = () => composeGift();
   const u = Auth.currentUser();
   let list = [];
-  try { list = await rpc('sr_admin_users', { p_token: u.token }); } catch (e) { el.querySelector('.alist').innerHTML = `<p class="empty">${esc(e.message)}</p>`; return; }
+  try { list = await rpc('sr_admin_users', { p_token: u?.token }); } catch (e) { el.querySelector('.alist').innerHTML = `<p class="empty">${esc(e.message)}</p>`; return; }
   const day = (t) => t ? new Date(t).toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
   el.querySelector('.alist').innerHTML = `<p class="note">全 ${list.length} 人</p>` + list.map(a => {
     const s = a.summary || {};
@@ -2304,7 +2307,7 @@ function givePack(name) {
   cf.querySelectorAll('.give-one').forEach(b => b.onclick = async () => {
     b.disabled = true;
     try {
-      await rpc('sr_admin_grant_code', { p_token: Auth.currentUser().token, p_username: name, p_code: packCode[b.dataset.s] });
+      await rpc('sr_admin_grant_code', { p_token: Auth.currentUser()?.token, p_username: name, p_code: packCode[b.dataset.s] });
       toast(`「${name}」に「${packOf[b.dataset.s].name}」を渡しました`); cf.remove();
     } catch (ex) {
       const m = String(ex.message || ex);
@@ -2326,7 +2329,7 @@ function confirmDeleteUser(name) {
   go.onclick = async () => {
     go.disabled = true;
     try {
-      await rpc('sr_admin_delete_user', { p_token: Auth.currentUser().token, p_username: name });
+      await rpc('sr_admin_delete_user', { p_token: Auth.currentUser()?.token, p_username: name });
       toast(`「${name}」を消しました`); cf.remove(); showAdmin();
     } catch (ex) {
       const m = String(ex.message || ex);
@@ -2773,7 +2776,7 @@ Sync.setHandlers({
   onStatus: (s) => { syncState = s; paintSync(); },
   onExpired: () => {
     // 合い鍵が使えなくなった＝ほかの端末で同じアカウントにログインされた
-    localStorage.removeItem('studyroom.cloud');
+    Auth.forget();
     document.querySelectorAll('.lb-screen, .photo-ui, .photo-preview').forEach(e => e.remove());
     document.body.classList.remove('photo-mode');
     toast('別の端末で同じアカウントにログインされたため、ログアウトしました', 4500);
