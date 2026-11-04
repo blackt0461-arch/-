@@ -863,3 +863,9 @@ h3.sec { font-size: 14px; color: var(--muted); margin: 18px 4px 8px; font-weight
 .sc-row > .ic:last-child { width: 16px; height: 16px; opacity: .6; }
 .sc-resume { display: flex; flex-direction: row; align-items: center; justify-content: center; gap: 6px; width: 100%; margin: 4px 0 8px; padding-block: 12px; }
 .sc-resume small { font-size: 11px; opacity: .8; }
+
+/* 勉強 ⇄ パズル の切りかえ（1.8.2） */
+.sheet-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 6px; }
+.sheet-foot .link.close { margin: 0; }
+.mode-switch { display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; border-radius: 999px; border: 1px solid var(--sk-card-line, rgba(255,255,255,.14)); background: var(--sk-icon-bg, rgba(255,255,255,.06)); color: var(--sk-text, inherit); text-decoration: none; font-size: 13px; }
+.mode-switch .ic { width: 16px; height: 16px; }
