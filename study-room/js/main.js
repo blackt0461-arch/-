@@ -265,7 +265,7 @@ function showGacha(banner = null) {
   const act = G.activeSeries();
   // 限定が左、恒常（スタンダード）が右。アイコンはそのガチャの代表の家具
   const heroOf = (sid) => G.bySeries(sid).find(i => i.rarity === 5) || G.bySeries(sid)[0];
-  const banners = [...act.map(s => ({ id: s.id, name: `限定：${s.name}`, short: s.name.replace('シリーズ', ''), desc: s.desc, limited: true, hero: heroOf(s.id) })),
+  const banners = [...act.map(s => ({ id: s.id, name: `限定：${s.name}`, title: s.title, short: s.title || s.name.replace('シリーズ', ''), desc: s.desc, limited: true, hero: heroOf(s.id) })),
     { id: 'standard', name: 'スタンダード', short: 'スタンダード', desc: '★5は上質な定番（恒常）から出ます', hero: G.gachaById('g5-grand-piano') || G.byRarity(5).find(i => !i.limited) }];
   const b = banners.find(x => x.id === banner) || banners[0];
   const t1 = hs.rareTickets || 0, t4 = hs.rareTickets4 || 0, t5 = hs.rareTickets5 || 0;
@@ -277,7 +277,7 @@ function showGacha(banner = null) {
     <div class="banner ${b.limited ? 'b-' + b.id : 'b-standard'}">
       <div class="bn-glow"></div>
       ${b.limited ? '<span class="bn-tag">期間限定</span>' : ''}
-      <h3>${esc(b.name.replace('限定：', ''))}</h3>
+      ${b.title ? `<p class="bn-kicker">${esc(b.name.replace('限定：', ''))}</p><h3 class="bn-title">${esc(b.title)}</h3>` : `<h3>${esc(b.name.replace('限定：', ''))}</h3>`}
       <p>${esc(b.desc)}</p>
       ${b.limited && SAMPLE_ROOMS[b.id] ? `<button class="bn-sample">${icon('home')}モデルハウスを見る</button>` : ''}
       <div class="bn-picks">${(b.limited ? G.bySeries(b.id) : G.byRarity(5).filter(i => !i.limited)).slice(0, 4).map(it => `<span class="thumb">${thumbHTML(it)}</span>`).join('')}</div>
@@ -910,10 +910,12 @@ function onSelectItem(uid) {
     <div class="float-bar">
       <span class="fb-name">${esc(it.name)}</span>
       ${it.place !== 'wall' ? `<button class="rot">${icon('rotate')}回す</button>` : ''}
+      <button class="swap">${icon('refresh')}入れかえ</button>
       <button class="store">${icon('box')}しまう</button>
       <button class="x" aria-label="選ぶのをやめる">${icon('x')}</button>
     </div>`);
   fb.querySelector('.rot')?.addEventListener('click', () => room3d.rotateSelected());
+  fb.querySelector('.swap').onclick = () => showSwap(uid);
   fb.querySelector('.store').onclick = () => {
     const r = curRoom();
     const riders = r.placed.filter(x => x.on === uid).map(x => x.uid);
@@ -926,6 +928,51 @@ function onSelectItem(uid) {
   };
   fb.querySelector('.x').onclick = () => room3d.select(null);
   app.querySelector('.home')?.append(fb);
+}
+// 入れかえ：同じ種類の家具と、場所と向きはそのままで取りかえる
+function showSwap(uid) {
+  const r = curRoom();
+  const p = r.placed.find(x => x.uid === uid);
+  const cur = p && itemById(p.item);
+  if (!cur) return;
+  const ids = S.isUnlimited() ? [...new Set([...ITEMS, ...G.GACHA_ITEMS].map(i => i.id))] : Object.keys(HS().inventory);
+  const list = ids.map(itemById).filter(it => it && it.id !== cur.id && it.genre === cur.genre && it.place === cur.place && S.owned(it.id) > S.placedCount(it.id));
+  const genreName = GENRES.find(g => g.id === cur.genre)?.name || '家具';
+  const el = sheet(`
+    <div class="sh-head"><span class="sh-ic">${icon('refresh')}</span><div><h3>入れかえ</h3><p>${esc(cur.name)}と、同じ場所・同じ向きで取りかえます</p></div></div>
+    ${list.length ? `<div class="invgrid">${list.map(it => `<button class="inv-item" data-id="${it.id}"><span class="thumb">${thumbHTML(it)}</span><b>${esc(it.name)}</b></button>`).join('')}</div>`
+      : `<p class="empty">入れかえられる${esc(genreName)}を持っていません。「家具を買う」やガチャで手に入れると、ここに出ます。</p>`}
+    <button class="link close">やめる</button>`, 'inv-sheet');
+  el.querySelector('.close').onclick = () => el.remove();
+  el.querySelectorAll('.inv-item').forEach(b => b.onclick = async () => {
+    const next = itemById(b.dataset.id);
+    el.remove();
+    const before = p.item;
+    p.item = next.id;
+    room3d.removeObject(uid);
+    const o = await room3d.placeOne(p, true);
+    // 大きさがちがって重なったら、近くの空いている所へ少しずらす。それでもだめなら元にもどす
+    if (!o || !(room3d.checkPlacement(o) || room3d.findFreeSpot(o))) {
+      if (o) room3d.removeObject(uid);
+      p.item = before;
+      await room3d.placeOne(p, false);
+      room3d.updateLights();
+      return toast('ここには入りませんでした（大きすぎるかも）', 2600);
+    }
+    // 上にのっていた小物は、新しい家具の高さにのせ直す
+    for (const x of r.placed.filter(q => q.on === uid)) {
+      const ro = room3d.objByUid?.[x.uid];
+      if (!ro) continue;
+      delete x.on; delete x.y;
+      room3d.mountPlaced(ro, x);
+      room3d.checkPlacement(ro);
+    }
+    room3d.updateLights();
+    S.save();
+    room3d.select(uid);
+    vibrate(20);
+    toast(`${next.name}に入れかえました`, 1800);
+  });
 }
 function showInventory() {
   const inv = HS().inventory;
@@ -1022,7 +1069,7 @@ function photoMode() {
 
 // =========================== 更新のお知らせ ===========================
 // このプログラムの版（version.json と同じにする。公開のたびに上げる）
-const APP_VERSION = '2.8.0';
+const APP_VERSION = '2.8.1';
 // 新しい版が出たら、みんな同じタイミングでそろうように強制で再起動する。
 // 開いた時・画面に戻った時・1分ごとに version.json を見る
 async function latestVersion() {

@@ -321,6 +321,9 @@ export class Room3D {
   loop() {
     requestAnimationFrame(() => this.loop());
     if (!this.active || document.hidden) return;
+    // 文字の見えにくさを調べるとき（tools/check/contrast.js）は、部屋は1回描いたら止めて速くする
+    if (window.__ccFreeze && this.__ccFrames > 30) return;
+    if (window.__ccFreeze) this.__ccFrames = (this.__ccFrames || 0) + 1;
     const dt = Math.min(this.clock.getDelta(), 0.05);
     const t = this.clock.elapsedTime;
     if (this.targetLook) {

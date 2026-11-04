@@ -18,7 +18,7 @@ export const SHARD_COST = 5;
 // 限定のシリーズ。start / end は開催期間（ISO 日付文字列。null = 未定）。いちばん上が今のピックアップ
 // （もとの「ロックシリーズ」の家具は、id はそのままでバンドシリーズに入った）
 export const SERIES = [
-  { id: 'band', name: 'バンドシリーズ', desc: 'ライブハウスの熱気を、自分の部屋に。', start: null, end: null },
+  { id: 'band', name: 'バンドシリーズ', title: 'OVERDRIVE', desc: 'アンプをいっぱいに上げて。ライブハウスの熱気を、自分の部屋に。', start: null, end: null },
   { id: 'starry', name: '星空シリーズ', desc: '濃紺と金に、またたく星。夜空の中で暮らすような部屋に。', start: '2099-01-01', end: null }, // お休み中（持っている家具はそのまま）
   { id: 'gothic', name: 'ゴシックシリーズ', desc: '黒檀と深紅のベルベット、ゆらめくろうそく。古城の一室のような部屋に。', start: '2099-01-01', end: null }, // まだ開いていない
   { id: 'wa', name: '和の雅シリーズ', desc: '黒漆と金箔、舞う桜。雅な日本の部屋に。', start: '2099-01-01', end: null }, // まだ開いていない
