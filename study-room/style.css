@@ -252,3 +252,6 @@ input { font: inherit; }
 /* 下から出る画面があるあいだは、アイコン列を隠す */
 #app:has(.sheet) .tabbar { display: none; }
 .sheet { z-index: 6; }
+
+/* テスト版（管理者だけ）のしるし */
+.is-beta body::after { content: "テスト版"; position: fixed; top: calc(env(safe-area-inset-top, 0px) + 2px); left: 50%; transform: translateX(-50%); z-index: 9999; padding: 2px 10px; border-radius: 0 0 8px 8px; background: #e86f5a; color: #fff; font: 700 11px/1.6 "Zen Kaku Gothic New", sans-serif; letter-spacing: .1em; pointer-events: none; }

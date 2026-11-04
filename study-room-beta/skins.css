@@ -1,0 +1,182 @@
+/* =====================================================================
+   着せ替え（<html data-skin="…">）。基本の A は theme.css。
+   それぞれ --sk-* を変えて、形がちがう所だけ下に書き足す。
+   ===================================================================== */
+
+/* ---------- B 木のぬくもり（★4） ---------- */
+[data-skin="b"] {
+  --sk-font: "Zen Maru Gothic", "Hiragino Maru Gothic ProN", sans-serif;
+  --sk-head: "Zen Maru Gothic", sans-serif;  --sk-num: "Zen Maru Gothic", sans-serif;
+  --sk-head-weight: 700; --sk-head-spacing: .06em;
+  --sk-text: #4a3627; --sk-muted: #75583f; --sk-accent: #ffb85c; --sk-accent-text: #a95a10; --sk-hot-fg: #4a2a10; --sk-xp: #6a4bd8;
+  --sk-panel: rgba(255, 250, 240, .93); --sk-panel-line: transparent; --sk-blur: none;
+  --sk-sheet: #fff8ee; --sk-sheet-line: #f0e2cc; --sk-card: #ffffff; --sk-card-line: #f0e2cc;
+  --sk-icon-bg: #f3e6d2; --sk-icon-fg: #8a5a2b;
+  --sk-btn-bg: #457a33; --sk-btn-fg: #ffffff; --sk-btn-shadow: 0 4px 0 #335c26; --sk-radius: 20px;
+  --sk-cap-bg: #fff8ee; --sk-cap-fg: #4a3627; --sk-cap-line: transparent;
+  --sk-tab-bg: #fff8ee; --sk-tab-fg: #b39a83; --sk-tab-on: #8a5a2b;
+  --sk-center-bg: #457a33; --sk-center-fg: #ffffff; --sk-center-shadow: 0 5px 0 #3b6b2c;
+  --sk-sel-bg: #ffb85c; --sk-sel-fg: #2e1704; --sk-sel-line: #ffb85c;
+  --sk-new-bg: #b83a28; --sk-new-fg: #fff; --sk-bar: #4f8a3c; --sk-dot: #ff6b5a;
+  --sk-screen-bg: rgba(255, 246, 232, .94);
+  --ok: #3a7a2a; --ng: #b0402c;
+}
+[data-skin="b"] .room-name, [data-skin="b"] .rankchip, [data-skin="b"] .round, [data-skin="b"] .hotbar .sl { box-shadow: 0 3px 0 rgba(120,85,50,.22); }
+[data-skin="b"] .hotbar .sl { border-radius: 16px; }
+[data-skin="b"] .hotbar .solve-ring { background: conic-gradient(#7fb069 calc(var(--p) * 1%), #eadbc5 0); }
+
+/* ---------- C ミニマル・ライト（★4） ---------- */
+[data-skin="c"] {
+  --sk-head: "Zen Kaku Gothic New", sans-serif; --sk-num: "Zen Kaku Gothic New", sans-serif; --sk-head-weight: 700; --sk-head-spacing: .04em;
+  --sk-text: #111; --sk-muted: #555; --sk-accent: #111; --sk-xp: #5a3bc8;
+  --sk-panel: rgba(255, 255, 255, .74); --sk-panel-line: rgba(0, 0, 0, .06); --sk-blur: blur(20px) saturate(1.6);
+  --sk-sheet: rgba(255, 255, 255, .95); --sk-sheet-line: rgba(0, 0, 0, .06); --sk-card: #ffffff; --sk-card-line: #ececec;
+  --sk-icon-bg: #f1f1f1; --sk-icon-fg: #111;
+  --sk-btn-bg: #111; --sk-btn-fg: #fff; --sk-btn-shadow: none; --sk-radius: 14px;
+  --sk-cap-bg: rgba(255,255,255,.8); --sk-cap-fg: #111; --sk-cap-line: transparent;
+  --sk-tab-bg: rgba(255, 255, 255, .85); --sk-tab-fg: #9a9a9a; --sk-tab-on: #111;
+  --sk-center-bg: #111; --sk-center-fg: #fff; --sk-center-shadow: 0 8px 22px rgba(0,0,0,.25);
+  --sk-sel-bg: #111; --sk-sel-fg: #fff; --sk-sel-line: #111;
+  --sk-new-bg: #111; --sk-new-fg: #fff; --sk-bar: #111; --sk-dot: #ff3b30;
+  --sk-screen-bg: rgba(244, 244, 246, .95);
+  --ok: #2f9e5b; --ng: #e0453a;
+}
+[data-skin="c"] .hotbar .solve-ring { background: conic-gradient(#111 calc(var(--p) * 1%), rgba(0,0,0,.12) 0); }
+
+/* ---------- D スタイリッシュ（★4） ---------- */
+[data-skin="d"] {
+  --sk-head: "Dela Gothic One", sans-serif; --sk-num: "Oswald", sans-serif; --sk-head-weight: 400; --sk-head-spacing: .05em;
+  --sk-text: #fff; --sk-muted: #b0b0b0; --sk-accent: #e5322d; --sk-accent-text: #ff6a63;
+  --sk-panel: #0b0b0b; --sk-panel-line: transparent; --sk-blur: none;
+  --sk-sheet: #0b0b0b; --sk-sheet-line: #e5322d; --sk-card: #161616; --sk-card-line: transparent;
+  --sk-icon-bg: #1d1d1d; --sk-icon-fg: #ff4d47;
+  --sk-btn-bg: #e5322d; --sk-btn-fg: #fff; --sk-btn-shadow: none; --sk-radius: 0px;
+  --sk-cap-bg: #0b0b0b; --sk-cap-fg: #fff; --sk-cap-line: transparent;
+  --sk-tab-bg: #0b0b0b; --sk-tab-fg: #777; --sk-tab-on: #fff;
+  --sk-center-bg: #e5322d; --sk-center-fg: #fff; --sk-center-shadow: none;
+  --sk-sel-bg: #ffffff; --sk-sel-fg: #0b0b0b; --sk-sel-line: #fff;
+  --sk-new-bg: #e5322d; --sk-new-fg: #fff; --sk-bar: #e5322d; --sk-dot: #e5322d;
+}
+[data-skin="d"] .room-name { border-left: 4px solid #e5322d; clip-path: polygon(0 0, 100% 0, 96% 100%, 0 100%); }
+[data-skin="d"] .rankchip { background: #e5322d; clip-path: polygon(10% 0, 100% 0, 100% 100%, 0 100%); }
+[data-skin="d"] .rankchip .lv, [data-skin="d"] .rankchip .lv b { color: #fff; }
+[data-skin="d"] .hotbar .sl { transform: skewX(-8deg); }
+[data-skin="d"] .hotbar .sl > * { transform: skewX(8deg); }
+[data-skin="d"] .hotbar .sl.on { box-shadow: 4px 4px 0 #e5322d; }
+[data-skin="d"] .hotbar .solve-ring { border-radius: 0; transform: rotate(45deg); width: 64px; height: 64px; margin: 6px; }
+[data-skin="d"] .hotbar .solve-ring::before { border-radius: 0; }
+[data-skin="d"] .hotbar .sr-in { transform: rotate(-45deg); }
+[data-skin="d"] .btn.primary, [data-skin="d"] .btn.gold { clip-path: polygon(3% 0, 100% 0, 97% 100%, 0 100%); font-family: "Dela Gothic One", sans-serif; font-weight: 400; letter-spacing: .1em; }
+[data-skin="d"] .sheet { border-top: 4px solid #e5322d; border-radius: 0; }
+[data-skin="d"] .genre-row, [data-skin="d"] .menu-list button, [data-skin="d"] .half-sheet .hc { clip-path: polygon(0 0, 100% 0, 98.5% 100%, 0 100%); }
+
+/* ---------- E1 ネオン（★4・バンド限定） ---------- */
+[data-skin="e1"] {
+  --neon: #ff3d8b; --neon2: #33e1ff;
+  --sk-head: "Dela Gothic One", sans-serif; --sk-num: "Oswald", sans-serif; --sk-head-weight: 400; --sk-head-spacing: .06em;
+  --sk-text: #f4f0ff; --sk-muted: #b6b3c8; --sk-accent: #ff3d8b; --sk-accent-text: #ff7ab0;
+  --sk-panel: #0c0c10; --sk-panel-line: #3a3a44; --sk-blur: none;
+  --sk-sheet: #0c0c10; --sk-sheet-line: #ff3d8b; --sk-card: #121217; --sk-card-line: #2c2c36;
+  --sk-icon-bg: #18181f; --sk-icon-fg: #33e1ff;
+  --sk-btn-bg: transparent; --sk-btn-fg: #fff; --sk-btn-line: #ff3d8b; --sk-btn-shadow: 0 0 12px rgba(255,61,139,.7), inset 0 0 12px rgba(255,61,139,.4); --sk-radius: 6px;
+  --sk-cap-bg: #0c0c10; --sk-cap-fg: #fff; --sk-cap-line: #ff3d8b;
+  --sk-tab-bg: #08080a; --sk-tab-fg: #6f6c80; --sk-tab-on: #33e1ff;
+  --sk-center-bg: #0c0c10; --sk-center-fg: #ff3d8b; --sk-center-line: #ff3d8b; --sk-center-shadow: 0 0 16px #ff3d8b;
+  --sk-sel-bg: #0c0c10; --sk-sel-fg: #33e1ff; --sk-sel-line: #33e1ff;
+  --sk-new-bg: #33e1ff; --sk-new-fg: #06060a; --sk-bar: #33e1ff; --sk-dot: #ff3d8b; --sk-hot-fg: #0c0c10;
+}
+[data-skin="e1"] .rankchip .lv b { color: #33e1ff; text-shadow: 0 0 8px #33e1ff; }
+[data-skin="e1"] .hotbar .sl.on, [data-skin="e1"] .seg button.on, [data-skin="e1"] .rec-subj button.on { border: 1.5px solid #33e1ff !important; box-shadow: 0 0 10px rgba(51,225,255,.55); }
+[data-skin="e1"] .btn.primary, [data-skin="e1"] .btn.gold { text-shadow: 0 0 8px #ff3d8b; }
+
+/* ---------- E2 ヴィンテージアンプ（★4・バンド限定） ---------- */
+[data-skin="e2"] {
+  --gold: #c9a45c;
+  --sk-head: "Shippori Mincho", serif; --sk-num: "Cormorant Garamond", serif;
+  --sk-text: #f3e6c8; --sk-muted: #c8b48a; --sk-accent: #ffb347;
+  --sk-panel: repeating-linear-gradient(45deg, #3a2618 0 4px, #33210f 4px 8px); --sk-panel-line: #c9a45c; --sk-blur: none;
+  --sk-sheet: #2c1d10; --sk-sheet-line: #c9a45c; --sk-card: rgba(241, 226, 192, .08); --sk-card-line: rgba(201, 164, 92, .45);
+  --sk-icon-bg: rgba(241, 226, 192, .12); --sk-icon-fg: #ffcf7a;
+  --sk-btn-bg: #f1e2c0; --sk-btn-fg: #3a2618; --sk-btn-line: #c9a45c; --sk-btn-shadow: 0 4px 0 #6b4a2a; --sk-radius: 8px;
+  --sk-cap-bg: #3a2618; --sk-cap-fg: #f3e6c8; --sk-cap-line: #c9a45c;
+  --sk-tab-bg: #2c1d10; --sk-tab-fg: #a98f68; --sk-tab-on: #ffd38a;
+  --sk-center-bg: radial-gradient(circle at 40% 35%, #fff2d0, #ffb347 55%, #b8661c); --sk-center-fg: #3a2618; --sk-center-shadow: 0 0 18px rgba(255,179,71,.7);
+  --sk-sel-bg: #ffb347; --sk-sel-fg: #3a2618; --sk-sel-line: #ffb347;
+  --sk-new-bg: #b8361c; --sk-new-fg: #f1e2c0; --sk-bar: #ffb347; --sk-dot: #e0502a;
+}
+
+/* ---------- E3 ライブフライヤー（★4・バンド限定） ---------- */
+[data-skin="e3"] {
+  --tape: #ffd400;
+  --sk-head: "Dela Gothic One", sans-serif; --sk-num: "Oswald", sans-serif; --sk-head-weight: 400; --sk-head-spacing: .04em;
+  --sk-text: #111; --sk-muted: #555; --sk-accent: #ffd400; --sk-accent-text: #111; --sk-xp: #5a3bc8; --ok: #2f8f50; --ng: #c8382d;
+  --sk-panel: #f4f1ea; --sk-panel-line: #111; --sk-blur: none;
+  --sk-sheet: #f4f1ea; --sk-sheet-line: #111; --sk-card: #ffffff; --sk-card-line: #111;
+  --sk-icon-bg: #ffd400; --sk-icon-fg: #111; --sk-hot-fg: #111;
+  --sk-btn-bg: #111; --sk-btn-fg: #ffd400; --sk-btn-shadow: 4px 4px 0 #ffd400; --sk-radius: 0px;
+  --sk-cap-bg: #111; --sk-cap-fg: #f4f1ea; --sk-cap-line: #111;
+  --sk-tab-bg: #f4f1ea; --sk-tab-fg: #777; --sk-tab-on: #111;
+  --sk-center-bg: #ffd400; --sk-center-fg: #111; --sk-center-line: #111; --sk-center-shadow: 4px 4px 0 #111;
+  --sk-sel-bg: #ffd400; --sk-sel-fg: #111; --sk-sel-line: #111;
+  --sk-new-bg: #e3262a; --sk-new-fg: #fff; --sk-bar: #111; --sk-dot: #e3262a;
+  --sk-screen-bg: rgba(244, 241, 234, .95);
+}
+[data-skin="e3"] .room-name { transform: rotate(-1deg); box-shadow: 3px 4px 0 rgba(0,0,0,.6); }
+[data-skin="e3"] .rankchip { transform: rotate(2deg); background: #ffd400; box-shadow: 3px 3px 0 #111; }
+[data-skin="e3"] .hotbar .sl { box-shadow: 3px 3px 0 #111; }
+[data-skin="e3"] #room { filter: grayscale(.6) contrast(1.15); }
+[data-skin="e3"] #room.dim { filter: grayscale(1) contrast(1.2) brightness(.5) blur(6px); }
+
+/* ---------- E4 フェスステージ（★4・バンド限定） ---------- */
+[data-skin="e4"] {
+  --g: linear-gradient(110deg, #7b2cff, #ff3d8b 55%, #ff9f2e);
+  --sk-head: "Dela Gothic One", sans-serif; --sk-num: "Oswald", sans-serif; --sk-head-weight: 400; --sk-head-spacing: .05em;
+  --sk-text: #fff; --sk-muted: #c4bce0; --sk-accent: #ff3d8b; --sk-accent-text: #ff8ac0;
+  --sk-panel: rgba(10, 6, 24, .75); --sk-panel-line: rgba(255,255,255,.18); --sk-blur: blur(10px);
+  --sk-sheet: linear-gradient(180deg, rgba(24,10,48,.97), rgba(10,6,24,.98)); --sk-sheet-line: #ff3d8b; --sk-card: rgba(255,255,255,.06); --sk-card-line: rgba(255,255,255,.1);
+  --sk-icon-bg: rgba(255,255,255,.08); --sk-icon-fg: #ffb0d0;
+  --sk-btn-bg: linear-gradient(110deg, #7b2cff, #ff3d8b 55%, #ff9f2e); --sk-btn-fg: #fff; --sk-btn-shadow: 0 6px 18px rgba(255,61,139,.5); --sk-radius: 6px;
+  --sk-cap-bg: rgba(10, 6, 24, .8); --sk-cap-fg: #fff; --sk-cap-line: rgba(255,255,255,.18);
+  --sk-tab-bg: rgba(10, 6, 24, .92); --sk-tab-fg: #8f86b3; --sk-tab-on: #fff;
+  --sk-center-bg: linear-gradient(110deg, #7b2cff, #ff3d8b 55%, #ff9f2e); --sk-center-fg: #fff; --sk-center-shadow: 0 0 18px rgba(255,61,139,.7);
+  --sk-sel-bg: #b0185a; --sk-sel-fg: #fff; --sk-sel-line: #ff3d8b; --sk-hot-fg: #1a0a2e;
+  --sk-new-bg: #ff9f2e; --sk-new-fg: #1a0a2e; --sk-bar: #ff3d8b; --sk-dot: #ff9f2e;
+}
+[data-skin="e4"] .room-name, [data-skin="e4"] .rankchip, [data-skin="e4"] .hotbar .sl { transform: skewX(-6deg); }
+[data-skin="e4"] .room-name > *, [data-skin="e4"] .rankchip > *, [data-skin="e4"] .hotbar .sl > * { transform: skewX(6deg); }
+[data-skin="e4"] .bar h2, [data-skin="e4"] .sh-head h3 { font-style: italic; }
+
+/* ---------- E5 バンドルーム（★5・バンド限定） ---------- */
+[data-skin="e5"] {
+  --red: #d4202f; --pink: #ff4fa3; --amber: #ffb347;
+  --drum: radial-gradient(120% 140% at 30% 0%, #ff4652, #d4202f 45%, #8d0f1b);
+  --sk-head: "Dela Gothic One", sans-serif; --sk-num: "Oswald", sans-serif; --sk-head-weight: 400; --sk-head-spacing: .06em;
+  --sk-text: #f6efe9; --sk-muted: #b7aea8; --sk-accent: #ff4fa3; --sk-accent-text: #ff85bf;
+  --sk-panel: #0d0c0d; --sk-panel-line: #34302f; --sk-blur: none;
+  --sk-sheet: #0e0c0d; --sk-sheet-line: #b9bcc6; --sk-card: #161314; --sk-card-line: #2e2829;
+  --sk-icon-bg: #1c1819; --sk-icon-fg: #ffb347;
+  --sk-btn-bg: radial-gradient(120% 160% at 30% 0%, #ff4652, #d4202f 45%, #8d0f1b); --sk-btn-fg: #fff; --sk-btn-line: #d6d9e0; --sk-btn-shadow: 0 0 0 1px #6d717a, 0 6px 16px rgba(212,32,47,.45); --sk-radius: 8px;
+  --sk-cap-bg: #0d0c0d; --sk-cap-fg: #f6efe9; --sk-cap-line: #34302f;
+  --sk-tab-bg: #0d0c0d; --sk-tab-fg: #9b8f8a; --sk-tab-on: #ffb347;
+  --sk-center-bg: radial-gradient(circle at 40% 35%, #ff4652, #d4202f 55%, #7a0d16); --sk-center-fg: #fff; --sk-center-line: #d6d9e0; --sk-center-shadow: 0 0 0 1px #6d717a, 0 6px 18px rgba(212,32,47,.6);
+  --sk-sel-bg: #1a0f12; --sk-sel-fg: #ffd6ea; --sk-sel-line: #ff4fa3;
+  --sk-new-bg: #ff4fa3; --sk-new-fg: #fff; --sk-bar: #ff4fa3; --sk-dot: #ff4fa3;
+}
+/* 機材ケースの銀の角金具 */
+[data-skin="e5"] .room-name, [data-skin="e5"] .rankchip { position: relative; border-radius: 5px; box-shadow: inset 0 0 0 3px #161415, 0 4px 12px rgba(0,0,0,.5); }
+[data-skin="e5"] .room-name::before, [data-skin="e5"] .room-name::after, [data-skin="e5"] .rankchip::before, [data-skin="e5"] .rankchip::after {
+  content: ""; position: absolute; width: 10px; height: 10px; background: linear-gradient(180deg, #f4f6fa, #9aa0ab 55%, #e6e9ef);
+  clip-path: polygon(0 0, 100% 0, 100% 32%, 32% 32%, 32% 100%, 0 100%);
+}
+[data-skin="e5"] .room-name::before { left: -2px; top: -2px; } [data-skin="e5"] .room-name::after { right: -2px; bottom: -2px; transform: rotate(180deg); }
+[data-skin="e5"] .rankchip::before { right: -2px; top: -2px; transform: rotate(90deg); } [data-skin="e5"] .rankchip::after { left: -2px; bottom: -2px; transform: rotate(-90deg); }
+[data-skin="e5"] .rn-ic { background: radial-gradient(circle at 40% 35%, #ff5a66, #d4202f 60%, #7a0d16); color: #fff; border-radius: 50%; box-shadow: 0 0 0 2px #c9ccd4; }
+[data-skin="e5"] .rankchip .lv b { color: #ffd6ea; text-shadow: 0 0 4px #ff4fa3, 0 0 10px #ff4fa3; }
+[data-skin="e5"] .hotbar .sl { border-radius: 6px; }
+[data-skin="e5"] .hotbar .sl.hot { background: radial-gradient(120% 140% at 30% 0%, #ff4652, #d4202f 45%, #8d0f1b); color: #fff; box-shadow: 0 0 0 2px #d6d9e0, 0 0 16px rgba(212,32,47,.7); }
+[data-skin="e5"] .hotbar .sl.on, [data-skin="e5"] .seg button.on, [data-skin="e5"] .rec-subj button.on, [data-skin="e5"] .skin-card.on { border: 1.5px solid #ff4fa3 !important; box-shadow: 0 0 10px rgba(255,79,163,.55); }
+[data-skin="e5"] .hotbar .solve-ring { background: conic-gradient(#ff4fa3 calc(var(--p) * 1%), #3a3233 0); }
+[data-skin="e5"] .hotbar.on-room::after { content: none; }
+[data-skin="e5"] .tabbar.hotbar:not(.on-room) { background: linear-gradient(180deg, transparent, rgba(26,10,10,.75) 45%); }
+[data-skin="e5"] .genre-row, [data-skin="e5"] .menu-list button { border-left: 4px solid #d4202f; }
+[data-skin="e5"] .sheet { border-top-width: 2px; }

@@ -109,6 +109,21 @@ function vibrate(p) { try { navigator.vibrate && navigator.vibrate(p); } catch (
 function sub() { return S.subject(subjectId); }
 const HS = () => S.house();
 const isAdmin = () => Auth.isAdmin();
+// テスト版（study-room-beta/ に置いた物）。管理者だけが入れる。ためして許可が出たら study-room/ に写して本番にする
+const BETA = /-beta\//.test(location.pathname);
+if (BETA) document.documentElement.classList.add('is-beta');
+function showBetaOnly() {
+  room3d?.setActive(false);
+  canvas.classList.add('dim');
+  app.innerHTML = '';
+  const el = h(`<div class="screen center"><div class="card login">
+    <h1 class="brand">ROOMIN</h1>
+    <p class="sub">ここは管理者だけが使える「テスト版」です</p>
+    <a class="btn primary big" href="../study-room/">いつものアプリを開く</a>
+    <button class="link logout">ほかのアカウントでログイン</button></div></div>`);
+  app.append(el);
+  el.querySelector('.logout').onclick = () => { Auth.logOut(); showLogin('login'); };
+}
 const isPuzzle = () => S.profile().mode === 'puzzle';
 // 家具が買えるまで、あと何回（勉強なら問題の数、パズルならクリアの数）
 const needText = (gap) => isPuzzle() ? `あと${Math.max(1, Math.ceil(gap / 36))}回` : `あと${Math.max(1, Math.ceil(gap / 24))}問`;
@@ -652,6 +667,7 @@ function curRoom() { return HS().rooms[HS().current]; }
 function curDef() { return roomDef(curRoom().id); }
 
 async function enterHouse() {
+  if (BETA && !isAdmin()) return showBetaOnly();
   const packsReady = loadSavedPacks();
   const added = ensureRooms();
   if (!room3d) {
@@ -1614,9 +1630,10 @@ function showMenu() {
       <button data-m="feedback">${icon('chat')}<span>要望・バグ報告<small>管理者に送る</small></span>${icon('chevronRight')}</button>
       <button data-m="news">${icon('bell')}<span>お知らせ<small>アップデートや運営からのお知らせ</small></span>${newsBadge ? `<i class="badge">${newsBadge}</i>` : ''}${icon('chevronRight')}</button>
       <button data-m="settings">${icon('gear')}<span>設定<small>画質・データ・ログアウト</small></span>${icon('chevronRight')}</button>
+      ${isAdmin() ? `<button data-m="beta">${icon(BETA ? 'home' : 'flask')}<span>${BETA ? 'いつもの版にもどる' : 'テスト版を開く'}<small>${BETA ? 'みんなが使っている版' : '次に出す版を、先に管理者だけでためす'}</small></span>${icon('chevronRight')}</button>` : ''}
       ${isAdmin() ? `<button data-m="admin">${icon('shield')}<span>管理者<small>みんなの記録と部屋</small></span>${icon('chevronRight')}</button>` : ''}
     </nav>`);
-  el.querySelectorAll('.menu-list button').forEach(b => b.onclick = () => ({ skins: () => showSkins(), records: showRecords, feedback: () => showFeedback(), bag: () => showBag(), news: showNews, ranking: showRanking, friends: showFriends, settings: showSettings, admin: showAdmin })[b.dataset.m]());
+  el.querySelectorAll('.menu-list button').forEach(b => b.onclick = () => ({ skins: () => showSkins(), records: showRecords, feedback: () => showFeedback(), bag: () => showBag(), news: showNews, ranking: showRanking, friends: showFriends, settings: showSettings, admin: showAdmin, beta: () => { location.href = BETA ? '../study-room/' : '../study-room-beta/'; } })[b.dataset.m]());
   paintSync();
 }
 
