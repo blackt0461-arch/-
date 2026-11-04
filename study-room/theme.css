@@ -308,7 +308,10 @@ b, strong { font-weight: 700; }
 .gc-car { display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory; margin: 0 -16px; padding: 2px 16px 4px; scroll-padding: 0 16px; scrollbar-width: none; }
 .gc-car::-webkit-scrollbar { display: none; }
 .gc-card.banner { flex: 0 0 84%; scroll-snap-align: start; min-height: 0; aspect-ratio: 1.15; margin: 0; padding: 16px; text-align: left; display: block; color: #fff; transition: transform .25s, opacity .25s; opacity: .55; transform: scale(.96); }
-.gc-card.banner.on { opacity: 1; transform: none; }
+.gc-card.banner.on { opacity: 1; filter: none; transform: none; }
+.gc-card.banner:not(.on) { opacity: 1; filter: brightness(.55); }
+.gc-card.banner.b-standard { background: linear-gradient(135deg, #6b4a22, #2a1f15); }
+.gc-card.b-standard .bn-tag.std { background: rgba(0,0,0,.4); }
 .gc-card .gc-txt { position: relative; z-index: 3; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; max-width: 100%; }
 .gc-card .gc-txt small:not(.gc-days) { max-width: 56%; }
 .gc-card .bn-tag { position: static; font-style: normal; display: inline-block; padding: 3px 8px; border-radius: 6px; background: #ff3d8b; color: #fff; font-size: 11px; font-weight: 700; letter-spacing: .05em; }
@@ -341,7 +344,7 @@ b, strong { font-weight: 700; }
 .gc-chips .chip { justify-content: center; white-space: nowrap; }
 .gc-chips .chip { display: inline-flex; align-items: center; gap: 5px; padding: 6px 11px; border-radius: 99px; background: var(--sk-panel); border: 1px solid var(--sk-panel-line); color: var(--sk-text); font-size: 12px; }
 .gc-chips .chip b { font-variant-numeric: tabular-nums; }
-.gc-chips .shard { width: 18px; height: 18px; display: grid; place-items: center; }
+.gc-chips .shard { width: 16px; height: 16px; display: grid; place-items: center; background: none; box-shadow: none; transform: none; color: var(--sk-text); }
 .gc-chips .shard svg { width: 14px; height: 14px; }
 .gc-pulls { grid-template-columns: 1fr 1fr; }
 .gc-pulls .btn { justify-content: center; text-align: center; padding: 12px 10px; }
