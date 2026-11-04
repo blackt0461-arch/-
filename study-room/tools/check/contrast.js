@@ -68,6 +68,10 @@ const SCREENS = [
   { id: 'quiz', name: '問題（物理）', steps: [click('.hotbar [data-t=play]'), waitFor('.subj'), click('.subj[data-s=physics]'), waitFor('.sym'), sleep(600)] },
   { id: 'choice', name: '問題（4択）', steps: [click('.hotbar [data-t=play]'), waitFor('.subj'), click('.subj[data-s=math]'), waitFor('.ch4 .fcard'), sleep(500)] },
   { id: 'choice-res', name: '問題の結果', steps: [click('.hotbar [data-t=play]'), waitFor('.subj'), click('.subj[data-s=math]'), waitFor('.ch4 .fcard'), click('.ch4 .fcard'), waitFor('.res'), sleep(800)] },
+  { id: 'home-full', name: '部屋（ゲージ満タン）', steps: [(p) => p.evaluate(() => { const A = window.__app, hs = A.HS(); hs.gauge = A.S.gaugeMax(hs); hs.fullNotified = true; A.showHome(); }), waitFor('.buy-tip'), sleep(600), (p) => p.evaluate(() => document.getElementById('toast')?.classList.remove('show')), sleep(500)] },
+  { id: 'giftbox', name: 'プレゼントBOX', steps: [(p) => p.evaluate(() => { const S = window.__app.S; S.addGift({ kind: 'ticket', amount: 3, title: '新規登録記念', from: 'operator' }); S.addGift({ kind: 'ticket4', amount: 1, title: 'Lv5 のごほうび', from: 'rank' }); window.__app.showGiftBox(); }), waitFor('.gb-row'), sleep(600)] },
+  { id: 'gacha-item', name: '出る家具を3Dで見る', steps: [click('.hotbar [data-t=gacha]'), waitFor('.gc-it'), click('.gc-it'), waitFor('.gi-view'), sleep(1500)] },
+  { id: 'admin', name: '管理者', steps: [click('.hotbar [data-t=menu]'), waitFor('[data-m=admin]'), click('[data-m=admin]'), waitFor('.acard'), sleep(600)] },
 ];
 
 // ---- 画面の中で：見えている文字とアイコンを集める ----

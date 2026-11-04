@@ -386,11 +386,19 @@ export class Room3D {
       p.needsUpdate = true;
     }
     if (this.exterior?.update) this.exterior.update(t);
+    // 何も動いていない時は、描きかえを1秒に30回に減らす（スマホが熱くならない・電池が長もち）
+    const busy = this.dragging || this.targetLook || this.walk || this.itemDrag || this.preview ||
+      Math.abs(this.vyaw) + Math.abs(this.vpitch) > 1e-5 ||
+      (this.marker && this.marker.userData.life > 0) || this.rain?.visible ||
+      this.items.children.some(o => o.userData.appear !== undefined && o.userData.appear < 1);
+    this._idleAcc = (this._idleAcc || 0) + dt;
+    if (!busy && this._idleAcc < 1 / 30 - 0.002) return;
+    const frameDt = this._idleAcc; this._idleAcc = 0;
     this.renderer.shadowMap.needsUpdate = true;
     if (this.composer && this.effectsOn !== false) {
       this.grade.uniforms.uTime.value = t;
-      this.composer.render(dt);
-      this.watchSpeed(dt);
+      this.composer.render(frameDt);
+      if (busy) this.watchSpeed(dt); // 間引いている時の間隔を「重い」と数えない
     } else this.renderer.render(this.scene, this.camera);
   }
 
