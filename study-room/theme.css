@@ -413,3 +413,9 @@ b, strong { font-weight: 700; }
 .sh-ic.danger { background: rgba(198,47,42,.18); color: #ff8a80; }
 .del-lbl { display: grid; gap: 8px; margin: 6px 0 14px; font-size: 13px; color: var(--sk-muted); }
 .del-in { font: inherit; font-size: 16px; padding: 12px; border-radius: 12px; border: 1px solid var(--sk-panel-line); background: rgba(255,255,255,.07); color: var(--sk-text); }
+
+/* 管理者・フレンドの人アイコンと Lv 札：着せ替えの色に合わせる（明るい着せ替えで見えなかった） */
+.av { background: var(--sk-card, var(--sk-panel)); border: 1px solid var(--sk-panel-line); color: var(--sk-text); }
+.lvb { background: var(--sk-accent); color: var(--sk-hot-fg, var(--sk-btn-fg)); }
+/* プレゼントBOXの数：どの着せ替えでも読める赤と白 */
+.round .gb-n { background: #d6342c; color: #fff; }
