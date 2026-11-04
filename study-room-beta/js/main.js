@@ -19,6 +19,7 @@ import * as DL from './download.js';
 import * as Sync from './sync.js';
 import { rpc } from './cloud.js';
 import { PUZZLES, puzzleById, levelInfo, mountPuzzle, livesOf } from './puzzles.js';
+import { openPuzzleHelp } from './puzzlehelp.js';
 
 const SUBJECTS = [
   { id: 'physics', name: '物理', ready: true },
@@ -1364,7 +1365,7 @@ function photoMode() {
 
 // =========================== 更新のお知らせ ===========================
 // このプログラムの版（version.json と同じにする。公開のたびに上げる）
-const APP_VERSION = '1.5.0';
+const APP_VERSION = '1.6.0';
 // 新しい版が出たら、みんな同じタイミングでそろうように強制で再起動する。
 // 開いた時・画面に戻った時・1分ごとに version.json を見る
 async function latestVersion() {
@@ -1529,13 +1530,23 @@ function playPuzzle(id, star) {
         <button class="icon back" aria-label="部屋にもどる">${icon('x')}</button>
         <h2>${z.name}<small>★${star}</small></h2>
         <span class="pz-life" aria-label="まちがえられる回数">${'<i class="on"></i>'.repeat(lives)}</span>
+        <button class="pz-ibtn ${S.profile().puzzleHelp?.[id] ? '' : 'pulse'}" aria-label="遊び方">i</button>
       </header>
-      <p class="pz-rule">${z.rule}${lives < 3 ? '<b>★5 は、まちがいは2回まで。</b>' : ''}</p>
       <p class="pz-moves" hidden></p>
       <div class="pz-host"></div>
     </div>`);
   app.append(el);
-  el.querySelector('.back').onclick = () => { S.save(); showHome(); };
+  el.querySelector('.back').onclick = () => { document.querySelector('.ph-sheet')?.remove(); S.save(); showHome(); };
+  // 右上の「i」：遊び方のカード。はじめてそのパズルを開いた時は自動で出す
+  const ib = el.querySelector('.pz-ibtn');
+  const help = () => openPuzzleHelp(id, z.name, () => {
+    const pr = S.profile(); (pr.puzzleHelp || (pr.puzzleHelp = {}))[id] = true; S.save();
+    ib.classList.remove('pulse');
+    if (lives < 3) toast('★5 は、まちがいは2回までです', 2600);
+  });
+  ib.onclick = help;
+  if (!S.profile().puzzleHelp?.[id]) setTimeout(() => { if (el.isConnected) help(); }, 400);
+  else if (lives < 3) toast('★5 は、まちがいは2回までです', 2600);
   const life = el.querySelector('.pz-life'), mv = el.querySelector('.pz-moves');
   const t0 = Date.now();
   mountPuzzle(id, star, el.querySelector('.pz-host'), {
