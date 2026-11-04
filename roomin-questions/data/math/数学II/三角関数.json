@@ -1,0 +1,17 @@
+[
+  {"id":null,"subject":"math","genre":"数学II","unit":"三角関数","grade":"hs2","level":1,"text":"180° を弧度法で表せ。","choices":["π","2π","π/2","180π"],"answer":0,"explain":"180°＝π ラジアン。360° が 2π。"},
+  {"id":null,"subject":"math","genre":"数学II","unit":"三角関数","grade":"hs2","level":1,"text":"π/3 ラジアンは何度か。","choices":["60°","30°","45°","120°"],"answer":0,"explain":"π＝180° なので π/3＝60°。"},
+  {"id":null,"subject":"math","genre":"数学II","unit":"三角関数","grade":"hs2","level":1,"text":"sin(π/6) の値を求めよ。","choices":["1/2","√3/2","1/√2","√3"],"answer":0,"explain":"π/6＝30° なので sin30°＝1/2。"},
+  {"id":null,"subject":"math","genre":"数学II","unit":"三角関数","grade":"hs2","level":1,"text":"関数 y=sinθ の周期を求めよ。","choices":["π","π/2","4π","2π"],"answer":3,"explain":"sinθ は 2π（360°）ごとに同じ値をくり返す。tanθ の周期は π。"},
+  {"id":null,"subject":"math","genre":"数学II","unit":"三角関数","grade":"hs2","level":1,"text":"半径 3、中心角 2（ラジアン）の扇形の弧の長さを求めよ。","choices":["9","6","3/2","18"],"answer":1,"explain":"弧の長さ＝半径×中心角（ラジアン）＝3×2＝6。9 は面積 (1/2)r²θ。"},
+  {"id":null,"subject":"math","genre":"数学II","unit":"三角関数","grade":"hs2","level":1,"text":"cos(−θ) と等しいものはどれか。","choices":["cosθ","−cosθ","sinθ","−sinθ"],"answer":0,"explain":"単位円で −θ の点は x 軸について対称なので、x 座標（cos）は変わらない。sin(−θ)＝−sinθ。"},
+  {"id":null,"subject":"math","genre":"数学II","unit":"三角関数","grade":"hs2","level":2,"text":"sin75° の値を求めよ。","choices":["(√6+√2)/4","(√6−√2)/4","(√3+1)/2","√3/4"],"answer":0,"explain":"sin(45°+30°)＝sin45°cos30°+cos45°sin30°＝(√6+√2)/4。(√6−√2)/4 は sin15°。"},
+  {"id":null,"subject":"math","genre":"数学II","unit":"三角関数","grade":"hs2","level":2,"text":"θ が鋭角で sinθ=1/3 のとき、cos2θ の値を求めよ。","choices":["1/9","2/3","−7/9","7/9"],"answer":3,"explain":"2倍角の公式 cos2θ＝1−2sin²θ＝1−2/9＝7/9。"},
+  {"id":null,"subject":"math","genre":"数学II","unit":"三角関数","grade":"hs2","level":2,"text":"関数 y=sin2θ の周期を求めよ。","choices":["2π","4π","π/2","π"],"answer":3,"explain":"sin kθ の周期は 2π/k なので 2π/2＝π。"},
+  {"id":null,"subject":"math","genre":"数学II","unit":"三角関数","grade":"hs2","level":2,"text":"sinθ+√3cosθ を r sin(θ+α)（r>0、−π<α≦π）の形に表せ。","choices":["2sin(θ+π/6)","√3 sin(θ+π/3)","2sin(θ+π/3)","4sin(θ+π/3)"],"answer":2,"explain":"r＝√(1+3)＝2。cosα＝1/2、sinα＝√3/2 なので α＝π/3。"},
+  {"id":null,"subject":"math","genre":"数学II","unit":"三角関数","grade":"hs2","level":2,"text":"0≦θ<2π のとき、cosθ=1/2 を満たす θ を求めよ。","choices":["π/3、5π/3","π/3、2π/3","π/6、11π/6","π/3"],"answer":0,"explain":"単位円で x 座標が 1/2 の点は2つあり、θ＝π/3、5π/3。"},
+  {"id":null,"subject":"math","genre":"数学II","unit":"三角関数","grade":"hs2","level":2,"text":"tan(θ+π) と等しいものはどれか。","choices":["−tanθ","1/tanθ","−1/tanθ","tanθ"],"answer":3,"explain":"tan の周期は π なので tan(θ+π)＝tanθ。"},
+  {"id":null,"subject":"math","genre":"数学II","unit":"三角関数","grade":"hs2","level":3,"text":"関数 y=sinθ+√3cosθ の最大値を求めよ。","choices":["1+√3","√3","2","4"],"answer":2,"explain":"合成すると y＝2sin(θ+π/3) なので最大値は 2。sin と cos の最大値を足して 1+√3 としてはいけない。"},
+  {"id":null,"subject":"math","genre":"数学II","unit":"三角関数","grade":"hs2","level":3,"text":"0≦θ<2π のとき、sin2θ=sinθ を満たす θ をすべて求めよ。","choices":["π/3、5π/3","0、π/3、π、5π/3","0、π","π/6、5π/6"],"answer":1,"explain":"2sinθcosθ−sinθ＝0 より sinθ(2cosθ−1)＝0。sinθ＝0 から 0、π、cosθ＝1/2 から π/3、5π/3。sinθ でわってしまうと解がもれる。"},
+  {"id":null,"subject":"math","genre":"数学II","unit":"三角関数","grade":"hs2","level":3,"text":"半径 4、中心角 π/4 の扇形の面積を求めよ。","choices":["2π","π","4π","π/2"],"answer":0,"explain":"面積＝(1/2)r²θ＝(1/2)×16×π/4＝2π。弧の長さは rθ＝π。"}
+]
