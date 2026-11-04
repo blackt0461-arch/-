@@ -847,7 +847,18 @@ export class Room3D {
     const alongs = (seg) => { const m = (seg.a0 + seg.a1) / 2, L = seg.a1 - seg.a0; return [m, m - L * 0.25, m + L * 0.25, seg.a0 + 0.6, seg.a1 - 0.6, m - L * 0.4, m + L * 0.4]; };
     const corners = [];
     for (const sx of [-1, 1]) for (const sz of [-1, 1]) corners.push({ x: sx * (sh.hw - 0.35), z: sz * (sh.hd - 0.35), rot: Math.atan2(-sx, -sz) });
-    const wallSide = (depth) => { for (const seg of walls) for (const a of alongs(seg)) { const q = segPoint(seg, a, 0, depth); out.push({ x: q.x, z: q.z, rot: segRot(seg) }); } };
+    // 家具の奥行き（正面向きの時の z の厚み）。壁ぎわに置く時に、背中を壁にぴったり付けるのに使う
+    let halfD = 0.25;
+    if (self) {
+      const p0 = self.userData.p, keep = { ...p0 };
+      Object.assign(p0, { x: 0, z: 0, rot: 0 }); delete p0.on; delete p0.y;
+      this.mountPlaced(self, p0);
+      const sz = new THREE.Box3().setFromObject(self).getSize(new THREE.Vector3());
+      halfD = Math.min(1.2, Math.max(0.1, sz.z / 2));
+      for (const k of Object.keys(p0)) if (!(k in keep)) delete p0[k];
+      Object.assign(p0, keep); this.mountPlaced(self, p0);
+    }
+    const wallSide = (depth) => { for (const seg of walls) for (const a of alongs(seg)) { const q = segPoint(seg, a, 0, depth ?? halfD + 0.03); out.push({ x: q.x, z: q.z, rot: segRot(seg) }); } };
     const g = item.genre;
     // 部屋ごとの「決まった配置」（layouts.js）を先にためす。小物はテーブルや棚の上がいちばん先
     const designed = layoutSpots(this.roomDef?.id, item);
@@ -869,7 +880,8 @@ export class Room3D {
     }
     // 小物：テーブルや棚の上
     if (Room3D.canStack(item) && !Room3D.isSupport(item)) {
-      for (const s of byGenre('table', 'storage')) { const c = centerOf(s), rr = s.userData.p.rot || 0; for (const [dx, dz] of [[0, 0], [0.22, 0], [-0.22, 0], [0, 0.22], [0, -0.22], [0.3, 0], [-0.3, 0], [0, 0.3], [0, -0.3]]) out.push({ x: c.x + dx, z: c.z + dz, rot: rr }); }
+      // テーブル・棚の「上」だけ（needOn：上にのらなければ使わない。すぐ横の床に落ちないように）
+      for (const s of byGenre('table', 'storage')) { const c = centerOf(s), rr = s.userData.p.rot || 0; for (const [dx, dz] of [[0, 0], [0.22, 0], [-0.22, 0], [0, 0.22], [0, -0.22], [0.3, 0], [-0.3, 0], [0, 0.3], [0, -0.3]]) out.push({ x: c.x + dx, z: c.z + dz, rot: rr, needOn: true }); }
       out.push(...designed);
     }
     if (g === 'table') {
@@ -877,22 +889,28 @@ export class Room3D {
       out.push({ x: 0, z: 0, rot: 0 }, { x: 0.6, z: 0, rot: 0 }, { x: -0.6, z: 0, rot: 0 });
     } else if (g === 'chair') {
       for (const t of byGenre('table')) { const c = centerOf(t); for (const [dx, dz] of [[0, 0.75], [0, -0.75], [0.75, 0], [-0.75, 0]]) out.push({ x: c.x + dx, z: c.z + dz, rot: Math.atan2(-dx, -dz) }); }
-      wallSide(0.4);
+      wallSide();
     } else if (g === 'plant' || (g === 'light' && item.place === 'floor')) {
       for (const s of byGenre('sofa')) { const c = centerOf(s), r = s.userData.p.rot || 0; for (const d of [-1.3, 1.3]) out.push({ x: c.x + Math.cos(r) * d, z: c.z - Math.sin(r) * d, rot: r }); }
       out.push(...corners);
-    } else wallSide(0.5); // ソファ・ベッド・棚・趣味の物などは壁ぎわ
+    } else wallSide(); // ソファ・ベッド・棚・趣味の物などは壁ぎわ（背中を壁に付ける）
     out.push(...corners);
     return out;
   }
   autoPlace(o) {
     const p = o.userData.p, item = o.userData.item;
     const start = { ...p };
+    // 向きを問わない物（照明・植物・小物・趣味の物）は、良い場所で向きを変えてもおさまるか試す
+    const turnable = item.place === 'floor' && ['plant', 'light', 'decor', 'hobby'].includes(item.genre);
     for (const c of this.autoSpots(item, o)) {
-      if (item.place !== 'wall') { delete p.on; delete p.y; }
-      Object.assign(p, c);
-      this.mountPlaced(o, p);
-      if (this.checkPlacement(o)) return true;
+      const { needOn, ...spot } = c;
+      const rots = turnable && spot.rot !== undefined ? [spot.rot, spot.rot + Math.PI / 2, spot.rot - Math.PI / 2, spot.rot + Math.PI] : [spot.rot];
+      for (const rot of rots) {
+        if (item.place !== 'wall') { delete p.on; delete p.y; }
+        Object.assign(p, spot, rot !== undefined ? { rot } : {});
+        this.mountPlaced(o, p);
+        if (this.checkPlacement(o) && (!needOn || p.on)) return true;
+      }
     }
     for (const k of Object.keys(p)) if (!(k in start)) delete p[k];
     Object.assign(p, start);
@@ -1162,6 +1180,7 @@ export class Room3D {
     const o = await this.placeOne(p, true);
     if (!o) return null;
     if (!(auto && this.autoPlace(o)) && !this.findFreeSpot(o)) { this.removeObject(p.uid); return null; }
+    this.updateBlob(o); // 置き場所をさがした時に試した所の影を残さない
     o.userData.baseY = o.position.y;
     this.updateLights();
     this.lookAt(new THREE.Box3().setFromObject(o).getCenter(new THREE.Vector3()));
