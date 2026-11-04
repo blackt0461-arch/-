@@ -331,48 +331,106 @@ function showGacha(banner = null) {
   if (isAdmin()) adminTopUp();
   const hs = HS();
   const act = G.activeSeries();
-  // 限定が左、恒常（スタンダード）が右。アイコンはそのガチャの代表の家具
+  // 限定が左、恒常（スタンダード）が右。1つのガチャが1枚のカード。横にめくって選ぶ
   const heroOf = (sid) => G.bySeries(sid).find(i => i.rarity === 5) || G.bySeries(sid)[0];
-  const banners = [...act.map(s => ({ id: s.id, name: `限定：${s.name}`, title: s.title, short: s.title || s.name.replace('シリーズ', ''), desc: s.desc, limited: true, hero: heroOf(s.id) })),
-    { id: 'standard', name: 'スタンダード', short: 'スタンダード', desc: '★5は上質な定番（恒常）から出ます', hero: G.gachaById('g5-grand-piano') || G.byRarity(5).find(i => !i.limited) }];
-  const b = banners.find(x => x.id === banner) || banners[0];
+  const banners = [...act.map(s => ({ id: s.id, name: s.name, title: s.title, desc: s.desc, limited: true, hero: heroOf(s.id), end: s.end })),
+    { id: 'standard', name: 'スタンダード', title: 'STANDARD', desc: '★5は上質な定番（いつでも）から出ます', hero: G.gachaById('g5-grand-piano') || G.byRarity(5).find(i => !i.limited) }];
+  let idx = Math.max(0, banners.findIndex(x => x.id === banner));
   const t1 = hs.rareTickets || 0, t4 = hs.rareTickets4 || 0, t5 = hs.rareTickets5 || 0;
   const s4 = hs.shards4 || 0, s5 = hs.shards5 || 0;
-  const el = screenWithTabs('gacha', `<button class="icon back">${icon('back')}</button><h2>レアガチャ</h2><span></span>`, 'gacha', `
-    <div class="bn-tabs">${banners.map(x => `<button data-b="${x.id}" class="bn-tab ${x.id === b.id ? 'on' : ''} ${x.limited ? 'lim' : ''}" aria-label="${esc(x.name)}">
-      <span class="bt-art banner ${x.limited ? 'b-' + x.id : 'b-standard'}">${x.hero ? `<span class="thumb">${thumbHTML(x.hero)}</span>` : ''}${x.limited ? `<i class="bt-rib">${icon('star')}限定</i>` : ''}</span>
-      <b>${esc(x.short)}</b></button>`).join('')}</div>
-    <div class="banner ${b.limited ? 'b-' + b.id : 'b-standard'}">
-      <div class="bn-glow"></div>
-      ${b.limited ? '<span class="bn-tag">期間限定</span>' : ''}
-      ${b.title ? `<p class="bn-kicker">${esc(b.name.replace('限定：', ''))}</p><h3 class="bn-title">${esc(b.title)}</h3>` : `<h3>${esc(b.name.replace('限定：', ''))}</h3>`}
-      <p>${esc(b.desc)}</p>
-      ${b.limited && SAMPLE_ROOMS[b.id] ? `<button class="bn-sample">${icon('home')}モデルハウスを見る</button>` : ''}
-      <div class="bn-picks">${(b.limited ? G.bySeries(b.id) : G.byRarity(5).filter(i => !i.limited)).slice(0, 4).map(it => `<span class="thumb">${thumbHTML(it)}</span>`).join('')}</div>
+  // 出る家具：★5 → ★4 の順に5つ
+  const lineup = (b) => {
+    const pool = b.limited ? G.bySeries(b.id) : [...G.byRarity(5), ...G.byRarity(4)].filter(i => !i.limited && i.place !== 'skin');
+    const r5 = pool.filter(i => i.rarity === 5), r4 = pool.filter(i => i.rarity === 4);
+    return [...r5.slice(0, 2), ...r4.slice(0, 3), ...r5.slice(2), ...r4.slice(3)].slice(0, 5);
+  };
+  const daysLeft = (b) => b.end ? Math.max(0, Math.ceil((Date.parse(b.end) - Date.now()) / 864e5)) : null;
+  const el = screenWithTabs('gacha', `<button class="icon back">${icon('back')}</button><h2>レアガチャ</h2><span class="gc-have">${ticketSVG('ticket', 'mini')}<b>${t1}</b></span>`, 'gacha', `
+    <div class="gc-car">${banners.map((x, k) => `
+      <button class="gc-card banner ${x.limited ? 'b-' + x.id : 'b-standard'}" data-k="${k}">
+        <div class="bn-glow"></div>
+        <span class="gc-txt">
+          ${x.limited ? `<i class="bn-tag">期間限定</i>` : '<i class="bn-tag std">いつでも</i>'}
+          <span class="bn-kicker">${esc(x.limited ? x.name : 'スタンダード')}</span>
+          <span class="bn-title">${esc(x.title || x.name)}</span>
+          <small>${esc(x.desc || '')}</small>
+          ${x.limited && daysLeft(x) != null && daysLeft(x) < 400 ? `<small class="gc-days">あと${daysLeft(x)}日</small>` : ''}
+          ${x.limited && SAMPLE_ROOMS[x.id] ? `<span class="bn-sample">${icon('home')}モデルハウスを見る</span>` : ''}
+        </span>
+        ${x.hero ? `<span class="gc-hero thumb">${thumbHTML(x.hero)}</span>` : ''}
+      </button>`).join('')}</div>
+    ${banners.length > 1 ? `<div class="gc-dots">${banners.map((x, k) => `<i data-k="${k}"></i>`).join('')}</div>` : ''}
+    <div class="gc-line"><p class="gc-h">出る家具</p><div class="gc-row"></div></div>
+    <div class="gc-chips">
+      <button class="chip shard-btn" data-r="4"><span class="shard s4">${icon('sparkle')}</span>★4かけら <b>${s4}/${G.SHARD_COST}</b></button>
+      <button class="chip shard-btn" data-r="5"><span class="shard s5">${icon('sparkle')}</span>★5かけら <b>${s5}/${G.SHARD_COST}</b></button>
+      <button class="chip rates-btn">割合</button>
     </div>
-    <div class="pull-btns">
-      <button class="btn gold pull1" ${t1 < 1 ? 'disabled' : ''}>${ticketSVG('ticket', 'mini')}<span>1回引く<small>レアチケット 1枚</small></span></button>
-      <button class="btn gold pull10" ${t1 < 10 ? 'disabled' : ''}>${ticketSVG('ticket', 'mini')}<span>10回引く<small>レアチケット 10枚・★4以上1つ確定</small></span></button>
-      ${t4 ? `<button class="btn special pull4">${ticketSVG('ticket4', 'mini')}<span>★4以上確定で引く<small>のこり ${t4}枚</small></span></button>` : ''}
-      ${t5 && act.length ? `<button class="btn special pull5">${ticketSVG('ticket5', 'mini')}<span>★5限定確定で引く<small>${esc(act[0].name)}・のこり ${t5}枚</small></span></button>` : ''}
-    </div>
-    <p class="have-t">レアチケット <b>${t1}</b> 枚</p>
-    <div class="shards">
-      <button class="shard-btn" data-r="4" ${s4 < G.SHARD_COST ? 'disabled' : ''}><span class="shard s4">${icon('sparkle')}</span>★4のかけら <b>${s4}/${G.SHARD_COST}</b><small>好きな★4と交換</small></button>
-      <button class="shard-btn" data-r="5" ${s5 < G.SHARD_COST ? 'disabled' : ''}><span class="shard s5">${icon('sparkle')}</span>★5のかけら <b>${s5}/${G.SHARD_COST}</b><small>好きな★5と交換</small></button>
-    </div>
-    <details class="rates"><summary>提供割合</summary>
-      <p>★5：5%（${b.limited ? 'うち半分は限定シリーズ' : '恒常のみ'}）／★4：25%／★3：70%。10回引くと★4以上が必ず1つ入ります。</p>
-      <p>★4・★5がかぶったら、それぞれのかけら1個になります。★3がかぶったら、もう1つ持てます。</p></details>`);
+    <div class="pull-btns gc-pulls">
+      <button class="btn ghost pull1" ${t1 < 1 ? 'disabled' : ''}><span>1回引く<small>レアチケット 1枚</small></span></button>
+      <button class="btn gold pull10" ${t1 < 10 ? 'disabled' : ''}><span>10回引く<small>10枚・★4以上1つ確定</small></span></button>
+      ${t4 ? `<button class="btn special pull4 wide">${ticketSVG('ticket4', 'mini')}<span>★4以上確定で引く<small>のこり ${t4}枚</small></span></button>` : ''}
+      ${t5 && act.length ? `<button class="btn special pull5 wide">${ticketSVG('ticket5', 'mini')}<span>★5限定確定で引く<small>${esc(act[0].name)}・のこり ${t5}枚</small></span></button>` : ''}
+    </div>`);
   el.querySelector('.back').onclick = halfFurniture;
-  el.querySelectorAll('.bn-tabs button').forEach(x => x.onclick = () => showGacha(x.dataset.b));
-  el.querySelector('.bn-sample')?.addEventListener('click', () => showSampleRoom(b.id));
-  const opts = { banner: b.id };
-  el.querySelector('.pull1')?.addEventListener('click', () => doPull(() => [G.pullWithTicket('ticket', gachaOwned, Math.random, opts)], { ticket: 1 }, b.id));
-  el.querySelector('.pull10')?.addEventListener('click', () => doPull(() => G.pullTen(gachaOwned, Math.random, opts), { ticket: 10 }, b.id));
-  el.querySelector('.pull4')?.addEventListener('click', () => doPull(() => [G.pullWithTicket('ticket4', gachaOwned, Math.random, opts)], { ticket4: 1 }, b.id));
-  el.querySelector('.pull5')?.addEventListener('click', () => doPull(() => [G.pullWithTicket('ticket5', gachaOwned, Math.random, { ...opts, series: act[0]?.id })], { ticket5: 1 }, b.id));
-  el.querySelectorAll('.shard-btn').forEach(x => x.onclick = () => shardExchange(+x.dataset.r, b.id));
+  const car = el.querySelector('.gc-car');
+  const cur = () => banners[idx];
+  // いま選んでいるガチャに合わせて、下の「出る家具」と点を変える
+  const sync = () => {
+    const b = cur();
+    el.querySelectorAll('.gc-dots i').forEach((d, k) => d.classList.toggle('on', k === idx));
+    el.querySelectorAll('.gc-card').forEach((c, k) => c.classList.toggle('on', k === idx));
+    const row = el.querySelector('.gc-row');
+    row.innerHTML = lineup(b).map(it => `<button class="gc-it r${it.rarity || 3} ${gachaOwned(it.id) ? 'have' : ''}" data-id="${it.id}">
+      <span class="thumb">${thumbHTML(it)}</span><i class="gc-r">★${it.rarity || 3}</i>${gachaOwned(it.id) ? `<i class="gc-ok">${icon('check')}</i>` : ''}</button>`).join('');
+    hydrateThumbs(row);
+    row.querySelectorAll('.gc-it').forEach(x => x.onclick = () => gachaItemSheet(itemById(x.dataset.id) || G.gachaById(x.dataset.id)));
+  };
+  // 横にめくり終わったら、真ん中のカードを選んだことにする
+  let t = 0;
+  car.addEventListener('scroll', () => { clearTimeout(t); t = setTimeout(() => {
+    const w = car.querySelector('.gc-card')?.offsetWidth || 1;
+    const k = Math.max(0, Math.min(banners.length - 1, Math.round(car.scrollLeft / (w + 10))));
+    if (k !== idx) { idx = k; sync(); }
+  }, 80); }, { passive: true });
+  const go = (k) => { const c = car.querySelectorAll('.gc-card')[k]; if (c) car.scrollTo({ left: c.offsetLeft - car.offsetLeft - 16, behavior: 'smooth' }); };
+  el.querySelectorAll('.gc-dots i').forEach(d => d.onclick = () => { idx = +d.dataset.k; sync(); go(idx); });
+  el.querySelectorAll('.gc-card').forEach(c => c.onclick = () => {
+    const k = +c.dataset.k;
+    if (k !== idx) { idx = k; sync(); return go(k); }
+    if (cur().limited && SAMPLE_ROOMS[cur().id]) showSampleRoom(cur().id);
+  });
+  sync();
+  requestAnimationFrame(() => { const c = car.querySelectorAll('.gc-card')[idx]; if (c) car.scrollLeft = c.offsetLeft - car.offsetLeft - 16; });
+  el.querySelector('.rates-btn').onclick = () => {
+    const b = cur();
+    const sh = sheet(`<div class="sh-head"><span class="sh-ic">${icon('star')}</span><div><h3>提供割合</h3><p>${esc(b.limited ? b.name : 'スタンダード')}</p></div></div>
+      <div class="rates-body"><p>★5：5%（${b.limited ? 'うち半分は限定シリーズ' : 'いつでも出る家具のみ'}）<br>★4：25%<br>★3：70%</p>
+      <p>10回引くと★4以上が必ず1つ入ります。</p><p>★4・★5がかぶったら、それぞれのかけら1個になります。★3がかぶったら、もう1つ持てます。</p></div>
+      <button class="link close">とじる</button>`, 'rates-sheet');
+    sh.querySelector('.close').onclick = () => sh.remove();
+  };
+  const opts = () => ({ banner: cur().id });
+  el.querySelector('.pull1')?.addEventListener('click', () => doPull(() => [G.pullWithTicket('ticket', gachaOwned, Math.random, opts())], { ticket: 1 }, cur().id));
+  el.querySelector('.pull10')?.addEventListener('click', () => doPull(() => G.pullTen(gachaOwned, Math.random, opts()), { ticket: 10 }, cur().id));
+  el.querySelector('.pull4')?.addEventListener('click', () => doPull(() => [G.pullWithTicket('ticket4', gachaOwned, Math.random, opts())], { ticket4: 1 }, cur().id));
+  el.querySelector('.pull5')?.addEventListener('click', () => doPull(() => [G.pullWithTicket('ticket5', gachaOwned, Math.random, { ...opts(), series: act[0]?.id })], { ticket5: 1 }, cur().id));
+  el.querySelectorAll('.shard-btn').forEach(x => x.onclick = () => {
+    const r = +x.dataset.r, have = r === 4 ? s4 : s5;
+    if (have < G.SHARD_COST) return toast(`★${r}のかけらが${G.SHARD_COST}個たまると、好きな★${r}と交換できます`, 2600);
+    shardExchange(r, cur().id);
+  });
+}
+// 出る家具を大きく見る
+function gachaItemSheet(it) {
+  if (!it) return;
+  const n = S.realOwned(it.id);
+  const sh = sheet(`<div class="gi-big thumb">${thumbHTML(it)}</div>
+    <div class="gi-t"><span class="gi-r r${it.rarity || 3}">${'★'.repeat(it.rarity || 3)}</span><h3>${esc(it.name)}</h3>
+    <p>${n ? `持っている（${n}）` : 'まだ持っていません'}</p></div>
+    <button class="link close">とじる</button>`, 'gi-sheet');
+  hydrateThumbs(sh);
+  sh.querySelector('.close').onclick = () => sh.remove();
 }
 // 限定シリーズの「全部そろえた部屋」の見本（見るだけ。フレンドの部屋と同じしくみで見せる）
 const SAMPLE_ROOMS = { band: () => import('./bandsample.js').then(m => m.BAND_SAMPLE) };
@@ -1162,7 +1220,7 @@ function photoMode() {
 
 // =========================== 更新のお知らせ ===========================
 // このプログラムの版（version.json と同じにする。公開のたびに上げる）
-const APP_VERSION = '2.11.1';
+const APP_VERSION = '2.12.0';
 // 新しい版が出たら、みんな同じタイミングでそろうように強制で再起動する。
 // 開いた時・画面に戻った時・1分ごとに version.json を見る
 async function latestVersion() {
