@@ -1,38 +1,67 @@
-// ガチャを引く演出。
-// ① チケットを上へスワイプ（またはタップ）して切る
-// ② 光の玉が昇る。色でレア度がわかる（青＝★3、紫＝★4、金＝★5）。ときどき青→紫→金へ「昇格」
-// ③ 玉がはじけて、光の粒が飛び散る
-// ④ ★5があれば、その家具だけを大きく見せる
-// ⑤ 裏向きのカードを1枚ずつめくる（★4以上は裏から光がもれる）
-// 右上の「スキップ」で、すぐ結果へ。
+// ガチャを引く演出（注文書と設計図）
+// ① 家具の注文書に、指でサインする → 「受付」のハンコ
+// ② 方眼の設計図が上から広がる
+// ③ 出る家具の形が線で描かれる。線の色でレア度がわかる（青＝★3、紫＝★4、金＝★5）。ときどき途中で色が変わる「昇格」
+// ④ 寸法が入り、光の線が上から下へなぞると本物の家具に変わる
+// ⑤ ★4は「良品」、★5は「完成」のハンコ。名前が出る
+// 10連は、1枚の紙に10この図面が並んで、まとめて本物に変わる。新しい★5はそのあと大きく見せる
+// ⑥ 結果のカード
+// 右上の「スキップ」で、すぐ結果へ。画面をタップすると早送り。
+import { blueprintArt } from './thumbs.js';
 const COL = { 3: '#7fd3ff', 4: '#c69bff', 5: '#ffd36a' };
+const KIND_NAME = { ticket: 'レアチケット', ticket4: '★4以上確定チケット', ticket5: '★5限定確定チケット' };
 
 export function playPullFX(res, opt) {
-  const { thumbHTML, hydrateThumbs, esc, vibrate, icon, ticketSVG, kind = 'ticket', onDone } = opt;
+  const { thumbHTML, hydrateThumbs, esc, vibrate, icon, kind = 'ticket', onDone } = opt;
   const top = Math.max(...res.map(r => r.rarity));
   // 昇格演出：★4以上のとき、半分くらいは「青から始まって変わる」
   const fake = top >= 4 && Math.random() < 0.55;
   const steps = fake ? (top === 5 ? (Math.random() < 0.5 ? [3, 5] : [3, 4, 5]) : [3, 4]) : [top];
   const ten = res.length > 1;
+  const now = new Date();
+  const no = String(Math.floor(Math.random() * 9000) + 1000);
 
   const ov = document.createElement('div');
-  ov.className = `pfx r${steps[0]}`;
+  ov.className = `pfx bpfx r${steps[0]}`;
   ov.innerHTML = `
     <canvas class="pfx-cv"></canvas>
-    <div class="pfx-pillars"><i></i><i></i><i></i></div>
     <button class="pfx-skip">スキップ ${icon('chevronRight')}</button>
-    <div class="pfx-stage">
-      <div class="pfx-ticket">${ticketSVG(kind, 'big')}<div class="pfx-cut"></div></div>
-      <p class="pfx-hint">上にスワイプして チケットを切る</p>
-      <div class="pfx-orb"><i></i></div>
-      <div class="pfx-stars"></div>
+    <div class="od">
+      <div class="od-paper">
+        <h3>家具 注文書</h3>
+        <p class="od-row"><span>品名</span><b>？？？</b></p>
+        <p class="od-row"><span>数</span><b>${res.length}</b></p>
+        <p class="od-row"><span>支払い</span><b>${KIND_NAME[kind] || 'チケット'} ${res.length}枚</b></p>
+        <p class="od-row"><span>日付</span><b>${now.getFullYear()}.${now.getMonth() + 1}.${now.getDate()}</b></p>
+        <div class="od-sign"><small>ここに指でサイン</small><canvas></canvas></div>
+        <i class="od-ok">受付</i>
+      </div>
+      <p class="od-hint">サインすると注文できます</p>
+    </div>
+    <div class="bp">
+      <div class="bp-art">
+        <canvas class="bp-lines"></canvas>
+        <img class="bp-real" alt="">
+        <div class="bp-ghost"></div>
+        <svg class="bp-dims" viewBox="0 0 100 100" preserveAspectRatio="none"></svg>
+        <div class="bp-scan"></div>
+      </div>
+      <div class="bp-grid"></div>
+      <i class="bp-stamp"></i>
+      <div class="bp-name"><i></i><b></b><small>タップでつづける</small></div>
+      <div class="bp-tb"><span>図面</span><span>No. ${no}</span><span>品名</span><span class="tb-name">？？？</span><span>縮尺</span><span>1 : 20</span><span>日付</span><span>${now.getFullYear()}.${now.getMonth() + 1}.${now.getDate()}</span></div>
+      <p class="bp-msg"></p>
     </div>
     <div class="pfx-flash"></div>
-    <div class="pfx-spot hide"></div>
     <div class="pfx-cards ${ten ? 'ten' : 'one'} hide"></div>
     <div class="pfx-btns hide"><button class="btn ghost again">もう一度</button><button class="btn gold ok">OK</button></div>`;
   document.body.append(ov);
   requestAnimationFrame(() => ov.classList.add('show'));
+
+  // 線を描くあいだ、出てくる家具の絵を先に用意しておく
+  const artP = new Map();
+  const getArt = (item) => { if (!artP.has(item.id)) artP.set(item.id, blueprintArt(item)); return artP.get(item.id); };
+  if (!ten) getArt(res[0].item);
 
   // ---- 光の粒（canvas） ----
   const cv = ov.querySelector('.pfx-cv'), cx = cv.getContext('2d');
@@ -75,75 +104,62 @@ export function playPullFX(res, opt) {
   };
   tick();
 
-  const wait = (ms) => new Promise(r => setTimeout(r, skipped ? 0 : ms));
-  let skipped = false;
-  const stage = ov.querySelector('.pfx-stage');
-  const setColor = (r) => { ov.classList.remove('r3', 'r4', 'r5'); ov.classList.add('r' + r); };
-
-  // ---- ① チケットを切る ----
-  const ticket = ov.querySelector('.pfx-ticket');
-  let started = false, y0 = null;
-  const start = () => { if (started) return; started = true; run(); };
-  ticket.addEventListener('pointerdown', e => { y0 = e.clientY; });
-  ov.addEventListener('pointermove', e => {
-    if (y0 == null || started) return;
-    const dy = Math.min(0, e.clientY - y0);
-    ticket.style.transform = `translateY(${dy * 0.4}px)`;
-    if (dy < -60) start();
+  let skipped = false, fast = false;
+  const wait = (ms) => new Promise(r => {
+    if (skipped) return r();
+    const t0 = performance.now();
+    const step = () => { if (skipped || fast || performance.now() - t0 >= ms) { fast = false; r(); } else requestAnimationFrame(step); };
+    step();
   });
-  ov.addEventListener('pointerup', () => { if (!started && y0 != null) start(); y0 = null; });
-  ov.querySelector('.pfx-skip').onclick = (e) => { e.stopPropagation(); skipped = true; if (!started) start(); };
+  const setColor = (r) => { ov.classList.remove('r3', 'r4', 'r5'); ov.classList.add('r' + r); ov.style.setProperty('--c', COL[r]); };
+  setColor(steps[0]);
+  const bp = ov.querySelector('.bp');
+  bp.addEventListener('click', () => { fast = true; });
+
+  // ---- ① 注文書にサイン ----
+  const od = ov.querySelector('.od');
+  const sc = od.querySelector('.od-sign canvas'), sg = sc.getContext('2d');
+  let started = false, last = null, ink = 0;
+  const fitSign = () => { const r = sc.getBoundingClientRect(); sc.width = r.width * dpr; sc.height = r.height * dpr; sg.setTransform(dpr, 0, 0, dpr, 0, 0); };
+  requestAnimationFrame(fitSign);
+  const pos = (e) => { const r = sc.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
+  sc.addEventListener('pointerdown', e => { if (started) return; sc.setPointerCapture?.(e.pointerId); last = pos(e); od.classList.add('writing'); });
+  sc.addEventListener('pointermove', e => {
+    if (!last || started) return;
+    const p = pos(e);
+    sg.strokeStyle = '#1b2f6b'; sg.lineWidth = 2.6; sg.lineCap = 'round'; sg.lineJoin = 'round';
+    sg.beginPath(); sg.moveTo(last[0], last[1]); sg.lineTo(p[0], p[1]); sg.stroke();
+    ink += Math.hypot(p[0] - last[0], p[1] - last[1]); last = p;
+  });
+  const lift = () => { if (!last) return; last = null; if (ink > 90 && !started) { started = true; run(); } };
+  sc.addEventListener('pointerup', lift); sc.addEventListener('pointercancel', lift);
+  ov.querySelector('.pfx-skip').onclick = (e) => { e.stopPropagation(); skipped = true; if (!started) { started = true; run(); } };
 
   async function run() {
-    vibrate(25);
-    ov.querySelector('.pfx-hint').remove();
-    ticket.style.transform = '';
-    ticket.classList.add('tear');
+    vibrate(20);
+    const ok = od.querySelector('.od-ok');
+    ok.classList.add('on');
+    await wait(150);
+    vibrate([30, 30, 50]);
     await wait(650);
-    ticket.remove();
-    // ---- ② 光の玉 ----
-    const orb = ov.querySelector('.pfx-orb');
-    orb.classList.add('in');
-    const ob = () => { const b = orb.getBoundingClientRect(); return { x: b.left + b.width / 2, y: b.top + b.height / 2 }; };
-    rising = { ...ob(), color: COL[steps[0]] };
-    await wait(1300);
-    for (let i = 1; i < steps.length; i++) {
-      // 昇格：ふるえて、ぱっと色が変わる
-      orb.classList.add('charge');
-      vibrate(30);
-      await wait(700);
-      orb.classList.remove('charge');
-      setColor(steps[i]);
-      rising.color = COL[steps[i]];
-      const { x, y } = ob();
-      burst(x, y, COL[steps[i]], 70, 6);
-      flash(0.5);
-      vibrate(steps[i] === 5 ? [50, 30, 90] : 40);
-      await wait(900);
+    od.classList.add('out');
+    await wait(300);
+    od.remove();
+    // ---- ② 設計図が広がる ----
+    bp.classList.add('on');
+    await wait(700);
+    if (!ten) await single(res[0], steps);
+    else {
+      await grid();
+      // 新しい★5だけ、大きく見せる（多くても2つ）
+      for (const r of res.filter(r => r.rarity === 5 && !r.shard).slice(0, 2)) {
+        if (skipped) break;
+        await single(r, [5]);
+      }
     }
-    if (top === 5) {
-      ov.classList.add('gold');
-      const st = ov.querySelector('.pfx-stars');
-      for (let i = 0; i < 5; i++) { const s = document.createElement('i'); s.textContent = '★'; s.style.animationDelay = (skipped ? 0 : i * 0.16) + 's'; st.append(s); }
-      vibrate([30, 60, 30, 60, 120]);
-      await wait(1400);
-    }
-    // ---- ③ はじける ----
-    rising = null;
-    orb.classList.add('pop');
-    const { x, y } = ob();
-    burst(x, y, COL[top], top === 5 ? 260 : top === 4 ? 180 : 120, top === 5 ? 13 : 10);
-    flash(1);
-    vibrate(top >= 5 ? [40, 40, 140] : top >= 4 ? [30, 40, 70] : 30);
-    await wait(500);
-    stage.remove();
-    // ---- ④ ★5の見せ場 ----
-    const fives = res.filter(r => r.rarity === 5 && !r.shard).slice(0, 3); // 新しい★5だけ（多くても3つ）
-    for (const r of fives) {
-      if (skipped) break;
-      await showcase(r);
-    }
-    // ---- ⑤ カードをめくる ----
+    bp.classList.add('out');
+    await wait(250);
+    bp.style.display = 'none';
     await showCards();
   }
 
@@ -153,23 +169,129 @@ export function playPullFX(res, opt) {
     requestAnimationFrame(() => { f.style.transition = 'opacity .7s'; f.style.opacity = 0; });
   }
 
-  function showcase(r) {
-    return new Promise(resolve => {
-      const sp = ov.querySelector('.pfx-spot');
-      sp.innerHTML = `
-        <div class="sp-rays"></div>
-        <div class="sp-item"><span class="thumb">${thumbHTML(r.item)}</span></div>
-        <div class="sp-stars">★★★★★</div>
-        <b class="sp-name">${esc(r.item.name)}</b>
-        ${r.shard ? '<i class="po-dup">かぶり → ★5のかけら</i>' : '<i class="po-new">NEW</i>'}
-        <p class="sp-tap">タップでつづける</p>`;
-      hydrateThumbs(sp);
-      sp.classList.remove('hide');
-      requestAnimationFrame(() => sp.classList.add('on'));
-      burst(W / 2, H * 0.42, COL[5], 160, 11);
-      const done = () => { sp.removeEventListener('click', done); sp.classList.remove('on'); setTimeout(() => { sp.classList.add('hide'); resolve(); }, 250); };
-      setTimeout(() => sp.addEventListener('click', done), 600);
-    });
+  // 1つの家具を、線 → 寸法 → 本物 → ハンコ の順に見せる
+  async function single(r, cols) {
+    const it = r.item, rar = r.rarity;
+    bp.classList.remove('ten', 'real', 'dimmed', 'named', 'stamped', 'ghosted');
+    bp.classList.add('one');
+    setColor(cols[0]);
+    const slow = rar === 3 ? 0.7 : rar === 4 ? 0.85 : 1;
+    const box = bp.querySelector('.bp-art');
+    const lc = bp.querySelector('.bp-lines'), real = bp.querySelector('.bp-real'), ghost = bp.querySelector('.bp-ghost'), dimsSvg = bp.querySelector('.bp-dims');
+    const msg = bp.querySelector('.bp-msg');
+    bp.querySelector('.tb-name').textContent = '？？？';
+    bp.querySelector('.bp-name i').textContent = '★'.repeat(rar);
+    bp.querySelector('.bp-name b').textContent = it.name;
+    const st = bp.querySelector('.bp-stamp');
+    st.className = 'bp-stamp r' + rar;
+    st.innerHTML = rar >= 4 ? `<span>${rar === 5 ? '完成' : '良品'}<small>${'★'.repeat(rar)}</small></span>` : '';
+    real.removeAttribute('src'); dimsSvg.innerHTML = ''; ghost.innerHTML = '';
+    const R = box.getBoundingClientRect();
+    lc.width = R.width * dpr; lc.height = R.height * dpr;
+    const g = lc.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    msg.textContent = '製図中…';
+    let art = null;
+    if (!skipped) art = await Promise.race([getArt(it), new Promise(z => setTimeout(() => z(null), 2600))]);
+    msg.textContent = '';
+    // ③ 線を描く
+    let bounds = { x0: 0.2, y0: 0.2, x1: 0.8, y1: 0.8 };
+    if (art && art.segs && art.segs.length) {
+      const segs = art.segs.slice().sort((p, q) => (Math.min(p[1], p[3]) - Math.min(q[1], q[3])) + (Math.random() - 0.5) * 0.04);
+      bounds = segs.reduce((b, q) => ({ x0: Math.min(b.x0, q[0], q[2]), y0: Math.min(b.y0, q[1], q[3]), x1: Math.max(b.x1, q[0], q[2]), y1: Math.max(b.y1, q[1], q[3]) }), { x0: 1, y0: 1, x1: 0, y1: 0 });
+      const drawUpTo = (n, from, color) => {
+        g.strokeStyle = color; g.lineWidth = 1.3; g.lineCap = 'round'; g.shadowColor = color; g.shadowBlur = 6;
+        g.beginPath();
+        for (let k = from; k < n; k++) { const q = segs[k]; g.moveTo(q[0] * R.width, q[1] * R.height); g.lineTo(q[2] * R.width, q[3] * R.height); }
+        g.stroke();
+      };
+      const dur = 1500 * slow;
+      let done = 0;
+      await new Promise(z => {
+        const t0 = performance.now();
+        const f = () => {
+          const k = (skipped || fast) ? 1 : Math.min(1, (performance.now() - t0) / dur);
+          const n = Math.floor(segs.length * (1 - Math.pow(1 - k, 1.6)));
+          if (n > done) { drawUpTo(n, done, COL[cols[0]]); done = n; }
+          if (k >= 1) { fast = false; z(); } else requestAnimationFrame(f);
+        };
+        f();
+      });
+      vibrate(8);
+      // 昇格：線の色が変わる
+      for (let s = 1; s < cols.length; s++) {
+        await wait(500);
+        g.clearRect(0, 0, R.width, R.height); drawUpTo(segs.length, 0, COL[cols[s]]);
+        setColor(cols[s]); flash(0.45);
+        burst(R.left + R.width / 2, R.top + R.height / 2, COL[cols[s]], 70, 6);
+        vibrate(cols[s] === 5 ? [50, 30, 90] : 40);
+      }
+      if (art.url) real.src = art.url;
+    } else {
+      // 線が作れないときは、絵のふちどりで代わりにする
+      ghost.innerHTML = thumbHTML(it); hydrateThumbs(ghost);
+      bp.classList.add('ghosted');
+      await wait(1300 * slow);
+      for (let s = 1; s < cols.length; s++) { await wait(400); setColor(cols[s]); flash(0.45); vibrate(40); }
+      const im = ghost.querySelector('img'); if (im) real.src = im.src;
+    }
+    // ④ 寸法
+    if (art && art.dims) {
+      const b = bounds, pad = 4;
+      const X0 = b.x0 * 100, X1 = b.x1 * 100, Y0 = b.y0 * 100, Y1 = b.y1 * 100;
+      const yb = Math.min(97, Y1 + pad), xr = Math.min(97, X1 + pad);
+      dimsSvg.innerHTML = `<path d="M${X0} ${yb} H${X1} M${X0} ${yb - 1.5} V${yb + 1.5} M${X1} ${yb - 1.5} V${yb + 1.5} M${xr} ${Y0} V${Y1} M${xr - 1.5} ${Y0} H${xr + 1.5} M${xr - 1.5} ${Y1} H${xr + 1.5}"/>`;
+      box.querySelector('.bp-dt')?.remove(); box.querySelector('.bp-dt2')?.remove();
+      box.insertAdjacentHTML('beforeend', `<span class="bp-dt" style="left:${(X0 + X1) / 2}%;top:${yb}%">W ${art.dims.w}</span><span class="bp-dt2" style="left:${xr}%;top:${(Y0 + Y1) / 2}%">H ${art.dims.h}</span>`);
+    }
+    bp.classList.add('dimmed');
+    await wait(600 * slow);
+    // ⑤ 光の線がなぞって本物に
+    bp.classList.add('real');
+    vibrate(rar >= 4 ? 30 : 10);
+    await wait(1000);
+    // ⑥ ハンコと名前
+    bp.querySelector('.tb-name').textContent = it.name;
+    bp.classList.add('named');
+    if (rar >= 4) {
+      bp.classList.add('stamped');
+      flash(rar === 5 ? 0.6 : 0.35);
+      const b = st.getBoundingClientRect();
+      burst(b.left + b.width / 2, b.top + b.height / 2, COL[rar], rar === 5 ? 160 : 70, rar === 5 ? 10 : 7);
+      vibrate(rar === 5 ? [60, 60, 120] : 40);
+    }
+    // タップするまで待つ（スキップのときは待たない）
+    if (!skipped) await new Promise(z => { const go = () => { bp.removeEventListener('click', go); z(); }; setTimeout(() => bp.addEventListener('click', go), 500); });
+    fast = false;
+  }
+
+  // 10連：1枚の紙に10この図面
+  async function grid() {
+    bp.classList.remove('one');
+    bp.classList.add('ten');
+    setColor(steps[0]);
+    const gd = bp.querySelector('.bp-grid');
+    gd.innerHTML = res.map((r, i) => `<div class="bg-c r${r.rarity}" style="--cc:${COL[r.rarity]}"><span class="bg-in">${thumbHTML(r.item)}</span><i>${'★'.repeat(r.rarity)}</i></div>`).join('');
+    hydrateThumbs(gd);
+    const cells = [...gd.querySelectorAll('.bg-c')];
+    // 昇格のときは、さいしょ全部を青で描く
+    if (steps.length > 1) cells.forEach(c => c.style.setProperty('--draw', COL[3]));
+    for (const c of cells) { c.classList.add('draw'); vibrate(5); await wait(150); }
+    await wait(400);
+    for (let s = 1; s < steps.length; s++) {
+      setColor(steps[s]); flash(0.4); vibrate(40);
+      cells.forEach(c => { const rr = +c.className.match(/r(\d)/)[1]; if (rr >= steps[s]) c.style.removeProperty('--draw'); });
+      await wait(600);
+    }
+    cells.forEach(c => c.style.removeProperty('--draw'));
+    setColor(top);
+    await wait(300);
+    bp.classList.add('real');
+    vibrate(top >= 4 ? [30, 40, 70] : 20);
+    cells.forEach((c, i) => setTimeout(() => c.classList.add('real'), skipped ? 0 : 120 + Math.floor(i / 5) * 350));
+    await wait(1100);
+    if (top >= 4) { flash(top === 5 ? 0.5 : 0.3); burst(innerWidth / 2, innerHeight * 0.42, COL[top], top === 5 ? 160 : 80, 9); }
+    await wait(700);
+    gd.innerHTML = '';
   }
 
   async function showCards() {
@@ -190,7 +312,7 @@ export function playPullFX(res, opt) {
     box.classList.remove('hide');
     const cards = [...box.querySelectorAll('.pc')];
     cards.forEach((c, i) => { c.style.animationDelay = (i * 0.05) + 's'; c.classList.add('deal'); });
-    await wait(ten ? 700 : 400);
+    await wait(ten ? 500 : 250);
     const flip = (c) => {
       if (c.classList.contains('flip')) return;
       c.classList.add('flip');
@@ -205,9 +327,8 @@ export function playPullFX(res, opt) {
     // 1枚ずつ自動でめくる（★4以上は少しためる）
     for (const c of cards) {
       const r = res[+c.dataset.i];
-      if (!skipped && r.rarity >= 4) { c.classList.add('tease'); await wait(450); c.classList.remove('tease'); }
       flip(c);
-      await wait(ten ? 230 : 300);
+      await wait(ten ? 70 : 100);
     }
     ov.querySelector('.pfx-skip').remove();
     ov.querySelector('.pfx-btns').classList.remove('hide');
