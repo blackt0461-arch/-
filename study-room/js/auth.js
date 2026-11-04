@@ -16,9 +16,14 @@ async function localHash(password, salt) {
 }
 function localUsers() { try { return JSON.parse(localStorage.getItem(LOCAL_USERS)) || {}; } catch (e) { return {}; } }
 
+// ログイン情報は、端末の保存（localStorage）と、このページの中（mem）の両方に持つ。
+// 端末の保存が何かのはずみで消えても、アプリを開いているあいだは mem から戻す（1.8.1）
+let mem = null;
+function store(s) { try { localStorage.setItem(SESSION, JSON.stringify(s)); } catch (e) { /* 保存できなくても mem で続ける */ } }
 function remember(r) {
   const s = { token: r.token, id: r.username.normalize('NFKC').toLowerCase(), name: r.username, admin: !!r.is_admin };
-  localStorage.setItem(SESSION, JSON.stringify(s));
+  mem = s;
+  store(s);
   localStorage.removeItem(LOCAL_SESSION);
   return s;
 }
@@ -54,7 +59,12 @@ export async function logIn(name, password) {
 export function logOut() {
   const s = currentUser();
   if (s) rpc('sr_logout', { p_token: s.token }).catch(() => {});
-  localStorage.removeItem(SESSION);
+  forget();
+}
+// ログイン情報を消す（ログアウト・合い鍵が使えなくなった時）
+export function forget() {
+  mem = null;
+  try { localStorage.removeItem(SESSION); } catch (e) { /* なし */ }
 }
 
 // サーバーから届いた「管理者かどうか」を覚えなおす
@@ -62,10 +72,15 @@ export function setAdmin(flag) {
   const s = currentUser();
   if (!s || s.admin === !!flag) return;
   s.admin = !!flag;
-  localStorage.setItem(SESSION, JSON.stringify(s));
+  mem = s;
+  store(s);
 }
 export function isAdmin() { return !!currentUser()?.admin; }
 
 export function currentUser() {
-  try { return JSON.parse(localStorage.getItem(SESSION)); } catch (e) { return null; }
+  let s = null;
+  try { s = JSON.parse(localStorage.getItem(SESSION)); } catch (e) { /* なし */ }
+  if (s && s.token) { mem = s; return s; }
+  if (mem) { store(mem); return mem; } // 端末の保存だけ消えていた → 戻す
+  return null;
 }
