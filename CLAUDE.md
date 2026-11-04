@@ -13,3 +13,13 @@
 ## アプリの更新のお知らせ（chord-analyzer/version.json の notes）
 
 画面に出るので、シンプルで簡潔に書く。1つ15字くらいまで・3つまで。数字や細かい説明は入れない（例：「メニューを下のアイコンに」）。
+
+## ROOMIN（study-room）の新しい版の出し方
+
+**テスト版 → 管理者がためす → ユーザーの許可 → 本番** の順にする。いきなり本番を変えない。
+
+- 変更はいつも `study-room-beta/`（テスト版。管理者だけが入れる）で作る。`study-room/`（本番）は直接さわらない。
+- テスト版の version.json と js/main.js の APP_VERSION を上げ、プルリクエスト → main にマージ → テスト版に出る。ユーザーに「テスト版に出しました。メニュー →『テスト版を開く』でためしてください」と伝える。
+- ユーザーが「許可」「OK」などと言ったら、`node study-room-beta/tools/release/release.js` で本番に写し、プルリクエスト → main にマージ → 本番に出る。
+- テスト版：https://blackt0461-arch.github.io/-/study-room-beta/ ／ 本番：https://blackt0461-arch.github.io/-/study-room/
+- くわしくは study-room-beta/SPEC.md の「23. 新しい版の出し方」。

@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#16130f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="ROOMIN">
+<title>ROOMIN</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="ui.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" media="print" onload="this.media='all'" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=Shippori+Mincho:wght@500;600;700&family=Zen+Kaku+Gothic+New:wght@400;500;700&family=Zen+Maru+Gothic:wght@500;700&family=Dela+Gothic+One&family=Oswald:wght@500;600&display=swap">
+<link rel="stylesheet" href="theme.css">
+<link rel="stylesheet" href="skins.css">
+<link rel="stylesheet" href="puzzle.css">
+<script>
+// 起動の見張り：10秒たっても画面が出ないときは、原因と「やり直す」ボタンを出す（古いiPadなどで真っ黒のまま止まらないように）
+(function () {
+  var errs = [];
+  window.__bootErrors = errs;
+  window.addEventListener('error', function (e) { errs.push((e.message || 'エラー') + (e.filename ? ' (' + e.filename.split('/').pop() + ':' + e.lineno + ')' : '')); });
+  window.addEventListener('unhandledrejection', function (e) { errs.push('Promise: ' + (e.reason && (e.reason.message || e.reason))); });
+  var supportsMap = !!(HTMLScriptElement.supports && HTMLScriptElement.supports('importmap'));
+  function started() { return !!document.querySelector('.title-screen, .login, .home, .screen, .dl-screen, .lb-screen, .update-ov'); }
+  setTimeout(function check() {
+    if (started() || document.getElementById('boot-fail')) return;
+    var ua = navigator.userAgent;
+    var os = (ua.match(/OS (\d+[_\d]*) like Mac/) || [])[1];
+    var box = document.createElement('div');
+    box.id = 'boot-fail';
+    box.style.cssText = 'position:fixed;inset:0;z-index:9999;background:#141416;color:#eee;font:15px/1.7 -apple-system,sans-serif;padding:40px 22px;overflow:auto';
+    box.innerHTML = '<h2 style="margin:0 0 8px;font-size:20px">読み込めませんでした</h2>' +
+      '<p style="margin:0 0 14px;color:#aaa">下のボタンでやり直してください。記録はネットに保存されているので消えません。</p>' +
+      '<button id="bf-retry" style="display:block;width:100%;padding:14px;margin:0 0 10px;border:0;border-radius:12px;background:#f2efe9;color:#17171a;font-weight:700;font-size:16px">もう一度</button>' +
+      '<button id="bf-clear" style="display:block;width:100%;padding:14px;margin:0 0 18px;border:1px solid #555;border-radius:12px;background:none;color:#eee;font-size:15px">古いデータを消して読みこみ直す</button>' +
+      '<p style="margin:0;color:#888;font-size:12px">原因の手がかり（スクリーンショットを送ってください）</p>' +
+      '<pre style="white-space:pre-wrap;font-size:11.5px;color:#bbb;background:#1e1e22;padding:10px;border-radius:8px">' +
+      (os ? 'iOS / iPadOS ' + os.replace(/_/g, '.') + '\n' : '') + 'importmap: ' + (supportsMap ? 'OK' : '使えない（iPadOS 16.4 以上が必要）') + '\n' +
+      (errs.length ? errs.slice(0, 6).join('\n') : 'エラーの記録なし（読み込みに時間がかかっている可能性）') + '\n\n' + ua + '</pre>';
+    document.body.appendChild(box);
+    document.getElementById('bf-retry').onclick = function () { location.reload(); };
+    document.getElementById('bf-clear').onclick = function () {
+      var jobs = [];
+      if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations) jobs.push(navigator.serviceWorker.getRegistrations().then(function (rs) { return Promise.all(rs.map(function (r) { return r.unregister(); })); }));
+      if (window.caches && caches.keys) jobs.push(caches.keys().then(function (ks) { return Promise.all(ks.map(function (k) { return caches.delete(k); })); }));
+      Promise.all(jobs).then(function () { location.reload(); }, function () { location.reload(); });
+    };
+  }, 10000);
+})();
+</script>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<canvas id="room"></canvas>
+<div id="app"></div>
+<div id="toast" class="toast"></div>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
