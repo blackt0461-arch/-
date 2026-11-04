@@ -738,16 +738,22 @@ function currentOffer() {
   S.save();
   return hs.offer;
 }
+// 候補にまざる「おまけ」のレアチケット（家具の代わりに選べる）
+const TICKET_CANDS = { '@ticket': 'ticket', '@ticket4': 'ticket4' };
+const ticketCand = (id) => ({ id, ticket: TICKET_CANDS[id], name: TICKET_NAME?.[TICKET_CANDS[id]] || 'レアチケット', place: 'ticket', src: {} });
 function offerCands(genre) {
   const o = currentOffer();
-  let ids = (o.cands[genre] || []).filter(id => { const it = itemById(id); return it && buyable(it); });
-  if (!ids.length) {
+  let ids = (o.cands[genre] || []).filter(id => { if (TICKET_CANDS[id]) return true; const it = itemById(id); return it && buyable(it); });
+  if (!ids.some(id => !TICKET_CANDS[id])) {
     ids = pickCandidates(genre, curRoom().style).map(i => i.id);
+    // まれに（約8%）、候補の1つがレアチケットになる。さらにその中のまれに★4以上確定
+    if (ids.length && Math.random() < 0.08) ids[ids.length - 1] = Math.random() < 0.15 ? '@ticket4' : '@ticket';
     o.cands[genre] = ids;
     S.save();
   }
-  return ids.map(itemById);
+  return ids.map(id => TICKET_CANDS[id] ? ticketCand(id) : itemById(id));
 }
+const candArt = (it) => it.ticket ? `<span class="thumb tk-thumb">${ticketSVG(it.ticket, 'mini')}</span>` : `<span class="thumb">${thumbHTML(it)}</span>`;
 
 function buyFlow() {
   const o = currentOffer();
@@ -760,10 +766,10 @@ function buyFlow() {
       const have = all.filter(i => S.realOwned(i.id)).length;
       const fresh = !curRoom().placed.some(p => itemById(p.item)?.genre === gid);
       const peek = offerCands(gid);
-      return `<button class="genre-row" data-g="${gid}">
+      return `<button class="genre-row ${peek.some(it => it.ticket) ? 'has-ticket' : ''}" data-g="${gid}">
         <span class="g-ic">${icon(GENRE_ICON[gid] || 'box')}</span>
         <span class="g-t"><b>${g.name}</b><small>${fresh ? '<i class="g-new">NEW</i>' : ''}${have}/${all.length}</small></span>
-        <span class="g-peek">${peek.map(it => `<span class="thumb">${thumbHTML(it)}</span>`).join('')}</span>
+        <span class="g-peek">${peek.map(candArt).join('')}</span>
         ${icon('chevronRight')}</button>`;
     }).join('')}</div>
     <button class="link close">あとで</button>`, 'buy-sheet');
@@ -777,16 +783,16 @@ function chooseCandidate(genreId) {
   const cands = offerCands(genreId);
   if (!cands.length) return toast('このジャンルは全部そろっています');
   // 選ぶ前から、3つのデータを裏で読み込んでおく（置くときに待たない）
-  for (const it of cands) if (it.src.model) loadModel(it.src.model).catch(() => {});
+  for (const it of cands) if (it.src?.model) loadModel(it.src.model).catch(() => {});
   let picked = null;
   const el = sheet(`
     <div class="sh-head"><button class="sh-back">${icon('back')}</button><div><h3>${g.name}</h3><p>買うと、部屋の合う場所に自動で置きます</p></div></div>
     <div class="candgrid">${cands.map(it => `
-      <button class="cand ${it.rare ? 'rare' : ''}" data-id="${it.id}">
-        <span class="thumb">${thumbHTML(it)}</span>
-        ${it.rare ? `<span class="badge-rare">${icon('star')}レア</span>` : ''}
+      <button class="cand ${it.rare || it.ticket ? 'rare' : ''} ${it.ticket ? 'ticket' : ''}" data-id="${it.id}">
+        ${candArt(it)}
+        ${it.rare || it.ticket ? `<span class="badge-rare">${icon('star')}${it.ticket ? 'おまけ' : 'レア'}</span>` : ''}
         <b>${esc(it.name)}</b>
-        <span class="chips">${(it.styles || []).slice(0, 2).map(s => `<i>${styleDef(s).name}</i>`).join('')}</span>
+        <span class="chips">${it.ticket ? '<i>ガチャに使える</i>' : (it.styles || []).slice(0, 2).map(s => `<i>${styleDef(s).name}</i>`).join('')}</span>
       </button>`).join('')}</div>
     <p class="pv-tip">選ぶと、部屋のどこに置かれるかが見られます</p>
     <button class="btn gold big ok" disabled>${icon('check')}これを買う</button>`, 'cand-sheet');
@@ -795,11 +801,14 @@ function chooseCandidate(genreId) {
   // 選んだら、部屋の決まった場所に実際に置いて見せる（壁紙・床などと、置ける数がいっぱいのときは見せない）
   const canPreview = (it) => it.place !== 'surface' && remainCapacity(curRoom()) > 0;
   el.querySelectorAll('.cand').forEach(b => b.onclick = async () => {
-    picked = itemById(b.dataset.id);
+    picked = TICKET_CANDS[b.dataset.id] ? ticketCand(b.dataset.id) : itemById(b.dataset.id);
     el.querySelectorAll('.cand').forEach(x => x.classList.toggle('on', x === b));
     el.querySelector('.ok').disabled = false;
     const tip = el.querySelector('.pv-tip');
-    if (canPreview(picked)) {
+    if (picked.ticket) {
+      room3d?.clearPreview();
+      tip.textContent = '家具の代わりに、レアガチャのチケットがもらえます';
+    } else if (canPreview(picked)) {
       tip.textContent = '部屋のどこに置かれるか、見せています…';
       const p = await room3d.showPreview(picked);
       if (picked && b.classList.contains('on')) tip.textContent = p ? '光っている場所に置かれます。あとで模様がえで動かせます' : '空いている場所がないので、持ち物に入ります';
@@ -814,6 +823,15 @@ function chooseCandidate(genreId) {
     const max = S.gaugeMax(hs);
     if (hs.gauge >= max) { hs.gauge -= max; hs.unlocks++; } else if (hs.tickets > 0) hs.tickets--; else return;
     hs.offer = null; // 次に買うときは、新しい候補
+    if (picked.ticket) {
+      const key = picked.ticket === 'ticket4' ? 'rareTickets4' : 'rareTickets';
+      hs[key] = (hs[key] || 0) + 1;
+      el.remove(); room3d?.clearPreview();
+      S.save(); vibrate([30, 40, 60]);
+      toast(`${picked.name}を1枚手に入れました`, 2400);
+      showHome();
+      return;
+    }
     S.own(picked.id);
     el.remove();
     vibrate([30, 40, 60]);
@@ -1144,7 +1162,7 @@ function photoMode() {
 
 // =========================== 更新のお知らせ ===========================
 // このプログラムの版（version.json と同じにする。公開のたびに上げる）
-const APP_VERSION = '2.10.0';
+const APP_VERSION = '2.11.0';
 // 新しい版が出たら、みんな同じタイミングでそろうように強制で再起動する。
 // 開いた時・画面に戻った時・1分ごとに version.json を見る
 async function latestVersion() {
