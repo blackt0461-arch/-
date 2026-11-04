@@ -19,6 +19,8 @@ import * as DL from './download.js';
 import * as Sync from './sync.js';
 import { rpc } from './cloud.js';
 import { PUZZLES, puzzleById, levelInfo, mountPuzzle, livesOf } from './puzzles.js';
+import { openPuzzleHelp } from './puzzlehelp.js';
+import * as BGM from './bgm.js';
 
 const SUBJECTS = [
   { id: 'physics', name: '物理', ready: true },
@@ -700,6 +702,7 @@ function remainCapacity(room = curRoom()) {
 
 let notesChecked = false;
 function showHome() {
+  BGM.duck(false);
   room3d?.clearPreview();
   S.setUnlimited(isAdmin());
   applySkin();
@@ -1364,7 +1367,7 @@ function photoMode() {
 
 // =========================== 更新のお知らせ ===========================
 // このプログラムの版（version.json と同じにする。公開のたびに上げる）
-const APP_VERSION = '1.5.0';
+const APP_VERSION = '1.7.0';
 // 新しい版が出たら、みんな同じタイミングでそろうように強制で再起動する。
 // 開いた時・画面に戻った時・1分ごとに version.json を見る
 async function latestVersion() {
@@ -1520,6 +1523,7 @@ function playPuzzle(id, star) {
   star = Math.max(1, Math.min(star || ps.last || 1, S.puzzleOpen(id)));
   ps.last = star; S.save();
   const lives = livesOf(star);
+  BGM.duck(true);
   room3d?.setActive(false);
   canvas.classList.add('dim');
   app.innerHTML = '';
@@ -1529,13 +1533,22 @@ function playPuzzle(id, star) {
         <button class="icon back" aria-label="部屋にもどる">${icon('x')}</button>
         <h2>${z.name}<small>★${star}</small></h2>
         <span class="pz-life" aria-label="まちがえられる回数">${'<i class="on"></i>'.repeat(lives)}</span>
+        <button class="pz-ibtn" aria-label="遊び方">i</button>
       </header>
-      <p class="pz-rule">${z.rule}${lives < 3 ? '<b>★5 は、まちがいは2回まで。</b>' : ''}</p>
       <p class="pz-moves" hidden></p>
       <div class="pz-host"></div>
     </div>`);
   app.append(el);
-  el.querySelector('.back').onclick = () => { S.save(); showHome(); };
+  el.querySelector('.back').onclick = () => { document.querySelector('.ph-sheet')?.remove(); S.save(); showHome(); };
+  // 右上の「i」：遊び方のカード。はじめてそのパズルを開いた時は自動で出す
+  const ib = el.querySelector('.pz-ibtn');
+  const help = () => openPuzzleHelp(id, z.name, () => {
+    const pr = S.profile(); (pr.puzzleHelp || (pr.puzzleHelp = {}))[id] = true; S.save();
+    if (lives < 3) toast('★5 は、まちがいは2回までです', 2600);
+  });
+  ib.onclick = help;
+  if (!S.profile().puzzleHelp?.[id]) setTimeout(() => { if (el.isConnected) help(); }, 400);
+  else if (lives < 3) toast('★5 は、まちがいは2回までです', 2600);
   const life = el.querySelector('.pz-life'), mv = el.querySelector('.pz-moves');
   const t0 = Date.now();
   mountPuzzle(id, star, el.querySelector('.pz-host'), {
@@ -2225,8 +2238,8 @@ function confirmDeleteUser(name) {
 
 // =========================== 設定 ===========================
 function showSettings() {
-  let q = 'high';
-  try { q = localStorage.getItem('studyroom.quality') || 'high'; } catch (e) { /* なし */ }
+  let q = 'low';
+  try { q = localStorage.getItem('studyroom.quality') || 'low'; } catch (e) { /* なし */ }
   const ver = (() => { try { return localStorage.getItem('studyroom.version') || ''; } catch (e) { return ''; } })();
   const el = screenWithTabs('settings', `<button class="icon back">${icon('back')}</button><h2>設定</h2><span></span>`, 'menu', `
     <section class="group">
@@ -2246,6 +2259,13 @@ function showSettings() {
         <small>カクカクするときは「ふつう」か「かるい」に</small></div>
       ${DL.canDownload() ? `<button class="row-item tap dl"><span class="lbl">家具のデータ</span><span class="val">${DL.downloadState() === 'done' ? '保存ずみ' : 'まとめて保存する'}</span></button>` : ''}
     </section>
+    <section class="group bgm-set">
+      <div class="row-item col"><span class="lbl">${icon('music')}BGM</span>
+        <div class="seg bgm-on">${[[true, 'オン'], [false, 'オフ']].map(([v, n]) => `<button data-on="${v}" class="${BGM.settings().on === v ? 'on' : ''}">${n}</button>`).join('')}</div>
+        <label class="bgm-vol">音量<input type="range" id="bgm-vol" min="0" max="100" step="5" value="${Math.round(BGM.settings().vol * 100)}"><b>${Math.round(BGM.settings().vol * 100)}</b></label>
+        <label class="bgm-track">曲<select id="bgm-track">${BGM.TRACKS.map(([k, n]) => `<option value="${k}" ${BGM.settings().track === k ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
+        <small>自動のときは、部屋の時間と天気で曲が変わります。問題やパズルを解いている間は小さくなります</small></div>
+    </section>
     ${isAdmin() ? `<section class="group admin-only">
       <div class="row-item col"><span class="lbl">${icon('shield')}レベル（管理者だけ）</span>
         <div class="lvctl"><button class="lvm">${icon('back')}</button><b class="lvv">Lv${rankNow().rank}</b><button class="lvp">${icon('chevronRight')}</button>
@@ -2260,10 +2280,17 @@ function showSettings() {
     </section>` : ''}
     <p class="ver">ROOMIN ${esc(ver)}</p>`);
   el.querySelector('.back').onclick = showMenu;
-  el.querySelectorAll('.seg button').forEach(b => b.onclick = () => {
+  el.querySelectorAll('.bgm-on button').forEach(b => b.onclick = () => {
+    BGM.setOn(b.dataset.on === 'true');
+    el.querySelectorAll('.bgm-on button').forEach(x => x.classList.toggle('on', x === b));
+  });
+  const vol = el.querySelector('#bgm-vol');
+  vol.oninput = () => { BGM.setVolume(vol.value / 100); vol.nextElementSibling.textContent = vol.value; };
+  el.querySelector('#bgm-track').onchange = (e) => BGM.setTrack(e.target.value);
+  el.querySelectorAll('.seg button[data-q]').forEach(b => b.onclick = () => {
     try { localStorage.setItem('studyroom.quality', b.dataset.q); } catch (e) { /* なし */ }
     room3d?.setQuality(b.dataset.q);
-    el.querySelectorAll('.seg button').forEach(x => x.classList.toggle('on', x === b));
+    el.querySelectorAll('.seg button[data-q]').forEach(x => x.classList.toggle('on', x === b));
   });
   el.querySelector('.dl')?.addEventListener('click', () => { if (DL.downloadState() !== 'done') showDownload(); });
   // テスト勉強のコード
@@ -2312,6 +2339,7 @@ function showSettings() {
 
 // =========================== 問題を解く ===========================
 function startSet() {
+  BGM.duck(true); // 解いている間は BGM を小さく
   const st = sub();
   if (!(st.session && st.session.idx < st.session.set.length)) {
     st.session = { set: S.buildSet(st, probs()), idx: 0, results: [], gained: 0, xp: 0, rankUp: false, startedAt: Date.now(), bonus: S.solvedToday() < S.BONUS_PER_DAY };
@@ -2704,8 +2732,8 @@ function showTitle() {
   el.querySelector('.t-gear').onclick = () => titleSettings(el);
 }
 function titleSettings(host) {
-  let q = 'high';
-  try { q = localStorage.getItem('studyroom.quality') || 'high'; } catch (e) { /* なし */ }
+  let q = 'low';
+  try { q = localStorage.getItem('studyroom.quality') || 'low'; } catch (e) { /* なし */ }
   const sh = h(`<div class="sheet t-settings"><div class="grab"></div>
     <div class="sh-head"><span class="sh-ic">${icon('gear')}</span><div><h3>かんたん設定</h3><p>あとからメニューでも変えられます</p></div></div>
     <p class="lbl">画質</p>
@@ -2729,6 +2757,7 @@ const fixScroll = () => { if (window.scrollY || document.documentElement.scrollT
 document.addEventListener('focusout', () => setTimeout(fixScroll, 120));
 window.visualViewport?.addEventListener('resize', () => setTimeout(fixScroll, 120));
 window.addEventListener('scroll', () => { if (!document.activeElement || !/INPUT|TEXTAREA/.test(document.activeElement.tagName)) fixScroll(); }, { passive: true });
+BGM.init();
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
   navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(r => r.update()).catch(() => {});
 }
