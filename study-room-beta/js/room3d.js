@@ -404,19 +404,19 @@ export class Room3D {
 
   // --- 画面の雰囲気（影MODのような、光のにじみ・すき間の影・色の味付け） ---
   setupEffects() {
-    let q = 'high';
-    try { q = localStorage.getItem('studyroom.quality') || 'high'; } catch (e) { /* なし */ }
+    let q = 'low';
+    try { q = localStorage.getItem('studyroom.quality') || 'low'; } catch (e) { /* なし */ }
     this.quality = q;
     const c = this.composer = new EffectComposer(this.renderer);
     c.addPass(new RenderPass(this.scene, this.camera));
     const w = this.canvas.clientWidth || window.innerWidth, h = this.canvas.clientHeight || window.innerHeight;
     this.ao = new GTAOPass(this.scene, this.camera, w, h);
     this.ao.updateGtaoMaterial({ radius: 0.35, distanceExponent: 1.5, thickness: 1, scale: 1.2, samples: 12 });
-    this.ao.blendIntensity = 0.85;
+    this.ao.blendIntensity = 0.6; // 1.7.0：強すぎたので弱めた
     this.ao.enabled = q === 'high';
     this.effectsOn = q !== 'low';
     c.addPass(this.ao);
-    this.bloom = new UnrealBloomPass(new THREE.Vector2(w / 2, h / 2), 0.45, 0.65, 0.82);
+    this.bloom = new UnrealBloomPass(new THREE.Vector2(w / 2, h / 2), 0.22, 0.4, 0.88);
     c.addPass(this.bloom);
     c.addPass(new OutputPass());
     this.grade = new ShaderPass({
@@ -455,8 +455,9 @@ export class Room3D {
     u.uSplit.value = m.split ?? 0.12;
     u.uSat.value = m.sat ?? 1.12;
     u.uVig.value = m.vig ?? 0.32;
-    this.bloom.strength = m.bloom ?? 0.45;
-    this.bloom.threshold = m.bloomTh ?? 0.82;
+    // 光のにじみ：1.7.0 で「光が強すぎる」とのことで、半分にして、にじみはじめる明るさも上げた
+    this.bloom.strength = (m.bloom ?? 0.45) * 0.5;
+    this.bloom.threshold = Math.min(0.95, (m.bloomTh ?? 0.82) + 0.06);
   }
   setQuality(q) {
     this.quality = q;

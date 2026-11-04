@@ -841,3 +841,11 @@ h3.sec { font-size: 14px; color: var(--muted); margin: 18px 4px 8px; font-weight
 .bp-sweep { position: absolute; left: 0; right: 0; top: 0; height: 3px; background: var(--c); box-shadow: 0 0 22px 6px var(--c); opacity: 0; pointer-events: none; z-index: 3; }
 .bp.ten.real .bp-sweep { animation: bpSweep 1.1s ease-in-out forwards; }
 @keyframes bpSweep { 0% { top: 18%; opacity: 1; } 92% { opacity: 1; } 100% { top: 68%; opacity: 0; } }
+
+/* BGM の設定（1.7.0） */
+.bgm-set .lbl { display: inline-flex; align-items: center; gap: 6px; }
+.bgm-set .lbl .ic, .bgm-set .lbl svg { width: 18px; height: 18px; }
+.bgm-vol, .bgm-track { display: flex; align-items: center; gap: 10px; margin-top: 10px; font-size: 14px; }
+.bgm-vol input { flex: 1; min-width: 0; accent-color: var(--sk-accent, #d8c3a0); }
+.bgm-vol b { width: 2.4em; text-align: right; font-variant-numeric: tabular-nums; }
+.bgm-track select { flex: 1; min-width: 0; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--sk-card-line, rgba(255,255,255,.12)); background: var(--sk-card, #222); color: var(--sk-text, #f2efe9); font: inherit; }
