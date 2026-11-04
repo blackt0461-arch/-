@@ -124,12 +124,22 @@ export class Room3D {
     this.bindControls();
     this.resize();
     window.addEventListener('resize', () => this.resize());
+    // iPhone では、キーボードを閉じた時や画面の向きを変えた時に resize が来ないことがある。
+    // 見えている大きさと絵の大きさがずれると縦にのびるので、こまめに確かめて合わせる
+    window.addEventListener('orientationchange', () => setTimeout(() => this.resize(), 300));
+    window.visualViewport?.addEventListener('resize', () => this.resize());
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) this.resize(); });
+    setInterval(() => {
+      const w = this.canvas.clientWidth, h = this.canvas.clientHeight;
+      if (w && h && (w !== this._sw || h !== this._sh)) this.resize();
+    }, 700);
     this.loop();
   }
 
   resize() {
     const w = this.canvas.clientWidth || window.innerWidth;
     const h = this.canvas.clientHeight || window.innerHeight;
+    this._sw = w; this._sh = h;
     this.renderer.setSize(w, h, false);
     if (this.composer) {
       this.composer.setPixelRatio(this.renderer.getPixelRatio());

@@ -131,15 +131,23 @@ function tabbar(active) {
   const dot = (k) => (k === 'menu' && newsBadge) || (k === 'social' && friendBadge) || (k === 'gacha' && ticketCount()) || (k === 'room' && buy);
   const el = h(`<nav class="tabbar hotbar ${active === 'room' ? 'on-room' : ''}">
     <div class="slots">${slots.map(([k, ic, n]) => `
-      <button data-t="${k}" class="sl ${k === active ? 'on' : ''} ${k === 'buy' && buy ? 'hot' : ''}" aria-label="${n}">${icon(ic)}<span class="sl-t">${n}</span>${dot(k) ? '<i class="dot"></i>' : ''}</button>`).join('')}</div>
+      <button data-t="${k}" class="sl ${k === active ? 'on' : ''} ${k === 'buy' && buy ? 'hot' : ''}" aria-label="${n}">${icon(ic)}<span class="sl-t">${n}</span>${dot(k) ? '<i class="dot"></i>' : ''}${k === 'buy' && buy ? '<span class="buy-tip">買える！</span>' : ''}</button>`).join('')}</div>
     <div class="solve-wrap">
       ${!buy && active === 'room' ? `<span class="solve-need">あと${need}問</span>` : ''}
+      ${buy && active === 'room' ? `<span class="solve-need full">${icon('sparkle')}満タン</span>` : ''}
       <button data-t="play" class="solve-ring ${buy ? 'full' : ''}" style="--p:${pct}" aria-label="解く">
         <span class="sr-in">${icon(resume ? 'refresh' : 'pencil')}<b>${resume ? '続きから' : '解く'}</b></span>${resume || due || !S.playedToday() ? '<i class="dot"></i>' : ''}
       </button>
     </div>
   </nav>`);
   el.querySelectorAll('[data-t]').forEach(b => b.onclick = () => goTab(b.dataset.t));
+  // ゲージが満タンになった時に1回だけ知らせる
+  if (active === 'room') {
+    if (buy && !hs.fullNotified) {
+      hs.fullNotified = true; S.save();
+      setTimeout(() => { toast('ゲージ満タン！「買う」で家具を1つ買えます', 3200); vibrate([30, 40, 60]); }, 700);
+    } else if (!buy && hs.fullNotified) { hs.fullNotified = false; S.save(); }
+  }
   return el;
 }
 function goTab(t) {
@@ -1254,7 +1262,7 @@ function photoMode() {
 
 // =========================== 更新のお知らせ ===========================
 // このプログラムの版（version.json と同じにする。公開のたびに上げる）
-const APP_VERSION = '1.0.0';
+const APP_VERSION = '1.0.1';
 // 新しい版が出たら、みんな同じタイミングでそろうように強制で再起動する。
 // 開いた時・画面に戻った時・1分ごとに version.json を見る
 async function latestVersion() {
@@ -2341,6 +2349,11 @@ function titleSettings(host) {
 
 showTitle();
 
+// iPhone：キーボードを閉じたあと、画面が下にずれたまま残る（下に黒い帯が出る）のを戻す
+const fixScroll = () => { if (window.scrollY || document.documentElement.scrollTop || document.body.scrollTop) { window.scrollTo(0, 0); document.documentElement.scrollTop = 0; document.body.scrollTop = 0; } };
+document.addEventListener('focusout', () => setTimeout(fixScroll, 120));
+window.visualViewport?.addEventListener('resize', () => setTimeout(fixScroll, 120));
+window.addEventListener('scroll', () => { if (!document.activeElement || !/INPUT|TEXTAREA/.test(document.activeElement.tagName)) fixScroll(); }, { passive: true });
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
   navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(r => r.update()).catch(() => {});
 }
