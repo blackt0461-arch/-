@@ -47,7 +47,15 @@ const serve = () => new Promise(res => { const srv = http.createServer((req, rsp
     if (id === 'akari') await page.screenshot({ path: path.join(OUT, 'puzzle-1-hub.png') });
     await page.click(`.pz-star[data-p=${id}][data-s="1"]`); await page.waitForSelector('.puzzle-screen .pz-host > *');
     await page.waitForTimeout(300);
+    // はじめて開いた時は、遊び方のカードが自動で出る（指が動く）→ とじると「i」が光らなくなる
+    await page.waitForSelector('.ph-sheet', { timeout: 3000 }).catch(() => {});
+    await page.waitForTimeout(2600);
+    const help = await page.evaluate(() => ({ open: !!document.querySelector('.ph-sheet'), cap: document.querySelector('.ph-cap')?.textContent || '', finger: getComputedStyle(document.querySelector('.ph-finger') || document.body).opacity }));
+    check(help.open && /(ます|です)/.test(help.cap), `${id}：はじめは遊び方のカードが自動で出る（${help.cap.slice(0, 22)}…）`);
+    // 注意：遊び方のカードが動いている間は、ためし用のブラウザで画面の写真がとれない（実機では問題なし）。写真はとじてからとる
+    await page.evaluate(() => document.querySelector('.ph-close')?.click()); await page.waitForTimeout(400);
     await page.screenshot({ path: path.join(OUT, `puzzle-2-${id}.png`) });
+    check(!(await page.locator('.ph-sheet').count()) && !(await page.locator('.pz-ibtn.pulse').count()), `${id}：とじると「i」が光らなくなる`);
     const before = await page.evaluate(() => ({ g: window.__app.HS().gauge, xp: window.__app.S.profile().xp }));
     // わざとまちがえる（おひっこしは無し）
     if (id !== 'hikkoshi') {

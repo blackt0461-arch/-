@@ -126,7 +126,7 @@ function slideLevel(star) {
 // mountPuzzle(id, star, host, { onWin({ mistakes, moves }), onLose(), onChange() })
 const FUR = [['ソファ', '#e86f5a', 'sofa'], ['ベッド', '#5b8def', 'bed'], ['つくえ', '#f2b84b', 'desk'], ['植物', '#6cbf8a', 'plant'], ['いす', '#b28ad6', 'chair'], ['たな', '#5cc4c9', 'shelf']];
 // 平面的な家具のイラスト（白い面と、こい線）。w×h は形の比（1×1・1×2・2×1）
-const INK = '#2b2a33';
+export const INK = '#2b2a33';
 const ART = {
   sofa: [40, 40, `<rect x="7" y="9" width="26" height="13" rx="4"/><rect x="3" y="16" width="8" height="15" rx="3"/><rect x="29" y="16" width="8" height="15" rx="3"/><rect x="9" y="21" width="22" height="9" rx="2"/><rect x="6" y="30" width="3" height="4" fill="${INK}"/><rect x="31" y="30" width="3" height="4" fill="${INK}"/>`],
   bed: [40, 40, `<rect x="4" y="8" width="5" height="26" rx="2"/><rect x="6" y="19" width="31" height="9" rx="2"/><rect x="11" y="13" width="9" height="6" rx="2.5"/><rect x="21" y="16" width="16" height="5" rx="2" fill-opacity=".7"/><rect x="33" y="27" width="3" height="7" fill="${INK}"/>`],
@@ -139,7 +139,7 @@ const ART = {
   bigsofa: [80, 80, `<rect x="12" y="14" width="56" height="28" rx="7"/><rect x="4" y="30" width="16" height="32" rx="6"/><rect x="60" y="30" width="16" height="32" rx="6"/><rect x="18" y="42" width="44" height="18" rx="4"/><rect x="38" y="42" width="3" height="18" fill="${INK}" fill-opacity=".35"/><rect x="10" y="62" width="5" height="8" fill="${INK}"/><rect x="65" y="62" width="5" height="8" fill="${INK}"/>`],
   lamp: [40, 40, `<path d="M12 16 L28 16 L32 26 L8 26 Z" fill="${INK}"/><rect x="19" y="4" width="2" height="12" fill="${INK}"/><circle cx="20" cy="29" r="4" fill="#fff7c2" stroke="${INK}" stroke-width="2"/>`],
 };
-const art = (k, cls = 'pz-art') => { const [w, h, body] = ART[k]; return `<svg class="${cls}" viewBox="0 0 ${w} ${h}" fill="#fff" aria-hidden="true">${body}</svg>`; };
+export const art = (k, cls = 'pz-art') => { const [w, h, body] = ART[k]; return `<svg class="${cls}" viewBox="0 0 ${w} ${h}" fill="#fff" aria-hidden="true">${body}</svg>`; };
 const REG = ['#e86f5a', '#5b8def', '#f2b84b', '#6cbf8a', '#b28ad6', '#f29bb4', '#5cc4c9', '#a6a08f', '#e8a06a'];
 export function mountPuzzle(id, lv, host, cb = {}) {
   host.innerHTML = '';
@@ -173,7 +173,7 @@ export function mountPuzzle(id, lv, host, cb = {}) {
       }
     };
     draw();
-    host._solve = () => { for (let r = 0; r < N; r++) { const c = sol[r]; for (let k = 0; k < 2; k++) board.children[r * N + c].click(); } };
+    host._solve = () => { for (let r = 0; r < N; r++) { const c = sol[r]; for (let k = 0; k < 3 && !board.children[r * N + c].querySelector('svg'); k++) board.children[r * N + c].click(); } };
   }
 
   if (id === 'aburi') {
