@@ -1423,7 +1423,7 @@ function photoMode() {
 
 // =========================== 更新のお知らせ ===========================
 // このプログラムの版（version.json と同じにする。公開のたびに上げる）
-const APP_VERSION = '1.8.2';
+const APP_VERSION = '1.8.3';
 // 新しい版が出たら、みんな同じタイミングでそろうように強制で再起動する。
 // 開いた時・画面に戻った時・1分ごとに version.json を見る
 async function latestVersion() {
@@ -1537,7 +1537,7 @@ function showDownload() {
 function askMode() {
   return new Promise((done) => {
     const el = sheet(`
-      <div class="sh-head"><span class="sh-ic">${icon('home')}</span><div><h3>なにで部屋をつくる？</h3><p>あとから設定でいつでも変えられます</p></div></div>
+      <div class="sh-head"><span class="sh-ic">${icon('home')}</span><div><h3>なにで部屋をつくる？</h3><p>あとから変えることはできません</p></div></div>
       <div class="mode-pick">
         <button data-m="study"><span class="mp-ic">${icon('pencil')}</span><b>勉強</b><small>問題を解いてゲージをためる</small></button>
         <button data-m="puzzle"><span class="mp-ic">${icon('grid')}</span><b>パズル</b><small>頭をつかうパズルをクリアしてためる</small></button>
@@ -1545,6 +1545,7 @@ function askMode() {
     app.querySelector('.tabbar')?.classList.add('hide');
     el.querySelectorAll('[data-m]').forEach(b => b.onclick = () => {
       const m = b.dataset.m, name = m === 'puzzle' ? 'パズル' : '勉強';
+      if (!confirm(`「${name}」で部屋をつくります。あとから変えられませんが、よいですか？`)) return;
       const pr = S.profile(); pr.mode = m; pr.modeAt = Date.now(); S.save(); Sync.push?.();
       el.remove(); showHome();
       toast(m === 'puzzle' ? '右下の「パズル」から始めよう' : '右下の「解く」から始めよう', 3000);
@@ -1553,7 +1554,7 @@ function askMode() {
   });
 }
 
-// 勉強 ⇄ パズル を切りかえる（1.8.2 から自分で変えられる。部屋・家具・記録はそのまま）
+// 勉強 ⇄ パズル を切りかえる。切りかえられるのは管理者だけ（自分のモード。ほかの人は管理者画面から）。部屋・家具・記録はそのまま
 function setMode(m, quiet) {
   const pr = S.profile();
   if (pr.mode === m) return;
@@ -1563,7 +1564,7 @@ function setMode(m, quiet) {
   if (tb) { const act = tb.querySelector('.sl.on')?.dataset.t || 'room'; const nt = tabbar(act); if (tb.classList.contains('hide')) nt.classList.add('hide'); tb.replaceWith(nt); }
   if (!quiet) toast(m === 'puzzle' ? 'パズルで部屋をつくります。右下の「パズル」から' : '勉強で部屋をつくります。右下の「解く」から', 2800);
 }
-const switchBtn = (to) => `<button class="link mode-switch" data-to="${to}">${icon(to === 'puzzle' ? 'grid' : 'pencil')}${to === 'puzzle' ? 'パズルに切りかえる' : '勉強に切りかえる'}</button>`;
+const switchBtn = (to) => !isAdmin() ? '' : `<button class="link mode-switch" data-to="${to}">${icon(to === 'puzzle' ? 'grid' : 'pencil')}${to === 'puzzle' ? 'パズルに切りかえる' : '勉強に切りかえる'}</button>`;
 
 // =========================== パズル ===========================
 function showPuzzleHub() {
@@ -1583,7 +1584,7 @@ function showPuzzleHub() {
     <div class="sheet-foot">${switchBtn('study')}<button class="link close">とじる</button></div>`, 'subj-sheet puzzle-sheet');
   app.querySelector('.tabbar')?.classList.add('hide');
   el.querySelector('.close').onclick = () => { el.remove(); showHome(); };
-  el.querySelector('.mode-switch').onclick = () => { setMode('study'); el.remove(); showHome(); chooseSubject(); };
+  el.querySelector('.mode-switch')?.addEventListener('click', () => { setMode('study'); el.remove(); showHome(); chooseSubject(); });
   el.querySelectorAll('.pz-star[data-p]').forEach(b => b.onclick = () => { el.remove(); playPuzzle(b.dataset.p, +b.dataset.s); });
 }
 function playPuzzle(id, star) {
@@ -1674,7 +1675,7 @@ async function chooseSubject() {
     <div class="sheet-foot">${switchBtn('puzzle')}<button class="link close">とじる</button></div>`, 'subj-sheet');
   app.querySelector('.tabbar')?.classList.add('hide');
   el.querySelector('.close').onclick = () => { el.remove(); showHome(); };
-  el.querySelector('.mode-switch').onclick = () => { setMode('puzzle'); el.remove(); showHome(); showPuzzleHub(); };
+  el.querySelector('.mode-switch')?.addEventListener('click', () => { setMode('puzzle'); el.remove(); showHome(); showPuzzleHub(); });
   const draw = () => {
     el.querySelector('.subjgrid').innerHTML = SUBJECTS.map(s0 => {
       const ready = probs(s0.id).length > 0;
@@ -2375,11 +2376,11 @@ function showSettings() {
         <small>カクカクするときは「ふつう」か「かるい」に</small></div>
       ${DL.canDownload() ? `<button class="row-item tap dl"><span class="lbl">家具のデータ</span><span class="val">${DL.downloadState() === 'done' ? '保存ずみ' : 'まとめて保存する'}</span></button>` : ''}
     </section>
-    <section class="group mode-set">
+    ${isAdmin() ? `<section class="group mode-set">
       <div class="row-item col"><span class="lbl">部屋づくりのしかた</span>
         <div class="seg mode-seg">${[['study', '勉強'], ['puzzle', 'パズル']].map(([k, n]) => `<button data-mode="${k}" class="${(S.profile().mode || 'study') === k ? 'on' : ''}">${n}</button>`).join('')}</div>
-        <small>いつでも切りかえられます。部屋・家具・記録はそのまま残ります</small></div>
-    </section>
+        <small>管理者だけが切りかえられます。部屋・家具・記録はそのまま残ります</small></div>
+    </section>` : ''}
     <section class="group bgm-set">
       <div class="row-item col"><span class="lbl">${icon('music')}BGM</span>
         <div class="seg bgm-on">${[[true, 'オン'], [false, 'オフ']].map(([v, n]) => `<button data-on="${v}" class="${BGM.settings().on === v ? 'on' : ''}">${n}</button>`).join('')}</div>

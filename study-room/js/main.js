@@ -22,18 +22,71 @@ import { PUZZLES, puzzleById, levelInfo, mountPuzzle, livesOf } from './puzzles.
 import { openPuzzleHelp } from './puzzlehelp.js';
 import * as BGM from './bgm.js';
 
+// bank：data/bank/<科目>.json の問題バンク（教科書に合わせた 教科 → ジャンル → 単元）。あとから読みこむ
 const SUBJECTS = [
-  { id: 'physics', name: '物理', ready: true },
-  { id: 'math', name: '数学' },
-  { id: 'english', name: '英語' },
-  { id: 'chem', name: '化学' },
-  { id: 'jp', name: '国語' },
-  { id: 'social', name: '社会' },
+  { id: 'jp', name: '国語', bank: true },
+  { id: 'math', name: '数学', bank: true },
+  { id: 'english', name: '英語', bank: true },
+  { id: 'physics', name: '物理（公式）', ready: true },
+  { id: 'physics4', name: '物理（4択）', bank: true },
+  { id: 'chem', name: '化学', bank: true },
+  { id: 'bio', name: '生物', bank: true },
+  { id: 'earth', name: '地学', bank: true },
+  { id: 'social', name: '社会', bank: true },
 ];
+Object.assign(SUBJECT_ICON, { physics4: 'magnet', bio: 'plant', earth: 'sun' });
+// 前からある問題を、教科書の ジャンル・単元 に入れなおす（[ジャンル, 単元]。単元が null なら前の名前のまま）
+const OLD_UNIT = {
+  math: { '数と式': ['数学I', '数と式'], '二次関数': ['数学I', '二次関数'], '図形と計量': ['数学I', '図形と計量'], 'データの分析': ['数学I', 'データの分析'],
+    '場合の数と確率': ['数学A', '場合の数と確率'], '整数の性質': ['数学A', '数学と人間の活動'], '図形の性質': ['数学A', '図形の性質'],
+    '式と証明': ['数学II', '式と証明'], '複素数と方程式': ['数学II', '複素数と方程式'], '図形と方程式': ['数学II', '図形と方程式'], '三角関数': ['数学II', '三角関数'],
+    '指数・対数': ['数学II', '指数関数と対数関数'], '微分・積分': ['数学II', '微分法と積分法'], '数列': ['数学B', '数列'], 'ベクトル': ['数学C', 'ベクトル'] },
+  english: { '文法（時制）': ['文法', '時制'], '文法（助動詞）': ['文法', '助動詞'], '文法（受動態）': ['文法', '受動態'], '文法（不定詞・動名詞）': ['文法', '不定詞と動名詞'],
+    '文法（分詞）': ['文法', '分詞'], '文法（比較）': ['文法', '比較'], '文法（関係詞）': ['文法', '関係詞'], '文法（仮定法）': ['文法', '仮定法'], '語順整序': ['文法', '語順整序'],
+    '語彙': ['語彙・熟語', '重要単語'], 'イディオム・熟語': ['語彙・熟語', 'イディオム・熟語'], '会話表現': ['会話表現', '日常の会話'], '発音・アクセント': ['発音・アクセント', 'アクセント'] },
+  chem: { '物質の構成': ['化学基礎', '物質の構成'], '原子の構造': ['化学基礎', '原子の構造と周期表'], '周期表': ['化学基礎', '原子の構造と周期表'], '化学結合': ['化学基礎', '化学結合'],
+    '物質量': ['化学基礎', '物質量と化学反応式'], '化学反応式': ['化学基礎', '物質量と化学反応式'], '酸と塩基': ['化学基礎', '酸と塩基'], '中和・pH': ['化学基礎', '酸と塩基'],
+    '酸化還元': ['化学基礎', '酸化還元反応'], '電池・電気分解': ['化学', '化学反応とエネルギー'], '熱化学': ['化学', '化学反応とエネルギー'], '反応速度と平衡': ['化学', '反応速度と化学平衡'],
+    '気体の性質': ['化学', '物質の状態'], '無機物質': ['化学', '無機物質'], '有機化合物': ['化学', '有機化合物'] },
+  jp: { '漢字の読み': ['言葉（漢字・語彙・文法・敬語）', '漢字の読み'], '漢字の書き（同音異義語）': ['言葉（漢字・語彙・文法・敬語）', '同音異義語'],
+    '語彙・慣用句・ことわざ': ['言葉（漢字・語彙・文法・敬語）', '慣用句・ことわざ'], '四字熟語': ['言葉（漢字・語彙・文法・敬語）', '四字熟語'], '敬語': ['言葉（漢字・語彙・文法・敬語）', '敬語'],
+    '文法（品詞・助詞・助動詞）': ['言葉（漢字・語彙・文法・敬語）', '文法（品詞・助詞・助動詞）'], '古文単語': ['古文', '古文単語'],
+    '古典文法（助動詞の意味・活用・係り結び）': ['古文', '古典文法（助動詞）'], '漢文（返り点・句法・再読文字）': ['漢文', '漢文の句法'], '文学史': ['文学史', '文学史いろいろ'] },
+};
+// 社会は「ジャンル（中身）」の名前なので、かっこの前をジャンル、中をそろえる
+const SOCIAL_UNIT = { '地図と地理情報': '地図と地理情報', '気候': '気候と生活', '地形': '地形と自然環境', '産業': '世界の産業と貿易', '人口': '地球的課題', '防災': '自然災害と防災',
+  '近代化': '近代化と私たち', '大衆化': '国際秩序の変化や大衆化と私たち', 'グローバル化': 'グローバル化と私たち', '近世': '江戸時代' };
+function regroup(sid, p) {
+  if (sid === 'social') { const m = /^(.+?)（(.+)）$/.exec(p.unit || ''); if (m) return { ...p, genre: m[1], unit: SOCIAL_UNIT[m[2]] || m[2] }; return { ...p, genre: 'そのほか' }; }
+  const g = OLD_UNIT[sid]?.[p.unit];
+  return g ? { ...p, genre: g[0], unit: g[1] || p.unit } : p;
+}
 const PROBLEMS = validProblems();
-const ALLP = { physics: PROBLEMS, ...SUBJECT_PROBLEMS };
+const ALLP = { physics: PROBLEMS };
+for (const [sid, list] of Object.entries(SUBJECT_PROBLEMS)) ALLP[sid] = list.map(p => regroup(sid, p));
 const byId = Object.fromEntries(Object.values(ALLP).flat().map(p => [p.id, p]));
 function probs(id = subjectId) { return ALLP[id] || []; }
+// 問題バンクを読みこむ（1科目1回だけ。読めなくても前からある問題は使える）
+const bankLoading = {}, bankDone = {};
+function loadBank(sid) {
+  if (!SUBJECTS.find(x => x.id === sid)?.bank) return Promise.resolve();
+  return bankLoading[sid] ||= fetch(`data/bank/${sid}.json`).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }).then(list => {
+    const have = new Set((ALLP[sid] || []).map(p => p.id));
+    const add = list.filter(p => !have.has(p.id) && Array.isArray(p.choices) && p.choices.length === 4 && p.answer >= 0 && p.answer < 4);
+    ALLP[sid] = [...(ALLP[sid] || []), ...add];
+    for (const p of add) byId[p.id] = p;
+    bankDone[sid] = true;
+  }).catch(e => { delete bankLoading[sid]; console.warn('bank', sid, e); });
+}
+const loadAllBanks = () => Promise.all(SUBJECTS.filter(x => x.bank).map(x => loadBank(x.id)));
+// えらんだ範囲（ジャンル・単元）の問題だけ
+function scoped(sid = subjectId) {
+  const sc = S.subject(sid).scope, all = probs(sid);
+  if (!sc || (!sc.genre && !sc.unit)) return all;
+  const list = all.filter(p => (!sc.genre || p.genre === sc.genre) && (!sc.unit || p.unit === sc.unit));
+  return list.length ? list : all;
+}
+const scopeLabel = (sc) => !sc || (!sc.genre && !sc.unit) ? 'すべて' : [sc.genre, sc.unit].filter(Boolean).join(' ・ ');
 
 // ---- テスト勉強用の問題集（設定でコードを入れると、教科えらびに科目が増える） ----
 // 中身は js/packs.js に暗号で入っていて、コードがないと開けない。入れたコードは記録（profile.codes）に残す
@@ -64,7 +117,7 @@ async function loadSavedPacks() {
   const { normCode } = await import('./packcrypt.js');
   const u = Auth.currentUser();
   let granted = [];
-  if (u) { try { granted = (await rpc('sr_my_codes', { p_token: u.token })) || []; } catch (e) { /* まだ準備できていない・オフライン */ } }
+  if (u) { try { granted = (await rpc('sr_my_codes', { p_token: u?.token })) || []; } catch (e) { /* まだ準備できていない・オフライン */ } }
   // 「MODE:puzzle:時刻」は、管理者がモードを変えた知らせ（問題集ではない）。いちばん新しいものを使う
   const modes = granted.filter(c => /^MODE:/.test(c)).map(c => c.split(':')).map(([, m, t]) => ({ m, t: +t || 0 })).filter(x => x.m === 'study' || x.m === 'puzzle').sort((a, b) => a.t - b.t);
   granted = granted.filter(c => !/^MODE:/.test(c));
@@ -265,7 +318,7 @@ async function refreshGifts(force = false) {
   if (!u || (!force && Date.now() - giftsCheckedAt < 60000)) return;
   giftsCheckedAt = Date.now();
   let list;
-  try { list = await rpc('sr_gift_list', { p_token: u.token }); } catch (e) { return; }
+  try { list = await rpc('sr_gift_list', { p_token: u?.token }); } catch (e) { return; }
   let added = 0;
   for (const g of list || []) {
     const id = 'op' + g.id;
@@ -670,6 +723,7 @@ function curDef() { return roomDef(curRoom().id); }
 
 async function enterHouse() {
   if (BETA && !isAdmin()) return showBetaOnly();
+  setTimeout(loadAllBanks, 2500); // 問題バンクは、部屋が出てから裏で読みこむ
   const packsReady = loadSavedPacks();
   const added = ensureRooms();
   if (!room3d) {
@@ -703,6 +757,8 @@ function remainCapacity(room = curRoom()) {
 let notesChecked = false;
 function showHome() {
   BGM.duck(false);
+  // ログイン情報がない（ログアウトされた）のに部屋を出そうとしたら、ログイン画面へ（こわれた画面にしない）
+  if (!Auth.currentUser()) return showLogin('login');
   room3d?.clearPreview();
   S.setUnlimited(isAdmin());
   applySkin();
@@ -1367,7 +1423,7 @@ function photoMode() {
 
 // =========================== 更新のお知らせ ===========================
 // このプログラムの版（version.json と同じにする。公開のたびに上げる）
-const APP_VERSION = '1.7.0';
+const APP_VERSION = '1.8.3';
 // 新しい版が出たら、みんな同じタイミングでそろうように強制で再起動する。
 // 開いた時・画面に戻った時・1分ごとに version.json を見る
 async function latestVersion() {
@@ -1498,6 +1554,18 @@ function askMode() {
   });
 }
 
+// 勉強 ⇄ パズル を切りかえる。切りかえられるのは管理者だけ（自分のモード。ほかの人は管理者画面から）。部屋・家具・記録はそのまま
+function setMode(m, quiet) {
+  const pr = S.profile();
+  if (pr.mode === m) return;
+  pr.mode = m; pr.modeAt = Date.now(); S.save(); Sync.push?.();
+  // 下のボタン（右下の「解く」⇄「パズル」）をすぐ描きなおす
+  const tb = app.querySelector('.tabbar');
+  if (tb) { const act = tb.querySelector('.sl.on')?.dataset.t || 'room'; const nt = tabbar(act); if (tb.classList.contains('hide')) nt.classList.add('hide'); tb.replaceWith(nt); }
+  if (!quiet) toast(m === 'puzzle' ? 'パズルで部屋をつくります。右下の「パズル」から' : '勉強で部屋をつくります。右下の「解く」から', 2800);
+}
+const switchBtn = (to) => !isAdmin() ? '' : `<button class="link mode-switch" data-to="${to}">${icon(to === 'puzzle' ? 'grid' : 'pencil')}${to === 'puzzle' ? 'パズルに切りかえる' : '勉強に切りかえる'}</button>`;
+
 // =========================== パズル ===========================
 function showPuzzleHub() {
   if (!app.querySelector('.home')) showHome();
@@ -1513,9 +1581,10 @@ function showPuzzleHub() {
           : `<span class="pz-star locked" aria-label="★${st}（★${st - 1}をクリアすると選べます）">${icon('lock')}<small>★${st}</small></span>`).join('')}</div>
       </div>`; }).join('')}</div>
     <p class="pz-hub-note">★をクリアすると、次の★が選べるようになります。前の★にはいつでももどれます</p>
-    <button class="link close">とじる</button>`, 'subj-sheet puzzle-sheet');
+    <div class="sheet-foot">${switchBtn('study')}<button class="link close">とじる</button></div>`, 'subj-sheet puzzle-sheet');
   app.querySelector('.tabbar')?.classList.add('hide');
   el.querySelector('.close').onclick = () => { el.remove(); showHome(); };
+  el.querySelector('.mode-switch')?.addEventListener('click', () => { setMode('study'); el.remove(); showHome(); chooseSubject(); });
   el.querySelectorAll('.pz-star[data-p]').forEach(b => b.onclick = () => { el.remove(); playPuzzle(b.dataset.p, +b.dataset.s); });
 }
 function playPuzzle(id, star) {
@@ -1597,23 +1666,70 @@ function puzzleResult(id, star, won, r, secs) {
   el.querySelector('.home').onclick = () => showHome();
 }
 
-function chooseSubject() {
+async function chooseSubject() {
   if (!app.querySelector('.home')) showHome();
+  const loading = SUBJECTS.some(x => x.bank && !bankDone[x.id]);
   const el = sheet(`
-    <div class="sh-head"><span class="sh-ic">${icon('pencil')}</span><div><h3>どの科目を解く？</h3><p>どの科目を解いても、同じ家が育ちます</p></div></div>
-    <div class="subjgrid">${SUBJECTS.map(s0 => {
-      const s = { ...s0, ready: probs(s0.id).length > 0 };
-      const st = s.ready ? S.subject(s.id) : null;
-      const resume = st && st.session && st.session.idx < st.session.set.length;
-      const stats = st ? S.stats(st, probs(s.id)) : null;
-      const meta = !s.ready ? '準備中' : resume ? '続きから' : stats.due ? `復習 ${stats.due}問` : (S.solvedToday() < S.BONUS_PER_DAY ? 'ゲージ1.5倍' : '1問ずつ');
-      return `<button class="subj ${s.ready ? '' : 'soon'}" data-s="${s.id}" ${s.ready ? '' : 'disabled'}>
-        <span class="s-ic">${icon(SUBJECT_ICON[s.id] || 'book')}</span><b>${s.name}</b><small>${meta}</small></button>`;
-    }).join('')}</div>
-    <button class="link close">とじる</button>`, 'subj-sheet');
+    <div class="sh-head"><span class="sh-ic">${icon('pencil')}</span><div><h3>どの教科を解く？</h3><p>どの教科を解いても、同じ家が育ちます</p></div></div>
+    <div class="subjgrid"></div>
+    <div class="sheet-foot">${switchBtn('puzzle')}<button class="link close">とじる</button></div>`, 'subj-sheet');
   app.querySelector('.tabbar')?.classList.add('hide');
   el.querySelector('.close').onclick = () => { el.remove(); showHome(); };
-  el.querySelectorAll('.subj:not(.soon)').forEach(b => b.onclick = () => { subjectId = b.dataset.s; el.remove(); startSet(); });
+  el.querySelector('.mode-switch')?.addEventListener('click', () => { setMode('puzzle'); el.remove(); showHome(); showPuzzleHub(); });
+  const draw = () => {
+    el.querySelector('.subjgrid').innerHTML = SUBJECTS.map(s0 => {
+      const ready = probs(s0.id).length > 0;
+      const st = ready ? S.subject(s0.id) : null;
+      const resume = st && st.session && st.session.idx < st.session.set.length;
+      const stats = st ? S.stats(st, probs(s0.id)) : null;
+      const meta = !ready ? (s0.bank && !bankDone[s0.id] ? '読みこみ中' : '準備中') : resume ? '続きから' : stats.due ? `復習 ${stats.due}問` : `${probs(s0.id).length}問`;
+      return `<button class="subj ${ready ? '' : 'soon'}" data-s="${s0.id}" ${ready ? '' : 'disabled'}>
+        <span class="s-ic">${icon(SUBJECT_ICON[s0.id] || 'book')}</span><b>${esc(s0.name)}</b><small>${meta}</small></button>`;
+    }).join('');
+    el.querySelectorAll('.subj:not(.soon)').forEach(b => b.onclick = () => { subjectId = b.dataset.s; chooseScope(el); });
+  };
+  draw();
+  if (loading) { await loadAllBanks(); if (el.isConnected && el.querySelector('.subjgrid')) draw(); }
+}
+// 教科 → ジャンル → 単元 をえらぶ（同じ下からの画面の中で切りかえる）
+function chooseScope(el, genre = null) {
+  const sid = subjectId, st = S.subject(sid), all = probs(sid), subj = SUBJECTS.find(x => x.id === sid);
+  const resume = st.session && st.session.idx < st.session.set.length;
+  const go = (sc) => {
+    const same = JSON.stringify(st.scope || null) === JSON.stringify(sc);
+    if (!same) { st.scope = sc; st.session = null; S.save(); }
+    el.remove(); startSet();
+  };
+  const genres = [...new Set(all.map(p => p.genre).filter(Boolean))];
+  const units = (g) => [...new Set(all.filter(p => (g ? p.genre === g : !p.genre || genres.length === 0)).map(p => p.unit).filter(Boolean))];
+  // ジャンルも単元も1つしかない教科は、そのまま始める
+  if (!genre && genres.length <= 1 && units(genres[0] || null).length <= 1) return go(null);
+  if (!genre && genres.length === 1) genre = genres[0];
+  const done = (list) => { const n = list.filter(p => st.srs[p.id]?.seen).length; return `${n} / ${list.length}`; };
+  const bar = (list) => `<span class="sc-bar"><i style="width:${list.length ? list.filter(p => st.srs[p.id]?.seen).length / list.length * 100 : 0}%"></i></span>`;
+  const row = (attrs, name, list, sub) => `<button class="sc-row" ${attrs}><span class="sc-t"><b>${esc(name)}</b>${sub ? `<small>${esc(sub)}</small>` : ''}${bar(list)}</span><span class="sc-n">${done(list)}</span>${icon('chevronRight')}</button>`;
+  let body;
+  if (!genre && genres.length > 1) {
+    body = row('data-all="1"', 'すべての範囲から', all, 'いろいろなジャンルからまぜて出ます')
+      + genres.map(g => { const list = all.filter(p => p.genre === g); return row(`data-g="${esc(g)}"`, g, list, `${units(g).length}単元`); }).join('');
+  } else {
+    const g = genre || null, us = genre ? units(genre) : [...new Set(all.map(p => p.unit).filter(Boolean))];
+    const gl = g ? all.filter(p => p.genre === g) : all;
+    body = row(`data-gall="1"`, g ? `${g} をぜんぶ` : 'すべての単元から', gl, '単元をまぜて出ます')
+      + us.map(u => row(`data-u="${esc(u)}"`, u, gl.filter(p => p.unit === u))).join('');
+  }
+  el.innerHTML = `<div class="grab"></div>
+    <div class="sh-head"><button class="icon sc-back" aria-label="もどる">${icon('back')}</button><div><h3>${esc(genre || subj.name)}</h3><p>${genre ? `${esc(subj.name)}・単元をえらぶ` : 'ジャンルをえらぶ'}</p></div></div>
+    ${resume ? `<button class="btn primary big sc-resume">${icon('refresh')}続きから<small>（${esc(scopeLabel(st.scope))}）</small></button>` : ''}
+    <div class="sc-list">${body}</div>
+    <button class="link close">とじる</button>`;
+  el.querySelector('.close').onclick = () => { el.remove(); showHome(); };
+  el.querySelector('.sc-back').onclick = () => { if (genre && genres.length > 1) chooseScope(el); else { el.remove(); chooseSubject(); } };
+  el.querySelector('.sc-resume')?.addEventListener('click', () => { el.remove(); startSet(); });
+  el.querySelector('[data-all]')?.addEventListener('click', () => go(null));
+  el.querySelectorAll('[data-g]').forEach(b => b.onclick = () => chooseScope(el, b.dataset.g));
+  el.querySelector('[data-gall]')?.addEventListener('click', () => go(genre ? { genre } : null));
+  el.querySelectorAll('[data-u]').forEach(b => b.onclick = () => go({ genre: genre || null, unit: b.dataset.u }));
 }
 
 // =========================== メニュー ===========================
@@ -1752,7 +1868,7 @@ function showFeedback(kind = 'bug') {
     if (!body) return;
     const btn = e.target.querySelector('button'); btn.disabled = true;
     try {
-      await rpc('sr_feedback_send', { p_token: Auth.currentUser().token, p_kind: kind, p_body: body + `\n\n（${navigator.userAgent.slice(0, 120)}）` });
+      await rpc('sr_feedback_send', { p_token: Auth.currentUser()?.token, p_kind: kind, p_body: body + `\n\n（${navigator.userAgent.slice(0, 120)}）` });
       toast('送りました。ありがとう！'); e.target.reset();
     } catch (ex) { toast(ex.message); }
     btn.disabled = false;
@@ -1762,7 +1878,7 @@ function showFeedback(kind = 'bug') {
 async function showFeedbackInbox() {
   const el = screenWithTabs('feedback', `<button class="icon back">${icon('back')}</button><h2>届いた要望・バグ</h2><span></span>`, 'menu', `<div class="fblist"><p class="empty">読み込み中…</p></div>`);
   el.querySelector('.back').onclick = showAdmin;
-  const tk = Auth.currentUser().token;
+  const tk = Auth.currentUser()?.token;
   const load = async () => {
     let list = [];
     try { list = await rpc('sr_feedback_list', { p_token: tk }); } catch (e) { el.querySelector('.fblist').innerHTML = `<p class="empty">${esc(e.message)}</p>`; return; }
@@ -1897,11 +2013,12 @@ async function showRanking() {
   // 自分の最新の数をネットに送ってから見る
   try { await Sync.push(); } catch (e) { /* なし */ }
   let r;
-  try { r = await rpc('sr_weekly_ranking', { p_token: Auth.currentUser().token, p_week: wk }); }
+  const pz = isPuzzle(), unit = pz ? '回' : '問';
+  try { r = await rpc(pz ? 'sr_weekly_puzzle' : 'sr_weekly_ranking', { p_token: Auth.currentUser()?.token, p_week: wk }); }
   catch (e) { el.querySelector('.rk-list').innerHTML = `<p class="empty">${esc(e.message)}</p>`; return; }
-  const mine = S.profile().week?.key === wk ? S.profile().week.solved : 0;
+  const mine = S.profile().week?.key === wk ? (pz ? S.profile().week.puzzle || 0 : S.profile().week.solved) : 0;
   el.querySelector('.rk-me').innerHTML = `<div class="rk-mecard"><span class="rk-pos">${r.me ? r.me.pos + '<small>位</small>' : '—'}</span>
-    <div><b>あなた</b><small>${r.total || 0}人中 ・ 今週 ${mine}問</small></div>${icon('pencil')}</div>`;
+    <div><b>あなた</b><small>${r.total || 0}人中 ・ 今週 ${mine}${unit}</small></div>${icon(pz ? 'grid' : 'pencil')}</div>`;
   const medal = (p) => p <= 3 ? `<span class="medal m${p}">${p}</span>` : `<span class="rk-n">${p}</span>`;
   el.querySelector('.rk-list').innerHTML = (r.top || []).length ? r.top.map(x => `
     <div class="rk-row ${x.me ? 'me' : ''}">${medal(x.pos)}<b>${esc(x.username)}</b><span>${x.solved}${unit}<small>${pz ? 'ノーミス' : '正解'} ${x.correct}</small></span></div>`).join('')
@@ -1966,7 +2083,7 @@ async function refreshNewsBadge() {
   const u = Auth.currentUser();
   if (!u) return;
   try {
-    const list = await rpc('sr_news_list', { p_token: u.token });
+    const list = await rpc('sr_news_list', { p_token: u?.token });
     const seen = +(localStorage.getItem(NEWS_SEEN) || 0);
     newsBadge = list.filter(n => n.id > seen).length;
   } catch (e) { /* オフライン */ }
@@ -1975,7 +2092,7 @@ async function showNews() {
   const el = screenWithTabs('news', `<button class="icon back">${icon('back')}</button><h2>お知らせ</h2><span></span>`, 'menu', `<div class="nlist"><p class="empty">読み込み中…</p></div>`);
   el.querySelector('.back').onclick = showMenu;
   let list = [];
-  try { list = await rpc('sr_news_list', { p_token: Auth.currentUser().token }); }
+  try { list = await rpc('sr_news_list', { p_token: Auth.currentUser()?.token }); }
   catch (e) { el.querySelector('.nlist').innerHTML = `<p class="empty">${esc(e.message)}</p>`; return; }
   const seen = +(localStorage.getItem(NEWS_SEEN) || 0);
   const day = (t) => new Date(t).toLocaleDateString('ja-JP', { year: 'numeric', month: 'numeric', day: 'numeric' });
@@ -2010,7 +2127,7 @@ function composeNews(after) {
       <div class="row2"><button class="btn ghost back2">書きなおす</button><button class="btn gold send">${icon('check')}送る</button></div>`, 'news-sheet');
     cf.querySelector('.back2').onclick = () => { cf.remove(); composeNews(after); };
     cf.querySelector('.send').onclick = async () => {
-      try { await rpc('sr_news_post2', { p_token: Auth.currentUser().token, p_title: t, p_body: b, p_admin_only: adm }); toast('お知らせを送りました'); cf.remove(); after && after(); }
+      try { await rpc('sr_news_post2', { p_token: Auth.currentUser()?.token, p_title: t, p_body: b, p_admin_only: adm }); toast('お知らせを送りました'); cf.remove(); after && after(); }
       catch (ex) { toast(ex.message); }
     };
   };
@@ -2044,7 +2161,7 @@ function composeGift() {
     cf.querySelector('.back2').onclick = () => cf.remove();
     cf.querySelector('.send').onclick = async () => {
       try {
-        await rpc('sr_gift_send', { p_token: Auth.currentUser().token, p_title: g.title, p_kind: g.kind, p_amount: g.amount, p_item: g.itemId, p_days: g.days });
+        await rpc('sr_gift_send', { p_token: Auth.currentUser()?.token, p_title: g.title, p_kind: g.kind, p_amount: g.amount, p_item: g.itemId, p_days: g.days });
         toast('プレゼントを送りました'); cf.remove(); el.remove(); refreshGifts(true);
       } catch (ex) { toast(ex.message); }
     };
@@ -2056,7 +2173,7 @@ async function refreshFriendBadge() {
   const u = Auth.currentUser();
   if (!u) return;
   try {
-    const list = await rpc('sr_friend_list', { p_token: u.token });
+    const list = await rpc('sr_friend_list', { p_token: u?.token });
     friendBadge = list.filter(f => f.status === 'incoming').length;
   } catch (e) { /* オフライン */ }
 }
@@ -2069,7 +2186,7 @@ async function showFriends() {
   const listEl = el.querySelector('.flist');
   const load = async () => {
     let list = [];
-    try { list = await rpc('sr_friend_list', { p_token: u.token }); } catch (e) { listEl.innerHTML = `<p class="empty">${esc(e.message)}</p>`; return; }
+    try { list = await rpc('sr_friend_list', { p_token: u?.token }); } catch (e) { listEl.innerHTML = `<p class="empty">${esc(e.message)}</p>`; return; }
     friendBadge = list.filter(f => f.status === 'incoming').length;
     const sec = (title, arr, row) => arr.length ? `<h3 class="sec">${title}</h3>${arr.map(row).join('')}` : '';
     const lv = f => S.rankInfo(f.summary?.xp || 0).rank;
@@ -2084,9 +2201,9 @@ async function showFriends() {
         <div class="frow"><span class="av">${icon('user')}</span><b>${esc(f.username)}<small>承認を待っています</small></b>
           <button class="btn ghost sm del" data-u="${esc(f.username)}">取り消す</button></div>`) ||
       '<p class="empty">まだフレンドがいません。相手のユーザー名を入れて申請してみましょう。</p>';
-    listEl.querySelectorAll('.acc').forEach(b => b.onclick = async () => { await rpc('sr_friend_respond', { p_token: u.token, p_username: b.dataset.u, p_accept: true }); toast(`${b.dataset.u}さんとフレンドになりました`); load(); });
-    listEl.querySelectorAll('.dec').forEach(b => b.onclick = async () => { await rpc('sr_friend_respond', { p_token: u.token, p_username: b.dataset.u, p_accept: false }); load(); });
-    listEl.querySelectorAll('.del').forEach(b => b.onclick = async () => { if (!confirm(`${b.dataset.u}さんをフレンドから外しますか？`)) return; await rpc('sr_friend_remove', { p_token: u.token, p_username: b.dataset.u }); load(); });
+    listEl.querySelectorAll('.acc').forEach(b => b.onclick = async () => { await rpc('sr_friend_respond', { p_token: u?.token, p_username: b.dataset.u, p_accept: true }); toast(`${b.dataset.u}さんとフレンドになりました`); load(); });
+    listEl.querySelectorAll('.dec').forEach(b => b.onclick = async () => { await rpc('sr_friend_respond', { p_token: u?.token, p_username: b.dataset.u, p_accept: false }); load(); });
+    listEl.querySelectorAll('.del').forEach(b => b.onclick = async () => { if (!confirm(`${b.dataset.u}さんをフレンドから外しますか？`)) return; await rpc('sr_friend_remove', { p_token: u?.token, p_username: b.dataset.u }); load(); });
     listEl.querySelectorAll('.visit').forEach(b => b.onclick = () => visitFriend(b.dataset.u));
   };
   el.querySelector('.addf').onsubmit = async (e) => {
@@ -2094,7 +2211,7 @@ async function showFriends() {
     const n = e.target.n.value.trim();
     if (!n) return;
     try {
-      const r = await rpc('sr_friend_request', { p_token: u.token, p_username: n });
+      const r = await rpc('sr_friend_request', { p_token: u?.token, p_username: n });
       toast(r.status === 'accepted' ? `${n}さんとフレンドになりました` : `${n}さんに申請しました`);
       e.target.reset(); load();
     } catch (ex) { toast(ex.message); }
@@ -2106,7 +2223,7 @@ async function showFriends() {
 async function visitFriend(username, back = showFriends) {
   const u = Auth.currentUser();
   let r;
-  try { r = await rpc('sr_friend_house', { p_token: u.token, p_username: username }); } catch (e) { return toast(e.message); }
+  try { r = await rpc('sr_friend_house', { p_token: u?.token, p_username: username }); } catch (e) { return toast(e.message); }
   const house = r.house;
   if (!house || !house.rooms?.length || house.v !== 2) return toast(`${username}さんの部屋はまだ準備中です`);
   visiting = { username: r.username, house, current: 0, summary: r.summary, back };
@@ -2161,7 +2278,7 @@ async function showAdmin() {
   el.querySelector('.sendgift').onclick = () => composeGift();
   const u = Auth.currentUser();
   let list = [];
-  try { list = await rpc('sr_admin_users', { p_token: u.token }); } catch (e) { el.querySelector('.alist').innerHTML = `<p class="empty">${esc(e.message)}</p>`; return; }
+  try { list = await rpc('sr_admin_users', { p_token: u?.token }); } catch (e) { el.querySelector('.alist').innerHTML = `<p class="empty">${esc(e.message)}</p>`; return; }
   const day = (t) => t ? new Date(t).toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
   el.querySelector('.alist').innerHTML = `<p class="note">全 ${list.length} 人</p>` + list.map(a => {
     const s = a.summary || {};
@@ -2204,7 +2321,7 @@ function givePack(name) {
   cf.querySelectorAll('.give-one').forEach(b => b.onclick = async () => {
     b.disabled = true;
     try {
-      await rpc('sr_admin_grant_code', { p_token: Auth.currentUser().token, p_username: name, p_code: packCode[b.dataset.s] });
+      await rpc('sr_admin_grant_code', { p_token: Auth.currentUser()?.token, p_username: name, p_code: packCode[b.dataset.s] });
       toast(`「${name}」に「${packOf[b.dataset.s].name}」を渡しました`); cf.remove();
     } catch (ex) {
       const m = String(ex.message || ex);
@@ -2226,7 +2343,7 @@ function confirmDeleteUser(name) {
   go.onclick = async () => {
     go.disabled = true;
     try {
-      await rpc('sr_admin_delete_user', { p_token: Auth.currentUser().token, p_username: name });
+      await rpc('sr_admin_delete_user', { p_token: Auth.currentUser()?.token, p_username: name });
       toast(`「${name}」を消しました`); cf.remove(); showAdmin();
     } catch (ex) {
       const m = String(ex.message || ex);
@@ -2259,6 +2376,11 @@ function showSettings() {
         <small>カクカクするときは「ふつう」か「かるい」に</small></div>
       ${DL.canDownload() ? `<button class="row-item tap dl"><span class="lbl">家具のデータ</span><span class="val">${DL.downloadState() === 'done' ? '保存ずみ' : 'まとめて保存する'}</span></button>` : ''}
     </section>
+    ${isAdmin() ? `<section class="group mode-set">
+      <div class="row-item col"><span class="lbl">部屋づくりのしかた</span>
+        <div class="seg mode-seg">${[['study', '勉強'], ['puzzle', 'パズル']].map(([k, n]) => `<button data-mode="${k}" class="${(S.profile().mode || 'study') === k ? 'on' : ''}">${n}</button>`).join('')}</div>
+        <small>管理者だけが切りかえられます。部屋・家具・記録はそのまま残ります</small></div>
+    </section>` : ''}
     <section class="group bgm-set">
       <div class="row-item col"><span class="lbl">${icon('music')}BGM</span>
         <div class="seg bgm-on">${[[true, 'オン'], [false, 'オフ']].map(([v, n]) => `<button data-on="${v}" class="${BGM.settings().on === v ? 'on' : ''}">${n}</button>`).join('')}</div>
@@ -2280,6 +2402,10 @@ function showSettings() {
     </section>` : ''}
     <p class="ver">ROOMIN ${esc(ver)}</p>`);
   el.querySelector('.back').onclick = showMenu;
+  el.querySelectorAll('.mode-seg button').forEach(b => b.onclick = () => {
+    setMode(b.dataset.mode);
+    el.querySelectorAll('.mode-seg button').forEach(x => x.classList.toggle('on', x === b));
+  });
   el.querySelectorAll('.bgm-on button').forEach(b => b.onclick = () => {
     BGM.setOn(b.dataset.on === 'true');
     el.querySelectorAll('.bgm-on button').forEach(x => x.classList.toggle('on', x === b));
@@ -2338,11 +2464,12 @@ function showSettings() {
 }
 
 // =========================== 問題を解く ===========================
-function startSet() {
+async function startSet() {
   BGM.duck(true); // 解いている間は BGM を小さく
+  await loadBank(subjectId); // 問題バンクの問題が入ったセットの続きでも、問題が見つかるように
   const st = sub();
   if (!(st.session && st.session.idx < st.session.set.length)) {
-    st.session = { set: S.buildSet(st, probs()), idx: 0, results: [], gained: 0, xp: 0, rankUp: false, startedAt: Date.now(), bonus: S.solvedToday() < S.BONUS_PER_DAY };
+    st.session = { set: S.buildSet(st, scoped()), idx: 0, results: [], gained: 0, xp: 0, rankUp: false, startedAt: Date.now(), bonus: S.solvedToday() < S.BONUS_PER_DAY };
     S.save();
   }
   room3d.setActive(false);
@@ -2672,7 +2799,7 @@ Sync.setHandlers({
   onStatus: (s) => { syncState = s; paintSync(); },
   onExpired: () => {
     // 合い鍵が使えなくなった＝ほかの端末で同じアカウントにログインされた
-    localStorage.removeItem('studyroom.cloud');
+    Auth.forget();
     document.querySelectorAll('.lb-screen, .photo-ui, .photo-preview').forEach(e => e.remove());
     document.body.classList.remove('photo-mode');
     toast('別の端末で同じアカウントにログインされたため、ログアウトしました', 4500);

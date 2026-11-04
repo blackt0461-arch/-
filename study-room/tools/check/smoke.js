@@ -76,7 +76,9 @@ function serve() {
   for (const subj of ['math', 'english', 'chem', 'jp', 'social']) {
     await page.evaluate(() => document.querySelector('.solve-ring')?.click()); await page.waitForTimeout(600);
     if (!(await page.locator(`.subj[data-s=${subj}]`).count())) { check(false, `${subj}：科目えらびにボタンがない`); await page.evaluate(() => window.__app.showHome()); continue; }
-    await page.click(`.subj[data-s=${subj}]`); await page.waitForTimeout(700);
+    await page.click(`.subj[data-s=${subj}]`); await page.waitForTimeout(500);
+    // ジャンル・単元をえらぶ画面が出たら「すべて」から
+    await page.evaluate(() => (document.querySelector('.sc-list [data-all]') || document.querySelector('.sc-list [data-gall]'))?.click()); await page.waitForTimeout(700);
     let solved = 0;
     for (let k = 0; k < 30 && solved < 3; k++) {
       const st = await page.evaluate(() => {
@@ -92,6 +94,34 @@ function serve() {
     check(solved >= 3, `${subj}：${solved}問 解けた`);
     await page.evaluate(() => (document.querySelector('.step .home') || document.querySelector('.quiz .back'))?.click()); await page.waitForTimeout(700);
   }
+
+  // ---- 2b. 教科 → ジャンル → 単元（問題バンク） ----
+  console.log('2b. 教科 → ジャンル → 単元');
+  await page.evaluate(() => window.__app.showHome()); await page.waitForTimeout(400);
+  await page.evaluate(() => document.querySelector('.solve-ring')?.click());
+  await page.waitForFunction(() => [...document.querySelectorAll('.subj')].some(b => b.dataset.s === 'bio' && !b.disabled), null, { timeout: 30000 }).catch(() => {});
+  const subjList = await page.evaluate(() => [...document.querySelectorAll('.subj')].map(b => b.dataset.s + (b.disabled ? '(×)' : '')).join(' '));
+  check(['bio', 'earth', 'physics4', 'physics'].every(k => subjList.includes(k) && !subjList.includes(k + '(×)')), `生物・地学・物理（4択）・物理（公式）がえらべる：${subjList}`);
+  await page.screenshot({ path: path.join(OUT, 'smoke-2b-subjects.png') });
+  await page.click('.subj[data-s=jp]'); await page.waitForSelector('.sc-list');
+  check(await page.locator('.sc-list [data-g]').count() >= 4, `国語のジャンルが出る（${await page.locator('.sc-list [data-g]').count()}つ）`);
+  await page.click('.sc-list [data-g="古文"]'); await page.waitForSelector('.sc-list [data-u]');
+  await page.screenshot({ path: path.join(OUT, 'smoke-2b-units.png') });
+  await page.click('.sc-list [data-u="枕草子"]'); await page.waitForTimeout(800);
+  const units = new Set();
+  for (let k = 0; k < 3; k++) {
+    units.add(await page.evaluate(() => document.querySelector('.choice .tag')?.textContent.trim()));
+    await page.evaluate(() => [...document.querySelectorAll('.fcard')].find(b => !b.disabled)?.click()); await page.waitForTimeout(900);
+    await page.evaluate(() => document.querySelector('.step .more')?.click()); await page.waitForTimeout(600);
+  }
+  check(units.size === 1 && units.has('枕草子'), `「枕草子」をえらぶと、枕草子の問題だけ出る（${[...units].join('・')}）`);
+  await page.evaluate(() => (document.querySelector('.step .home') || document.querySelector('.quiz .back'))?.click()); await page.waitForTimeout(600);
+  // もう一度ひらくと「続きから」が出る（とちゅうでやめた時）
+  await page.evaluate(() => document.querySelector('.solve-ring')?.click()); await page.waitForTimeout(500);
+  await page.click('.subj[data-s=jp]'); await page.waitForTimeout(400);
+  const rs = await page.locator('.sc-resume').textContent().catch(() => '');
+  check(/枕草子/.test(rs) || rs === '', `続きからのボタンに、えらんだ範囲が出る（${rs.trim() || 'セットが終わっていて続きなし'}）`);
+  await page.evaluate(() => window.__app.showHome()); await page.waitForTimeout(400);
 
   // ---- 3. ガチャの演出（★5・昇格） ----
   console.log('3. ガチャの演出');

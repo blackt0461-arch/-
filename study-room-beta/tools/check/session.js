@@ -35,6 +35,12 @@ const serve = () => new Promise(res => { const srv = http.createServer((req, rsp
   check(await page.evaluate(() => !!localStorage.getItem('studyroom.cloud')), 'ログイン情報が端末にもどる');
   await page.evaluate(() => document.querySelector('[data-t=menu]')?.click()); await page.waitForTimeout(500);
   check(await page.locator('.menu-list [data-m=admin]').count() === 1, '管理者のメニューが消えない');
+  await page.click('.menu-list [data-m=settings]'); await page.waitForSelector('.mode-seg');
+  await page.click('.mode-seg [data-mode=study]'); await page.waitForTimeout(300);
+  check(await page.evaluate(() => window.__app.S.profile().mode) === 'study' && /解く|続きから/.test(await page.locator('.solve-ring').textContent()), '管理者は設定で勉強⇄パズルを切りかえられる');
+  await page.evaluate(() => document.querySelector('.solve-ring').click()); await page.waitForTimeout(500);
+  check(await page.locator('.mode-switch[data-to=puzzle]').count() === 1, '管理者には教科えらびに「パズルに切りかえる」が出る');
+  await page.evaluate(() => window.__app.showHome()); await page.waitForTimeout(300);
 
   console.log('2. 本当にログアウトされた');
   await page.evaluate(async () => { const A = await import('/js/auth.js'); A.forget(); window.__app.showHome(); }); await page.waitForTimeout(600);

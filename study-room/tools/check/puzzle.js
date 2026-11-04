@@ -112,6 +112,15 @@ const serve = () => new Promise(res => { const srv = http.createServer((req, rsp
   check(/手数の上限/.test(await page.locator('.pz-res-sheet').textContent().catch(() => '')), `上限（${limit}手）をこえると失敗になる`);
   await page.screenshot({ path: path.join(OUT, 'puzzle-4-lose.png') });
 
+  console.log('4b. 管理者でない人は切りかえられない');
+  await page.evaluate(() => window.__app.showHome()); await page.waitForTimeout(300);
+  await page.evaluate(() => document.querySelector('.solve-ring').click()); await page.waitForSelector('.pz-hub');
+  check(await page.locator('.mode-switch').count() === 0, 'パズルえらびに切りかえのボタンが出ない');
+  await page.evaluate(() => window.__app.showHome()); await page.waitForTimeout(300);
+  await page.evaluate(() => document.querySelector('[data-t=menu]')?.click()); await page.waitForTimeout(400);
+  await page.click('.menu-list [data-m=settings]'); await page.waitForSelector('.bgm-set');
+  check(await page.locator('.mode-seg').count() === 0, '設定に切りかえの欄が出ない');
+
   console.log('5. 管理者がモードを変える');
   await page.evaluate(async () => { const { rpc } = await import('/js/cloud.js'); await rpc('sr_signup', { p_username: 'admin', p_password: 'x' }); });
   // 管理者として「puzzler」を勉強に（mock なので直接コードを渡す）
