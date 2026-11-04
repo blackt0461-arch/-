@@ -28,5 +28,20 @@
   {"id":null,"subject":"math","genre":"数学II","unit":"指数関数と対数関数","grade":"hs2","level":2,"text":"2^(1/2)×2^(1/3) を 2 の累乗で表せ。","choices":["2^(1/6)","2^(1/5)","4^(5/6)","2^(5/6)"],"answer":3,"explain":"指数どうしを足して 1/2+1/3＝5/6。"},
   {"id":null,"subject":"math","genre":"数学II","unit":"指数関数と対数関数","grade":"hs2","level":3,"text":"log₁₀3=0.4771 とする。3²⁰ は何けたの整数か。","choices":["9けた","10けた","20けた","11けた"],"answer":1,"explain":"log₁₀3²⁰＝20×0.4771＝9.542 なので 10⁹<3²⁰<10¹⁰。けた数は 10。"},
   {"id":null,"subject":"math","genre":"数学II","unit":"指数関数と対数関数","grade":"hs2","level":3,"text":"y=log₂x のグラフと y=log_(1/2) x のグラフの位置関係はどれか。","choices":["y 軸に関して対称","原点に関して対称","直線 y=x に関して対称","x 軸に関して対称"],"answer":3,"explain":"log_(1/2) x＝−log₂x なので、y の符号が逆の x 軸対称。"},
-  {"id":null,"subject":"math","genre":"数学II","unit":"指数関数と対数関数","grade":"hs2","level":3,"text":"(1/3)ⁿ<0.001 を満たす最小の自然数 n を求めよ。","choices":["6","7","3","10"],"answer":1,"explain":"3ⁿ>1000 となる最小の n。3⁶＝729、3⁷＝2187 なので n＝7。"}
+  {"id":null,"subject":"math","genre":"数学II","unit":"指数関数と対数関数","grade":"hs2","level":3,"text":"(1/3)ⁿ<0.001 を満たす最小の自然数 n を求めよ。","choices":["6","7","3","10"],"answer":1,"explain":"3ⁿ>1000 となる最小の n。3⁶＝729、3⁷＝2187 なので n＝7。"},
+  {"id":null,"subject":"math","genre":"数学II","unit":"指数関数と対数関数","grade":"hs2","level":1,"text":"2⁻¹ の値を求めよ。","choices":["−2","−1/2","1/2","2"],"answer":2,"explain":"a⁻ⁿ＝1/aⁿ。"},
+  {"id":null,"subject":"math","genre":"数学II","unit":"指数関数と対数関数","grade":"hs2","level":1,"text":"27^(1/3) の値を求めよ。","choices":["9","1/3","27/3","3"],"answer":3,"explain":"3乗して 27 になる正の数は 3。"},
+  {"id":null,"subject":"math","genre":"数学II","unit":"指数関数と対数関数","grade":"hs2","level":1,"text":"log₂32 の値を求めよ。","choices":["16","6","4","5"],"answer":3,"explain":"2⁵＝32。"},
+  {"id":null,"subject":"math","genre":"数学II","unit":"指数関数と対数関数","grade":"hs2","level":1,"text":"log₅1 の値を求めよ。","choices":["0","1","5","1/5"],"answer":0,"explain":"5⁰＝1 なので 0。"},
+  {"id":null,"subject":"math","genre":"数学II","unit":"指数関数と対数関数","grade":"hs2","level":1,"text":"log₁₀10 の値を求めよ。","choices":["0","10","1","100"],"answer":2,"explain":"logₐa＝1。"},
+  {"id":null,"subject":"math","genre":"数学II","unit":"指数関数と対数関数","grade":"hs2","level":1,"text":"5⁰ の値を求めよ。","choices":["0","5","1/5","1"],"answer":3,"explain":"0 でない数の0乗は 1。"},
+  {"id":null,"subject":"math","genre":"数学II","unit":"指数関数と対数関数","grade":"hs2","level":2,"text":"log₃18−log₃2 の値を求めよ。","choices":["3","2","16","9"],"answer":1,"explain":"log₃(18/2)＝log₃9＝2。"},
+  {"id":null,"subject":"math","genre":"数学II","unit":"指数関数と対数関数","grade":"hs2","level":2,"text":"log₂√2 の値を求めよ。","choices":["2","√2","1/2","1"],"answer":2,"explain":"√2＝2^(1/2) なので 1/2。"},
+  {"id":null,"subject":"math","genre":"数学II","unit":"指数関数と対数関数","grade":"hs2","level":2,"text":"方程式 4ˣ=8 を解け。","choices":["x=2","x=2/3","x=3/2","x=1/2"],"answer":2,"explain":"2²ˣ＝2³ より 2x＝3。"},
+  {"id":null,"subject":"math","genre":"数学II","unit":"指数関数と対数関数","grade":"hs2","level":2,"text":"不等式 2^(x+1)>16 を解け。","choices":["x>3","x>4","x>8","x<3"],"answer":0,"explain":"2^(x+1)>2⁴ で、底 2>1 なので x+1>4。"},
+  {"id":null,"subject":"math","genre":"数学II","unit":"指数関数と対数関数","grade":"hs2","level":2,"text":"方程式 log₃(x−1)=2 を解け。","choices":["x=10","x=7","x=9","x=8"],"answer":0,"explain":"x−1＝3²＝9 なので x＝10。真数条件 x>1 も満たす。"},
+  {"id":null,"subject":"math","genre":"数学II","unit":"指数関数と対数関数","grade":"hs2","level":2,"text":"3^(log₃5) の値を求めよ。","choices":["3","15","5","log₃5"],"answer":2,"explain":"a^(logₐM)＝M。3 を何乗すると 5 になるかの数で 3 を累乗するので 5。"},
+  {"id":null,"subject":"math","genre":"数学II","unit":"指数関数と対数関数","grade":"hs2","level":3,"text":"方程式 log₂x+log₂(x−2)=3 を解け。","choices":["x=−2、4","x=2","x=4","x=8"],"answer":2,"explain":"x(x−2)＝8 より (x−4)(x+2)＝0。真数条件 x>2 より x＝4。"},
+  {"id":null,"subject":"math","genre":"数学II","unit":"指数関数と対数関数","grade":"hs2","level":3,"text":"log₂3×log₃4×log₄8 の値を求めよ。","choices":["2","4","3","1"],"answer":2,"explain":"底の変換で (log3/log2)(log4/log3)(log8/log4)＝log8/log2＝3。"},
+  {"id":null,"subject":"math","genre":"数学II","unit":"指数関数と対数関数","grade":"hs2","level":3,"text":"2ˣ=3 のとき、4ˣ の値を求めよ。","choices":["9","6","12","3"],"answer":0,"explain":"4ˣ＝(2²)ˣ＝(2ˣ)²＝9。"}
 ]
