@@ -42,6 +42,27 @@ ROOMIN（study-room）用に作った4択問題の置き場です。**アプリ�
 
 ## 入っている問題の数
 
-`node roomin-questions/tools/check.js` の出力がいちばん正確です。下の表は作った時点のもの。
+`node roomin-questions/tools/check.js` の出力がいちばん正確です。下の表は `sh roomin-questions/tools/counts.sh` で書きかえられます。
 
 <!-- COUNTS -->
+| subject | ジャンル | 問題数 |
+|---|---|---|
+| bio | 生物 | 60問（4単元） |
+| bio | 生物基礎 | 90問（6単元） |
+| chem | 化学 | 90問（6単元） |
+| chem | 化学基礎 | 90問（6単元） |
+| earth | 地学 | 60問（4単元） |
+| earth | 地学基礎 | 75問（5単元） |
+| english | 文法 | 120問（8単元） |
+| english | 語彙・熟語 | 60問（4単元） |
+| jp | 古文 | 90問（6単元） |
+| jp | 言葉（漢字・語彙・文法・敬語） | 75問（5単元） |
+| math | 数学A | 60問（3単元） |
+| math | 数学I | 100問（5単元） |
+| physics | 物理 | 105問（7単元） |
+| physics | 物理基礎 | 90問（6単元） |
+| social | 地理総合 | 90問（6単元） |
+| social | 日本史探究 | 105問（7単元） |
+
+合計 1360問
+<!-- /COUNTS -->
