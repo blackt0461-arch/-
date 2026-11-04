@@ -746,8 +746,8 @@ function offerCands(genre) {
   let ids = (o.cands[genre] || []).filter(id => { if (TICKET_CANDS[id]) return true; const it = itemById(id); return it && buyable(it); });
   if (!ids.some(id => !TICKET_CANDS[id])) {
     ids = pickCandidates(genre, curRoom().style).map(i => i.id);
-    // まれに（約8%）、候補の1つがレアチケットになる。さらにその中のまれに★4以上確定
-    if (ids.length && Math.random() < 0.08) ids[ids.length - 1] = Math.random() < 0.15 ? '@ticket4' : '@ticket';
+    // まれに（約5%）、候補の1つがレアチケットになる。さらにその中のまれに★4以上確定
+    if (ids.length && Math.random() < 0.05) ids[ids.length - 1] = Math.random() < 0.15 ? '@ticket4' : '@ticket';
     o.cands[genre] = ids;
     S.save();
   }
@@ -1162,7 +1162,7 @@ function photoMode() {
 
 // =========================== 更新のお知らせ ===========================
 // このプログラムの版（version.json と同じにする。公開のたびに上げる）
-const APP_VERSION = '2.11.0';
+const APP_VERSION = '2.11.1';
 // 新しい版が出たら、みんな同じタイミングでそろうように強制で再起動する。
 // 開いた時・画面に戻った時・1分ごとに version.json を見る
 async function latestVersion() {
