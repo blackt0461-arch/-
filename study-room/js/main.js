@@ -64,7 +64,12 @@ function sheet(html, cls = '') {
 }
 
 // =========================== ログイン ===========================
-function showLogin(mode = 'login') {
+// この端末で一度でも使ったことがあれば「ログイン」、初めてなら「登録」から見せる
+function usedHereBefore() {
+  try { for (let i = 0; i < localStorage.length; i++) if (/^studyroom\.(v1\.user\.|users$)/.test(localStorage.key(i))) return true; } catch (e) { /* なし */ }
+  return false;
+}
+function showLogin(mode = usedHereBefore() ? 'login' : 'signup') {
   room3d?.setActive(false);
   canvas.classList.add('dim');
   app.innerHTML = '';
