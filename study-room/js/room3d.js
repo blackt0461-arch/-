@@ -708,8 +708,12 @@ export class Room3D {
         // その段が、ほかの物で横にふさがっていないか
         const free = (y) => !riders.some(x => Math.abs((x.userData.p.y || 0) - y) < 0.02 && (() => { const b2 = this.boxOf(x); return fb.max.x > b2.min.x && fb.min.x < b2.max.x && fb.max.z > b2.min.z && fb.min.z < b2.max.z; })());
         const cur = p.on === sup.userData.uid ? levels.find(l => Math.abs(l - (p.y || 0)) < 0.02) : undefined;
-        // 今の段がだめなら、目の高さ（1.2m）に近い段から順に
-        const order = [...(cur !== undefined ? [cur] : []), ...levels.filter(l => l !== cur).sort((a2, b2) => Math.abs(a2 - 1.2) - Math.abs(b2 - 1.2))];
+        // 指で動かしているときは、指がさしている段（その高さに近い段）から。
+        // そうでなければ今の段、だめなら目の高さ（1.2m）に近い段から順に
+        const hint = this.levelHint;
+        const order = hint !== undefined
+          ? [...levels].sort((a2, b2) => Math.abs(a2 - hint) - Math.abs(b2 - hint))
+          : [...(cur !== undefined ? [cur] : []), ...levels.filter(l => l !== cur).sort((a2, b2) => Math.abs(a2 - 1.2) - Math.abs(b2 - 1.2))];
         const y = order.find(free);
         if (y === undefined) return false;
         const top = +y.toFixed(3);
@@ -1034,9 +1038,33 @@ export class Room3D {
       p.a = best.axis === 'z' ? best.hit.x : best.hit.z;
       p.y = best.hit.y;
     } else {
-      const hit = ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), -(p.on ? p.y || 0 : 0)), new THREE.Vector3());
-      if (!hit) return;
-      p.x = hit.x; p.z = hit.z;
+      // 指の下に、物をのせられる家具の段（棚の板・テーブルの上）があれば、そこに置く。なければ床。
+      // 段の高さの水平な面と指の光線が、その家具の上（真上から見た範囲）で交わる所のうち、いちばん手前
+      this.levelHint = undefined;
+      let top = null;
+      if (Room3D.canStack(item)) {
+        const ob = this.boxOf(o), h = ob.max.y - ob.min.y;
+        let best = Infinity;
+        for (const x of this.items.children) {
+          if (x === o || !x.userData.uid || !x.visible || !Room3D.isSupport(x.userData.item) || x.userData.p?.on === p.uid) continue;
+          const sb = this.boxOf(x);
+          for (const y of this.stackLevels(x, h)) {
+            const hit = ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), -y), new THREE.Vector3());
+            if (!hit || hit.x < sb.min.x + 0.02 || hit.x > sb.max.x - 0.02 || hit.z < sb.min.z + 0.02 || hit.z > sb.max.z - 0.02) continue;
+            const d = hit.distanceTo(ray.origin);
+            if (d < best) { best = d; top = hit; }
+          }
+        }
+      }
+      if (top) { p.x = top.x; p.z = top.z; this.levelHint = top.y; }
+      else if (p.on && Room3D.canStack(item) && this.items.children.some(x => x !== o && x.userData.uid && x.visible && Room3D.isSupport(x.userData.item) && ray.intersectsBox(this.boxOf(x)))) {
+        // 棚にのっている物を、棚の段と段の間（前の板など）の上で動かしているあいだは、床に落とさずその場で待つ
+        return;
+      } else {
+        const hit = ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), new THREE.Vector3());
+        if (!hit) return;
+        p.x = hit.x; p.z = hit.z;
+      }
     }
     this.mountPlaced(o, p);
     const ok = this.checkPlacement(o);
@@ -1063,6 +1091,7 @@ export class Room3D {
   // 指をはなしたとき：重なっていたら最後の正しい位置へもどす
   endDrag() {
     const o = this.objByUid?.[this.selected];
+    this.levelHint = undefined;
     if (!o) return;
     const p = o.userData.p;
     if (!this.checkPlacement(o)) {
