@@ -18,7 +18,7 @@ import * as Auth from './auth.js';
 import * as DL from './download.js';
 import * as Sync from './sync.js';
 import { rpc } from './cloud.js';
-import { PUZZLES, puzzleById, levelInfo, mountPuzzle } from './puzzles.js';
+import { PUZZLES, puzzleById, levelInfo, mountPuzzle, livesOf } from './puzzles.js';
 
 const SUBJECTS = [
   { id: 'physics', name: '物理', ready: true },
@@ -197,10 +197,10 @@ function tabbar(active) {
   const dot = (k) => (k === 'menu' && newsBadge) || (k === 'social' && friendBadge) || (k === 'gacha' && ticketCount()) || (k === 'room' && buy);
   const el = h(`<nav class="tabbar hotbar ${active === 'room' ? 'on-room' : ''}">
     <div class="slots">${slots.map(([k, ic, n]) => `
-      <button data-t="${k}" class="sl ${k === active ? 'on' : ''} ${k === 'buy' && buy ? 'hot' : ''}" aria-label="${n}">${icon(ic)}<span class="sl-t">${n}</span>${dot(k) ? '<i class="dot"></i>' : ''}${k === 'buy' && buy ? '<span class="buy-tip">買える！</span>' : ''}</button>`).join('')}</div>
+      <button data-t="${k}" class="sl ${k === active ? 'on' : ''} ${k === 'buy' && buy ? 'hot' : ''}" aria-label="${n}">${icon(ic)}<span class="sl-t">${n}</span>${dot(k) ? '<i class="dot"></i>' : ''}${k === 'buy' && buy ? `<span class="buy-tip">${buyCount() > 1 ? `${buyCount()}つ買える！` : '買える！'}</span>` : ''}</button>`).join('')}</div>
     <div class="solve-wrap">
       ${!buy && active === 'room' ? `<span class="solve-need">${needText(max - hs.gauge)}</span>` : ''}
-      ${buy && active === 'room' ? `<span class="solve-need full">${icon('sparkle')}満タン</span>` : ''}
+      ${buy && active === 'room' ? `<span class="solve-need full">${icon('sparkle')}満タン${buyCount() > 1 ? ` ×${buyCount()}` : ''}</span>` : ''}
       ${isPuzzle() ? `<button data-t="play" class="solve-ring ${buy ? 'full' : ''}" style="--p:${pct}" aria-label="パズル">
         <span class="sr-in">${icon('grid')}<b>パズル</b></span>${!S.playedToday() ? '<i class="dot"></i>' : ''}` : `<button data-t="play" class="solve-ring ${buy ? 'full' : ''}" style="--p:${pct}" aria-label="解く">
         <span class="sr-in">${icon(resume ? 'refresh' : 'pencil')}<b>${resume ? '続きから' : '解く'}</b></span>${resume || due || !S.playedToday() ? '<i class="dot"></i>' : ''}`}
@@ -344,7 +344,7 @@ function halfFurniture() {
   const hs = HS(), max = S.gaugeMax(hs);
   const r = curRoom();
   const items = [
-    { ic: 'gift', name: '買う', sub: canBuyNow() ? '今すぐ1つ買える' : `ゲージ ${Math.min(100, Math.round(hs.gauge / max * 100))}%`, hot: canBuyNow(), go: () => goTab('buy') },
+    { ic: 'gift', name: '買う', sub: canBuyNow() ? `今すぐ${buyCount()}つ買える` : `ゲージ ${Math.min(100, Math.round(hs.gauge / max * 100))}%`, hot: canBuyNow(), go: () => goTab('buy') },
     { ic: 'move', name: '模様がえ', sub: `置いている ${r.placed.length}`, go: showEdit },
     { ic: 'star', name: 'レアガチャ', sub: `チケット ${hs.rareTickets || 0}`, dot: ticketCount() > 0, go: () => showGacha() },
     { ic: 'book', name: '図鑑', go: showZukan },
@@ -368,6 +368,12 @@ function adminTopUp() {
   for (const k of ['rareTickets', 'rareTickets4', 'rareTickets5', 'shards4', 'shards5', 'tickets']) if ((hs[k] || 0) < 99) hs[k] = 99;
 }
 function canBuyNow() { const hs = HS(); return hs.gauge >= S.gaugeMax(hs) || hs.tickets > 0; }
+// いま何個買えるか（ゲージは満タンをこえてもためておける。1つ買うごとに満タンの分だけ減る）
+function buyCount() {
+  const hs = HS(); let g = hs.gauge, u = hs.unlocks, n = 0;
+  while (n < 99) { const m = S.gaugeMax({ unlocks: u }); if (g < m) break; g -= m; u++; n++; }
+  return n + (isAdmin() ? 0 : hs.tickets || 0);
+}
 function ticketCount() { const hs = HS(); return (hs.rareTickets || 0) + (hs.rareTickets4 || 0) + (hs.rareTickets5 || 0); }
 
 // =========================== 家具（買う・ガチャ・模様がえ・図鑑・持ち物） ===========================
@@ -1021,7 +1027,7 @@ function chooseCandidate(genreId) {
       curRoom().placed.push(pv);
       S.save();
       if (!HS().villa) ensureRooms();
-      toast(`${picked.name}を置きました。模様がえで動かせます`, 2600);
+      toast(`${picked.name}を置きました。${canBuyNow() ? `まだ${buyCount()}つ買えます` : '模様がえで動かせます'}`, 2600);
     } else {
       room3d?.clearPreview();
       await putIntoRoom(picked, true);
@@ -1342,7 +1348,7 @@ function photoMode() {
 
 // =========================== 更新のお知らせ ===========================
 // このプログラムの版（version.json と同じにする。公開のたびに上げる）
-const APP_VERSION = '1.4.0';
+const APP_VERSION = '1.5.0';
 // 新しい版が出たら、みんな同じタイミングでそろうように強制で再起動する。
 // 開いた時・画面に戻った時・1分ごとに version.json を見る
 async function latestVersion() {
@@ -1476,19 +1482,28 @@ function askMode() {
 // =========================== パズル ===========================
 function showPuzzleHub() {
   if (!app.querySelector('.home')) showHome();
+  const R = S.PUZZLE_REWARD.gauge;
   const el = sheet(`
-    <div class="sh-head"><span class="sh-ic">${icon('grid')}</span><div><h3>どのパズルにする？</h3><p>クリアするとレベルが上がって、むずかしくなります</p></div></div>
-    <div class="pz-hub">${PUZZLES.map(z => { const ps = S.puzzleState(z.id); return `
-      <button class="pz-pick" data-p="${z.id}"><span class="s-ic">${icon(z.icon)}</span>
-        <span class="pz-pick-t"><b>${z.name}</b><small>${z.short}</small></span>
-        <span class="pz-lv">Lv<b>${ps.lv}</b><small>${levelInfo(z.id, ps.lv)}</small></span></button>`; }).join('')}</div>
+    <div class="sh-head"><span class="sh-ic">${icon('grid')}</span><div><h3>どのパズルにする？</h3><p>★を選んでスタート。★が高いほど、ゲージが多くたまります</p></div></div>
+    <div class="pz-hub">${PUZZLES.map(z => { const ps = S.puzzleState(z.id), open = S.puzzleOpen(z.id); return `
+      <div class="pz-pick">
+        <div class="pz-pick-top"><span class="s-ic">${icon(z.icon)}</span>
+          <span class="pz-pick-t"><b>${z.name}</b><small>${z.short}${ps.clears ? `・クリア ${ps.clears}回` : ''}</small></span></div>
+        <div class="pz-stars">${[1, 2, 3, 4, 5].map(st => st <= open
+          ? `<button class="pz-star ${st === Math.min(ps.last || 1, open) ? 'last' : ''} ${st <= ps.best ? 'clear' : ''}" data-p="${z.id}" data-s="${st}" aria-label="★${st}をはじめる"><b>★${st}</b><small>+${R[st - 1]}</small></button>`
+          : `<span class="pz-star locked" aria-label="★${st}（★${st - 1}をクリアすると選べます）">${icon('lock')}<small>★${st}</small></span>`).join('')}</div>
+      </div>`; }).join('')}</div>
+    <p class="pz-hub-note">★をクリアすると、次の★が選べるようになります。前の★にはいつでももどれます</p>
     <button class="link close">とじる</button>`, 'subj-sheet puzzle-sheet');
   app.querySelector('.tabbar')?.classList.add('hide');
   el.querySelector('.close').onclick = () => { el.remove(); showHome(); };
-  el.querySelectorAll('[data-p]').forEach(b => b.onclick = () => { el.remove(); playPuzzle(b.dataset.p); });
+  el.querySelectorAll('.pz-star[data-p]').forEach(b => b.onclick = () => { el.remove(); playPuzzle(b.dataset.p, +b.dataset.s); });
 }
-function playPuzzle(id) {
-  const z = puzzleById(id), ps = S.puzzleState(id), lv = ps.lv;
+function playPuzzle(id, star) {
+  const z = puzzleById(id), ps = S.puzzleState(id);
+  star = Math.max(1, Math.min(star || ps.last || 1, S.puzzleOpen(id)));
+  ps.last = star; S.save();
+  const lives = livesOf(star);
   room3d?.setActive(false);
   canvas.classList.add('dim');
   app.innerHTML = '';
@@ -1496,10 +1511,10 @@ function playPuzzle(id) {
     <div class="screen puzzle-screen">
       <header class="bar">
         <button class="icon back" aria-label="部屋にもどる">${icon('x')}</button>
-        <h2>${z.name}<small>Lv${lv}</small></h2>
-        <span class="pz-life" aria-label="のこり">${'<i class="on"></i>'.repeat(3)}</span>
+        <h2>${z.name}<small>★${star}</small></h2>
+        <span class="pz-life" aria-label="まちがえられる回数">${'<i class="on"></i>'.repeat(lives)}</span>
       </header>
-      <p class="pz-rule">${z.rule}</p>
+      <p class="pz-rule">${z.rule}${lives < 3 ? '<b>★5 は、まちがいは2回まで。</b>' : ''}</p>
       <p class="pz-moves" hidden></p>
       <div class="pz-host"></div>
     </div>`);
@@ -1507,43 +1522,50 @@ function playPuzzle(id) {
   el.querySelector('.back').onclick = () => { S.save(); showHome(); };
   const life = el.querySelector('.pz-life'), mv = el.querySelector('.pz-moves');
   const t0 = Date.now();
-  mountPuzzle(id, lv, el.querySelector('.pz-host'), {
-    onChange: (n) => { life.innerHTML = '<i class="on"></i>'.repeat(n) + '<i></i>'.repeat(3 - n); vibrate(60); },
+  mountPuzzle(id, star, el.querySelector('.pz-host'), {
+    onChange: (n) => { life.innerHTML = '<i class="on"></i>'.repeat(n) + '<i></i>'.repeat(lives - n); vibrate(60); },
     onMoves: (n, max) => { mv.hidden = false; mv.innerHTML = `手数 <b>${n}</b> / ${max}`; mv.classList.toggle('warn', max - n <= 3); },
-    onWin: (r) => setTimeout(() => puzzleResult(id, lv, true, r, (Date.now() - t0) / 1000), r.picture ? 900 : 350),
-    onLose: (why) => setTimeout(() => puzzleResult(id, lv, false, { why }, 0), 500),
+    onWin: (r) => setTimeout(() => puzzleResult(id, star, true, r, (Date.now() - t0) / 1000), r.picture ? 900 : 350),
+    onLose: (why) => setTimeout(() => puzzleResult(id, star, false, { why }, 0), 500),
   });
 }
-function puzzleResult(id, lv, won, r, secs) {
+function puzzleResult(id, star, won, r, secs) {
   const z = puzzleById(id);
   let pts = 0, xp = null;
   if (won) {
     const hs = HS();
-    pts = S.puzzleGauge(lv, r.mistakes || 0);
+    pts = S.puzzleGauge(star, r.mistakes || 0);
     if (S.solvedToday() < S.BONUS_PER_DAY) pts = Math.round(pts * 1.5); // 今日の最初のうちは1.5倍（勉強と同じ）
     hs.gauge += pts;
-    xp = S.addPuzzleClear(id, r.mistakes || 0);
+    xp = S.addPuzzleClear(id, star, r.mistakes || 0);
     const first = S.markPlayedToday();
     if (first) setTimeout(() => toast(`連続 ${S.currentStreak()}日目！`), 600);
     S.save(); Sync.push?.();
     vibrate([20, 30, 20]);
   } else vibrate([60, 40, 60]);
   const mm = Math.floor(secs / 60), ss = Math.round(secs % 60);
+  const n = buyCount();
+  const up = won && xp.unlocked;
   const el = sheet(`
     <div class="res ${won ? 'ok' : 'ng'} pz-res">
       <div class="ttl">${won ? 'クリア！' : 'しっぱい…'}</div>
       ${won ? `<p class="pz-sub">${r.picture ? `あらわれたのは「${esc(r.picture)}」！ ・ ` : ''}${r.moves ? `${r.moves}手${r.best ? '（最短！）' : ''} ・ ` : ''}${mm ? mm + '分' : ''}${ss}秒・まちがい ${r.mistakes || 0}回</p>
-        <div class="pts">+${pts}<small>ゲージ</small></div>
+        <div class="pts">+${pts}<small>ゲージ（★${star}）</small></div>
         <div class="xpgain">${icon('level')}+${xp.gained} XP${xp.rankUp ? `<b>Lv${xp.rank}にアップ！</b>` : ''}</div>
-        <p class="pz-up">${z.name} が <b>Lv${lv + 1}</b> に強化（${levelInfo(id, lv + 1)}）</p>`
-      : `<p class="pz-sub">${r.why === 'moves' ? '手数の上限になりました。' : 'まちがいが3回になりました。'}同じレベルで、もう一度ちょうせんできます</p>`}
+        ${n ? `<p class="gold-t">${icon('gift')}家具が${n > 1 ? ` ${n}つ` : ''}買えます！</p>` : ''}
+        ${up ? `<p class="pz-up">${icon('sparkle')}★${up} が選べるようになりました（${levelInfo(id, up)}・+${S.PUZZLE_REWARD.gauge[up - 1]}）</p>` : ''}`
+      : `<p class="pz-sub">${r.why === 'moves' ? '手数の上限になりました。' : `まちがいが${livesOf(star)}回になりました。`}もう一度ちょうせんするか、★を下げてみよう</p>`}
     </div>
     <div class="pz-res-btns">
-      <button class="btn primary big next">${won ? '次の問題' : 'もう一度'}</button>
+      ${up ? `<button class="btn primary big go-up">★${up} にちょうせん</button>` : ''}
+      <button class="btn ${up ? 'ghost' : 'primary big'} next">${won ? `★${star} でもう1問` : 'もう一度'}</button>
+      ${!won && star > 1 ? `<button class="btn ghost down">★${star - 1} にする</button>` : ''}
       <button class="btn ghost home">部屋にもどる</button>
     </div>`, 'pz-res-sheet');
-  el.querySelector('.next').onclick = () => playPuzzle(id);
-  el.querySelector('.home').onclick = () => { showHome(); if (won && canBuyNow()) setTimeout(() => toast('ゲージ満タン！「買う」で家具を1つ買えます', 3000), 400); };
+  el.querySelector('.go-up')?.addEventListener('click', () => playPuzzle(id, up));
+  el.querySelector('.next').onclick = () => playPuzzle(id, star);
+  el.querySelector('.down')?.addEventListener('click', () => playPuzzle(id, star - 1));
+  el.querySelector('.home').onclick = () => showHome();
 }
 
 function chooseSubject() {
@@ -1662,7 +1684,7 @@ function showRecords(subj = subjectId) {
     </div>
     ${isPuzzle() ? `<h3 class="sec">パズル（クリア ${pf.puzzleClears || 0}回）</h3>
     <div class="unit-list">${PUZZLES.map(z => { const ps = S.puzzleState(z.id); return `
-      <div class="unit-row"><b>${z.name}</b><span>Lv${ps.lv}<small>クリア ${ps.clears}・ノーミス ${ps.perfect}</small></span></div>`; }).join('')}</div>` : ''}
+      <div class="unit-row"><b>${z.name}</b><span>${ps.best ? `★${ps.best}までクリア` : 'まだクリアなし'}<small>クリア ${ps.clears}・ノーミス ${ps.perfect}</small></span></div>`; }).join('')}</div>` : ''}
     <div class="rec-subj">${SUBJECTS.filter(x => probs(x.id).length).map(x => `
       <button data-s="${x.id}" class="${x.id === subj ? 'on' : ''}"><span class="ic2">${icon(SUBJECT_ICON[x.id] || 'book')}</span><b>${x.name}</b><small>${solvedOf(x.id)}問</small></button>`).join('')}</div>
     <h3 class="sec">分野ごと（${subjName}）</h3>

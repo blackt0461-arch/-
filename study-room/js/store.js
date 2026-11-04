@@ -288,28 +288,37 @@ export function addAnswer(sub, unit, kind) {
 export function profile() { return state.profile || (state.profile = blankProfile()); }
 
 // --- パズルモード ---
-// 種類ごとのレベル（強化）。クリアすると1つ上がる
-export function puzzleState(id) { const p = profile(); const all = p.puzzle || (p.puzzle = {}); return all[id] || (all[id] = { lv: 1, clears: 0, perfect: 0 }); }
-// クリアの記録。経験値はまちがいが少なく、レベルが高いほど多い。戻り値は addAnswer と同じ形
-export function addPuzzleClear(id, mistakes) {
+// 種類ごとの記録。best＝クリアしたいちばん高い★（その1つ上まで選べる）、last＝前に選んだ★
+export const PUZZLE_REWARD = { gauge: [20, 30, 42, 56, 72], xp: [6, 10, 14, 20, 26] };
+export function puzzleState(id) {
+  const p = profile(); const all = p.puzzle || (p.puzzle = {});
+  const ps = all[id] || (all[id] = { best: 0, last: 1, clears: 0, perfect: 0 });
+  if (ps.lv != null) { ps.best = Math.min(5, Math.max(ps.best || 0, ps.lv - 1)); ps.last = Math.max(1, ps.best); delete ps.lv; } // 1.4.0 の「レベル」から
+  return ps;
+}
+export const puzzleOpen = (id) => Math.min(5, puzzleState(id).best + 1); // 選べるいちばん高い★
+// ゲージ：★が高いほど多い。まちがうと少し減る（半分より下にはならない）
+export function puzzleGauge(star, mistakes) { const b = PUZZLE_REWARD.gauge[star - 1]; return Math.max(Math.round(b / 2), b - mistakes * 6); }
+// クリアの記録。戻り値は addAnswer と同じ形に { unlocked: 新しく選べるようになった★ } を足したもの
+export function addPuzzleClear(id, star, mistakes) {
   const p = profile(), ps = puzzleState(id);
   const before = rankInfo(p.xp).rank;
-  const gained = Math.min(40, 12 + ps.lv * 2) - mistakes * 3;
+  const gained = Math.max(2, PUZZLE_REWARD.xp[star - 1] - mistakes * 2);
   p.xp += gained;
   p.puzzleClears = (p.puzzleClears || 0) + 1;
   countToday();
   ps.clears++; if (!mistakes) ps.perfect++;
-  ps.lv++;
+  const openBefore = puzzleOpen(id);
+  if (star > ps.best) ps.best = star;
+  const unlocked = puzzleOpen(id) > openBefore ? puzzleOpen(id) : 0;
   const wk = weekKey();
   if (!p.week || p.week.key !== wk) p.week = { key: wk, solved: 0, correct: 0 };
   p.week.puzzle = (p.week.puzzle || 0) + 1;
   if (!mistakes) p.week.perfectPuzzle = (p.week.perfectPuzzle || 0) + 1;
   const after = rankInfo(p.xp).rank;
   const rewards = after > before ? giveRankRewards(before, after) : null;
-  return { gained, rankUp: after > before, rank: after, rewards };
+  return { gained, rankUp: after > before, rank: after, rewards, unlocked };
 }
-// ゲージ：1回のクリアで問題2〜3問ぶんくらい。まちがうと少し減る
-export function puzzleGauge(lv, mistakes) { return Math.max(12, Math.round(36 + Math.min(lv, 10) * 2) - mistakes * 8); }
 
 // --- ログインボーナス（30日で1周。5日ごとにレアチケット、30日目は★4以上確定チケット） ---
 export function loginBonusDay(n) {
