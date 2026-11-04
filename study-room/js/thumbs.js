@@ -92,7 +92,7 @@ async function pump() {
       continue;
     }
     let url = null;
-    try { url = await drawItem(job.item); } catch (e) { console.warn('thumb', job.item.id, e); }
+    try { url = await locked(() => drawItem(job.item)); } catch (e) { console.warn('thumb', job.item.id, e); }
     if (url) idbPut(job.key, url);
     else memo.delete(job.key); // 失敗したら次にまた試せるように
     job.resolve(url);
@@ -102,6 +102,16 @@ async function pump() {
 }
 
 const jobs = new Map(); // key → job（まだ描いていない物）
+
+// 小さな3D画面は1つしかないので、描くのは1つずつ
+let lockP = Promise.resolve();
+function locked(fn) { const p = lockP.then(fn, fn); lockP = p.catch(() => {}); return p; }
+
+// ガチャの設計図の演出用：線（segs）・色つきの絵（url）・大きさ（dims, ミリ）
+export function blueprintArt(item) {
+  if (!item || item.place === 'skin' || item.src?.skin) return Promise.resolve(null);
+  return locked(() => drawItem(item, { blueprint: true, size: 512 })).catch(() => null);
+}
 
 function request(item, prio, el) {
   const key = keyOf(item);
@@ -399,13 +409,15 @@ export async function itemObject(item) {
   return obj ? { obj, kind, own, disposeGeo } : null;
 }
 
-async function drawItem(item) {
+async function drawItem(item, opts = {}) {
   const src = item.src || {};
   const made = await itemObject(item);
   if (!made) return null;
   const { obj, kind, own, disposeGeo } = made;
 
   const { renderer, scene, camera, key, fill, ground, stage } = studio();
+  const px = opts.size || SIZE;
+  if (px !== SIZE) renderer.setSize(px, px, false);
   const wall = kind === 'wall' || item.place === 'wall' || (item.place === 'surface' && kind !== 'swatch');
   obj.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
 
@@ -451,13 +463,38 @@ async function drawItem(item) {
   ground.position.set(center.x, box.min.y, center.z);
   ground.scale.setScalar(rad * 4);
 
+  // 設計図用：形のふち（角ばった所）の線を、画面の上の位置（0〜1）にして集める
+  let segs = null, dims = null;
+  if (opts.blueprint) {
+    camera.updateMatrixWorld(true);
+    segs = [];
+    const a = new THREE.Vector3(), b = new THREE.Vector3();
+    obj.traverse((o) => {
+      if (!o.isMesh || !o.geometry || o.visible === false) return;
+      let eg = null;
+      try { eg = new THREE.EdgesGeometry(o.geometry, 26); } catch { return; }
+      const pa = eg.attributes.position;
+      for (let i = 0; i + 1 < pa.count; i += 2) {
+        a.fromBufferAttribute(pa, i).applyMatrix4(o.matrixWorld).project(camera);
+        b.fromBufferAttribute(pa, i + 1).applyMatrix4(o.matrixWorld).project(camera);
+        segs.push([(a.x + 1) / 2, (1 - a.y) / 2, (b.x + 1) / 2, (1 - b.y) / 2]);
+      }
+      eg.dispose();
+    });
+    // 多すぎるときは長い線を残す
+    if (segs.length > 5000) segs = segs.map(q => [q, Math.hypot(q[2] - q[0], q[3] - q[1])]).sort((x, y) => y[1] - x[1]).slice(0, 5000).map(q => q[0]);
+    const mm = (v) => Math.round(v * 100) * 10; // メートル → ミリ（10ミリ単位）
+    dims = { w: mm(size.x), h: mm(size.y), d: mm(size.z) };
+  }
+
   renderer.render(scene, camera);
   let url = renderer.domElement.toDataURL('image/webp', 0.9);
   if (!url.startsWith('data:image/webp')) url = renderer.domElement.toDataURL('image/png');
   cleanup();
-  return url;
+  return opts.blueprint ? { url, segs, dims } : url;
 
   function cleanup() {
+    if (px !== SIZE) renderer.setSize(SIZE, SIZE, false);
     stage.remove(obj);
     if (lamp) { obj.remove(lamp); lamp.dispose(); }
     obj.traverse((o) => {
