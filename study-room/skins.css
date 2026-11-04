@@ -8,18 +8,18 @@
   --sk-font: "Zen Maru Gothic", "Hiragino Maru Gothic ProN", sans-serif;
   --sk-head: "Zen Maru Gothic", sans-serif;  --sk-num: "Zen Maru Gothic", sans-serif;
   --sk-head-weight: 700; --sk-head-spacing: .06em;
-  --sk-text: #4a3627; --sk-muted: #9a7c62; --sk-accent: #ffb85c;
+  --sk-text: #4a3627; --sk-muted: #75583f; --sk-accent: #ffb85c; --sk-accent-text: #a95a10; --sk-hot-fg: #4a2a10; --sk-xp: #6a4bd8;
   --sk-panel: rgba(255, 250, 240, .93); --sk-panel-line: transparent; --sk-blur: none;
   --sk-sheet: #fff8ee; --sk-sheet-line: #f0e2cc; --sk-card: #ffffff; --sk-card-line: #f0e2cc;
   --sk-icon-bg: #f3e6d2; --sk-icon-fg: #8a5a2b;
-  --sk-btn-bg: #7fb069; --sk-btn-fg: #ffffff; --sk-btn-shadow: 0 4px 0 #5d8a4a; --sk-radius: 20px;
+  --sk-btn-bg: #457a33; --sk-btn-fg: #ffffff; --sk-btn-shadow: 0 4px 0 #335c26; --sk-radius: 20px;
   --sk-cap-bg: #fff8ee; --sk-cap-fg: #4a3627; --sk-cap-line: transparent;
   --sk-tab-bg: #fff8ee; --sk-tab-fg: #b39a83; --sk-tab-on: #8a5a2b;
-  --sk-center-bg: #7fb069; --sk-center-fg: #ffffff; --sk-center-shadow: 0 5px 0 #5d8a4a;
-  --sk-sel-bg: #ffb85c; --sk-sel-fg: #4a2a10; --sk-sel-line: #ffb85c;
-  --sk-new-bg: #ff8a7a; --sk-new-fg: #fff; --sk-bar: #7fb069; --sk-dot: #ff6b5a;
+  --sk-center-bg: #457a33; --sk-center-fg: #ffffff; --sk-center-shadow: 0 5px 0 #3b6b2c;
+  --sk-sel-bg: #ffb85c; --sk-sel-fg: #2e1704; --sk-sel-line: #ffb85c;
+  --sk-new-bg: #b83a28; --sk-new-fg: #fff; --sk-bar: #4f8a3c; --sk-dot: #ff6b5a;
   --sk-screen-bg: rgba(255, 246, 232, .94);
-  --ok: #5d9a4a; --ng: #d9634f;
+  --ok: #3a7a2a; --ng: #b0402c;
 }
 [data-skin="b"] .room-name, [data-skin="b"] .rankchip, [data-skin="b"] .round, [data-skin="b"] .hotbar .sl { box-shadow: 0 3px 0 rgba(120,85,50,.22); }
 [data-skin="b"] .hotbar .sl { border-radius: 16px; }
@@ -28,7 +28,7 @@
 /* ---------- C ミニマル・ライト（★4） ---------- */
 [data-skin="c"] {
   --sk-head: "Zen Kaku Gothic New", sans-serif; --sk-num: "Zen Kaku Gothic New", sans-serif; --sk-head-weight: 700; --sk-head-spacing: .04em;
-  --sk-text: #111; --sk-muted: #777; --sk-accent: #111;
+  --sk-text: #111; --sk-muted: #555; --sk-accent: #111; --sk-xp: #5a3bc8;
   --sk-panel: rgba(255, 255, 255, .74); --sk-panel-line: rgba(0, 0, 0, .06); --sk-blur: blur(20px) saturate(1.6);
   --sk-sheet: rgba(255, 255, 255, .95); --sk-sheet-line: rgba(0, 0, 0, .06); --sk-card: #ffffff; --sk-card-line: #ececec;
   --sk-icon-bg: #f1f1f1; --sk-icon-fg: #111;
@@ -46,10 +46,10 @@
 /* ---------- D スタイリッシュ（★4） ---------- */
 [data-skin="d"] {
   --sk-head: "Dela Gothic One", sans-serif; --sk-num: "Oswald", sans-serif; --sk-head-weight: 400; --sk-head-spacing: .05em;
-  --sk-text: #fff; --sk-muted: #9a9a9a; --sk-accent: #e5322d;
+  --sk-text: #fff; --sk-muted: #b0b0b0; --sk-accent: #e5322d; --sk-accent-text: #ff6a63;
   --sk-panel: #0b0b0b; --sk-panel-line: transparent; --sk-blur: none;
   --sk-sheet: #0b0b0b; --sk-sheet-line: #e5322d; --sk-card: #161616; --sk-card-line: transparent;
-  --sk-icon-bg: #1d1d1d; --sk-icon-fg: #e5322d;
+  --sk-icon-bg: #1d1d1d; --sk-icon-fg: #ff4d47;
   --sk-btn-bg: #e5322d; --sk-btn-fg: #fff; --sk-btn-shadow: none; --sk-radius: 0px;
   --sk-cap-bg: #0b0b0b; --sk-cap-fg: #fff; --sk-cap-line: transparent;
   --sk-tab-bg: #0b0b0b; --sk-tab-fg: #777; --sk-tab-on: #fff;
@@ -74,7 +74,7 @@
 [data-skin="e1"] {
   --neon: #ff3d8b; --neon2: #33e1ff;
   --sk-head: "Dela Gothic One", sans-serif; --sk-num: "Oswald", sans-serif; --sk-head-weight: 400; --sk-head-spacing: .06em;
-  --sk-text: #f4f0ff; --sk-muted: #a6a3b8; --sk-accent: #ff3d8b;
+  --sk-text: #f4f0ff; --sk-muted: #b6b3c8; --sk-accent: #ff3d8b; --sk-accent-text: #ff7ab0;
   --sk-panel: #0c0c10; --sk-panel-line: #3a3a44; --sk-blur: none;
   --sk-sheet: #0c0c10; --sk-sheet-line: #ff3d8b; --sk-card: #121217; --sk-card-line: #2c2c36;
   --sk-icon-bg: #18181f; --sk-icon-fg: #33e1ff;
@@ -83,7 +83,7 @@
   --sk-tab-bg: #08080a; --sk-tab-fg: #6f6c80; --sk-tab-on: #33e1ff;
   --sk-center-bg: #0c0c10; --sk-center-fg: #ff3d8b; --sk-center-line: #ff3d8b; --sk-center-shadow: 0 0 16px #ff3d8b;
   --sk-sel-bg: #0c0c10; --sk-sel-fg: #33e1ff; --sk-sel-line: #33e1ff;
-  --sk-new-bg: #33e1ff; --sk-new-fg: #06060a; --sk-bar: #33e1ff; --sk-dot: #ff3d8b;
+  --sk-new-bg: #33e1ff; --sk-new-fg: #06060a; --sk-bar: #33e1ff; --sk-dot: #ff3d8b; --sk-hot-fg: #0c0c10;
 }
 [data-skin="e1"] .rankchip .lv b { color: #33e1ff; text-shadow: 0 0 8px #33e1ff; }
 [data-skin="e1"] .hotbar .sl.on, [data-skin="e1"] .seg button.on, [data-skin="e1"] .rec-subj button.on { border: 1.5px solid #33e1ff !important; box-shadow: 0 0 10px rgba(51,225,255,.55); }
@@ -96,7 +96,7 @@
   --sk-text: #f3e6c8; --sk-muted: #c8b48a; --sk-accent: #ffb347;
   --sk-panel: repeating-linear-gradient(45deg, #3a2618 0 4px, #33210f 4px 8px); --sk-panel-line: #c9a45c; --sk-blur: none;
   --sk-sheet: #2c1d10; --sk-sheet-line: #c9a45c; --sk-card: rgba(241, 226, 192, .08); --sk-card-line: rgba(201, 164, 92, .45);
-  --sk-icon-bg: #f1e2c0; --sk-icon-fg: #3a2618;
+  --sk-icon-bg: rgba(241, 226, 192, .12); --sk-icon-fg: #ffcf7a;
   --sk-btn-bg: #f1e2c0; --sk-btn-fg: #3a2618; --sk-btn-line: #c9a45c; --sk-btn-shadow: 0 4px 0 #6b4a2a; --sk-radius: 8px;
   --sk-cap-bg: #3a2618; --sk-cap-fg: #f3e6c8; --sk-cap-line: #c9a45c;
   --sk-tab-bg: #2c1d10; --sk-tab-fg: #a98f68; --sk-tab-on: #ffd38a;
@@ -109,7 +109,7 @@
 [data-skin="e3"] {
   --tape: #ffd400;
   --sk-head: "Dela Gothic One", sans-serif; --sk-num: "Oswald", sans-serif; --sk-head-weight: 400; --sk-head-spacing: .04em;
-  --sk-text: #111; --sk-muted: #555; --sk-accent: #ffd400;
+  --sk-text: #111; --sk-muted: #555; --sk-accent: #ffd400; --sk-accent-text: #111; --sk-xp: #5a3bc8; --ok: #2f8f50; --ng: #c8382d;
   --sk-panel: #f4f1ea; --sk-panel-line: #111; --sk-blur: none;
   --sk-sheet: #f4f1ea; --sk-sheet-line: #111; --sk-card: #ffffff; --sk-card-line: #111;
   --sk-icon-bg: #ffd400; --sk-icon-fg: #111; --sk-hot-fg: #111;
@@ -131,7 +131,7 @@
 [data-skin="e4"] {
   --g: linear-gradient(110deg, #7b2cff, #ff3d8b 55%, #ff9f2e);
   --sk-head: "Dela Gothic One", sans-serif; --sk-num: "Oswald", sans-serif; --sk-head-weight: 400; --sk-head-spacing: .05em;
-  --sk-text: #fff; --sk-muted: #b9b0d8; --sk-accent: #ff3d8b;
+  --sk-text: #fff; --sk-muted: #c4bce0; --sk-accent: #ff3d8b; --sk-accent-text: #ff8ac0;
   --sk-panel: rgba(10, 6, 24, .75); --sk-panel-line: rgba(255,255,255,.18); --sk-blur: blur(10px);
   --sk-sheet: linear-gradient(180deg, rgba(24,10,48,.97), rgba(10,6,24,.98)); --sk-sheet-line: #ff3d8b; --sk-card: rgba(255,255,255,.06); --sk-card-line: rgba(255,255,255,.1);
   --sk-icon-bg: rgba(255,255,255,.08); --sk-icon-fg: #ffb0d0;
@@ -139,8 +139,8 @@
   --sk-cap-bg: rgba(10, 6, 24, .8); --sk-cap-fg: #fff; --sk-cap-line: rgba(255,255,255,.18);
   --sk-tab-bg: rgba(10, 6, 24, .92); --sk-tab-fg: #8f86b3; --sk-tab-on: #fff;
   --sk-center-bg: linear-gradient(110deg, #7b2cff, #ff3d8b 55%, #ff9f2e); --sk-center-fg: #fff; --sk-center-shadow: 0 0 18px rgba(255,61,139,.7);
-  --sk-sel-bg: linear-gradient(110deg, #7b2cff, #ff3d8b 55%, #ff9f2e); --sk-sel-fg: #fff; --sk-sel-line: #ff3d8b;
-  --sk-new-bg: #ff9f2e; --sk-new-fg: #fff; --sk-bar: #ff3d8b; --sk-dot: #ff9f2e;
+  --sk-sel-bg: #b0185a; --sk-sel-fg: #fff; --sk-sel-line: #ff3d8b; --sk-hot-fg: #1a0a2e;
+  --sk-new-bg: #ff9f2e; --sk-new-fg: #1a0a2e; --sk-bar: #ff3d8b; --sk-dot: #ff9f2e;
 }
 [data-skin="e4"] .room-name, [data-skin="e4"] .rankchip, [data-skin="e4"] .hotbar .sl { transform: skewX(-6deg); }
 [data-skin="e4"] .room-name > *, [data-skin="e4"] .rankchip > *, [data-skin="e4"] .hotbar .sl > * { transform: skewX(6deg); }
@@ -151,7 +151,7 @@
   --red: #d4202f; --pink: #ff4fa3; --amber: #ffb347;
   --drum: radial-gradient(120% 140% at 30% 0%, #ff4652, #d4202f 45%, #8d0f1b);
   --sk-head: "Dela Gothic One", sans-serif; --sk-num: "Oswald", sans-serif; --sk-head-weight: 400; --sk-head-spacing: .06em;
-  --sk-text: #f6efe9; --sk-muted: #a79e98; --sk-accent: #ff4fa3;
+  --sk-text: #f6efe9; --sk-muted: #b7aea8; --sk-accent: #ff4fa3; --sk-accent-text: #ff85bf;
   --sk-panel: #0d0c0d; --sk-panel-line: #34302f; --sk-blur: none;
   --sk-sheet: #0e0c0d; --sk-sheet-line: #b9bcc6; --sk-card: #161314; --sk-card-line: #2e2829;
   --sk-icon-bg: #1c1819; --sk-icon-fg: #ffb347;

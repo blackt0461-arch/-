@@ -9,9 +9,9 @@
   --sk-head: "Shippori Mincho", "Hiragino Mincho ProN", "Yu Mincho", serif;   /* 見出し */
   --sk-num: "Cormorant Garamond", "Shippori Mincho", serif;                   /* 数字 */
   --sk-text: #f2efe9;
-  --sk-muted: rgba(242, 239, 233, .56);
+  --sk-muted: rgba(242, 239, 233, .74);
   --sk-accent: #d8c3a0;
-  --sk-panel: rgba(18, 18, 21, .55);          /* 部屋の画面の上にのる板（部屋名・Lv・丸ボタン） */
+  --sk-panel: rgba(18, 18, 21, .64);          /* 部屋の画面の上にのる板（部屋名・Lv・丸ボタン） */
   --sk-panel-line: rgba(255, 255, 255, .11);
   --sk-blur: blur(20px) saturate(1.3);
   --sk-sheet: rgba(20, 20, 23, .92);          /* 下から出る画面 */
@@ -36,8 +36,8 @@
   /* もとの変数にもつなぐ（ほかの画面がそのまま着せ替わる） */
   --bg: #121214;
   --text: var(--sk-text);  --muted: var(--sk-muted);
-  --accent: var(--sk-accent);  --accent2: var(--sk-accent);
-  --gold1: var(--sk-accent);  --gold2: var(--sk-accent);
+  --accent: var(--sk-accent-text, var(--sk-accent));  --accent2: var(--sk-accent-text, var(--sk-accent));
+  --gold1: var(--sk-accent-text, var(--sk-accent));  --gold2: var(--sk-accent);
   --panel: var(--sk-sheet);  --panel2: rgba(255, 255, 255, .06);  --line: var(--sk-card-line);
   --card: var(--sk-card);  --card-line: var(--sk-card-line);
   --glow: none;
@@ -222,10 +222,12 @@ b, strong { font-weight: 700; }
 /* ガチャ・ログボ・アップデート・タイトルなど「いつも暗い背景」の画面では、
    明るい着せ替えでも文字が見えるよう、色を暗い画面用にもどす */
 .pfx, .lb-screen, .update-ov, .title-screen, .photo-ui, .photo-preview {
-  --sk-text: #f2efe9; --sk-muted: rgba(242, 239, 233, .6);
+  --sk-text: #f2efe9; --sk-muted: rgba(242, 239, 233, .8);
   --sk-card: rgba(255, 255, 255, .06); --sk-card-line: rgba(255, 255, 255, .12);
   --sk-icon-bg: rgba(255, 255, 255, .08);
-  --text: #f2efe9; --muted: rgba(242, 239, 233, .6);
+  --text: #f2efe9; --muted: rgba(242, 239, 233, .8);
+  --sk-accent: #d8c3a0; --sk-accent-text: #e6d2ad; --accent: #e6d2ad; --accent2: #e6d2ad; --gold1: #e6d2ad; --gold2: #d8c3a0;
+  --sk-sel-line: #f2efe9;
   color: #f2efe9;
 }
 .pfx .btn.ghost, .lb-screen .btn.ghost { background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.28); color: #fff; }
@@ -238,3 +240,36 @@ b, strong { font-weight: 700; }
 .banner .bn-title { margin: 0 0 2px; font-family: "Dela Gothic One", var(--sk-head); font-size: 34px; letter-spacing: .06em; line-height: 1.05; color: #fff; text-shadow: 0 0 18px rgba(255, 60, 120, .65), 0 2px 0 rgba(0,0,0,.6); }
 .banner.b-band > p:not(.bn-kicker) { color: rgba(255,255,255,.88); text-shadow: 0 1px 3px rgba(0,0,0,.8); }
 .bn-tabs .bn-tab b { font-family: var(--sk-font); }
+.half-sheet .hs-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.half-sheet .hs-top .hs-title { margin: 0; }
+.half-sheet .hs-close { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; border: 1px solid var(--sk-card-line); background: var(--sk-icon-bg); color: var(--sk-text); }
+.half-sheet .hs-close .ic { width: 18px; height: 18px; }
+
+/* ===== 見えにくい文字の直し（tools/check/contrast.js で見つけた物） ===== */
+/* 全体の画面：部屋が明るく透けすぎないよう、うすく暗くする（明るい着せ替えは --sk-screen-bg で上書き） */
+.screen { background: var(--sk-screen-bg, rgba(10, 10, 12, .45)); }
+/* 文字に使うアクセント色 */
+.skin-card .sk-t i, .zk-total b, .rr-sub b, .eb-top .cap b, .gold-t, .gold-t .ic, .row-item .lbl .ic, .rp-rename, .bag-cnt, .rr-gifts .rr-room, .sk-count b { color: var(--sk-accent-text, var(--sk-accent)); }
+/* 選んでいる物の中の小さな文字は、選んだ色に合わせる */
+.skin-card.on .sk-t b, .skin-card.on .sk-t i, .skin-card.on .sk-t small { color: inherit; opacity: .8; }
+.half-sheet .hc.hot .ic, .half-sheet .hc.hot svg { color: var(--sk-sel-fg) !important; }
+.rp-room.lock, .rp-home.lock { opacity: .8; }
+/* Lv の道のり・ガチャの切りかえ：白い文字を、地の色に合わせる */
+.rr-now b, .rr-row.next .rr-lv, .rr-row.next .rr-lv small { color: var(--sk-text); }
+.bn-tabs .bn-tab.on, .bn-tabs .bn-tab.on b { color: var(--sk-text); }
+.rankchip .lv { color: var(--sk-text); opacity: .8; }
+.xpgain { color: var(--sk-xp, #b9a2ff); }
+.xpgain .ic { color: inherit; }
+/* ログボのスタンプは白に */
+.lb-cell .stamp, .lb-cell .stamp .ic { color: #fff; }
+
+.room-name .rn-edit { opacity: .85; }
+.rr-row.got .rr-gifts { opacity: .65; }
+.rr-lv small { color: inherit; opacity: .85; }
+.rr-row.got .rr-node { background: var(--sk-accent); border-color: var(--sk-accent); color: var(--sk-hot-fg, var(--sk-btn-fg)); }
+.ru-tickets b { color: var(--sk-text); }
+.lb-cell small { color: rgba(255,255,255,.85); }
+.pfx .ru-tickets b { color: #fff; }
+.rr-lv small { opacity: 1; }
+.rr-row:not(.got):not(.next) .rr-lv { color: var(--sk-text); opacity: .8; }
+.rr-row.got .rr-gifts { opacity: .78; }

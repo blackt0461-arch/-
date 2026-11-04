@@ -695,17 +695,82 @@ export class Room3D {
     if (!p.on && doorZone.intersectsBox(bb)) return false;
     if (!hits.length) { if (p.on) { delete p.on; delete p.y; this.mountPlaced(o, p); } return true; }
     // 1つの家具の上に、小物がまるごとのる場合だけ OK
-    if (hits.length === 1 && Room3D.canStack(item) && Room3D.isSupport(hits[0].userData.item)) {
-      const sb = this.boxOf(hits[0]);
+    // 家具（テーブル・棚）の上や、棚の中の段にのせる。同じ家具にのっている物とは、段がちがうか、横に重ならなければよい
+    const sup = hits.find(x => Room3D.isSupport(x.userData.item));
+    const riders = hits.filter(x => x !== sup);
+    if (sup && Room3D.canStack(item) && riders.every(x => x.userData.p?.on === sup.userData.uid)) {
+      const sb = this.boxOf(sup);
       const fb = this.boxOf(o);
       const cx = (fb.min.x + fb.max.x) / 2, cz = (fb.min.z + fb.max.z) / 2;
       if (cx > sb.min.x && cx < sb.max.x && cz > sb.min.z && cz < sb.max.z) {
-        const top = +sb.max.y.toFixed(3);
-        if (p.on !== hits[0].userData.uid || p.y !== top) { p.on = hits[0].userData.uid; p.y = top; this.mountPlaced(o, p); }
+        const h = fb.max.y - fb.min.y;
+        const levels = this.stackLevels(sup, h);
+        // その段が、ほかの物で横にふさがっていないか
+        const free = (y) => !riders.some(x => Math.abs((x.userData.p.y || 0) - y) < 0.02 && (() => { const b2 = this.boxOf(x); return fb.max.x > b2.min.x && fb.min.x < b2.max.x && fb.max.z > b2.min.z && fb.min.z < b2.max.z; })());
+        const cur = p.on === sup.userData.uid ? levels.find(l => Math.abs(l - (p.y || 0)) < 0.02) : undefined;
+        // 今の段がだめなら、目の高さ（1.2m）に近い段から順に
+        const order = [...(cur !== undefined ? [cur] : []), ...levels.filter(l => l !== cur).sort((a2, b2) => Math.abs(a2 - 1.2) - Math.abs(b2 - 1.2))];
+        const y = order.find(free);
+        if (y === undefined) return false;
+        const top = +y.toFixed(3);
+        if (p.on !== sup.userData.uid || p.y !== top) { p.on = sup.userData.uid; p.y = top; this.mountPlaced(o, p); }
         return true;
       }
     }
     return false;
+  }
+  // 家具の「物をのせられる面」の高さを、上から光線を当てて見つける（棚の中の板もふくむ）
+  shelfLevels(sup) {
+    if (sup.userData.levels) return sup.userData.levels;
+    sup.updateMatrixWorld(true);
+    const bb = this.boxOf(sup), sz = bb.getSize(new THREE.Vector3());
+    const ray = new THREE.Raycaster();
+    const hs = [];
+    for (const fx of [0.3, 0.5, 0.7]) for (const fz of [0.35, 0.5, 0.65]) {
+      ray.set(new THREE.Vector3(bb.min.x + sz.x * fx, bb.max.y + 0.5, bb.min.z + sz.z * fz), new THREE.Vector3(0, -1, 0));
+      for (const hit of ray.intersectObject(sup, true)) {
+        if (!hit.face) continue;
+        const n = hit.face.normal.clone().transformDirection(hit.object.matrixWorld);
+        if (n.y > 0.7 && hit.point.y > bb.min.y + 0.08) hs.push(hit.point.y);
+      }
+    }
+    // 近い高さはまとめる。上の面は必ず入れる
+    hs.push(bb.max.y);
+    hs.sort((a, b) => a - b);
+    const lv = [];
+    for (const y of hs) if (!lv.length || y - lv[lv.length - 1] > 0.06) lv.push(y); else lv[lv.length - 1] = Math.max(lv[lv.length - 1], y);
+    sup.userData.levels = lv.map(y => +y.toFixed(3));
+    return sup.userData.levels;
+  }
+  // 高さ h の物をのせられる段（上の段との間に h より広いすき間がある段。いちばん上の面は天井まで）
+  stackLevels(sup, h) {
+    const lv = this.shelfLevels(sup);
+    const ceil = (this.sh?.h || 2.6) - 0.05;
+    return lv.filter((y, i) => ((i + 1 < lv.length ? lv[i + 1] : ceil) - y) >= h + 0.02);
+  }
+  // 模様がえ：棚の上の物を、上の段・下の段へ
+  moveLevel(uid, dir) {
+    const o = this.objByUid?.[uid], p = o?.userData.p;
+    const sup = p?.on != null && this.objByUid?.[p.on];
+    if (!sup) return false;
+    const fb = this.boxOf(o);
+    const levels = this.stackLevels(sup, fb.max.y - fb.min.y);
+    const i = levels.findIndex(l => Math.abs(l - (p.y || 0)) < 0.02);
+    const j = i + dir;
+    if (i < 0 || j < 0 || j >= levels.length) return false;
+    p.y = levels[j];
+    this.mountPlaced(o, p);
+    this.updateBlob(o);
+    if (this.selBox) this.selBox.update();
+    return true;
+  }
+  levelInfo(uid) {
+    const o = this.objByUid?.[uid], p = o?.userData.p;
+    const sup = p?.on != null && this.objByUid?.[p.on];
+    if (!sup) return null;
+    const fb = this.boxOf(o);
+    const levels = this.stackLevels(sup, fb.max.y - fb.min.y);
+    return { count: levels.length, index: levels.findIndex(l => Math.abs(l - (p.y || 0)) < 0.02) };
   }
   // 新しく置いた物が重なっていたら、近くの空いている所をさがす。見つからなければ false
   findFreeSpot(o) {
@@ -768,7 +833,7 @@ export class Room3D {
     }
     // 小物：テーブルや棚の上
     if (Room3D.canStack(item) && !Room3D.isSupport(item)) {
-      for (const s of byGenre('table', 'storage')) { const c = centerOf(s); out.push({ x: c.x, z: c.z, rot: s.userData.p.rot || 0 }, { x: c.x + 0.2, z: c.z, rot: s.userData.p.rot || 0 }, { x: c.x - 0.2, z: c.z, rot: s.userData.p.rot || 0 }); }
+      for (const s of byGenre('table', 'storage')) { const c = centerOf(s), rr = s.userData.p.rot || 0; for (const [dx, dz] of [[0, 0], [0.22, 0], [-0.22, 0], [0, 0.22], [0, -0.22], [0.3, 0], [-0.3, 0], [0, 0.3], [0, -0.3]]) out.push({ x: c.x + dx, z: c.z + dz, rot: rr }); }
       out.push(...designed);
     }
     if (g === 'table') {
