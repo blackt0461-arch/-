@@ -1251,6 +1251,9 @@ export class Room3D {
     // 床
     const floor = new THREE.Mesh(new THREE.PlaneGeometry(RW, RD), fitMaterial(floorM, RW, RD));
     floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; g.add(floor);
+    // 床の下に、壁の外までひとまわり大きい床をもう1枚。ドアの下（壁の厚み）などのすき間から、外の芝生が見えないように
+    const under = new THREE.Mesh(new THREE.PlaneGeometry(RW + 1.2, RD + 1.2), fitMaterial(floorM, RW + 1.2, RD + 1.2));
+    under.rotation.x = -Math.PI / 2; under.position.y = -0.004; under.receiveShadow = true; g.add(under);
     // 天井（屋根裏は、途中から斜めに下がる）
     if (!sh.slope) box(RW + 0.4, WALL_T, RD + 0.4, 0, H + WALL_T / 2, 0, ceilM, RW, RD);
     else this.makeSlope(g, ceilM);
@@ -1340,6 +1343,10 @@ export class Room3D {
     const back = new THREE.Mesh(new THREE.BoxGeometry(sh.door.w + 0.02, sh.door.h + 0.02, WALL_T - 0.07), new THREE.MeshStandardMaterial({ color: '#2b2622', roughness: 0.9 }));
     back.position.set(0, (sh.door.h + 0.02) / 2 - 0.01, -0.07 - (WALL_T - 0.07) / 2);
     dg.add(back);
+    // ドアの下の敷居（壁の厚みの床。木の板）
+    const sill = new THREE.Mesh(new THREE.BoxGeometry(sh.door.w + 0.06, 0.018, WALL_T + 0.04), new THREE.MeshStandardMaterial({ color: '#6b5440', roughness: 0.6 }));
+    sill.position.set(0, 0.009, -WALL_T / 2); sill.receiveShadow = true;
+    dg.add(sill);
     dg.traverse(o => { if (o.isMesh) o.userData.door = true; });
     putOnWall(dg, dseg, sh.door.a);
     this.door = dg;
