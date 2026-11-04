@@ -188,9 +188,15 @@ function halfSheet(title, items) {
   if (!app.querySelector('.home')) showHome();
   closeSheets();
   const el = sheet(`
-    <h3 class="hs-title">${title}</h3>
+    <div class="hs-top"><h3 class="hs-title">${title}</h3><button class="hs-close" aria-label="部屋にもどる">${icon('x')}</button></div>
     <div class="hgrid">${items.map((x, i) => `<button class="hc ${x.hot ? 'hot' : ''}" data-i="${i}">${icon(x.ic)}<b>${x.name}</b>${x.sub ? `<small>${x.sub}</small>` : ''}${x.dot ? '<i class="dot"></i>' : ''}</button>`).join('')}</div>`, 'half-sheet');
   el.querySelectorAll('.hc').forEach(b => b.onclick = () => { el.remove(); items[+b.dataset.i].go(); });
+  el.querySelector('.hs-close').onclick = () => el.remove();
+  // 上の部屋のところをタップしても、とじて部屋にもどる
+  setTimeout(() => {
+    const away = (e) => { if (!el.isConnected) return document.removeEventListener('pointerdown', away, true); if (!el.contains(e.target) && !e.target.closest('.hotbar')) { el.remove(); document.removeEventListener('pointerdown', away, true); } };
+    document.addEventListener('pointerdown', away, true);
+  });
   return el;
 }
 function halfFurniture() {
@@ -331,6 +337,7 @@ function doPull(roll, cost, bannerId) {
     else S.own(r.item.id);
   }
   S.save();
+  try { Sync.push?.(true); } catch (e) { /* オフライン。あとで保存される */ } // 演出のとちゅうで閉じても、引いた結果は残るように
   const kind = cost.ticket5 ? 'ticket5' : cost.ticket4 ? 'ticket4' : 'ticket';
   playPull(res, bannerId, kind, () => doPull(roll, cost, bannerId));
 }
@@ -472,7 +479,6 @@ function showHome() {
       <div class="side-tools">
         <button class="round photo" aria-label="写真をとる">${icon('camera')}</button>
       </div>
-      <div class="hint">なぞると見回す・床をタップで歩く・ドアで別の部屋へ</div>
     </div>`);
   el.querySelector('.photo').onclick = photoMode;
   el.querySelector('.rankchip').onclick = showRankRoad;
@@ -910,12 +916,16 @@ function onSelectItem(uid) {
     <div class="float-bar">
       <span class="fb-name">${esc(it.name)}</span>
       ${it.place !== 'wall' ? `<button class="rot">${icon('rotate')}回す</button>` : ''}
+      ${room3d.levelInfo(uid)?.count > 1 ? `<button class="lvup">上の段</button><button class="lvdn">下の段</button>` : ''}
       <button class="swap">${icon('refresh')}入れかえ</button>
       <button class="store">${icon('box')}しまう</button>
       <button class="x" aria-label="選ぶのをやめる">${icon('x')}</button>
     </div>`);
   fb.querySelector('.rot')?.addEventListener('click', () => room3d.rotateSelected());
   fb.querySelector('.swap').onclick = () => showSwap(uid);
+  const lv = (dir) => { if (room3d.moveLevel(uid, dir)) { S.save(); vibrate(10); } else toast(dir > 0 ? 'これより上の段はありません' : 'これより下の段はありません', 1400); };
+  fb.querySelector('.lvup')?.addEventListener('click', () => lv(1));
+  fb.querySelector('.lvdn')?.addEventListener('click', () => lv(-1));
   fb.querySelector('.store').onclick = () => {
     const r = curRoom();
     const riders = r.placed.filter(x => x.on === uid).map(x => x.uid);
@@ -1076,9 +1086,15 @@ async function latestVersion() {
   try { return await (await fetch('version.json', { cache: 'no-store' })).json(); } catch (e) { return null; }
 }
 let restarting = false;
-function forceRestart(info) {
+function forceRestart(info, waited = 0) {
   const ver = info.version;
   if (restarting) return;
+  // ガチャの演出・問題の答えのとちゅう・ログボの画面では、終わるまで待つ（最大2分）。記録はもう保存してある
+  if (waited < 120000 && document.querySelector('.pfx, .quiz, .lb-screen, .photo-ui')) {
+    clearTimeout(forceRestart.t);
+    forceRestart.t = setTimeout(() => forceRestart(info, waited + 3000), 3000);
+    return;
+  }
   // 同じ版で何度も再起動をくり返さない（読みこみ直しても古いままのときの安全装置。3回まで）
   const key = 'studyroom.restart.' + ver;
   const n = +(sessionStorage.getItem(key) || 0);
