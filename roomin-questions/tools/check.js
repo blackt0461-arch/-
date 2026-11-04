@@ -77,7 +77,7 @@ for (const f of walk(DATA)) {
     const blob = [q.text, q.explain, ...(q.choices || [])].join('\n');
     for (const r of BAD) if (r.test(blob)) err(f, i, 'LaTeX/Markdown らしき文字: ' + r);
     if (/正しくない|誤っている|あてはまらない|適当でない/.test(q.text || '')) neg++;
-    const key = (q.text || '').replace(/\s/g, '');
+    const key = (q.text || '').replace(/\s/g, '') + '|' + [...(q.choices || [])].sort().join('|');
     if (seenText.has(key)) err(f, i, '同じ問題文が ' + seenText.get(key) + ' にもある');
     else seenText.set(key, path.relative(ROOT, f) + ' #' + (i + 1));
     all.push(q);
