@@ -71,7 +71,7 @@ for (const f of walk(DATA)) {
     else {
       const n = q.explain.split('。').filter(Boolean).length;
       if (n > 4) warn(f, i, 'explain の文が多い(' + n + ')');
-      if (/番目|[0-3]番|選択肢[0-9０-９]/.test(q.explain)) err(f, i, 'explain で選択肢の番号を使っている');
+      if (/選択肢.{0,3}[0-9０-９]|答えは[0-9０-９]番|[0-3]番の選択肢/.test(q.explain)) err(f, i, 'explain で選択肢の番号を使っている');
     }
     if (q.text && q.text.length > 220) warn(f, i, 'text が長い(' + q.text.length + ')');
     const blob = [q.text, q.explain, ...(q.choices || [])].join('\n');

@@ -14,6 +14,7 @@ ROOMIN（study-room）用に作った4択問題の置き場です。**アプリ�
   "level": 1, "text": "…", "choices": ["…","…","…","…"], "answer": 0, "explain": "…。" }
 ```
 
+- 下書きは `src/*.txt`（1行1問の短い書き方）。`node roomin-questions/tools/build.js` で `data/` の JSON を作り直す。直すときは src を直して build する（data を直接直すと、次の build で消える）。
 - 確かめ: `node roomin-questions/tools/check.js`（形・選択肢4つ・answer の範囲・LaTeX/Markdown なし・genre 名・同じ問題文の重複を見る。`-v` で注意も表示）
 - 1本にまとめる: `node roomin-questions/tools/check.js --merge` → `roomin-questions/dist/all.json`
 
