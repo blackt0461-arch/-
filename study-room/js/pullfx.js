@@ -53,15 +53,15 @@ export function playPullFX(res, opt) {
       <p class="bp-msg"></p>
     </div>
     <div class="pfx-flash"></div>
-    <div class="pfx-cards ${ten ? 'ten' : 'one'} hide"></div>
-    <div class="pfx-btns hide"><button class="btn ghost again">もう一度</button><button class="btn gold ok">OK</button></div>`;
+`;
   document.body.append(ov);
   requestAnimationFrame(() => ov.classList.add('show'));
 
   // 線を描くあいだ、出てくる家具の絵を先に用意しておく
   const artP = new Map();
   const getArt = (item) => { if (!artP.has(item.id)) artP.set(item.id, blueprintArt(item)); return artP.get(item.id); };
-  if (!ten) getArt(res[0].item);
+  res.forEach(r => getArt(r.item));
+  const artWithin = (item, ms) => Promise.race([getArt(item), new Promise(z => setTimeout(() => z(null), skipped ? 0 : ms))]);
 
   // ---- 光の粒（canvas） ----
   const cv = ov.querySelector('.pfx-cv'), cx = cv.getContext('2d');
@@ -142,11 +142,10 @@ export function playPullFX(res, opt) {
     await wait(150);
     vibrate([30, 30, 50]);
     await wait(650);
+    // ---- ② 注文書が上へ消えるのと同時に、設計図が広がる ----
     od.classList.add('out');
-    await wait(300);
-    od.remove();
-    // ---- ② 設計図が広がる ----
     bp.classList.add('on');
+    setTimeout(() => od.remove(), 400);
     await wait(700);
     if (!ten) await single(res[0], steps);
     else {
@@ -191,7 +190,7 @@ export function playPullFX(res, opt) {
     const g = lc.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0);
     msg.textContent = '製図中…';
     let art = null;
-    if (!skipped) art = await Promise.race([getArt(it), new Promise(z => setTimeout(() => z(null), 2600))]);
+    if (!skipped) art = await artWithin(it, 6000);
     msg.textContent = '';
     // ③ 線を描く
     let bounds = { x0: 0.2, y0: 0.2, x1: 0.8, y1: 0.8 };
@@ -227,12 +226,13 @@ export function playPullFX(res, opt) {
       }
       if (art.url) real.src = art.url;
     } else {
-      // 線が作れないときは、絵のふちどりで代わりにする
-      ghost.innerHTML = thumbHTML(it); hydrateThumbs(ghost);
-      bp.classList.add('ghosted');
-      await wait(1300 * slow);
+      // 線が作れないとき（着せ替えなど）は、色が変わる演出だけにして、そのまま絵を見せる
       for (let s = 1; s < cols.length; s++) { await wait(400); setColor(cols[s]); flash(0.45); vibrate(40); }
-      const im = ghost.querySelector('img'); if (im) real.src = im.src;
+      ghost.innerHTML = thumbHTML(it); hydrateThumbs(ghost);
+      const im = ghost.querySelector('img');
+      if (im && !im.classList.contains('thumb-wait')) real.src = im.src;
+      else { const { renderThumb } = await import('./thumbs.js'); const u = await Promise.race([renderThumb(it), new Promise(z => setTimeout(() => z(null), skipped ? 0 : 3000))]); if (u) real.src = u; }
+      ghost.innerHTML = '';
     }
     // ④ 寸法
     if (art && art.dims) {
@@ -264,30 +264,63 @@ export function playPullFX(res, opt) {
     fast = false;
   }
 
-  // 10連：1枚の紙に10この図面
+  // 10連：1枚の紙に10この図面。1つずつ線で描いて、まとめて本物に
   async function grid() {
     bp.classList.remove('one');
     bp.classList.add('ten');
     setColor(steps[0]);
     const gd = bp.querySelector('.bp-grid');
-    gd.innerHTML = res.map((r, i) => `<div class="bg-c r${r.rarity}" style="--cc:${COL[r.rarity]}"><span class="bg-in">${thumbHTML(r.item)}</span><i>${'★'.repeat(r.rarity)}</i></div>`).join('');
-    hydrateThumbs(gd);
-    const cells = [...gd.querySelectorAll('.bg-c')];
-    // 昇格のときは、さいしょ全部を青で描く
-    if (steps.length > 1) cells.forEach(c => c.style.setProperty('--draw', COL[3]));
-    for (const c of cells) { c.classList.add('draw'); vibrate(5); await wait(150); }
-    await wait(400);
+    gd.innerHTML = res.map(r => `<div class="bg-c r${r.rarity}" style="--cc:${COL[r.rarity]}"><canvas></canvas><img class="bg-real" alt=""><i>${'★'.repeat(r.rarity)}</i></div>`).join('');
+    const cells = [...gd.querySelectorAll('.bg-c')].map((el, i) => ({ el, r: res[i], cv: el.querySelector('canvas'), img: el.querySelector('.bg-real'), segs: null }));
+    const paint = (c, color, k = 1) => {
+      const R = c.cv.getBoundingClientRect();
+      if (c.cv.width !== Math.round(R.width * dpr)) { c.cv.width = Math.round(R.width * dpr); c.cv.height = Math.round(R.height * dpr); }
+      const g = c.cv.getContext('2d');
+      g.setTransform(dpr, 0, 0, dpr, 0, 0);
+      g.clearRect(0, 0, R.width, R.height);
+      if (!c.segs) return;
+      // 図面のマスは縦長なので、正方形の絵を真ん中に
+      const sz = Math.min(R.width, R.height), ox = (R.width - sz) / 2, oy = (R.height - sz) / 2;
+      g.strokeStyle = color; g.lineWidth = 0.9; g.lineCap = 'round'; g.shadowColor = color; g.shadowBlur = 3;
+      g.beginPath();
+      const n = Math.floor(c.segs.length * k);
+      for (let j = 0; j < n; j++) { const q = c.segs[j]; g.moveTo(ox + q[0] * sz, oy + q[1] * sz); g.lineTo(ox + q[2] * sz, oy + q[3] * sz); }
+      g.stroke();
+    };
+    const colOf = (c, upto) => COL[Math.min(c.r.rarity, upto)];
+    // 1つずつ描く（線の準備が間に合わない物は、あとで本物になる）
+    for (const c of cells) {
+      const art = await artWithin(c.r.item, 1500);
+      if (art && art.segs) {
+        c.segs = art.segs.slice().sort((p, q) => Math.min(p[1], p[3]) - Math.min(q[1], q[3]));
+        c.url = art.url;
+        const t0 = performance.now(), dur = 260;
+        await new Promise(z => { const f = () => { const k = (skipped || fast) ? 1 : Math.min(1, (performance.now() - t0) / dur); paint(c, colOf(c, steps[0]), k); if (k >= 1) z(); else requestAnimationFrame(f); }; f(); });
+      } else c.el.classList.add('wait');
+      c.el.classList.add('draw');
+      vibrate(5);
+    }
+    fast = false;
+    await wait(350);
+    // 昇格：レア度の高いマスから色が変わる
     for (let s = 1; s < steps.length; s++) {
       setColor(steps[s]); flash(0.4); vibrate(40);
-      cells.forEach(c => { const rr = +c.className.match(/r(\d)/)[1]; if (rr >= steps[s]) c.style.removeProperty('--draw'); });
+      cells.forEach(c => paint(c, colOf(c, steps[s])));
       await wait(600);
     }
-    cells.forEach(c => c.style.removeProperty('--draw'));
     setColor(top);
-    await wait(300);
+    // 本物の絵を用意（線が作れなかった物は小さな絵で）
+    const { renderThumb } = await import('./thumbs.js');
+    await Promise.all(cells.map(async c => {
+      let u = c.url;
+      if (!u) { const a2 = await artWithin(c.r.item, 2500); u = a2?.url || null; }
+      if (!u) u = await Promise.race([renderThumb(c.r.item), new Promise(z => setTimeout(() => z(null), skipped ? 0 : 2500))]);
+      if (!u) { const tmp = document.createElement('div'); tmp.innerHTML = thumbHTML(c.r.item); const im = tmp.querySelector('img'); if (im && !im.classList.contains('thumb-wait')) u = im.src; }
+      if (u) c.img.src = u;
+    }));
     bp.classList.add('real');
     vibrate(top >= 4 ? [30, 40, 70] : 20);
-    cells.forEach((c, i) => setTimeout(() => c.classList.add('real'), skipped ? 0 : 120 + Math.floor(i / 5) * 350));
+    cells.forEach((c, i) => setTimeout(() => c.el.classList.add('real'), skipped ? 0 : 120 + Math.floor(i / 5) * 350));
     await wait(1100);
     if (top >= 4) { flash(top === 5 ? 0.5 : 0.3); burst(innerWidth / 2, innerHeight * 0.42, COL[top], top === 5 ? 160 : 80, 9); }
     await wait(700);
@@ -295,6 +328,10 @@ export function playPullFX(res, opt) {
   }
 
   async function showCards() {
+    ov.insertAdjacentHTML('beforeend', `<div class="pfx-cards ${ten ? 'ten' : 'one'} hide"></div>
+    <div class="pfx-btns hide"><button class="btn ghost again">もう一度</button><button class="btn gold ok">OK</button></div>`);
+    ov.querySelector('.ok').onclick = () => close(false);
+    ov.querySelector('.again').onclick = () => close(true);
     const box = ov.querySelector('.pfx-cards');
     box.innerHTML = res.map((r, i) => `
       <div class="pc r${r.rarity}" data-i="${i}">
@@ -309,6 +346,11 @@ export function playPullFX(res, opt) {
         </div>
       </div>`).join('');
     hydrateThumbs(box);
+    // 設計図で描いた絵があれば、カードにもすぐ使う
+    box.querySelectorAll('.pc').forEach((c, i) => getArt(res[i].item).then(a => {
+      const im = c.querySelector('img.thumb-wait');
+      if (a?.url && im) { im.src = a.url; im.classList.remove('thumb-wait'); }
+    }));
     box.classList.remove('hide');
     const cards = [...box.querySelectorAll('.pc')];
     cards.forEach((c, i) => { c.style.animationDelay = (i * 0.05) + 's'; c.classList.add('deal'); });
@@ -335,6 +377,5 @@ export function playPullFX(res, opt) {
   }
 
   const close = (again) => { alive = false; removeEventListener('resize', fit); ov.remove(); onDone && onDone(again); };
-  ov.querySelector('.ok').onclick = () => close(false);
-  ov.querySelector('.again').onclick = () => close(true);
+
 }

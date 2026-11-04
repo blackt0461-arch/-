@@ -824,13 +824,15 @@ h3.sec { font-size: 14px; color: var(--muted); margin: 18px 4px 8px; font-weight
 .bp-tb span:nth-last-child(-n+2) { border-bottom: 0; }
 .bp-msg { position: absolute; left: 0; right: 0; top: 40%; text-align: center; margin: 0; color: rgba(205,232,255,.75); font-size: 13px; letter-spacing: .2em; }
 .bp-grid { position: absolute; left: 50%; top: 42%; transform: translate(-50%, -50%); width: min(92vw, 480px); display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px 6px; }
-.bg-c { --draw: var(--cc); position: relative; aspect-ratio: .8; border: 1px solid rgba(127,211,255,.3); border-radius: 4px; background: rgba(13,26,46,.6); transition: background .4s, border-color .4s; }
-.bg-c .bg-in { position: absolute; inset: 8%; opacity: 0; }
-.bg-c .bg-in img { width: 100%; height: 100%; object-fit: contain; filter: brightness(0) drop-shadow(0 0 1px var(--draw)) drop-shadow(0 0 1px var(--draw)) drop-shadow(0 0 2px var(--draw)); transition: filter .4s; }
-.bg-c.draw .bg-in { opacity: 1; animation: ghostIn .5s ease-out both; }
+.bg-c { position: relative; aspect-ratio: .8; border: 1px solid rgba(127,211,255,.3); border-radius: 4px; background: rgba(13,26,46,.6); transition: background .4s, border-color .4s; }
+.bg-c canvas { position: absolute; inset: 6%; width: 88%; height: 88%; transition: clip-path .7s ease-in-out; clip-path: inset(0 0 0 0); }
+.bg-c .bg-real { position: absolute; inset: 6%; width: 88%; height: 88%; object-fit: contain; clip-path: inset(0 0 100% 0); transition: clip-path .7s ease-in-out; }
+.bg-c.wait::after { content: "？"; position: absolute; inset: 0; display: grid; place-items: center; color: rgba(205,232,255,.45); font-size: 18px; }
+.bg-c.real::after { display: none; }
 .bg-c.real { background: color-mix(in srgb, var(--cc) 18%, rgba(13,26,46,.8)); border-color: var(--cc); }
-.bg-c.real .bg-in img { filter: none; }
+.bg-c.real canvas { clip-path: inset(100% 0 0 0); }
+.bg-c.real .bg-real { clip-path: inset(0 0 0 0); }
 .bg-c i { position: absolute; left: 0; right: 0; bottom: -16px; text-align: center; font-style: normal; font-size: 9px; color: var(--cc); opacity: 0; transition: opacity .3s; }
 .bg-c.real i { opacity: 1; }
 .bp.ten .bp-tb { opacity: .7; }
-.bg-c .bg-in img.thumb-wait, .bp-ghost img.thumb-wait { filter: none; opacity: .5; }
+.bp-ghost { display: none !important; }
