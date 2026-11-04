@@ -23,3 +23,7 @@
 - ユーザーが「許可」「OK」などと言ったら、`node study-room-beta/tools/release/release.js` で本番に写し、プルリクエスト → main にマージ → 本番に出る。
 - テスト版：https://blackt0461-arch.github.io/-/study-room-beta/ ／ 本番：https://blackt0461-arch.github.io/-/study-room/
 - くわしくは study-room-beta/SPEC.md の「23. 新しい版の出し方」。
+
+## ROOMIN の問題バンク（roomin-questions/）
+
+`roomin-questions/` に、指示書（INSTRUCTIONS.md）どおりに作った4択問題が教科・ジャンル・単元ごとに入っている（アプリにはまだ組みこんでいない）。組みこむ前に roomin-questions/README.md を読むこと。
