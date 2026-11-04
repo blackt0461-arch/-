@@ -1,0 +1,204 @@
+# 英語：文法
+@ english ;; 文法 ;; 時制 ;; hs1
+1 ;; (　)に入る語句を選べ。\nHe usually (　) to school by bus. ;; *goes ;; go ;; gone ;; going ;; usually は習慣を表すので現在形。主語が三人称単数なので goes。
+1 ;; (　)に入る語句を選べ。\nLook! The baby (　). ;; *is sleeping ;; sleeps ;; slept ;; has slept ;; Look! は「今まさに」起きていることを示すので現在進行形。
+1 ;; (　)に入る語句を選べ。\nI (　) a movie with my friends yesterday. ;; *saw ;; see ;; have seen ;; seen ;; yesterday のような過去を表す語があるときは過去形。現在完了は yesterday といっしょに使えない。
+1 ;; (　)に入る語句を選べ。\nI (　) in Osaka since 2020. ;; *have lived ;; live ;; lived ;; am living ;; since 2020（2020年から今まで）は継続を表すので現在完了形。
+1 ;; (　)に入る語句を選べ。\n(　) you ever been to Kyoto? ;; *Have ;; Did ;; Are ;; Do ;; been と ever があるので「行ったことがありますか」という経験の現在完了。疑問文は Have を前に出す。
+1 ;; (　)に入る語句を選べ。\nWhen I came home, my mother (　) dinner. ;; *was cooking ;; is cooking ;; cooks ;; has cooked ;; 帰ったとき（過去のある時点）に進行中だった動作なので過去進行形。
+2 ;; (　)に入る語句を選べ。\nI will call you when he (　) home. ;; *comes ;; will come ;; came ;; coming ;; 時や条件を表す副詞節（when 〜、if 〜）の中では、未来のことも現在形で表す。
+2 ;; (　)に入る語句を選べ。\nI had already finished my homework when she (　). ;; *came ;; has come ;; comes ;; had come ;; 宿題を終えたのは彼女が来た時点より前なので過去完了。来たこと自体は過去形で表す。
+2 ;; (　)に入る語句を選べ。\nI (　) here for three hours. I'm tired of waiting. ;; *have been waiting ;; am waiting ;; was waiting ;; waited ;; 3時間前から今までずっと待っている動作の継続なので、現在完了進行形。
+2 ;; (　)に入る語句を選べ。\nBy the time you arrive, we (　) the work. ;; *will have finished ;; have finished ;; finished ;; had finished ;; 未来のある時点（あなたが着くとき）までに完了していることは未来完了形で表す。
+2 ;; (　)に入る語句を選べ。\nShe lost the key that she (　) the day before. ;; *had bought ;; has bought ;; buys ;; was buying ;; 買ったのは失くした（過去）よりさらに前なので過去完了（大過去）。
+2 ;; (　)に入る語句を選べ。\nI don't know if it (　) tomorrow. ;; *will rain ;; rains ;; rained ;; has rained ;; この if は「〜かどうか」の名詞節で、know の目的語。名詞節では未来のことは will を使う。
+3 ;; (　)に入る語句を選べ。\nIt (　) for a week before it finally stopped. ;; *had been raining ;; has been raining ;; is raining ;; will have rained ;; やんだ（過去）時点まで1週間続いていた動作なので、過去完了進行形。
+3 ;; (　)に入る語句を選べ。\nTen years (　) since we first met. ;; *have passed ;; are passing ;; will pass ;; had been passed ;; since 〜 があり、今までに10年たったので現在完了形。pass は自動詞なので受け身にしない。
+3 ;; (　)に入る語句を選べ。\nI (　) him for ten years. ;; *have known ;; have been knowing ;; am knowing ;; know ;; know は状態を表す動詞なので進行形にしない。継続は現在完了で表す。
+
+@ english ;; 文法 ;; 助動詞 ;; hs1
+1 ;; (　)に入る語句を選べ。\nYou (　) wear a seatbelt in the car. It's the law. ;; *must ;; may ;; might ;; need not ;; 法律で決まっている義務なので must（〜しなければならない）。
+1 ;; (　)に入る語句を選べ。\n"(　) I open the window?" "Sure, go ahead." ;; *May ;; Must ;; Need ;; Would ;; May I 〜? は「〜してもよいですか」と許可を求める表現。
+1 ;; (　)に入る語句を選べ。\nShe will (　) swim next year. ;; *be able to ;; can ;; could ;; able to ;; 助動詞を2つ並べて will can とはいえないので、can のかわりに be able to を使う。
+1 ;; (　)に入る語句を選べ。\nYou (　) not to eat too much. ;; *ought ;; should ;; must ;; had better ;; ought to の否定は ought not to。should・must・had better のあとに to はつかない。
+1 ;; You don't have to come. の意味として正しいものを選べ。 ;; *あなたは来る必要はない ;; あなたは来てはいけない ;; あなたは来るべきだ ;; あなたは来るかもしれない ;; don't have to は「〜する必要はない」。「〜してはいけない」は must not。
+1 ;; (　)に入る語句を選べ。\nIt (　) rain this afternoon. Take an umbrella just in case. ;; *may ;; must not ;; need not ;; has to ;; 「〜かもしれない」という推量の may。念のためかさを持っていく、という流れに合う。
+2 ;; (　)に入る語句を選べ。\nHe (　) have been at the party last night. He was with me all evening. ;; *can't ;; must ;; should ;; may ;; can't have 過去分詞で「〜したはずがない」。一晩中自分といたので、パーティーにいたはずがない。
+2 ;; (　)に入る語句を選べ。\nYou (　) have told me the truth yesterday. Why did you lie? ;; *should ;; must ;; can ;; will ;; should have 過去分詞で「〜すべきだったのに（しなかった）」。must have なら「〜したにちがいない」で文脈に合わない。
+2 ;; (　)に入る語句を選べ。\nI would rather (　) at home today. ;; *stay ;; to stay ;; staying ;; stayed ;; would rather のあとは動詞の原形で「むしろ〜したい」。
+2 ;; (　)に入る語句を選べ。\nYou had better (　) a doctor. ;; *see ;; to see ;; seeing ;; seen ;; had better のあとは動詞の原形。「〜したほうがよい」。
+2 ;; (　)に入る語句を選べ。\nHe used to (　) tennis every Sunday. ;; *play ;; playing ;; played ;; plays ;; used to 動詞の原形で「以前はよく〜した」。be used to 〜ing（〜に慣れている）と区別する。
+2 ;; (　)に入る語句を選べ。\nShe must (　) tired after the long trip. ;; *be ;; being ;; to be ;; been ;; 助動詞のあとは原形。must be で「〜にちがいない」。
+3 ;; You need not have hurried. の意味として正しいものを選べ。 ;; *急ぐ必要はなかったのに（実際は急いだ） ;; 急いではいけなかった ;; 急いだにちがいない ;; 急いだかもしれない ;; need not have 過去分詞は「〜する必要はなかったのに（してしまった）」。
+3 ;; (　)に入る語句を選べ。\nI suggested that he (　) a rest. ;; *take ;; took ;; taking ;; to take ;; suggest（提案する）に続く that 節では、(should) 動詞の原形を使う。
+3 ;; He may well be angry. の意味として正しいものを選べ。 ;; *彼が怒るのももっともだ ;; 彼は怒ってもよい ;; 彼は怒ったほうがよい ;; 彼は怒ったにちがいない ;; may well 〜 は「〜するのももっともだ」「たぶん〜だろう」。may as well（〜したほうがよい）と区別する。
+
+@ english ;; 文法 ;; 受動態 ;; hs1
+1 ;; (　)に入る語句を選べ。\nThis room (　) every day. ;; *is cleaned ;; cleans ;; is cleaning ;; cleaned ;; 部屋は「そうじされる」側なので受動態 be 動詞＋過去分詞。
+1 ;; (　)に入る語句を選べ。\nThis novel was written (　) Soseki. ;; *by ;; with ;; from ;; of ;; 受動態で「〜によって」と動作をする人を表すのは by。
+1 ;; (　)に入る語句を選べ。\nEnglish (　) in many countries. ;; *is spoken ;; speaks ;; spoke ;; is speaking ;; 英語は「話される」ので受動態。
+1 ;; (　)に入る語句を選べ。\nThe bridge (　) last year. ;; *was built ;; is built ;; built ;; has built ;; last year なので過去の受動態 was built。
+1 ;; (　)に入る語句を選べ。\n(　) this letter written by Ken? ;; *Was ;; Did ;; Has ;; Does ;; 受動態の疑問文は be 動詞を前に出す。written があるので Did は使えない。
+1 ;; (　)に入る語句を選べ。\nI am interested (　) science. ;; *in ;; at ;; with ;; by ;; be interested in 〜 で「〜に興味がある」。by 以外の前置詞をとる受動態の形として覚える。
+2 ;; (　)に入る語句を選べ。\nThe work must (　) by tomorrow. ;; *be finished ;; finish ;; finished ;; be finishing ;; 助動詞のある受動態は 助動詞＋be＋過去分詞。
+2 ;; (　)に入る語句を選べ。\nThe house (　) now. ;; *is being painted ;; is painting ;; is painted ;; has painted ;; 「今ぬられているところ」は進行形の受動態 be being 過去分詞。
+2 ;; (　)に入る語句を選べ。\nA new station (　) here next year. ;; *will be built ;; will build ;; is building ;; has built ;; 未来の受動態は will be 過去分詞。駅は「建てられる」側。
+2 ;; (　)に入る語句を選べ。\nI was spoken (　) by a stranger. ;; *to ;; with ;; at ;; for ;; speak to 〜（〜に話しかける）を受動態にすると be spoken to by 〜。to を落とさない。
+2 ;; (　)に入る語句を選べ。\nHe was made (　) for an hour. ;; *to wait ;; wait ;; waiting ;; waited ;; make 人 動詞の原形 を受動態にすると、原形が to 不定詞に変わる。
+2 ;; (　)に入る語句を選べ。\nThe letter has just (　). ;; *been delivered ;; delivered ;; being delivered ;; be delivered ;; 現在完了の受動態は have been 過去分詞。手紙は「配達される」側。
+3 ;; It is said that he is rich. とほぼ同じ意味になるように、(　)に入る語句を選べ。\nHe is said (　) rich. ;; *to be ;; being ;; be ;; that he is ;; It is said that 〜 は、主語を前に出して be said to 〜 と書きかえられる。
+3 ;; (　)に入る語句を選べ。\nHe is said (　) in Paris when he was young. ;; *to have lived ;; to live ;; living ;; having lived ;; 住んでいたのは「言われている」今より前なので、完了不定詞 to have 過去分詞を使う。
+3 ;; Who painted this picture? を受動態にしたものとして正しいものを選べ。 ;; *By whom was this picture painted? ;; Who was painted this picture? ;; Whom did this picture paint? ;; By who did this picture painted? ;; 疑問詞 who が主語の文を受動態にすると By whom を文頭に置き、was 主語 過去分詞 と続ける。
+
+@ english ;; 文法 ;; 不定詞と動名詞 ;; hs1
+1 ;; (　)に入る語句を選べ。\nI want (　) a doctor in the future. ;; *to be ;; being ;; be ;; been ;; want は to 不定詞を目的語にとる。want to be で「〜になりたい」。
+1 ;; (　)に入る語句を選べ。\nI enjoyed (　) with you. ;; *talking ;; to talk ;; talk ;; talked ;; enjoy は動名詞だけを目的語にとる。
+1 ;; (　)に入る語句を選べ。\nHe finished (　) the report. ;; *writing ;; to write ;; write ;; written ;; finish は動名詞だけを目的語にとる。enjoy・finish・stop・mind などは動名詞。
+1 ;; (　)に入る語句を選べ。\nI have a lot of homework (　) today. ;; *to do ;; doing ;; do ;; done ;; 「するべき宿題」と名詞を後ろから説明する、形容詞的用法の to 不定詞。
+1 ;; (　)に入る語句を選べ。\nI went to the library (　) some books. ;; *to borrow ;; borrowing ;; borrow ;; borrowed ;; 「〜するために」と目的を表す、副詞的用法の to 不定詞。
+1 ;; (　)に入る語句を選べ。\n(　) English is a lot of fun. ;; *Learning ;; Learn ;; Learned ;; Learns ;; 主語になるのは名詞の働きをする動名詞（または to 不定詞）。「英語を学ぶこと」。
+2 ;; (　)に入る語句を選べ。\nI'm looking forward to (　) you. ;; *seeing ;; see ;; saw ;; be seen ;; look forward to の to は前置詞なので、あとは動名詞。to のあとでも原形にしない。
+2 ;; (　)に入る語句を選べ。\nI decided (　) abroad. ;; *to study ;; studying ;; study ;; studied ;; decide は to 不定詞を目的語にとる。これから先のことを表す動詞は to 不定詞が多い。
+2 ;; (　)に入る語句を選べ。\nDon't forget (　) this letter on your way. ;; *to mail ;; mailing ;; mail ;; mailed ;; forget to 〜 は「（これから）〜するのを忘れる」。forget 〜ing は「（すでに）〜したことを忘れる」。
+2 ;; (　)に入る語句を選べ。\nI remember (　) him once at a party. ;; *meeting ;; to meet ;; meet ;; met ;; remember 〜ing は「（過去に）〜したことを覚えている」。remember to 〜 は「忘れずに〜する」。
+2 ;; (　)に入る語句を選べ。\nIt is kind of you (　) me. ;; *to help ;; helping ;; help ;; helped ;; It is 形容詞 of 人 to 〜 で「〜するとは（人は）…だ」。kind など人の性質を表す形容詞のときは of を使う。
+2 ;; (　)に入る語句を選べ。\nHe stopped (　) because it was bad for his health. ;; *smoking ;; to smoke ;; smoke ;; smoked ;; stop 〜ing は「〜するのをやめる」。stop to 〜 は「〜するために立ち止まる」。
+3 ;; (　)に入る語句を選べ。\nThis box is too heavy for me (　). ;; *to carry ;; to carry it ;; carrying ;; carry ;; too 〜 to … の文で、主語（this box）が carry の目的語にあたるので、it をつけない。
+3 ;; (　)に入る語句を選べ。\nHe seems (　) ill last week. ;; *to have been ;; to be ;; being ;; having been ;; 「見える」のは今、病気だったのは先週なので、完了不定詞 to have 過去分詞を使う。
+3 ;; (　)に入る語句を選べ。\nI'm used to (　) up early. ;; *getting ;; get ;; got ;; be got ;; be used to 〜ing で「〜することに慣れている」。used to 原形（以前は〜した）と区別する。
+
+@ english ;; 文法 ;; 分詞 ;; hs1
+1 ;; (　)に入る語句を選べ。\nLook at the (　) baby. ;; *sleeping ;; slept ;; sleep ;; sleeps ;; 「眠っている赤ちゃん」と名詞を前から説明するのは現在分詞。
+1 ;; (　)に入る語句を選べ。\nMy father bought a (　) car. ;; *used ;; using ;; use ;; uses ;; 車は「使われた」側なので過去分詞 used。used car で「中古車」。
+1 ;; (　)に入る語句を選べ。\nThe boy (　) under the tree is Ken. ;; *sitting ;; sat ;; sit ;; sits ;; 「木の下にすわっている少年」と、語句をつけて後ろから説明する現在分詞。
+1 ;; (　)に入る語句を選べ。\nThis is a book (　) by Soseki. ;; *written ;; writing ;; wrote ;; write ;; 本は「書かれた」側なので過去分詞。by 〜 がついて後ろから名詞を説明している。
+1 ;; (　)に入る語句を選べ。\nThe game was very (　). ;; *exciting ;; excited ;; excite ;; excites ;; 試合が人をわくわくさせる側なので exciting。人がわくわくしたときは excited。
+1 ;; (　)に入る語句を選べ。\nI was (　) at the news. ;; *surprised ;; surprising ;; surprise ;; to surprise ;; 人が「驚かされた」ので過去分詞 surprised。知らせのほうを説明するなら surprising。
+2 ;; (　)に入る語句を選べ。\nI had my bike (　) yesterday. ;; *repaired ;; repair ;; repairing ;; to repair ;; have 物 過去分詞 で「物を〜してもらう」。自転車は「修理される」側。
+2 ;; (　)に入る語句を選べ。\nI heard my name (　). ;; *called ;; call ;; calling ;; to call ;; 名前は「呼ばれる」側なので、hear 物 過去分詞。
+2 ;; (　)に入る語句を選べ。\n(　) the window, I saw a bird. ;; *Opening ;; Opened ;; To open ;; Open ;; 分詞構文。「窓を開けると」で、主語の I が開ける側なので現在分詞。
+2 ;; (　)に入る語句を選べ。\n(　) from the hill, the town looks beautiful. ;; *Seen ;; Seeing ;; To see ;; See ;; 主語の the town は「見られる」側なので、過去分詞で始まる分詞構文。
+2 ;; (　)に入る語句を選べ。\nHe sat (　) by his children. ;; *surrounded ;; surrounding ;; surround ;; to surround ;; 彼は子どもたちに「囲まれて」すわっていたので過去分詞。
+2 ;; (　)に入る語句を選べ。\nI'm sorry to have kept you (　). ;; *waiting ;; waited ;; wait ;; to wait ;; keep 人 〜ing で「人を〜させたままにする」。あなたが待っている側なので現在分詞。
+3 ;; (　)に入る語句を選べ。\n(　) nothing to do, I went to bed early. ;; *Having ;; Had ;; Have ;; To have ;; 「することがなかったので」と理由を表す分詞構文。As I had nothing to do を分詞にすると Having。
+3 ;; (　)に入る語句を選べ。\nHe listened to music with his eyes (　). ;; *closed ;; closing ;; close ;; to close ;; with 名詞 分詞 で付帯状況を表す。目は「閉じられた」状態なので過去分詞。
+3 ;; (　)に入る語句を選べ。\nWeather (　), we will go hiking tomorrow. ;; *permitting ;; permitted ;; permit ;; to permit ;; 分詞の前に意味上の主語がある独立分詞構文。「天気がよければ」という決まった言い方。
+
+@ english ;; 文法 ;; 比較 ;; hs1
+1 ;; (　)に入る語句を選べ。\nTom is (　) than Ken. ;; *taller ;; tall ;; tallest ;; more tall ;; than があるので比較級。tall の比較級は taller。
+1 ;; (　)に入る語句を選べ。\nThis is the (　) book of the three. ;; *most interesting ;; more interesting ;; interestinger ;; interesting ;; 3つの中で一番なので最上級。長い形容詞は most をつける。
+1 ;; (　)に入る語句を選べ。\nShe is as tall (　) her mother. ;; *as ;; than ;; so ;; to ;; as 〜 as … で「…と同じくらい〜」。
+1 ;; (　)に入る語句を選べ。\nThis is the (　) movie I have ever seen. ;; *best ;; better ;; good ;; most good ;; good の最上級は best。「今まで見た中で一番よい映画」。
+1 ;; (　)に入る語句を選べ。\nMt. Fuji is higher than (　) mountain in Japan. ;; *any other ;; all ;; other ;; any others ;; 比較級＋than any other 単数名詞 で、最上級と同じ意味になる。
+1 ;; (　)に入る語句を選べ。\nHe runs (　) than I. ;; *faster ;; fast ;; fastest ;; more fast ;; fast の比較級は faster。than I (do) と考える。
+2 ;; (　)に入る語句を選べ。\nThis bag is three times as (　) as that one. ;; *large ;; larger ;; largest ;; more large ;; 倍数 as 原級 as で「〜の…倍」。as と as の間は原級。
+2 ;; (　)に入る語句を選べ。\nThe (　) you practice, the better you become. ;; *more ;; much ;; most ;; many ;; the 比較級 〜, the 比較級 … で「〜すればするほど…」。
+2 ;; (　)に入る語句を選べ。\nNo other student in the class is (　) than Mary. ;; *taller ;; tall ;; tallest ;; as tall ;; No other 〜 is 比較級 than … で「…ほど〜な人はいない」＝最上級の意味。
+2 ;; (　)に入る語句を選べ。\nHe is the taller (　) the two. ;; *of ;; in ;; than ;; with ;; the 比較級 of the two で「2人のうちで〜な方」。2つのうちの一方なので the がつく。
+2 ;; (　)に入る語句を選べ。\nI have (　) books than you. ;; *fewer ;; less ;; little ;; few ;; books は数えられる名詞なので、数が少ないことは fewer で表す。less は数えられない名詞に使う。
+2 ;; (　)に入る語句を選べ。\nHe is not so much a teacher (　) a scholar. ;; *as ;; than ;; but ;; so ;; not so much A as B で「A というよりむしろ B」。
+3 ;; (　)に入る語句を選べ。\nThis plan is much (　) than that one. ;; *better ;; more good ;; very better ;; best ;; 比較級を強めるのは much や far。very は比較級を強められない。
+3 ;; He is no more a genius than I am. の意味として正しいものを選べ。 ;; *私と同じように、彼も天才などではない ;; 彼は私よりも天才だ ;; 彼は私ほど天才ではないが、少しは才能がある ;; 彼はもう天才ではない ;; no more A than B は「B と同じように A でない」。「私が天才でないのと同様に彼も天才ではない」という強い否定。
+3 ;; (　)に入る語句を選べ。\n(　) as 100 people came to the concert. ;; *As many ;; As much ;; So much ;; More ;; as many as 数 で「〜もの数の」と多さを強調する。people は数えられるので many。
+
+@ english ;; 文法 ;; 関係詞 ;; hs1
+1 ;; (　)に入る語句を選べ。\nI have a friend (　) lives in Tokyo. ;; *who ;; which ;; whose ;; whom ;; 先行詞が人（a friend）で、関係詞が lives の主語になるので who。
+1 ;; (　)に入る語句を選べ。\nThis is the book (　) I bought yesterday. ;; *which ;; who ;; whose ;; where ;; 先行詞が物（the book）で、bought の目的語になるので which（that も可、省略も可）。
+1 ;; (　)に入る語句を選べ。\nThe girl (　) hair is long is Aya. ;; *whose ;; who ;; which ;; whom ;; 「その子の髪が長い」と所有を表すので whose。
+1 ;; (　)に入る語句を選べ。\nThis is the house (　) I was born. ;; *where ;; which ;; when ;; what ;; 場所を表す先行詞で、I was born（文として完全）に続くので関係副詞 where。
+1 ;; (　)に入る語句を選べ。\nI still remember the day (　) we first met. ;; *when ;; where ;; which ;; what ;; 時を表す先行詞 the day に続けるので関係副詞 when。
+1 ;; (　)に入る語句を選べ。\n(　) he said is true. ;; *What ;; Which ;; That ;; Who ;; what は先行詞をふくむ関係代名詞で「〜こと・もの」。What he said で「彼が言ったこと」。
+2 ;; (　)に入る語句を選べ。\nThis is the town (　) I visited last year. ;; *which ;; where ;; when ;; what ;; visit は目的語が必要な他動詞で、関係詞がその目的語になるので which。場所でも where にはならない。
+2 ;; (　)に入る語句を選べ。\nHe said nothing, (　) made her angry. ;; *which ;; that ;; what ;; who ;; 前の文全体（何も言わなかったこと）を先行詞にする非制限用法の which。that はコンマのあとに使えない。
+2 ;; (　)に入る語句を選べ。\nTell me the reason (　) you were late. ;; *why ;; which ;; where ;; how ;; the reason に続けて理由を表すのは関係副詞 why。
+2 ;; (　)に入る語句を選べ。\nI have two sons, (　) are doctors. ;; *both of whom ;; both of them ;; both of who ;; both whom ;; 文をつなぐには関係代名詞が必要。前置詞のあとなので目的格の whom を使う。them では文がつながらない。
+2 ;; (　)に入る語句を選べ。\nYou can choose (　) you like. ;; *whatever ;; what if ;; however ;; whenever ;; whatever は「〜するものは何でも」。choose の目的語になっている。
+2 ;; (　)に入る語句を選べ。\n(　) comes first will get a prize. ;; *Whoever ;; Whatever ;; Whenever ;; However ;; Whoever は「〜する人はだれでも」。文全体の主語になっている。
+3 ;; (　)に入る語句を選べ。\nThis is the hotel (　) we stayed at last summer. ;; *which ;; where ;; in which ;; there ;; 文末に at があるので、関係詞は at の目的語。関係代名詞 which を使う。where を使うなら at はいらない。
+3 ;; (　)に入る語句を選べ。\nHe is not (　) he used to be. ;; *what ;; which ;; that ;; who ;; what he used to be で「以前の彼」。what は先行詞をふくむ関係代名詞。
+3 ;; (　)に入る語句を選べ。\nThe man (　) I thought was honest deceived me. ;; *who ;; whom ;; whose ;; which ;; I thought をはさんでいるが、関係詞は was の主語なので主格の who。
+
+@ english ;; 文法 ;; 仮定法 ;; hs2
+1 ;; (　)に入る語句を選べ。\nIf I (　) rich, I would buy a big house. ;; *were ;; am ;; will be ;; have been ;; 今の事実に反する仮定は仮定法過去。be 動詞はふつう were を使う。
+1 ;; (　)に入る語句を選べ。\nIf I had had enough money, I (　) the car. ;; *would have bought ;; would buy ;; will buy ;; had bought ;; 過去の事実に反する仮定は仮定法過去完了。主節は would have 過去分詞。
+1 ;; (　)に入る語句を選べ。\nI wish I (　) fly like a bird. ;; *could ;; can ;; will ;; am able ;; I wish のあとは仮定法で、今かなわない願望は過去形（could）。
+1 ;; (　)に入る語句を選べ。\nIf it (　) tomorrow, we will stay home. ;; *rains ;; will rain ;; rained ;; had rained ;; 実際に起こりうる条件なので仮定法ではない。条件の副詞節の中なので未来でも現在形。
+1 ;; (　)に入る語句を選べ。\nHe talks as if he (　) everything. ;; *knew ;; knows ;; has known ;; will know ;; as if 仮定法過去で「まるで〜であるかのように」。本当は知らない。
+1 ;; (　)に入る語句を選べ。\nI wish I (　) harder when I was young. ;; *had studied ;; studied ;; study ;; would study ;; 過去にかなわなかったことへの後悔は I wish 仮定法過去完了。
+2 ;; (　)に入る語句を選べ。\nWithout water, nothing (　) live. ;; *could ;; can ;; will ;; is able to ;; Without 〜 が「〜がなければ」と if 節のかわりをする仮定法過去。主節に could を使う。
+2 ;; (　)に入る語句を選べ。\nIf I had taken the medicine last night, I (　) well now. ;; *would be ;; would have been ;; will be ;; had been ;; if 節は過去（昨夜）、主節は今（now）の仮定なので、主節は仮定法過去 would be。
+2 ;; (　)に入る語句を選べ。\nIt's time you (　) to bed. ;; *went ;; go ;; will go ;; have gone ;; It's time 仮定法過去 で「もう〜する時間だ（なのにしていない）」。
+2 ;; (　)に入る語句を選べ。\nIf it (　) not been for your help, I would have failed. ;; *had ;; were ;; has ;; would ;; If it had not been for 〜 は「（あのとき）〜がなかったら」。仮定法過去完了。
+2 ;; (　)に入る語句を選べ。\n(　) I you, I would accept the offer. ;; *Were ;; Am ;; If ;; Was ;; If I were you の if を省略すると、were を前に出して Were I you となる。
+2 ;; (　)に入る語句を選べ。\nIf you should (　) him, please tell him to call me. ;; *see ;; saw ;; seeing ;; seen ;; If 主語 should 原形 は「万一〜したら」。should のあとは原形。
+3 ;; (　)に入る語句を選べ。\n(　) he been there, he would have helped us. ;; *Had ;; If ;; Has ;; Were ;; If he had been there の if を省略すると had が前に出る。
+3 ;; (　)に入る語句を選べ。\n(　) your advice, I would make a mistake. ;; *But for ;; Instead of ;; In spite of ;; Because of ;; But for 〜 は「〜がなければ」で、If it were not for と同じ意味。
+3 ;; (　)に入る語句を選べ。\nIf he had left home earlier, he (　) missed the train. ;; *would not have ;; will not have ;; would not ;; had not ;; 過去の事実に反する仮定なので、主節は would not have 過去分詞。
+
+# 英語：語彙・熟語
+@ english ;; 語彙・熟語 ;; 動詞を使った熟語 ;; hs1
+1 ;; look for の意味として正しいものを選べ。 ;; *〜を探す ;; 〜の世話をする ;; 〜を見上げる ;; 〜を楽しみにする ;; look for 〜 は「〜を探す」。look after は世話をする、look forward to は楽しみに待つ。
+1 ;; 「〜の世話をする」の意味を表す熟語はどれか。 ;; *look after ;; look for ;; look into ;; look over ;; look after 〜＝take care of 〜。look into は調べる。
+1 ;; give up の意味として正しいものを選べ。 ;; *あきらめる ;; 手渡す ;; 立ち上がる ;; 始める ;; give up は「あきらめる、やめる」。give up 〜ing の形でもよく使う。
+1 ;; (　)に入る語を選べ。\nIt's cold. Put (　) your coat. ;; *on ;; off ;; up ;; out ;; put on 〜 は「〜を身につける（着る）」。脱ぐのは take off。
+1 ;; (　)に入る語を選べ。\nThe plane will take (　) in ten minutes. ;; *off ;; on ;; in ;; up ;; take off は「離陸する」。「（服などを）脱ぐ」の意味もある。
+1 ;; (　)に入る語を選べ。\nI usually get (　) at six. ;; *up ;; on ;; off ;; out ;; get up は「起きる」。get on は乗る、get off は降りる。
+2 ;; put off の意味として正しいものを選べ。 ;; *〜を延期する ;; 〜を身につける ;; 〜を消す ;; 〜をがまんする ;; put off 〜＝postpone 〜。put up with 〜 は「〜をがまんする」。
+2 ;; carry out the plan の意味として正しいものを選べ。 ;; *計画を実行する ;; 計画を運び出す ;; 計画を中止する ;; 計画を書き直す ;; carry out 〜 は「〜を実行する」。
+2 ;; (　)に入る語を選べ。\nShe turned (　) his offer because she was too busy. ;; *down ;; up ;; on ;; in ;; turn down 〜 は「〜を断る」。turn on は（電気を）つける、turn in は提出する。
+2 ;; 「決心する」の意味を表す熟語はどれか。 ;; *make up one's mind ;; make fun of ;; make sure ;; make a mistake ;; make up one's mind＝decide。make fun of はからかう、make sure は確かめる。
+2 ;; look up to の意味として正しいものを選べ。 ;; *〜を尊敬する ;; 〜を軽べつする ;; 〜を辞書で調べる ;; 〜を待つ ;; look up to 〜＝respect 〜。反対の意味は look down on 〜（軽べつする）。
+2 ;; (　)に入る語を選べ。\nI came (　) an old friend at the station. ;; *across ;; up ;; over ;; out ;; come across 〜 は「〜に偶然出会う、〜を偶然見つける」。
+3 ;; 「〜をがまんする」の意味を表す熟語はどれか。 ;; *put up with ;; put off ;; put out ;; put on ;; put up with 〜＝stand / bear 〜。put out は（火などを）消す。
+3 ;; (　)に入る語を選べ。\nWe can't do (　) a smartphone these days. ;; *without ;; with ;; away ;; over ;; do without 〜 は「〜なしですませる」。can't do without で「〜なしではやっていけない」。
+3 ;; (　)に入る語を選べ。\nYou should make the (　) of this chance. ;; *most ;; best ;; much ;; more ;; make the most of 〜 は「〜を最大限に利用する」。
+@ english ;; 語彙・熟語 ;; 前置詞を使った熟語 ;; hs1
+1 ;; (　)に入る語を選べ。\nShe is fond (　) music. ;; *of ;; in ;; at ;; with ;; be fond of 〜 で「〜が好きだ」。
+1 ;; (　)に入る語を選べ。\nHe is good (　) playing the piano. ;; *at ;; in ;; of ;; for ;; be good at 〜 で「〜が得意だ」。
+1 ;; (　)に入る語を選べ。\nMy sister is afraid (　) dogs. ;; *of ;; at ;; with ;; from ;; be afraid of 〜 で「〜をこわがる」。
+1 ;; (　)に入る語句を選べ。\nThe game was canceled (　) the rain. ;; *because of ;; in spite of ;; instead of ;; in front of ;; because of 〜 は「〜のために（理由）」。in spite of は「〜にもかかわらず」。
+1 ;; (　)に入る語句を選べ。\nThere is a tall tree (　) my house. ;; *in front of ;; because of ;; instead of ;; in spite of ;; in front of 〜 は「〜の前に」という場所を表す。
+1 ;; at once の意味として正しいものを選べ。 ;; *すぐに ;; 一度だけ ;; ついに ;; ときどき ;; at once＝immediately で「すぐに」。「一度」は once。
+2 ;; (　)に入る語を選べ。\nWhether we go or not depends (　) the weather. ;; *on ;; in ;; at ;; for ;; depend on 〜 で「〜しだいである、〜にたよる」。
+2 ;; (　)に入る語を選べ。\nHer parents are proud (　) her. ;; *of ;; for ;; at ;; with ;; be proud of 〜 で「〜をほこりに思う」＝take pride in 〜。
+2 ;; (　)に入る語句を選べ。\nI drank tea (　) coffee. ;; *instead of ;; because of ;; in spite of ;; by way of ;; instead of 〜 は「〜のかわりに」。
+2 ;; (　)に入る語句を選べ。\nHe went out (　) the heavy rain. ;; *in spite of ;; because of ;; instead of ;; thanks to ;; in spite of 〜＝despite 〜 で「〜にもかかわらず」。
+2 ;; by the way の意味として正しいものを選べ。 ;; *ところで ;; 道のそばで ;; ついに ;; その結果 ;; by the way は話題を変えるときの「ところで」。
+2 ;; (　)に入る語を選べ。\nWho is responsible (　) this project? ;; *for ;; to ;; of ;; at ;; be responsible for 〜 で「〜に責任がある」。
+3 ;; in terms of の意味として正しいものを選べ。 ;; *〜の点から見て ;; 〜の期間中に ;; 〜を条件として ;; 〜の代わりに ;; in terms of 〜 は「〜の観点から、〜に関して」。
+3 ;; (　)に入る語を選べ。\nI'm speaking on (　) of all the students. ;; *behalf ;; side ;; part ;; place ;; on behalf of 〜 で「〜を代表して、〜のために」。
+3 ;; (　)に入る語を選べ。\nAnyone can join the club regardless (　) age. ;; *of ;; to ;; for ;; with ;; regardless of 〜 で「〜に関係なく」。
+
+@ english ;; 語彙・熟語 ;; 重要単語 ;; hs1
+1 ;; important の意味として正しいものを選べ。 ;; *重要な ;; 不可能な ;; 有名な ;; 便利な ;; important は「重要な」。impossible は不可能な、famous は有名な、convenient は便利な。
+1 ;; decide の意味として正しいものを選べ。 ;; *決める ;; 説明する ;; 心配する ;; 断る ;; decide は「決める、決心する」。名詞は decision。
+1 ;; environment の意味として正しいものを選べ。 ;; *環境 ;; 政府 ;; 経験 ;; 設備 ;; environment は「環境」。government は政府、experience は経験、equipment は設備。
+1 ;; 「〜を借りる」の意味を表す語はどれか。 ;; *borrow ;; lend ;; rent ;; owe ;; borrow は（無料で）借りる。lend は貸す。
+1 ;; (　)に入る語を選べ。\nMy uncle often goes (　) on business. ;; *abroad ;; foreign ;; aboard ;; across ;; abroad は「外国へ」という副詞なので、前に to はつけない。foreign は「外国の」という形容詞。
+1 ;; famous の意味として正しいものを選べ。 ;; *有名な ;; 親しい ;; ゆたかな ;; ゆかいな ;; famous は「有名な」。be famous for 〜 で「〜で有名だ」。
+2 ;; available の意味として正しいものを選べ。 ;; *利用できる、手に入る ;; 避けられない ;; 価値のある ;; 平均的な ;; available は「利用できる、手が空いている」。
+2 ;; improve の意味として正しいものを選べ。 ;; *改善する、向上させる ;; 証明する ;; 輸入する ;; 印象づける ;; improve は「よくする、よくなる」。prove は証明する、import は輸入する。
+2 ;; opportunity の意味として正しいものを選べ。 ;; *機会 ;; 反対 ;; 意見 ;; 義務 ;; opportunity は「機会」＝chance。opposition は反対、opinion は意見。
+2 ;; recognize の意味として正しいものを選べ。 ;; *（見て）それとわかる、認める ;; 思い出させる ;; 推薦する ;; 回復する ;; recognize は「見分ける、認める」。recommend は推薦する、recover は回復する。
+2 ;; 「〜を減らす」の意味を表す語はどれか。 ;; *reduce ;; produce ;; increase ;; introduce ;; reduce は減らす。produce は生産する、increase は増やす、introduce は紹介する。
+2 ;; (　)に入る語を選べ。\nWe must (　) energy for the future. ;; *save ;; spend ;; waste ;; produce ;; save energy で「エネルギーを節約する」。waste は「むだにする」で文の意味に合わない。
+3 ;; sufficient の意味として正しいものを選べ。 ;; *十分な ;; 効率のよい ;; 能率の悪い ;; 不足した ;; sufficient＝enough。efficient は効率のよい。
+3 ;; ambiguous の意味として正しいものを選べ。 ;; *あいまいな ;; 野心的な ;; 明らかな ;; 豊かな ;; ambiguous は「2通り以上に解釈できる、あいまいな」。ambitious は野心的な。
+3 ;; indispensable の意味として正しいものを選べ。 ;; *不可欠な ;; 不要な ;; 独立した ;; 無関心な ;; indispensable＝essential（なくてはならない）。dispense with（〜なしですます）が「できない」という意味から。
+
+@ english ;; 語彙・熟語 ;; 派生語と反意語 ;; hs1
+1 ;; happy の名詞形はどれか。 ;; *happiness ;; happily ;; happen ;; unhappy ;; 形容詞に -ness をつけて名詞にする。happily は副詞、happen は「起こる」で別の語。
+1 ;; decide の名詞形はどれか。 ;; *decision ;; decisive ;; decided ;; decider ;; decide→decision（決定）。decisive は「決定的な」という形容詞。
+1 ;; success の形容詞形はどれか。 ;; *successful ;; succeed ;; successive ;; successfully ;; successful は「成功した」。succeed は動詞、successfully は副詞。successive は「連続する」で意味がちがう。
+1 ;; beauty の形容詞形はどれか。 ;; *beautiful ;; beautifully ;; beautify ;; beauties ;; beauty（美）→beautiful（美しい）。beautifully は副詞。
+1 ;; cheap の反意語として正しいものを選べ。 ;; *expensive ;; low ;; free ;; poor ;; cheap（安い）の反対は expensive（高価な）。
+1 ;; increase の反意語として正しいものを選べ。 ;; *decrease ;; include ;; improve ;; produce ;; increase（増える）の反対は decrease（減る）。
+2 ;; (　)に入る語を選べ。\nThis car uses little gas. It is very (　). ;; *economical ;; economic ;; economy ;; economics ;; economical は「経済的な、むだのない」。economic は「経済の」。
+2 ;; (　)に入る語を選べ。\nIt was (　) of you to bring an umbrella. ;; *sensible ;; sensitive ;; sense ;; sensation ;; sensible は「分別のある、賢明な」。sensitive は「敏感な」。
+2 ;; include の反意語として正しいものを選べ。 ;; *exclude ;; conclude ;; increase ;; invite ;; include（含む）の反対は exclude（除く）。conclude は「結論を出す」。
+2 ;; (　)に入る語を選べ。\nShe is a very (　) writer. Her stories are full of new ideas. ;; *imaginative ;; imaginary ;; imaginable ;; imagination ;; imaginative は「想像力に富んだ」。imaginary は「想像上の」、imaginable は「想像できる」。
+2 ;; wide の動詞形（「広げる」）はどれか。 ;; *widen ;; width ;; widely ;; widow ;; 形容詞に -en をつけて動詞にする（wide→widen）。width は名詞の「幅」。
+2 ;; able の名詞形はどれか。 ;; *ability ;; enable ;; ably ;; unable ;; able→ability（能力）。enable は「できるようにする」という動詞。
+3 ;; (　)に入る語を選べ。\nYou should be (　) to your teachers. ;; *respectful ;; respectable ;; respective ;; respected ;; respectful は「（人に）敬意を払う」。respectable は「立派な」、respective は「それぞれの」。
+3 ;; (　)に入る語を選べ。\nHe is an (　) student; he studies hard every day. ;; *industrious ;; industrial ;; industry ;; industrialized ;; industrious は「勤勉な」。industrial は「産業の」。
+3 ;; (　)に入る語を選べ。\nIt cost a (　) amount of money. ;; *considerable ;; considerate ;; consideration ;; considering ;; considerable は「かなりの」。considerate は「思いやりのある」。
