@@ -955,6 +955,7 @@ function chooseCandidate(genreId) {
   const canPreview = (it) => it.place !== 'surface' && remainCapacity(curRoom()) > 0;
   el.querySelectorAll('.cand').forEach(b => b.onclick = async () => {
     picked = TICKET_CANDS[b.dataset.id] ? ticketCand(b.dataset.id) : itemById(b.dataset.id);
+    if (picked.place !== 'surface' && room3d?.surfPreview) room3d.previewSurfaceItem(null);
     el.querySelectorAll('.cand').forEach(x => x.classList.toggle('on', x === b));
     el.querySelector('.ok').disabled = false;
     const tip = el.querySelector('.pv-tip');
@@ -966,8 +967,12 @@ function chooseCandidate(genreId) {
       const p = await room3d.showPreview(picked);
       if (picked && b.classList.contains('on')) tip.textContent = p ? '光っている場所に置かれます。あとで模様がえで動かせます' : '空いている場所がないので、持ち物に入ります';
     } else {
-      room3d?.clearPreview();
-      tip.textContent = picked.place === 'surface' ? '買うと、すぐ部屋の見た目が変わります' : `置ける数がいっぱいなので、持ち物に入ります（Lvが上がると増えます）`;
+      room3d?.clearPreview(true);
+      if (picked.place === 'surface') {
+        tip.textContent = '部屋にためしに映しています…';
+        await room3d?.previewSurfaceItem(picked);
+        if (b.classList.contains('on')) tip.textContent = 'いまの部屋に映しています。買うとこの見た目になります';
+      } else tip.textContent = `置ける数がいっぱいなので、持ち物に入ります（Lvが上がると増えます）`;
     }
   });
   el.querySelector('.ok').onclick = async () => {
@@ -976,6 +981,7 @@ function chooseCandidate(genreId) {
     const max = S.gaugeMax(hs);
     if (hs.gauge >= max) { hs.gauge -= max; hs.unlocks++; } else if (hs.tickets > 0) hs.tickets--; else return;
     hs.offer = null; // 次に買うときは、新しい候補
+    if (room3d) room3d.surfPreview = null; // ためしに映していた物は、本当に変える時に作り直す
     if (picked.ticket) {
       const key = picked.ticket === 'ticket4' ? 'rareTickets4' : 'rareTickets';
       hs[key] = (hs[key] || 0) + 1;
@@ -1315,7 +1321,7 @@ function photoMode() {
 
 // =========================== 更新のお知らせ ===========================
 // このプログラムの版（version.json と同じにする。公開のたびに上げる）
-const APP_VERSION = '1.2.1';
+const APP_VERSION = '1.2.2';
 // 新しい版が出たら、みんな同じタイミングでそろうように強制で再起動する。
 // 開いた時・画面に戻った時・1分ごとに version.json を見る
 async function latestVersion() {
