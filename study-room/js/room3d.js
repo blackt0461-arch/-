@@ -918,6 +918,227 @@ export class Room3D {
     return false;
   }
 
+  // ===================== 自動で並べる =====================
+  // 家具を役わり（ソファ・ローテーブル・いす・テレビ台・食卓…）に分け、並べ方（style）どおりに置く。
+  // 位置は「ソファの正面から42cm先にテーブル」のように家具どうしの関係で決めるので、どの部屋の形でも使える。
+  // インテリアの目安：通り道75〜90cm／ソファとローテーブル40〜45cm／テレビとソファ1.5〜2m／ラグは座る家具の前脚がのる
+  // style: 'talk'（団らん）| 'tv'（テレビ中心）| 'window'（窓辺）| 'cafe'（カフェ）| 'auto'（おまかせ）
+  // 戻り値：{ style, failed: [置けなかった物の uid] }
+  async arrangeRoom(ps, style = 'auto') {
+    const sh = this.sh;
+    // 今ある物はいったん全部どける
+    for (const uid of Object.keys(this.objByUid || {})) this.removeObject(uid);
+    const objs = [];
+    for (const p of ps) {
+      Object.assign(p, { x: 0, z: 0, rot: 0 }); delete p.on; delete p.y;
+      const o = await this.placeOne(p, false);
+      if (!o) continue;
+      o.userData.sz = this.sizeAt0(o);
+      o.userData.role = this.roleOf(o);
+      this.items.remove(o); // まだ置いていない物は、ぶつかりの判定に入れない
+      objs.push(o);
+    }
+    const pick = (role, cond = () => true) => { const i = objs.findIndex(o => !o.userData.done && o.userData.role === role && cond(o)); return i < 0 ? null : objs[i]; };
+    const all = (role) => objs.filter(o => !o.userData.done && o.userData.role === role);
+    const biggest = (role) => all(role).sort((a, b) => b.userData.sz.w * b.userData.sz.d - a.userData.sz.w * a.userData.sz.d)[0] || null;
+    if (style === 'auto') {
+      const nChairs = all('chair').length;
+      style = all('dining').length && nChairs >= 2 ? 'cafe' : all('tv').length && (all('low').length || all('coffee').length) ? 'tv' : all('sofa').length && nChairs >= 2 ? 'talk' : all('sofa').length ? 'window' : 'talk';
+    }
+    const put = (o, x, z, rot) => { this.items.add(o); const p = o.userData.p; delete p.on; delete p.y; Object.assign(p, { x, z, rot }); this.mountPlaced(o, p); if (this.checkPlacement(o)) { o.userData.done = true; return true; } this.items.remove(o); return false; };
+    const freeWalls = () => [...sh.walls].map(seg => ({ seg, free: (seg.a1 - seg.a0) - openingsOn(sh, seg.id).reduce((n, op) => n + op.w, 0), door: sh.door.wall === seg.id, win: sh.windows.some(w => w.wall === seg.id) }));
+    // 壁にぴったり（背中を壁に）。a のまわりを少しずつずらして試す
+    const onWall = (o, seg, a) => {
+      if (!o || !seg) return false;
+      const half = o.userData.sz.w / 2, rot = segRot(seg);
+      for (const da of [0, 0.3, -0.3, 0.6, -0.6, 0.9, -0.9, 1.3, -1.3]) {
+        const aa = Math.max(seg.a0 + half + 0.02, Math.min(seg.a1 - half - 0.02, a + da));
+        const q = segPoint(seg, aa, 0, o.userData.sz.d / 2 + 0.03);
+        if (put(o, q.x, q.z, rot)) return true;
+      }
+      return false;
+    };
+    // 家具どうしの関係：anchor の side（front/back/left/right）へ gap はなし、off だけ横へ。facing は 'same' か 'toward'
+    const rel = (o, A, side, gap, off = 0, facing = 'same') => {
+      if (!o || !A || !A.userData.done) return false;
+      const ap = A.userData.p, ar = ap.rot || 0, as = A.userData.sz, is = o.userData.sz;
+      const f = { x: Math.sin(ar), z: Math.cos(ar) }, perp = { x: Math.cos(ar), z: -Math.sin(ar) };
+      const dir = side === 'front' ? f : side === 'back' ? { x: -f.x, z: -f.z } : side === 'left' ? perp : { x: -perp.x, z: -perp.z };
+      const along = side === 'front' || side === 'back', s2 = along ? perp : f;
+      const rot = facing === 'toward' ? Math.atan2(-dir.x, -dir.z) : ar;
+      // 置く物の、dir の向きの厚み（向きによって幅か奥行き）
+      const turned = Math.abs(Math.sin(rot - ar)) > 0.7;
+      const iExt = along ? (turned ? is.w : is.d) : (turned ? is.d : is.w);
+      for (const [dg, doff] of [[0, 0], [0.1, 0], [0, 0.25], [0, -0.25], [0.25, 0], [0.2, 0.3], [0.2, -0.3]]) {
+        const dist = (along ? as.d : as.w) / 2 + gap + dg + iExt / 2;
+        if (put(o, ap.x + dir.x * dist + s2.x * (off + doff), ap.z + dir.z * dist + s2.z * (off + doff), rot)) return true;
+      }
+      return false;
+    };
+    const corner = (o) => {
+      if (!o) return false;
+      const m = Math.max(o.userData.sz.w, o.userData.sz.d) / 2 + 0.06;
+      for (const [sx, sz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) if (put(o, sx * (sh.hw - m), sz * (sh.hd - m), Math.atan2(-sx, -sz))) return true;
+      return false;
+    };
+    const opposite = (seg) => sh.walls.find(w => w.axis === seg.axis && w.n === -seg.n) || null;
+    // 壁の中で、窓やドアからいちばんはなれた所（同じくらいなら真ん中に近い所）
+    const mid = (seg) => {
+      const ops = openingsOn(sh, seg.id), m = (seg.a0 + seg.a1) / 2;
+      if (!ops.length) return m;
+      let best = m, score = -Infinity;
+      for (let a = seg.a0 + 0.8; a <= seg.a1 - 0.8 + 1e-6; a += 0.1) {
+        const d = Math.min(...ops.map(op => Math.abs(a - op.a) - op.w / 2));
+        const sc = Math.min(d, 1.5) - Math.abs(a - m) * 0.2;
+        if (sc > score) { score = sc; best = a; }
+      }
+      return best;
+    };
+    const W = freeWalls();
+    const wallFor = (avoidWin = true) => (W.filter(w => !w.door && (!avoidWin || !w.win)).sort((a, b) => b.free - a.free)[0] || W.filter(w => !w.door).sort((a, b) => b.free - a.free)[0] || W[0]).seg;
+    let sofa = null, focus = null; // focus：照明や絵を合わせる中心の家具
+    const loungeAround = (table) => {
+      // いすを2つまで、テーブルの向こう側にテーブル向きで
+      const chairs = all('chair').slice(0, 2);
+      if (chairs.length === 2) { rel(chairs[0], table, 'front', 0.45, -0.42, 'toward'); rel(chairs[1], table, 'front', 0.45, 0.42, 'toward'); }
+      else if (chairs.length === 1) rel(chairs[0], table, 'front', 0.45, 0, 'toward');
+    };
+    if (style === 'cafe') {
+      const t = biggest('dining') || biggest('coffee') || biggest('desk');
+      if (t) {
+        const rot = sh.w >= sh.d ? 0 : Math.PI / 2;
+        for (const [x, z] of [[0, 0], [-0.4, 0], [0.4, 0], [0, -0.4], [0, 0.4], [-0.8, -0.3], [0.8, 0.3]]) if (put(t, x, z, rot)) break;
+        focus = t;
+        const ch = all('chair').slice(0, 6), q = t.userData.sz.w / 4;
+        const spots = [['front', -q], ['front', q], ['back', -q], ['back', q], ['left', 0], ['right', 0]];
+        ch.forEach((c, i) => rel(c, t, spots[i][0], 0.05, spots[i][1], 'toward'));
+        const sb = biggest('low') || biggest('tall');
+        if (sb) { const seg = wallFor(true); onWall(sb, seg, mid(seg)); }
+        const rug = pick('rug'); if (rug) put(rug, t.userData.p.x, t.userData.p.z, rot);
+      }
+    } else if (style === 'tv') {
+      const stand = biggest('low') || pick('side') || pick('coffee');
+      const seg = wallFor(true);
+      if (stand && onWall(stand, seg, mid(seg))) {
+        const tv = pick('tv'); if (tv) { for (const [dx] of [[0], [0.25], [-0.25]]) { const sp = stand.userData.p; if (put(tv, sp.x + Math.cos(sp.rot) * dx, sp.z - Math.sin(sp.rot) * dx, sp.rot)) break; } }
+        sofa = biggest('sofa');
+        if (sofa && !rel(sofa, stand, 'front', 1.75, 0, 'toward')) rel(sofa, stand, 'front', 1.4, 0, 'toward');
+        focus = stand;
+      }
+    } else if (style === 'window') {
+      const win = sh.windows[0], seg = win && sh.walls.find(w => w.id === win.wall);
+      sofa = biggest('sofa');
+      if (seg && sofa) {
+        const depth = seg.axis === 'z' ? sh.d : sh.w, d = Math.max(1.6, Math.min(3.0, depth * 0.55));
+        const q = segPoint(seg, win.a, 0, d);
+        put(sofa, q.x, q.z, segRot(seg) + Math.PI) || put(sofa, q.x, q.z - 0.3 * seg.n, segRot(seg) + Math.PI);
+        // 窓のわきに大きな植物
+        for (const side of [-1, 1]) { const pl = pick('bigplant'); if (!pl) break; const a = win.a + side * (win.w / 2 + pl.userData.sz.w / 2 + 0.1); const q2 = segPoint(seg, a, 0, pl.userData.sz.d / 2 + 0.06); put(pl, q2.x, q2.z, segRot(seg)); }
+      }
+    }
+    // 団らん（ほかの並べ方でソファが置けなかった時も）
+    if (!sofa || !sofa.userData.done) {
+      sofa = biggest('sofa');
+      if (sofa) { const seg = wallFor(true); onWall(sofa, seg, mid(seg)); }
+    }
+    if (sofa && sofa.userData.done) {
+      const coffee = biggest('coffee') || (style !== 'cafe' ? pick('side') : null);
+      if (coffee) rel(coffee, sofa, 'front', 0.42, 0, 'same');
+      const rug = pick('rug'); if (rug) rel(rug, sofa, 'front', -0.3, 0, 'same');
+      if (style === 'window') {
+        const ch = all('chair').slice(0, 2);
+        if (coffee && coffee.userData.done) { if (ch[0]) rel(ch[0], coffee, 'left', 0.45, 0, 'toward'); if (ch[1]) rel(ch[1], coffee, 'right', 0.45, 0, 'toward'); }
+      } else if (coffee && coffee.userData.done) {
+        // 2つ目のソファは向かい合わせ。いすは残りに
+        const sofa2 = pick('sofa'); if (sofa2) rel(sofa2, coffee, 'front', 0.45, 0, 'toward');
+        if (style === 'tv') { const ch = all('chair').slice(0, 2); if (ch[0]) rel(ch[0], coffee, 'left', 0.45, 0, 'toward'); if (ch[1]) rel(ch[1], coffee, 'right', 0.45, 0, 'toward'); }
+        else loungeAround(coffee);
+      }
+      const side = pick('side'); if (side) rel(side, sofa, 'right', 0.06, 0, 'same');
+      const lamp = pick('floorlamp'); if (lamp) rel(lamp, sofa, 'left', 0.1, 0, 'same');
+      focus = focus || coffee || sofa;
+      // 本棚は、ソファと反対の壁（テレビ中心ならソファのうしろ側の壁）
+      const tall = biggest('tall');
+      if (tall) { const sseg = sh.walls.find(w => Math.cos(segRot(w) - (sofa.userData.p.rot || 0)) > 0.99); const seg = (style === 'tv' ? sseg : sseg && opposite(sseg)) || wallFor(false); if (!onWall(tall, seg, mid(seg))) onWall(tall, wallFor(false), 0); }
+    }
+    // 天井の照明：中心の家具の上
+    for (const [i, c] of all('ceil').entries()) {
+      const fp = focus?.userData.p, off = (i - (all('ceil').length - 1) / 2) * 0.8;
+      if (fp) { if (put(c, fp.x + Math.cos(fp.rot || 0) * off, fp.z - Math.sin(fp.rot || 0) * off, 0)) continue; }
+      this.items.add(c); if (!this.autoPlace(c)) this.items.remove(c); else c.userData.done = true;
+    }
+    // 絵などの壁の物：ソファの上 → ほかは自動
+    const art = pick('wall');
+    if (art && sofa?.userData.done) {
+      const sp = sofa.userData.p, seg = sh.walls.find(w => Math.abs(Math.cos(segRot(w) - (sp.rot || 0)) - 1) < 0.01);
+      if (seg) { this.items.add(art); Object.assign(art.userData.p, { wall: seg.id, a: seg.axis === 'z' ? sp.x : sp.z, y: 1.65 }); this.mountPlaced(art, art.userData.p); if (this.checkPlacement(art)) art.userData.done = true; else this.items.remove(art); }
+    }
+    // 大きな植物・照明はすみ
+    for (const o of [...all('bigplant'), ...all('floorlamp')]) corner(o);
+    // 残りの家具（いす・棚・小物など）は、種類に合う場所へ（小物はテーブルや棚の上）
+    const rest = objs.filter(o => !o.userData.done).sort((a, b) => (a.userData.role === 'small') - (b.userData.role === 'small'));
+    const failed = [];
+    for (const o of rest) {
+      this.items.add(o);
+      if (this.autoPlace(o) || this.findFreeSpot(o)) o.userData.done = true;
+      else { this.items.remove(o); failed.push(o.userData.uid); }
+    }
+    for (const o of objs) if (o.userData.done) { o.userData.baseY = o.position.y; this.updateBlob(o); } else delete this.objByUid[o.userData.uid];
+    this.updateLights();
+    return { style, failed };
+  }
+  // 並べたあと、部屋を見わたせる所（ソファからいちばん遠いすみの上のほう）から見る
+  overview() {
+    const sh = this.sh, sofa = this.items.children.find(o => o.userData.role === 'sofa');
+    const sp = sofa ? sofa.position : new THREE.Vector3(-sh.hw, 0, 0);
+    // 家具の中にカメラが入らない所をえらぶ（すみから少しずつ内側へ）
+    const boxes = this.items.children.filter(o => o.userData.uid && o.userData.item?.place !== 'rug' && o.userData.item?.place !== 'ceiling').map(o => this.boxOf(o));
+    const clear = (x, z) => !boxes.some(b => x > b.min.x - 0.45 && x < b.max.x + 0.45 && z > b.min.z - 0.45 && z < b.max.z + 0.45 && b.max.y > 0.9);
+    let best = null;
+    for (const inset of [0.9, 1.2, 1.5]) {
+      for (const [sx, sz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+        const x = sx * (sh.hw - inset), z = sz * (sh.hd - inset), d = Math.hypot(x - sp.x, z - sp.z);
+        if (clear(x, z) && (!best || d > best.d)) best = { x, z, d };
+      }
+      if (best) break;
+    }
+    best = best || { x: sh.hw - 0.9, z: sh.hd - 0.9 };
+    this.walk = null; this.targetLook = null; this.vyaw = this.vpitch = 0;
+    if (this.topView) this.setTopView(false);
+    this.camera.position.set(best.x, 1.5, best.z);
+    this.yaw = Math.atan2(best.x, best.z); this.pitch = -0.32;
+  }
+  // 正面向き（rot 0）の時の幅 w（x）・奥行き d（z）・高さ h
+  sizeAt0(o) {
+    const p = o.userData.p, keep = { ...p };
+    Object.assign(p, { x: 0, z: 0, rot: 0 }); delete p.on; delete p.y;
+    this.mountPlaced(o, p);
+    const b = new THREE.Box3().setFromObject(o);
+    for (const k of Object.keys(p)) if (!(k in keep)) delete p[k];
+    Object.assign(p, keep); this.mountPlaced(o, p);
+    return { w: b.max.x - b.min.x, d: b.max.z - b.min.z, h: b.max.y - b.min.y };
+  }
+  roleOf(o) {
+    const it = o.userData.item, s = o.userData.sz, id = it.id;
+    if (it.place === 'rug') return 'rug';
+    if (it.place === 'ceiling') return 'ceil';
+    if (it.place === 'wall') return 'wall';
+    if (/(^|-)tv(-|$)|television/.test(id)) return 'tv';
+    if (it.genre === 'sofa') return /bed/.test(id) ? 'bed' : 'sofa';
+    if (it.genre === 'chair') return 'chair';
+    if (it.genre === 'table') {
+      if (/desk/.test(id)) return 'desk';
+      if (s.w < 0.66 && s.d < 0.66) return 'side';
+      if (s.h < 0.56) return 'coffee';
+      return Math.max(s.w, s.d) >= 0.8 ? 'dining' : 'side';
+    }
+    if (it.genre === 'storage') return Room3D.canStack(it) ? 'small' : s.h < 0.85 ? 'low' : 'tall';
+    if (it.genre === 'light') return s.h > 1.0 ? 'floorlamp' : 'small';
+    if (it.genre === 'plant') return s.h > 0.9 ? 'bigplant' : 'small';
+    if (Room3D.canStack(it)) return 'small';
+    return 'other';
+  }
+
   // 照明の光（重くならないように、近いものから最大4つ）
   updateLights() {
     for (const l of this.lamps) l.parent && l.parent.remove(l);

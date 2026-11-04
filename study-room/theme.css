@@ -443,3 +443,22 @@ b, strong { font-weight: 700; }
 .ex-list li::before { content: ""; position: absolute; left: 0; top: .75em; width: 5px; height: 5px; border-radius: 50%; background: var(--sk-muted); }
 .ex-list li.eq { padding: 6px 10px 6px 14px; border-radius: 10px; background: color-mix(in srgb, var(--sk-accent) 14%, transparent); }
 .ex-list li.eq::before { background: var(--sk-accent); top: 1.15em; }
+
+/* 自動で並べる */
+.arrange .ar-count { color: var(--sk-muted); font-size: 13px; }
+.arrange .ar-count b { color: var(--sk-text); font-size: 16px; }
+.ar-lead { margin: 0 0 8px; font-size: 13px; color: var(--sk-muted); }
+.ar-grid { padding-bottom: 230px; }
+.ar-item { position: relative; }
+.ar-item.on { outline: 2px solid var(--sk-accent); outline-offset: -2px; }
+.ar-item .ar-n { position: absolute; right: 6px; top: 6px; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 11px; background: var(--sk-accent); color: var(--sk-hot-fg, var(--sk-btn-fg)); font-style: normal; font-weight: 700; font-size: 12px; line-height: 22px; text-align: center; }
+.ar-foot { position: fixed; left: 0; right: 0; bottom: calc(env(safe-area-inset-bottom, 0px) + 84px); padding: 10px 12px; background: var(--sk-panel); border-top: 1px solid var(--sk-panel-line); backdrop-filter: var(--sk-blur); -webkit-backdrop-filter: var(--sk-blur); display: grid; gap: 8px; z-index: 5; }
+.ar-styles { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 5px; }
+.ar-styles::-webkit-scrollbar { display: none; }
+.ar-styles button { display: grid; justify-items: center; gap: 1px; padding: 7px 4px; border-radius: 12px; border: 1px solid var(--sk-panel-line); background: transparent; color: var(--sk-text); font: inherit; }
+.ar-styles button svg { width: 18px; height: 18px; }
+.ar-styles button b { font-size: 12.5px; }
+.ar-styles button small { font-size: 9.5px; color: var(--sk-muted); white-space: nowrap; }
+.ar-styles button.on { background: var(--sk-accent); color: var(--sk-hot-fg, var(--sk-btn-fg)); border-color: transparent; }
+.ar-styles button.on small { color: inherit; opacity: .8; }
+.ar-after { display: grid; gap: 8px; }
