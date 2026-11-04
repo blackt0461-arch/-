@@ -432,3 +432,14 @@ b, strong { font-weight: 700; }
 .give-list { display: grid; gap: 8px; margin: 6px 0 12px; }
 .give-one { display: flex; align-items: center; gap: 8px; justify-content: flex-start; }
 .give-one small { margin-left: auto; opacity: .7; }
+
+/* 問題集（電子回路など）の式の見せ方 */
+.mv { font-family: "Cormorant", "Times New Roman", serif; font-style: italic; font-size: 1.12em; letter-spacing: .01em; white-space: nowrap; }
+.mv sub, .fx sub, .ex-list sub { font-size: .62em; font-style: normal; font-family: var(--sk-font, sans-serif); vertical-align: -.35em; line-height: 0; margin-left: 1px; }
+.fx sup, .ex-list sup, .fcard sup, .formula sup { font-size: .66em; vertical-align: .55em; line-height: 0; }
+.problem.fx { line-height: 1.9; }
+.ex-list { list-style: none; margin: 8px 0 0; padding: 12px 14px; display: grid; gap: 8px; text-align: left; border-radius: 14px; background: var(--sk-panel); border: 1px solid var(--sk-panel-line); }
+.ex-list li { position: relative; padding-left: 14px; font-size: 13.5px; line-height: 1.75; color: var(--sk-text); }
+.ex-list li::before { content: ""; position: absolute; left: 0; top: .75em; width: 5px; height: 5px; border-radius: 50%; background: var(--sk-muted); }
+.ex-list li.eq { padding: 6px 10px 6px 14px; border-radius: 10px; background: color-mix(in srgb, var(--sk-accent) 14%, transparent); }
+.ex-list li.eq::before { background: var(--sk-accent); top: 1.15em; }
