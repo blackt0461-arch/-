@@ -419,3 +419,13 @@ b, strong { font-weight: 700; }
 .lvb { background: var(--sk-accent); color: var(--sk-hot-fg, var(--sk-btn-fg)); }
 /* プレゼントBOXの数：どの着せ替えでも読める赤と白 */
 .round .gb-n { background: #d6342c; color: #fff; }
+
+/* 設定：テスト勉強のコード */
+.codes .code-note { color: var(--sk-muted); font-size: 12px; }
+.code-form { display: flex; gap: 8px; margin-top: 8px; }
+.code-form input { flex: 1; min-width: 0; font: inherit; font-size: 16px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--sk-panel-line); background: rgba(255,255,255,.07); color: var(--sk-text); letter-spacing: .08em; }
+.code-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.code-list:empty { display: none; }
+.code-chip { display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px; border-radius: 99px; background: var(--sk-accent); color: var(--sk-hot-fg, var(--sk-btn-fg)); font-size: 12.5px; font-weight: 700; }
+.code-chip svg { width: 14px; height: 14px; }
+.code-chip small { font-weight: 400; opacity: .8; }

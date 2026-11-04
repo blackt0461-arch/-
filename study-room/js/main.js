@@ -31,6 +31,34 @@ const PROBLEMS = validProblems();
 const ALLP = { physics: PROBLEMS, ...SUBJECT_PROBLEMS };
 const byId = Object.fromEntries(Object.values(ALLP).flat().map(p => [p.id, p]));
 function probs(id = subjectId) { return ALLP[id] || []; }
+
+// ---- テスト勉強用の問題集（設定でコードを入れると、教科えらびに科目が増える） ----
+// 中身は js/packs.js に暗号で入っていて、コードがないと開けない。入れたコードは記録（profile.codes）に残す
+const packOf = {}; // 科目id → 問題集
+async function openCode(code) {
+  const [{ PACKS }, { openPack }] = await Promise.all([import('./packs.js'), import('./packcrypt.js')]);
+  const found = [];
+  for (const sealed of PACKS) { const p = await openPack(code, sealed); if (p) found.push(p); }
+  return found;
+}
+function addPack(p) {
+  const sid = 'pack-' + p.id;
+  const list = (p.problems || []).map(q => ({ ...q, id: sid + ':' + q.id, grade: q.grade || 'hs1', level: q.level || 1, unit: q.unit || p.name }))
+    .filter(q => q.text && Array.isArray(q.choices) && q.choices.length === 4 && q.answer >= 0 && q.answer < 4);
+  if (!list.length) return null;
+  ALLP[sid] = list;
+  for (const q of list) byId[q.id] = q;
+  if (!SUBJECTS.some(x => x.id === sid)) SUBJECTS.push({ id: sid, name: p.name, pack: true });
+  else SUBJECTS.find(x => x.id === sid).name = p.name;
+  if (!SUBJECT_ICON[sid]) SUBJECT_ICON[sid] = p.icon || 'star';
+  packOf[sid] = p;
+  return sid;
+}
+// ログインした時に、入れてあるコードの問題集を開く
+async function loadSavedPacks() {
+  const codes = S.profile().codes || [];
+  for (const c of codes) { try { (await openCode(c)).forEach(addPack); } catch (e) { console.warn('pack', e); } }
+}
 const UNITS = ['力学', '熱', '波動', '電磁気'];
 const COLORS = ['#ff8a5b', '#4fc3f7', '#c792ea', '#9ccc65', '#ffd54f', '#f06292', '#4db6ac'];
 const SURFACE_KINDS = [['wall', '壁'], ['floor', '床'], ['door', 'ドア'], ['window', '窓'], ['curtain', 'カーテン']];
@@ -112,6 +140,8 @@ function showLogin(mode = usedHereBefore() ? 'login' : 'signup') {
 }
 
 function startAs(u) {
+  // 前の人が開いた問題集は外す
+  for (const sid of Object.keys(packOf)) { delete ALLP[sid]; delete packOf[sid]; const i = SUBJECTS.findIndex(x => x.id === sid); if (i >= 0) SUBJECTS.splice(i, 1); }
   user = u;
   S.useUser(u.id);
   visiting = null;
@@ -583,6 +613,7 @@ function curRoom() { return HS().rooms[HS().current]; }
 function curDef() { return roomDef(curRoom().id); }
 
 async function enterHouse() {
+  loadSavedPacks();
   const added = ensureRooms();
   if (!room3d) {
     room3d = new Room3D(canvas);
@@ -1267,7 +1298,7 @@ function photoMode() {
 
 // =========================== 更新のお知らせ ===========================
 // このプログラムの版（version.json と同じにする。公開のたびに上げる）
-const APP_VERSION = '1.0.2';
+const APP_VERSION = '1.1.0';
 // 新しい版が出たら、みんな同じタイミングでそろうように強制で再起動する。
 // 開いた時・画面に戻った時・1分ごとに version.json を見る
 async function latestVersion() {
@@ -1914,6 +1945,13 @@ function showSettings() {
       <div class="row-item"><span class="lbl">ユーザー</span><span class="val">${esc(user.name)}${isAdmin() ? '（管理者）' : ''}</span></div>
       <div class="row-item"><span class="lbl">保存</span><span class="val sync"></span></div>
     </section>
+    <section class="group codes">
+      <div class="row-item col"><span class="lbl">テスト勉強のコード</span>
+        <small class="code-note">コードを入れると、教科えらびにテスト勉強用の科目が増えます</small>
+        <form class="code-form"><input name="code" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="コードを入力"><button class="btn primary sm">入れる</button></form>
+        <div class="code-list">${SUBJECTS.filter(x => x.pack).map(x => `<span class="code-chip">${icon(SUBJECT_ICON[x.id] || 'star')}${esc(x.name)}<small>${probs(x.id).length}問</small></span>`).join('')}</div>
+      </div>
+    </section>
     <section class="group">
       <div class="row-item col"><span class="lbl">画質</span>
         <div class="seg">${[['high', 'きれい'], ['mid', 'ふつう'], ['low', 'かるい']].map(([k, n]) => `<button data-q="${k}" class="${k === q ? 'on' : ''}">${n}</button>`).join('')}</div>
@@ -1940,6 +1978,24 @@ function showSettings() {
     el.querySelectorAll('.seg button').forEach(x => x.classList.toggle('on', x === b));
   });
   el.querySelector('.dl')?.addEventListener('click', () => { if (DL.downloadState() !== 'done') showDownload(); });
+  // テスト勉強のコード
+  el.querySelector('.code-form').onsubmit = async (e) => {
+    e.preventDefault();
+    const inp = e.target.code, code = inp.value.trim();
+    if (!code) return;
+    const btn = e.target.querySelector('button'); btn.disabled = true;
+    const found = await openCode(code).catch(() => []);
+    btn.disabled = false;
+    if (!found.length) { toast('そのコードは見つかりません。もう一度たしかめてください', 2800); vibrate(60); return; }
+    const pr = S.profile();
+    const { normCode } = await import('./packcrypt.js');
+    pr.codes = [...new Set([...(pr.codes || []), normCode(code)])];
+    found.forEach(addPack);
+    S.save(); Sync.push?.();
+    vibrate([20, 40, 20]);
+    toast(`「${found.map(p => p.name).join('」「')}」が教科えらびに増えました`, 3200);
+    showSettings();
+  };
   el.querySelector('.logout').onclick = async () => { await Sync.push(); Auth.logOut(); showLogin(); };
   // 管理者だけ：記録をすべて消して最初から（ログインはそのまま）
   el.querySelector('.reset-all')?.addEventListener('click', async () => {
