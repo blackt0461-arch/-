@@ -112,6 +112,22 @@ const serve = () => new Promise(res => { const srv = http.createServer((req, rsp
   check(/手数の上限/.test(await page.locator('.pz-res-sheet').textContent().catch(() => '')), `上限（${limit}手）をこえると失敗になる`);
   await page.screenshot({ path: path.join(OUT, 'puzzle-4-lose.png') });
 
+  console.log('4b. 自分で切りかえる');
+  await page.evaluate(() => window.__app.showHome()); await page.waitForTimeout(300);
+  await page.evaluate(() => document.querySelector('.solve-ring').click()); await page.waitForSelector('.pz-hub');
+  await page.click('.mode-switch[data-to=study]'); await page.waitForTimeout(800);
+  check(await page.evaluate(() => window.__app.S.profile().mode) === 'study' && await page.locator('.subj-sheet .subjgrid').count() === 1, 'パズルの画面から「勉強に切りかえる」→ 教科えらびが出る');
+  await page.click('.mode-switch[data-to=puzzle]'); await page.waitForTimeout(800);
+  check(await page.evaluate(() => window.__app.S.profile().mode) === 'puzzle' && await page.locator('.pz-hub').count() === 1, '教科えらびから「パズルに切りかえる」→ パズルえらびが出る');
+  await page.evaluate(() => window.__app.showHome()); await page.waitForTimeout(300);
+  await page.evaluate(() => document.querySelector('[data-t=menu]')?.click()); await page.waitForTimeout(400);
+  await page.click('.menu-list [data-m=settings]'); await page.waitForSelector('.mode-seg');
+  await page.click('.mode-seg [data-mode=study]'); await page.waitForTimeout(300);
+  check(await page.evaluate(() => window.__app.S.profile().mode) === 'study' && await page.locator('.seg button[data-q].on').count() === 1, '設定から「勉強」にできる（画質の選択は消えない）');
+  check(/解く|続きから/.test(await page.locator('.solve-ring').textContent()), `右下のボタンがすぐ「解く」になる（${(await page.locator('.solve-ring').textContent()).trim()}）`);
+  await page.screenshot({ path: path.join(OUT, 'mode-settings.png') });
+  await page.click('.mode-seg [data-mode=puzzle]'); await page.waitForTimeout(300);
+
   console.log('5. 管理者がモードを変える');
   await page.evaluate(async () => { const { rpc } = await import('/js/cloud.js'); await rpc('sr_signup', { p_username: 'admin', p_password: 'x' }); });
   // 管理者として「puzzler」を勉強に（mock なので直接コードを渡す）
