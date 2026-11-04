@@ -22,18 +22,71 @@ import { PUZZLES, puzzleById, levelInfo, mountPuzzle, livesOf } from './puzzles.
 import { openPuzzleHelp } from './puzzlehelp.js';
 import * as BGM from './bgm.js';
 
+// bank：data/bank/<科目>.json の問題バンク（教科書に合わせた 教科 → ジャンル → 単元）。あとから読みこむ
 const SUBJECTS = [
-  { id: 'physics', name: '物理', ready: true },
-  { id: 'math', name: '数学' },
-  { id: 'english', name: '英語' },
-  { id: 'chem', name: '化学' },
-  { id: 'jp', name: '国語' },
-  { id: 'social', name: '社会' },
+  { id: 'jp', name: '国語', bank: true },
+  { id: 'math', name: '数学', bank: true },
+  { id: 'english', name: '英語', bank: true },
+  { id: 'physics', name: '物理（公式）', ready: true },
+  { id: 'physics4', name: '物理（4択）', bank: true },
+  { id: 'chem', name: '化学', bank: true },
+  { id: 'bio', name: '生物', bank: true },
+  { id: 'earth', name: '地学', bank: true },
+  { id: 'social', name: '社会', bank: true },
 ];
+Object.assign(SUBJECT_ICON, { physics4: 'magnet', bio: 'plant', earth: 'sun' });
+// 前からある問題を、教科書の ジャンル・単元 に入れなおす（[ジャンル, 単元]。単元が null なら前の名前のまま）
+const OLD_UNIT = {
+  math: { '数と式': ['数学I', '数と式'], '二次関数': ['数学I', '二次関数'], '図形と計量': ['数学I', '図形と計量'], 'データの分析': ['数学I', 'データの分析'],
+    '場合の数と確率': ['数学A', '場合の数と確率'], '整数の性質': ['数学A', '数学と人間の活動'], '図形の性質': ['数学A', '図形の性質'],
+    '式と証明': ['数学II', '式と証明'], '複素数と方程式': ['数学II', '複素数と方程式'], '図形と方程式': ['数学II', '図形と方程式'], '三角関数': ['数学II', '三角関数'],
+    '指数・対数': ['数学II', '指数関数と対数関数'], '微分・積分': ['数学II', '微分法と積分法'], '数列': ['数学B', '数列'], 'ベクトル': ['数学C', 'ベクトル'] },
+  english: { '文法（時制）': ['文法', '時制'], '文法（助動詞）': ['文法', '助動詞'], '文法（受動態）': ['文法', '受動態'], '文法（不定詞・動名詞）': ['文法', '不定詞と動名詞'],
+    '文法（分詞）': ['文法', '分詞'], '文法（比較）': ['文法', '比較'], '文法（関係詞）': ['文法', '関係詞'], '文法（仮定法）': ['文法', '仮定法'], '語順整序': ['文法', '語順整序'],
+    '語彙': ['語彙・熟語', '重要単語'], 'イディオム・熟語': ['語彙・熟語', 'イディオム・熟語'], '会話表現': ['会話表現', '日常の会話'], '発音・アクセント': ['発音・アクセント', 'アクセント'] },
+  chem: { '物質の構成': ['化学基礎', '物質の構成'], '原子の構造': ['化学基礎', '原子の構造と周期表'], '周期表': ['化学基礎', '原子の構造と周期表'], '化学結合': ['化学基礎', '化学結合'],
+    '物質量': ['化学基礎', '物質量と化学反応式'], '化学反応式': ['化学基礎', '物質量と化学反応式'], '酸と塩基': ['化学基礎', '酸と塩基'], '中和・pH': ['化学基礎', '酸と塩基'],
+    '酸化還元': ['化学基礎', '酸化還元反応'], '電池・電気分解': ['化学', '化学反応とエネルギー'], '熱化学': ['化学', '化学反応とエネルギー'], '反応速度と平衡': ['化学', '反応速度と化学平衡'],
+    '気体の性質': ['化学', '物質の状態'], '無機物質': ['化学', '無機物質'], '有機化合物': ['化学', '有機化合物'] },
+  jp: { '漢字の読み': ['言葉（漢字・語彙・文法・敬語）', '漢字の読み'], '漢字の書き（同音異義語）': ['言葉（漢字・語彙・文法・敬語）', '同音異義語'],
+    '語彙・慣用句・ことわざ': ['言葉（漢字・語彙・文法・敬語）', '慣用句・ことわざ'], '四字熟語': ['言葉（漢字・語彙・文法・敬語）', '四字熟語'], '敬語': ['言葉（漢字・語彙・文法・敬語）', '敬語'],
+    '文法（品詞・助詞・助動詞）': ['言葉（漢字・語彙・文法・敬語）', '文法（品詞・助詞・助動詞）'], '古文単語': ['古文', '古文単語'],
+    '古典文法（助動詞の意味・活用・係り結び）': ['古文', '古典文法（助動詞）'], '漢文（返り点・句法・再読文字）': ['漢文', '漢文の句法'], '文学史': ['文学史', '文学史いろいろ'] },
+};
+// 社会は「ジャンル（中身）」の名前なので、かっこの前をジャンル、中をそろえる
+const SOCIAL_UNIT = { '地図と地理情報': '地図と地理情報', '気候': '気候と生活', '地形': '地形と自然環境', '産業': '世界の産業と貿易', '人口': '地球的課題', '防災': '自然災害と防災',
+  '近代化': '近代化と私たち', '大衆化': '国際秩序の変化や大衆化と私たち', 'グローバル化': 'グローバル化と私たち', '近世': '江戸時代' };
+function regroup(sid, p) {
+  if (sid === 'social') { const m = /^(.+?)（(.+)）$/.exec(p.unit || ''); if (m) return { ...p, genre: m[1], unit: SOCIAL_UNIT[m[2]] || m[2] }; return { ...p, genre: 'そのほか' }; }
+  const g = OLD_UNIT[sid]?.[p.unit];
+  return g ? { ...p, genre: g[0], unit: g[1] || p.unit } : p;
+}
 const PROBLEMS = validProblems();
-const ALLP = { physics: PROBLEMS, ...SUBJECT_PROBLEMS };
+const ALLP = { physics: PROBLEMS };
+for (const [sid, list] of Object.entries(SUBJECT_PROBLEMS)) ALLP[sid] = list.map(p => regroup(sid, p));
 const byId = Object.fromEntries(Object.values(ALLP).flat().map(p => [p.id, p]));
 function probs(id = subjectId) { return ALLP[id] || []; }
+// 問題バンクを読みこむ（1科目1回だけ。読めなくても前からある問題は使える）
+const bankLoading = {}, bankDone = {};
+function loadBank(sid) {
+  if (!SUBJECTS.find(x => x.id === sid)?.bank) return Promise.resolve();
+  return bankLoading[sid] ||= fetch(`data/bank/${sid}.json`).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }).then(list => {
+    const have = new Set((ALLP[sid] || []).map(p => p.id));
+    const add = list.filter(p => !have.has(p.id) && Array.isArray(p.choices) && p.choices.length === 4 && p.answer >= 0 && p.answer < 4);
+    ALLP[sid] = [...(ALLP[sid] || []), ...add];
+    for (const p of add) byId[p.id] = p;
+    bankDone[sid] = true;
+  }).catch(e => { delete bankLoading[sid]; console.warn('bank', sid, e); });
+}
+const loadAllBanks = () => Promise.all(SUBJECTS.filter(x => x.bank).map(x => loadBank(x.id)));
+// えらんだ範囲（ジャンル・単元）の問題だけ
+function scoped(sid = subjectId) {
+  const sc = S.subject(sid).scope, all = probs(sid);
+  if (!sc || (!sc.genre && !sc.unit)) return all;
+  const list = all.filter(p => (!sc.genre || p.genre === sc.genre) && (!sc.unit || p.unit === sc.unit));
+  return list.length ? list : all;
+}
+const scopeLabel = (sc) => !sc || (!sc.genre && !sc.unit) ? 'すべて' : [sc.genre, sc.unit].filter(Boolean).join(' ・ ');
 
 // ---- テスト勉強用の問題集（設定でコードを入れると、教科えらびに科目が増える） ----
 // 中身は js/packs.js に暗号で入っていて、コードがないと開けない。入れたコードは記録（profile.codes）に残す
@@ -670,6 +723,7 @@ function curDef() { return roomDef(curRoom().id); }
 
 async function enterHouse() {
   if (BETA && !isAdmin()) return showBetaOnly();
+  setTimeout(loadAllBanks, 2500); // 問題バンクは、部屋が出てから裏で読みこむ
   const packsReady = loadSavedPacks();
   const added = ensureRooms();
   if (!room3d) {
@@ -1367,7 +1421,7 @@ function photoMode() {
 
 // =========================== 更新のお知らせ ===========================
 // このプログラムの版（version.json と同じにする。公開のたびに上げる）
-const APP_VERSION = '1.7.0';
+const APP_VERSION = '1.8.0';
 // 新しい版が出たら、みんな同じタイミングでそろうように強制で再起動する。
 // 開いた時・画面に戻った時・1分ごとに version.json を見る
 async function latestVersion() {
@@ -1597,23 +1651,69 @@ function puzzleResult(id, star, won, r, secs) {
   el.querySelector('.home').onclick = () => showHome();
 }
 
-function chooseSubject() {
+async function chooseSubject() {
   if (!app.querySelector('.home')) showHome();
+  const loading = SUBJECTS.some(x => x.bank && !bankDone[x.id]);
   const el = sheet(`
-    <div class="sh-head"><span class="sh-ic">${icon('pencil')}</span><div><h3>どの科目を解く？</h3><p>どの科目を解いても、同じ家が育ちます</p></div></div>
-    <div class="subjgrid">${SUBJECTS.map(s0 => {
-      const s = { ...s0, ready: probs(s0.id).length > 0 };
-      const st = s.ready ? S.subject(s.id) : null;
-      const resume = st && st.session && st.session.idx < st.session.set.length;
-      const stats = st ? S.stats(st, probs(s.id)) : null;
-      const meta = !s.ready ? '準備中' : resume ? '続きから' : stats.due ? `復習 ${stats.due}問` : (S.solvedToday() < S.BONUS_PER_DAY ? 'ゲージ1.5倍' : '1問ずつ');
-      return `<button class="subj ${s.ready ? '' : 'soon'}" data-s="${s.id}" ${s.ready ? '' : 'disabled'}>
-        <span class="s-ic">${icon(SUBJECT_ICON[s.id] || 'book')}</span><b>${s.name}</b><small>${meta}</small></button>`;
-    }).join('')}</div>
+    <div class="sh-head"><span class="sh-ic">${icon('pencil')}</span><div><h3>どの教科を解く？</h3><p>どの教科を解いても、同じ家が育ちます</p></div></div>
+    <div class="subjgrid"></div>
     <button class="link close">とじる</button>`, 'subj-sheet');
   app.querySelector('.tabbar')?.classList.add('hide');
   el.querySelector('.close').onclick = () => { el.remove(); showHome(); };
-  el.querySelectorAll('.subj:not(.soon)').forEach(b => b.onclick = () => { subjectId = b.dataset.s; el.remove(); startSet(); });
+  const draw = () => {
+    el.querySelector('.subjgrid').innerHTML = SUBJECTS.map(s0 => {
+      const ready = probs(s0.id).length > 0;
+      const st = ready ? S.subject(s0.id) : null;
+      const resume = st && st.session && st.session.idx < st.session.set.length;
+      const stats = st ? S.stats(st, probs(s0.id)) : null;
+      const meta = !ready ? (s0.bank && !bankDone[s0.id] ? '読みこみ中' : '準備中') : resume ? '続きから' : stats.due ? `復習 ${stats.due}問` : `${probs(s0.id).length}問`;
+      return `<button class="subj ${ready ? '' : 'soon'}" data-s="${s0.id}" ${ready ? '' : 'disabled'}>
+        <span class="s-ic">${icon(SUBJECT_ICON[s0.id] || 'book')}</span><b>${esc(s0.name)}</b><small>${meta}</small></button>`;
+    }).join('');
+    el.querySelectorAll('.subj:not(.soon)').forEach(b => b.onclick = () => { subjectId = b.dataset.s; chooseScope(el); });
+  };
+  draw();
+  if (loading) { await loadAllBanks(); if (el.isConnected && el.querySelector('.subjgrid')) draw(); }
+}
+// 教科 → ジャンル → 単元 をえらぶ（同じ下からの画面の中で切りかえる）
+function chooseScope(el, genre = null) {
+  const sid = subjectId, st = S.subject(sid), all = probs(sid), subj = SUBJECTS.find(x => x.id === sid);
+  const resume = st.session && st.session.idx < st.session.set.length;
+  const go = (sc) => {
+    const same = JSON.stringify(st.scope || null) === JSON.stringify(sc);
+    if (!same) { st.scope = sc; st.session = null; S.save(); }
+    el.remove(); startSet();
+  };
+  const genres = [...new Set(all.map(p => p.genre).filter(Boolean))];
+  const units = (g) => [...new Set(all.filter(p => (g ? p.genre === g : !p.genre || genres.length === 0)).map(p => p.unit).filter(Boolean))];
+  // ジャンルも単元も1つしかない教科は、そのまま始める
+  if (!genre && genres.length <= 1 && units(genres[0] || null).length <= 1) return go(null);
+  if (!genre && genres.length === 1) genre = genres[0];
+  const done = (list) => { const n = list.filter(p => st.srs[p.id]?.seen).length; return `${n} / ${list.length}`; };
+  const bar = (list) => `<span class="sc-bar"><i style="width:${list.length ? list.filter(p => st.srs[p.id]?.seen).length / list.length * 100 : 0}%"></i></span>`;
+  const row = (attrs, name, list, sub) => `<button class="sc-row" ${attrs}><span class="sc-t"><b>${esc(name)}</b>${sub ? `<small>${esc(sub)}</small>` : ''}${bar(list)}</span><span class="sc-n">${done(list)}</span>${icon('chevronRight')}</button>`;
+  let body;
+  if (!genre && genres.length > 1) {
+    body = row('data-all="1"', 'すべての範囲から', all, 'いろいろなジャンルからまぜて出ます')
+      + genres.map(g => { const list = all.filter(p => p.genre === g); return row(`data-g="${esc(g)}"`, g, list, `${units(g).length}単元`); }).join('');
+  } else {
+    const g = genre || null, us = genre ? units(genre) : [...new Set(all.map(p => p.unit).filter(Boolean))];
+    const gl = g ? all.filter(p => p.genre === g) : all;
+    body = row(`data-gall="1"`, g ? `${g} をぜんぶ` : 'すべての単元から', gl, '単元をまぜて出ます')
+      + us.map(u => row(`data-u="${esc(u)}"`, u, gl.filter(p => p.unit === u))).join('');
+  }
+  el.innerHTML = `<div class="grab"></div>
+    <div class="sh-head"><button class="icon sc-back" aria-label="もどる">${icon('back')}</button><div><h3>${esc(genre || subj.name)}</h3><p>${genre ? `${esc(subj.name)}・単元をえらぶ` : 'ジャンルをえらぶ'}</p></div></div>
+    ${resume ? `<button class="btn primary big sc-resume">${icon('refresh')}続きから<small>（${esc(scopeLabel(st.scope))}）</small></button>` : ''}
+    <div class="sc-list">${body}</div>
+    <button class="link close">とじる</button>`;
+  el.querySelector('.close').onclick = () => { el.remove(); showHome(); };
+  el.querySelector('.sc-back').onclick = () => { if (genre && genres.length > 1) chooseScope(el); else { el.remove(); chooseSubject(); } };
+  el.querySelector('.sc-resume')?.addEventListener('click', () => { el.remove(); startSet(); });
+  el.querySelector('[data-all]')?.addEventListener('click', () => go(null));
+  el.querySelectorAll('[data-g]').forEach(b => b.onclick = () => chooseScope(el, b.dataset.g));
+  el.querySelector('[data-gall]')?.addEventListener('click', () => go(genre ? { genre } : null));
+  el.querySelectorAll('[data-u]').forEach(b => b.onclick = () => go({ genre: genre || null, unit: b.dataset.u }));
 }
 
 // =========================== メニュー ===========================
@@ -2338,11 +2438,12 @@ function showSettings() {
 }
 
 // =========================== 問題を解く ===========================
-function startSet() {
+async function startSet() {
   BGM.duck(true); // 解いている間は BGM を小さく
+  await loadBank(subjectId); // 問題バンクの問題が入ったセットの続きでも、問題が見つかるように
   const st = sub();
   if (!(st.session && st.session.idx < st.session.set.length)) {
-    st.session = { set: S.buildSet(st, probs()), idx: 0, results: [], gained: 0, xp: 0, rankUp: false, startedAt: Date.now(), bonus: S.solvedToday() < S.BONUS_PER_DAY };
+    st.session = { set: S.buildSet(st, scoped()), idx: 0, results: [], gained: 0, xp: 0, rankUp: false, startedAt: Date.now(), bonus: S.solvedToday() < S.BONUS_PER_DAY };
     S.save();
   }
   room3d.setActive(false);

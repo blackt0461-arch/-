@@ -1,0 +1,134 @@
+# 英語（追加 第2弾 その3）
+@ english ;; 語彙・熟語 ;; 動詞を使った熟語 ;; hs1
+1 ;; take care of の意味として正しいものを選べ。 ;; *〜の世話をする ;; 〜を持っていく ;; 〜を心配する ;; 〜を注意深く見る ;; take care of 〜＝look after 〜。Take care. は「気をつけてね」という別れのあいさつ。
+1 ;; (　)に入る語を選べ。\nI'm looking forward (　) seeing you. ;; *to ;; for ;; at ;; on ;; look forward to 〜ing で「〜を楽しみに待つ」。to のあとは動名詞。
+1 ;; (　)に入る語を選べ。\nWe got (　) the bus at the station. ;; *on ;; up ;; out ;; at ;; get on は（バス・電車に）乗る、get off は降りる。車やタクシーなら get in / get out of。
+1 ;; (　)に入る語を選べ。\nPlease turn (　) the light. It's dark. ;; *on ;; off ;; down ;; over ;; turn on は（電気などを）つける、turn off は消す。
+1 ;; find out の意味として正しいものを選べ。 ;; *（調べて）わかる、明らかにする ;; 外で見つける ;; 見失う ;; 探し始める ;; find out the truth で「真実を知る」。
+1 ;; (　)に入る語を選べ。\nShe picked (　) the pen from the floor. ;; *up ;; out ;; on ;; off ;; pick up は「拾い上げる」「車で迎えに行く」。
+2 ;; (　)に入る語を選べ。\nWe have run (　) of milk. ;; *out ;; off ;; over ;; away ;; run out of 〜 で「〜を使い果たす、切らす」。
+2 ;; (　)に入る語を選べ。\nShe was brought (　) by her grandmother. ;; *up ;; out ;; in ;; down ;; bring up は「育てる」。受け身で be brought up「育てられる」。
+2 ;; (　)に入る語を選べ。\nMany students took part (　) the event. ;; *in ;; on ;; at ;; for ;; take part in 〜＝participate in 〜「〜に参加する」。
+2 ;; (　)に入る語を選べ。\nI get along (　) my classmates. ;; *with ;; to ;; for ;; at ;; get along with 〜 で「〜と仲よくやっていく」。
+2 ;; (　)に入る語を選べ。\nThe game was called (　) because of the rain. ;; *off ;; on ;; up ;; out ;; call off＝cancel「中止する」。
+2 ;; (　)に入る語を選べ。\nThe police are looking (　) the accident. ;; *into ;; after ;; for ;; up to ;; look into 〜＝investigate「〜を調べる」。
+3 ;; (　)に入る語を選べ。\nI'll work hard to make up (　) lost time. ;; *for ;; to ;; with ;; of ;; make up for 〜＝compensate for 〜「〜の埋め合わせをする」。
+3 ;; (　)に入る語を選べ。\nWhat does "UN" stand (　)? ;; *for ;; by ;; with ;; to ;; stand for 〜 で「〜を表す、〜の略である」。UN は United Nations。
+3 ;; (　)に入る語を選べ。\nHe takes (　) his father. They look alike. ;; *after ;; over ;; off ;; in ;; take after 〜＝resemble「（親など）に似ている」。
+
+@ english ;; 語彙・熟語 ;; 前置詞を使った熟語 ;; hs1
+1 ;; (　)に入る語を選べ。\nThe box is full (　) toys. ;; *of ;; with ;; in ;; at ;; be full of 〜 で「〜でいっぱいだ」（＝be filled with）。
+1 ;; (　)に入る語を選べ。\nMy opinion is different (　) yours. ;; *from ;; to ;; with ;; of ;; be different from 〜 で「〜とちがう」。
+1 ;; (　)に入る語を選べ。\nDon't be late (　) school. ;; *for ;; to ;; at ;; in ;; be late for 〜 で「〜に遅れる」。
+1 ;; (　)に入る語句を選べ。\nWe arrived just (　) the concert. ;; *in time for ;; on time for ;; in time of ;; on time to ;; in time for 〜 で「〜に間に合って」。on time は「時間どおりに」。
+1 ;; on time の意味として正しいものを選べ。 ;; *時間どおりに ;; 間に合って ;; ときどき ;; 一度に ;; The train arrived on time.「電車は時間どおりに着いた」。
+1 ;; for example の意味として正しいものを選べ。 ;; *たとえば ;; そのかわりに ;; 最後に ;; とくに ;; 具体例をあげるときに使う。such as も「〜のような」と例をあげる。
+2 ;; (　)に入る語を選べ。\nHe was absent (　) school yesterday. ;; *from ;; at ;; to ;; of ;; be absent from 〜 で「〜を欠席する」。
+2 ;; (　)に入る語を選べ。\nKyoto is famous (　) its old temples. ;; *for ;; as ;; of ;; with ;; be famous for 〜 で「〜で有名だ」。be famous as 〜 は「〜として有名だ」。
+2 ;; at least の意味として正しいものを選べ。 ;; *少なくとも ;; ついに ;; 最後に ;; せいぜい ;; at least は「少なくとも」。at most は「せいぜい、多くても」。
+2 ;; in fact の意味として正しいものを選べ。 ;; *実際に、実は ;; それに対して ;; 原因として ;; 最後に ;; 前の内容を強めたり、意外な事実を述べたりするときに使う。
+2 ;; (　)に入る語句を選べ。\n(　) the weather forecast, it will rain tomorrow. ;; *According to ;; Because ;; In spite ;; Instead ;; according to 〜 で「〜によれば」。
+2 ;; (　)に入る語句を選べ。\n(　) your help, I finished the work. ;; *Thanks to ;; Instead of ;; In spite of ;; Regardless of ;; thanks to 〜 で「〜のおかげで」。
+3 ;; on purpose の意味として正しいものを選べ。 ;; *わざと ;; 偶然に ;; 目的もなく ;; 急いで ;; on purpose＝intentionally。反対は by accident / by chance（偶然に）。
+3 ;; (　)に入る語を選べ。\nMr. Sato is in charge (　) this class. ;; *of ;; for ;; with ;; at ;; in charge of 〜 で「〜を担当して、〜の責任者で」。
+3 ;; This machine is out of order. の意味として正しいものを選べ。 ;; *この機械は故障している ;; この機械は注文できない ;; この機械は順番待ちだ ;; この機械は新品だ ;; out of order で「故障中」。
+@ english ;; 語彙・熟語 ;; 重要単語 ;; hs1
+1 ;; difficult の意味として正しいものを選べ。 ;; *難しい ;; ちがった ;; 便利な ;; 危険な ;; difficult＝hard。反対は easy。
+1 ;; finally の意味として正しいものを選べ。 ;; *ついに、最後に ;; 初めに ;; ふつうは ;; 急に ;; at last とほぼ同じ意味。first（最初に）、usually（ふつうは）。
+1 ;; continue の意味として正しいものを選べ。 ;; *続ける ;; 数える ;; 集める ;; 比べる ;; continue to 〜 / continue 〜ing で「〜し続ける」。
+1 ;; prepare の意味として正しいものを選べ。 ;; *準備する ;; 比べる ;; 修理する ;; 好む ;; prepare for 〜 で「〜の準備をする」。prefer は「〜の方を好む」。
+1 ;; 「到着する」の意味を表す語はどれか。 ;; *arrive ;; leave ;; return ;; reach for ;; arrive at（in）〜 で「〜に着く」。leave は「出発する」。
+1 ;; healthy の意味として正しいものを選べ。 ;; *健康な ;; 重い ;; 裕福な ;; 役に立つ ;; health（健康）の形容詞。
+2 ;; necessary の意味として正しいものを選べ。 ;; *必要な ;; 自然な ;; 否定的な ;; 近所の ;; It is necessary for 人 to 〜 で「（人が）〜する必要がある」。名詞は necessity。
+2 ;; however の意味として正しいものを選べ。 ;; *しかしながら ;; だから ;; そのうえ ;; たとえば ;; 前の内容と反対のことを述べるときの副詞。文頭ではコンマを置く。
+2 ;; suggest の意味として正しいものを選べ。 ;; *提案する ;; 成功する ;; 苦しむ ;; 支持する ;; suggest that 主語 (should) 原形 の形でも使う。
+2 ;; recently の意味として正しいものを選べ。 ;; *最近 ;; すぐに ;; 遅く ;; 正しく ;; 過去形や現在完了形といっしょに使う。
+2 ;; protect の意味として正しいものを選べ。 ;; *守る ;; 生産する ;; 予想する ;; 抗議する ;; protect A from B で「B から A を守る」。
+2 ;; achieve の意味として正しいものを選べ。 ;; *達成する ;; 受け入れる ;; 認める ;; 痛む ;; achieve a goal で「目標を達成する」。名詞は achievement。
+3 ;; consequence の意味として正しいものを選べ。 ;; *結果 ;; 意識 ;; 会議 ;; 自信 ;; consequence＝result。as a consequence で「その結果」。
+3 ;; inevitable の意味として正しいものを選べ。 ;; *避けられない ;; 目に見えない ;; 価値のない ;; 招かれた ;; It is inevitable that 〜 で「〜は避けられない」。
+3 ;; obvious の意味として正しいものを選べ。 ;; *明らかな ;; あいまいな ;; 古い ;; 従順な ;; obvious＝clear。obviously は「明らかに」。
+
+@ english ;; 語彙・熟語 ;; 派生語と反意語 ;; hs1
+1 ;; dangerous の反意語として正しいものを選べ。 ;; *safe ;; danger ;; strong ;; careful ;; dangerous（危険な）の反対は safe（安全な）。danger は名詞。
+1 ;; arrive の名詞形はどれか。 ;; *arrival ;; arriving ;; arrivement ;; arrivance ;; arrive→arrival（到着）。survive→survival も同じ形。
+1 ;; friend の形容詞形（「親しみやすい」）はどれか。 ;; *friendly ;; friendship ;; friendful ;; friends ;; -ly で終わるが、friendly は副詞ではなく形容詞。friendship は名詞「友情」。
+1 ;; possible の反意語として正しいものを選べ。 ;; *impossible ;; unpossible ;; dispossible ;; nonpossible ;; im- をつけて反対の意味になる。p・b・m で始まる語には im- がつくことが多い。
+1 ;; long の名詞形（「長さ」）はどれか。 ;; *length ;; longness ;; longth ;; longing ;; long→length。wide→width、high→height と合わせて覚える。
+1 ;; strong の名詞形（「強さ」）はどれか。 ;; *strength ;; strongness ;; strongth ;; strengthen ;; strengthen は動詞「強くする」。
+2 ;; deep の名詞形（「深さ」）はどれか。 ;; *depth ;; deepness ;; deepth ;; deepen ;; deepen は動詞「深くする」。
+2 ;; agree の名詞形はどれか。 ;; *agreement ;; agreeable ;; agreeing ;; agreation ;; agreeable は形容詞「感じのよい」。
+2 ;; succeed（成功する）の名詞形はどれか。 ;; *success ;; successful ;; successive ;; succession ;; succession は「連続、継承」で別の意味（succeed には「継ぐ」の意味もある）。
+2 ;; accept の反意語として最も適当なものを選べ。 ;; *reject ;; except ;; expect ;; receive ;; accept（受け入れる）の反対は reject / refuse（断る）。except は「〜を除いて」。
+2 ;; private の反意語として正しいものを選べ。 ;; *public ;; personal ;; secret ;; special ;; private（私的な）の反対は public（公の）。
+2 ;; ancient の反意語として最も適当なものを選べ。 ;; *modern ;; old ;; antique ;; classic ;; ancient（古代の）の反対は modern（現代の）。
+3 ;; (　)に入る語を選べ。\nNara is a (　) city with many old temples. ;; *historic ;; historical ;; history ;; historian ;; historic は「歴史上重要な、由緒ある」。historical は「歴史の、歴史に関する」。
+3 ;; (　)に入る語を選べ。\nDon't be so (　). You are 16 years old. ;; *childish ;; childlike ;; childhood ;; children ;; childish は「子どもっぽい（悪い意味）」。childlike は「子どもらしい、無邪気な（よい意味）」。
+3 ;; (　)に入る語を選べ。\nIt rained for three (　) days. ;; *successive ;; successful ;; success ;; succeeding ;; successive は「連続した」。successful は「成功した」。
+
+@ english ;; 会話表現 ;; 日常の会話 ;; hs1
+1 ;; Nice to meet you. と言われたときの返事として適切なものはどれか。 ;; *Nice to meet you, too. ;; Yes, I am. ;; See you. ;; I'm sorry. ;; 初対面のあいさつには、同じ表現に too をつけて返す。
+1 ;; 会話が自然になるように(　)に入るものを選べ。\nA: What time is it now?\nB: (　) ;; *It's three o'clock. ;; It's Monday. ;; It's sunny. ;; It's mine. ;; 時刻をたずねられているので時刻で答える。
+1 ;; 会話が自然になるように(　)に入るものを選べ。\nA: How much is this T-shirt?\nB: (　) ;; *It's 1,500 yen. ;; It's large. ;; It's cotton. ;; It's blue. ;; How much 〜? は値段をたずねる表現。
+1 ;; 会話が自然になるように(　)に入るものを選べ。\nA: Excuse me. Where is the station?\nB: (　) ;; *Go straight and turn left at the corner. ;; It's ten minutes ago. ;; Yes, it is. ;; I go there by bus. ;; 道案内では Go straight（まっすぐ行く）、turn left / right（左・右に曲がる）を使う。
+1 ;; Have a nice weekend! と言われたときの返事として適切なものはどれか。 ;; *You too. ;; Yes, I have. ;; No, thank you. ;; I'm fine. ;; 「あなたもね」と返す。Same to you. でもよい。
+1 ;; 会話が自然になるように(　)に入るものを選べ。\nA: Can I borrow your pen?\nB: (　) ;; *Sure, go ahead. ;; Yes, you borrow. ;; No, I'm a pen. ;; You're welcome. ;; Go ahead. は「どうぞ」と許可する表現。
+2 ;; 電話で、相手が話したい人がいないときの言い方として適切なものはどれか。 ;; *May I take a message? ;; May I leave a message? ;; Can you hear me? ;; Who are you? ;; take a message は伝言を受ける側、leave a message は伝言を残す側の表現。
+2 ;; 会話が自然になるように(　)に入るものを選べ。\nA: How long does it take to get to the airport?\nB: (　) ;; *About thirty minutes. ;; About three kilometers. ;; It's very long. ;; By train. ;; How long does it take? は所要時間をたずねる。距離は How far で聞く。
+2 ;; 誘いをていねいに断るときの表現として適切なものはどれか。 ;; *I'm afraid I can't. ;; Of course. ;; That's a good idea. ;; Why not? ;; I'm afraid 〜 は言いにくいことをやわらかく伝える。Why not? は「もちろん」という同意。
+2 ;; 会話が自然になるように(　)に入るものを選べ。\nA: What do you think of this movie?\nB: (　) ;; *I think it's very exciting. ;; I think of you. ;; Yes, I do. ;; It's on Channel 4. ;; What do you think of 〜? は感想・意見をたずねる表現。
+2 ;; 答えを考えるときに「ええと」の意味で使う表現はどれか。 ;; *Let me see. ;; See you. ;; Look out. ;; I see. ;; Let me see. / Let's see. は考える間をとる表現。I see. は「なるほど」。
+2 ;; 電話で「少々お待ちください」と言うときの表現はどれか。 ;; *Hold on, please. ;; Hang up, please. ;; Call back. ;; Speaking. ;; Hold on / Hold the line は「切らずに待って」。hang up は電話を切ること。
+3 ;; I couldn't agree more. の意味として正しいものはどれか。 ;; *大賛成です ;; まったく賛成できません ;; もう賛成できません ;; 少しだけ賛成です ;; 「これ以上賛成することはできない」＝「完全に賛成だ」という意味。
+3 ;; 会話が自然になるように(　)に入るものを選べ。\nA: I'm sorry I broke your cup.\nB: (　) It was an old one. ;; *Never mind. ;; Don't mention it. ;; You're welcome. ;; Good luck. ;; Never mind. は「気にしないで」。Don't mention it. はお礼への返事。
+3 ;; It's up to you. の意味として正しいものはどれか。 ;; *あなた次第です ;; あなたの番です ;; あなたが起きる時間です ;; あなたに追いつきます ;; be up to 人 で「（人）しだいだ、（人）が決めることだ」。
+
+@ english ;; 発音・アクセント ;; アクセント ;; hs1
+1 ;; 最も強く読む位置が、ほかの3つと異なる語はどれか。 ;; *idea ;; onion ;; apple ;; lemon ;; idea は第2音節（i-DE-a）。ほかは第1音節を強く読む。
+1 ;; 最も強く読む位置が、ほかの3つと異なる語はどれか。 ;; *before ;; answer ;; office ;; Sunday ;; before は第2音節（be-FORE）。ほかは第1音節。
+1 ;; 最も強く読む位置が、ほかの3つと異なる語はどれか。 ;; *museum ;; hospital ;; library ;; restaurant ;; museum は第2音節（mu-SE-um）。ほかは第1音節を強く読む。
+1 ;; 最も強く読む位置が、ほかの3つと異なる語はどれか。 ;; *eraser ;; interest ;; chocolate ;; vegetable ;; eraser は第2音節（e-RA-ser）。ほかは第1音節。
+1 ;; 最も強く読む位置が、ほかの3つと異なる語はどれか。 ;; *enjoy ;; happy ;; teacher ;; window ;; enjoy は第2音節（en-JOY）。ほかは第1音節。
+1 ;; 最も強く読む位置が、ほかの3つと異なる語はどれか。 ;; *computer ;; basketball ;; internet ;; energy ;; computer は第2音節（com-PU-ter）。ほかは第1音節。
+2 ;; communication で最も強く読む音節はどれか。 ;; *第4音節（-ca-） ;; 第1音節（com-） ;; 第2音節（-mu-） ;; 第5音節（-tion） ;; -tion で終わる語は、その直前の音節を強く読む（com-mu-ni-CA-tion）。
+2 ;; 最も強く読む位置が、ほかの3つと異なる語はどれか。 ;; *problem ;; event ;; design ;; result ;; problem は第1音節（PROB-lem）。ほかは第2音節。
+2 ;; 最も強く読む位置が、ほかの3つと異なる語はどれか。 ;; *tomato ;; video ;; radio ;; stadium ;; tomato は第2音節（to-MA-to）。video・radio・stadium は第1音節で、日本語の読み方とちがうので注意。
+2 ;; 最も強く読む位置が、ほかの3つと異なる語はどれか。 ;; *deliver ;; volume ;; challenge ;; happen ;; deliver は第2音節（de-LIV-er）。ほかは第1音節。
+2 ;; 最も強く読む位置が、ほかの3つと異なる語はどれか。 ;; *adventure ;; comfort ;; factory ;; memory ;; adventure は第2音節（ad-VEN-ture）。ほかは第1音節。
+2 ;; 最も強く読む位置が、ほかの3つと異なる語はどれか。 ;; *cartoon ;; carpet ;; garden ;; market ;; cartoon は第2音節（car-TOON）。-oon で終わる語は語尾を強く読むことが多い。
+3 ;; present を動詞（「贈る、提示する」）として使うとき、最も強く読む音節はどれか。 ;; *第2音節（-sent） ;; 第1音節（pres-） ;; どちらも同じ強さ ;; 文によって決まる ;; 名詞・形容詞は PRES-ent、動詞は pre-SENT（名前動後）。
+3 ;; 最も強く読む位置が、ほかの3つと異なる語はどれか。 ;; *kangaroo ;; candidate ;; avenue ;; animal ;; kangaroo は第3音節（kan-ga-ROO）。ほかは第1音節。
+3 ;; dessert（デザート）で最も強く読む音節はどれか。 ;; *第2音節（-ssert） ;; 第1音節（de-） ;; どちらも同じ強さ ;; 文によって変わる ;; dessert は des-SERT。名詞の desert（砂漠）は DES-ert で、つづりも強さもちがう。
+
+@ english ;; 文法 ;; 接続詞 ;; hs1
+1 ;; (　)に入る語を選べ。\nI was very tired, (　) I went to bed early. ;; *so ;; but ;; or ;; because ;; 「とても疲れていたので、早く寝た」と結果を表すので so。
+1 ;; (　)に入る語を選べ。\n(　) I got home, it was already dark. ;; *When ;; Because ;; If ;; Though ;; 「家に着いたとき」と時を表すので When。
+1 ;; (　)に入る語を選べ。\nPlease call me (　) you need help. ;; *if ;; though ;; but ;; so ;; 「もし助けが必要なら」と条件を表すので if。
+1 ;; (　)に入る語を選べ。\nI think (　) he is right. ;; *that ;; what ;; which ;; if ;; think that 〜 で「〜だと思う」。この that は省略できる。
+1 ;; (　)に入る語を選べ。\nWould you like tea (　) coffee? ;; *or ;; and ;; but ;; so ;; A or B で「A か B か」とどちらかを選ばせる。
+1 ;; (　)に入る語を選べ。\nI like music, (　) my brother doesn't. ;; *but ;; so ;; or ;; because ;; 「私は音楽が好きだが、兄は好きではない」と対比を表すので but。
+2 ;; (　)に入る語を選べ。\nNeither he (　) I was at home. ;; *nor ;; or ;; and ;; but ;; neither A nor B で「A も B も〜ない」。動詞は B に合わせる。
+2 ;; (　)に入る語句を選べ。\nShe studied hard (　) she could pass the exam. ;; *so that ;; such that ;; even if ;; as if ;; so that 主語 can 〜 で「〜できるように」と目的を表す。
+2 ;; (　)に入る語を選べ。\n(　) I was reading a book, my sister was watching TV. ;; *While ;; During ;; Because ;; Unless ;; while は接続詞で「〜している間に」。during は前置詞なので後ろに文を続けられない。
+2 ;; (　)に入る語句を選べ。\n(　) he is rich, he lives a simple life. ;; *Even though ;; Because ;; Since ;; So that ;; even though は「〜であるけれども」と逆接を強めた表現。
+2 ;; (　)に入る語を選べ。\n(　) it is raining, we'll stay home. ;; *Since ;; Though ;; Unless ;; Until ;; since は「〜なので」と理由を表すこともある。相手もわかっている理由に使うことが多い。
+2 ;; (　)に入る語句を選べ。\nYou can use my bike (　) you return it by six. ;; *as long as ;; as far as ;; as soon as ;; as well as ;; as long as 〜 は「〜する限り、〜しさえすれば」と条件を表す。
+3 ;; (　)に入る語句を選べ。\n(　) you are a high school student, you should study harder. ;; *Now that ;; So that ;; In order ;; Even if ;; now that 〜 は「今や〜なので」。
+3 ;; (　)に入る語を選べ。\nHardly had he left home (　) it began to snow. ;; *when ;; than ;; that ;; until ;; Hardly 〜 when … で「〜するとすぐに…」。No sooner 〜 than … と同じ意味。
+3 ;; (　)に入る語を選べ。\nIt was not (　) I lost my health that I realized its value. ;; *until ;; when ;; since ;; before ;; It is not until A that B で「A して初めて B する」。
+@ english ;; 文法 ;; 前置詞 ;; hs1
+1 ;; (　)に入る語を選べ。\nI usually study (　) the morning. ;; *in ;; on ;; at ;; for ;; in the morning / afternoon / evening。夜は at night。
+1 ;; (　)に入る語を選べ。\nYour book is (　) the desk. ;; *on ;; in ;; at ;; to ;; 表面に接しているときは on。
+1 ;; (　)に入る語を選べ。\nThe cat is sleeping (　) the table. ;; *under ;; on ;; between ;; above ;; under は「〜の下に」。
+1 ;; (　)に入る語を選べ。\nThe bank is (　) the post office and the hospital. ;; *between ;; among ;; across ;; along ;; between A and B で「A と B の間に」。
+1 ;; (　)に入る語を選べ。\nLet's play tennis (　) school. ;; *after ;; before ;; during ;; since ;; after school で「放課後」。
+1 ;; (　)に入る語を選べ。\nThis is a book (　) Japanese history. ;; *about ;; at ;; to ;; by ;; about 〜 で「〜について」。
+2 ;; (　)に入る語を選べ。\nThe store is (　) the street from the station. ;; *across ;; along ;; through ;; among ;; across the street で「通りの向こう側に」。
+2 ;; (　)に入る語を選べ。\nThe train went (　) a long tunnel. ;; *through ;; across ;; along ;; over ;; through は「〜を通りぬけて」。
+2 ;; (　)に入る語を選べ。\nWe walked (　) the river. ;; *along ;; through ;; between ;; among ;; along は「〜にそって」。
+2 ;; (　)に入る語を選べ。\nAre you for or (　) the plan? ;; *against ;; with ;; without ;; across ;; for は「賛成して」、against は「反対して」。
+2 ;; (　)に入る語を選べ。\nI can't live (　) music. ;; *without ;; with ;; by ;; for ;; without 〜 で「〜なしで」。
+2 ;; (　)に入る語を選べ。\nHe went to Osaka (　) business. ;; *on ;; at ;; by ;; in ;; on business で「仕事で」。on a trip（旅行で）、on vacation（休暇で）も同じ on。
+3 ;; (　)に入る語を選べ。\nThe story is (　) my understanding. ;; *beyond ;; under ;; between ;; among ;; beyond 〜 で「〜をこえて」。beyond my understanding で「私には理解できない」。
+3 ;; (　)に入る語を選べ。\n(　) all his efforts, he failed. ;; *With ;; By ;; For ;; On ;; with all 〜 で「〜にもかかわらず」（＝for all 〜）。
+3 ;; (　)に入る語句を選べ。\n(　), he won first prize. ;; *To my surprise ;; In my surprise ;; By my surprise ;; With surprise of me ;; to 人's surprise で「（人が）驚いたことに」。

@@ -1,0 +1,68 @@
+# 英語：会話表現・アクセント・文法（追加）
+@ english ;; 会話表現 ;; 日常の会話 ;; hs1
+1 ;; 会話が自然になるように(　)に入るものを選べ。\nA: How are you?\nB: (　) ;; *I'm fine, thank you. ;; I'm sixteen years old. ;; I'm from Japan. ;; I'm a student. ;; How are you? は調子をたずねるあいさつ。年齢・出身・職業を答えるのではない。
+1 ;; 会話が自然になるように(　)に入るものを選べ。\nA: Thank you for your help.\nB: (　) ;; *You're welcome. ;; I'm sorry. ;; Yes, please. ;; Here you are. ;; お礼に対しては You're welcome.（どういたしまして）や My pleasure. と答える。
+1 ;; 店で店員に May I help you? と声をかけられた。見ているだけのときの答えとして適切なものはどれか。 ;; *I'm just looking, thanks. ;; Yes, I'm helping you. ;; No, you may not. ;; I'm looking for you. ;; 「見ているだけです」は I'm just looking.。
+1 ;; 会話が自然になるように(　)に入るものを選べ。\nA: How about going to the movies this weekend?\nB: (　) ;; *That sounds great. ;; I'm going to the movies yesterday. ;; Yes, I did. ;; No, it isn't. ;; How about 〜ing? は誘いの表現。That sounds great.（いいね）と応じる。
+1 ;; 会話が自然になるように(　)に入るものを選べ。\nA: I'm sorry I'm late.\nB: (　) ;; *That's all right. ;; You're welcome. ;; Same to you. ;; Nice to meet you. ;; 謝られたときは That's all right. / No problem. などと答える。You're welcome. はお礼への返事。
+1 ;; 会話が自然になるように(　)に入るものを選べ。\nA: Can you pass me the salt?\nB: Sure. (　) ;; *Here you are. ;; You're welcome. ;; Excuse me. ;; I'm afraid not. ;; 物を手渡すときは Here you are. / Here it is.。
+2 ;; 会話が自然になるように(　)に入るものを選べ。\nA: Do you mind if I open the window?\nB: (　) It's hot in here. ;; *No, not at all. ;; Yes, I do. ;; Yes, I mind. ;; No, you can't. ;; Do you mind 〜? は「〜するといやですか」という意味なので、許可するときは No（いやではない）で答える。
+2 ;; 会話が自然になるように(　)に入るものを選べ。\nA: Would you like some more cake?\nB: (　) I'm full. ;; *No, thank you. ;; Yes, please. ;; Yes, I would like. ;; No, I don't like. ;; I'm full.（おなかがいっぱい）と続くので、ていねいに断る No, thank you.。
+2 ;; 会話が自然になるように(　)に入るものを選べ。\nA: You look pale. What's wrong?\nB: (　) ;; *I have a headache. ;; I'm fine. Nothing is wrong with you. ;; It's a wrong number. ;; I'm right. ;; What's wrong? は「どうしたの？」。体調を答える I have a headache.（頭が痛い）が自然。
+2 ;; 電話で May I speak to Ken? と言われた。自分が Ken のときの答えとして適切なものはどれか。 ;; *Speaking. ;; I'm Ken's. ;; You're speaking. ;; Ken is me. ;; 電話で「私です」と答えるときは Speaking. や This is he.（男性の場合）と言う。
+2 ;; 会話が自然になるように(　)に入るものを選べ。\nA: Why don't we have lunch together?\nB: (　) ;; *Sounds good. ;; Because I'm hungry. ;; I don't know why. ;; No, we didn't. ;; Why don't we 〜? は「〜しませんか」という誘い。理由をたずねる疑問文ではない。
+2 ;; 会話が自然になるように(　)に入るものを選べ。\nA: I passed the entrance exam!\nB: (　) ;; *Congratulations! ;; That's too bad. ;; Take care. ;; Never mind. ;; 合格を聞いたら Congratulations!（おめでとう）。That's too bad. は残念なことへの返事。
+3 ;; Would you mind closing the door? と頼まれた。引き受けるときの答えとして適切なものはどれか。 ;; *Of course not. ;; Yes, of course. ;; Yes, I would. ;; No, I can't. ;; mind は「いやだと思う」なので、引き受けるときは否定で答える（Of course not. / Not at all.）。Yes で答えると「いやだ」の意味になる。
+3 ;; 会話が自然になるように(　)に入るものを選べ。\nA: I don't like coffee.\nB: (　) I prefer tea. ;; *Neither do I. ;; So do I. ;; I don't, too. ;; Me neither don't. ;; 否定の文に「私も〜ない」と答えるときは Neither do I.（Me neither.）。So do I. は肯定文への返事。
+3 ;; Help yourself to the cookies. の意味として正しいものはどれか。 ;; *クッキーをご自由にどうぞ ;; クッキーを自分で作ってください ;; クッキーを運ぶのを手伝って ;; クッキーは自分のために取っておいて ;; help yourself to 〜 で「〜を自由に取って食べる」。食べ物をすすめるときの表現。
+
+@ english ;; 発音・アクセント ;; アクセント ;; hs1
+1 ;; 最も強く読む位置が、ほかの3つと異なる語はどれか。 ;; *hotel ;; music ;; picture ;; window ;; hotel は第2音節（ho-TEL）。ほかは第1音節を強く読む。
+1 ;; 最も強く読む位置が、ほかの3つと異なる語はどれか。 ;; *guitar ;; table ;; pencil ;; sister ;; guitar は第2音節（gui-TAR）。ほかは第1音節。
+1 ;; 最も強く読む位置が、ほかの3つと異なる語はどれか。 ;; *Japan ;; Canada ;; China ;; England ;; Japan は第2音節（Ja-PAN）。ほかは第1音節を強く読む。
+1 ;; 最も強く読む位置が、ほかの3つと異なる語はどれか。 ;; *effort ;; event ;; excite ;; agree ;; effort は第1音節（EF-fort）。ほかは第2音節を強く読む。
+1 ;; 最も強く読む位置が、ほかの3つと異なる語はどれか。 ;; *camera ;; piano ;; banana ;; potato ;; camera は第1音節（CAM-er-a）。piano・banana・potato は第2音節。
+1 ;; 最も強く読む位置が、ほかの3つと異なる語はどれか。 ;; *morning ;; advice ;; begin ;; ago ;; morning は第1音節（MOR-ning）。ほかは第2音節を強く読む。
+2 ;; 最も強く読む位置が、ほかの3つと異なる語はどれか。 ;; *beautiful ;; delicious ;; important ;; tomorrow ;; beautiful は第1音節（BEAU-ti-ful）。ほかは第2音節。
+2 ;; 最も強く読む位置が、ほかの3つと異なる語はどれか。 ;; *experience ;; volunteer ;; engineer ;; Japanese ;; experience は第2音節（ex-PE-ri-ence）。-eer や -ese で終わる語は語尾を強く読む。
+2 ;; 最も強く読む位置が、ほかの3つと異なる語はどれか。 ;; *mountain ;; career ;; police ;; machine ;; mountain は第1音節。career・police・machine は第2音節を強く読む。
+2 ;; photographer で最も強く読む音節はどれか。 ;; *第2音節（-tog-） ;; 第1音節（pho-） ;; 第3音節（-ra-） ;; 第4音節（-pher） ;; pho-TOG-ra-pher。photograph は第1音節、photographic は第3音節なので、形によって位置が変わる。
+2 ;; economic で最も強く読む音節はどれか。 ;; *第3音節（-nom-） ;; 第1音節（e-） ;; 第2音節（-co-） ;; 第4音節（-ic） ;; -ic で終わる語は、その直前の音節を強く読む（ec-o-NOM-ic）。economy は第2音節。
+2 ;; 最も強く読む位置が、ほかの3つと異なる語はどれか。 ;; *violin ;; calendar ;; character ;; alcohol ;; violin は第3音節（vi-o-LIN）。ほかは第1音節を強く読む。
+3 ;; record を名詞（記録）として使うとき、最も強く読む音節はどれか。 ;; *第1音節（rec-） ;; 第2音節（-cord） ;; どちらも同じ強さ ;; 文によって決まる ;; 名詞は前、動詞は後ろを強く読む語が多い（名前動後）。動詞の「記録する」は re-CORD。
+3 ;; 最も強く読む位置が、ほかの3つと異なる語はどれか。 ;; *technical ;; technique ;; unique ;; antique ;; technical は第1音節（TECH-ni-cal）。-ique で終わる語は語尾を強く読む。
+3 ;; catastrophe で最も強く読む音節はどれか。 ;; *第2音節（-tas-） ;; 第1音節（ca-） ;; 第3音節（-tro-） ;; 第4音節（-phe） ;; ca-TAS-tro-phe。つづりから第1音節と思いやすいので注意。
+
+@ english ;; 文法 ;; 接続詞 ;; hs1
+1 ;; (　)に入る語を選べ。\nI stayed home (　) it was raining. ;; *because ;; but ;; so ;; or ;; 「雨が降っていたので」と理由を表すので because。
+1 ;; (　)に入る語を選べ。\nHe is rich, (　) he is not happy. ;; *but ;; so ;; and ;; because ;; 「お金持ちだが幸せではない」と逆の内容をつなぐので but。
+1 ;; (　)に入る語を選べ。\nHurry up, (　) you'll miss the bus. ;; *or ;; and ;; but ;; so ;; 命令文, or 〜 で「〜しなさい、さもないと…」。
+1 ;; (　)に入る語を選べ。\nStudy hard, (　) you will pass the test. ;; *and ;; or ;; but ;; though ;; 命令文, and 〜 で「〜しなさい、そうすれば…」。
+1 ;; (　)に入る語を選べ。\n(　) it was cold, he went out without a coat. ;; *Though ;; Because ;; If ;; So ;; 「寒かったけれど」と逆接なので Though（Although）。
+1 ;; (　)に入る語を選べ。\nBoth Tom (　) Ken are high school students. ;; *and ;; or ;; nor ;; but ;; both A and B で「A も B も両方」。
+2 ;; (　)に入る語を選べ。\nEither you (　) I am wrong. ;; *or ;; and ;; nor ;; but ;; either A or B で「A か B のどちらか」。動詞は B に合わせるので am。
+2 ;; (　)に入る語を選べ。\nNot only he but also I (　) tired. ;; *am ;; is ;; are ;; be ;; not only A but also B が主語のとき、動詞は B（I）に合わせる。
+2 ;; (　)に入る語を選べ。\nHe was so tired (　) he went to bed early. ;; *that ;; as ;; when ;; because ;; so 〜 that … で「とても〜なので…」。
+2 ;; (　)に入る語を選べ。\nPlease wait here (　) I come back. ;; *until ;; by ;; since ;; while ;; until は「〜するまで（ずっと）」。by は前置詞で「〜までに」なので、文はつなげない。
+2 ;; (　)に入る語句を選べ。\n(　) you finish your homework, call me. ;; *As soon as ;; Unless ;; Although ;; Whether ;; as soon as 〜 で「〜するとすぐに」。時を表す節なので finish は現在形。
+2 ;; (　)に入る語を選べ。\nI will go (　) it rains or not. ;; *whether ;; if ;; unless ;; that ;; whether A or not で「A であろうとなかろうと」。この副詞節では if は使えない。
+3 ;; (　)に入る語を選べ。\nYou'll be late (　) you hurry. ;; *unless ;; if ;; when ;; because ;; unless は「〜しない限り」＝if 〜 not。「急がないと遅れる」。
+3 ;; (　)に入る語を選べ。\nNo sooner had I arrived at the station (　) it began to rain. ;; *than ;; when ;; that ;; before ;; No sooner 〜 than … で「〜するとすぐに…」。Hardly 〜 when … も同じ意味。
+3 ;; (　)に入る語句を選べ。\nTake an umbrella in case it (　). ;; *rains ;; will rain ;; rained ;; is raining ;; in case 〜 は「〜するといけないから」。条件を表す節なので未来でも現在形。
+
+@ english ;; 文法 ;; 前置詞 ;; hs1
+1 ;; (　)に入る語を選べ。\nThe class starts (　) nine o'clock. ;; *at ;; on ;; in ;; for ;; 時刻には at を使う。
+1 ;; (　)に入る語を選べ。\nI go to church (　) Sundays. ;; *on ;; at ;; in ;; by ;; 曜日や日付には on を使う。
+1 ;; (　)に入る語を選べ。\nMy birthday is (　) April. ;; *in ;; on ;; at ;; for ;; 月・季節・年には in を使う。
+1 ;; (　)に入る語を選べ。\nI go to school (　) bus. ;; *by ;; on ;; with ;; in ;; 交通手段は by bus のように by＋冠詞なしの名詞。
+1 ;; (　)に入る語を選べ。\nI have studied English (　) three hours. ;; *for ;; since ;; during ;; in ;; for は「〜の間」と期間の長さを表す。since は「〜から（今まで）」。
+1 ;; (　)に入る語を選べ。\nShe has lived here (　) 2015. ;; *since ;; for ;; from ;; at ;; since は過去の起点から今までの継続を表し、現在完了とよくいっしょに使う。
+2 ;; (　)に入る語を選べ。\nPlease finish the report (　) Friday. ;; *by ;; until ;; for ;; since ;; by は「〜までに（期限）」。until は「〜までずっと（継続）」。
+2 ;; (　)に入る語を選べ。\nI visited my grandmother (　) the summer vacation. ;; *during ;; while ;; for ;; since ;; during は前置詞で「〜の間に」。while は接続詞なので後ろに主語と動詞がくる。
+2 ;; (　)に入る語を選べ。\nThe train will arrive (　) ten minutes. ;; *in ;; after ;; for ;; by ;; 未来について「今から〜後に」は in を使う。
+2 ;; (　)に入る語を選べ。\nThe money was divided (　) the two brothers. ;; *between ;; among ;; with ;; of ;; 2者の間は between、3者以上の間は among。
+2 ;; (　)に入る語を選べ。\nHe cut the paper (　) scissors. ;; *with ;; by ;; in ;; of ;; 道具を使って「〜で」というときは with。
+2 ;; (　)に入る語を選べ。\nThe store is open (　) 9 a.m. to 8 p.m. ;; *from ;; since ;; at ;; for ;; from A to B で「A から B まで」。
+3 ;; (　)に入る語を選べ。\nWine is made (　) grapes. ;; *from ;; of ;; by ;; in ;; 原料が変化して元の形が分からないときは be made from。材料がそのまま分かるときは be made of。
+3 ;; (　)に入る語を選べ。\nThis desk is made (　) wood. ;; *of ;; from ;; into ;; by ;; 木の机は見て材料が木だと分かるので be made of。
+3 ;; For all his wealth, he is not happy. の For all の意味として正しいものはどれか。 ;; *〜にもかかわらず ;; 〜のために ;; 〜のすべてに対して ;; 〜の代わりに ;; for all 〜 は「〜にもかかわらず」で in spite of と同じ。
