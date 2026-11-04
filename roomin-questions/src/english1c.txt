@@ -1,0 +1,67 @@
+# 英語 文法（追加 第2弾 その2）
+@ english ;; 文法 ;; 分詞 ;; hs1
+1 ;; (　)に入る語句を選べ。\nLook at the (　) leaves. ;; *falling ;; fell ;; fall ;; falls ;; 「落ちていく葉」と、している最中の動作を表すので現在分詞。
+1 ;; (　)に入る語句を選べ。\nWho fixed the (　) window? ;; *broken ;; breaking ;; break ;; broke ;; 窓は「割られた」状態なので過去分詞。
+1 ;; (　)に入る語句を選べ。\nPortuguese is the language (　) in Brazil. ;; *spoken ;; speaking ;; speaks ;; spoke ;; 言語は「話される」側なので過去分詞。in Brazil がついて後ろから説明している。
+1 ;; (　)に入る語句を選べ。\nThe man (　) at the door is my uncle. ;; *standing ;; stood ;; stands ;; to stand ;; 「ドアのところに立っている男性」。現在分詞が語句をともなって後ろから名詞を説明する。
+1 ;; (　)に入る語句を選べ。\nI was (　) during the long speech. ;; *bored ;; boring ;; bore ;; to bore ;; 人が「退屈させられた」ので bored。話のほうを説明するなら boring。
+1 ;; (　)に入る語句を選べ。\nIt was a very (　) movie, so I fell asleep. ;; *boring ;; bored ;; bore ;; to bore ;; 映画が人を退屈させる側なので boring。
+2 ;; (　)に入る語句を選べ。\nI saw him (　) the road. ;; *crossing ;; crossed ;; to cross ;; crosses ;; see 人 〜ing で「人が〜しているところを見る」。
+2 ;; (　)に入る語句を選べ。\nI want this letter (　) today. ;; *sent ;; send ;; sending ;; to sending ;; want 物 過去分詞 で「物が〜されることを望む」。手紙は「送られる」側。
+2 ;; (　)に入る語句を選べ。\n(　) along the street, I met an old friend. ;; *Walking ;; Walked ;; To walk ;; Walk ;; 分詞構文で「通りを歩いていると」。主語 I が歩く側なので現在分詞。
+2 ;; (　)に入る語句を選べ。\n(　) in Kyoto, she knows a lot about temples. ;; *Born ;; Bearing ;; Being bear ;; To born ;; Being born の Being が省略された分詞構文。「京都で生まれたので」。
+2 ;; (　)に入る語句を選べ。\nShe kept (　) for an hour. ;; *talking ;; talked ;; to talk ;; talk ;; keep 〜ing で「〜し続ける」。
+2 ;; (　)に入る語句を選べ。\nI got my hair (　) yesterday. ;; *cut ;; cutting ;; to cut ;; cuts ;; get 物 過去分詞 で「物を〜してもらう」。cut は過去分詞も cut。
+3 ;; (　)に入る語句を選べ。\n(　) from his accent, he must be from Osaka. ;; *Judging ;; Judged ;; To judge ;; Judge ;; Judging from 〜 は「〜から判断すると」という慣用的な分詞構文。
+3 ;; (　)に入る語句を選べ。\nIt (　) fine, we went on a picnic. ;; *being ;; been ;; is ;; to be ;; 主語が文の主語とちがうので、分詞の前に残した独立分詞構文。As it was fine の意味。
+3 ;; (　)に入る語句を選べ。\n(　) what to say, I kept silent. ;; *Not knowing ;; Knowing not ;; Not known ;; Don't knowing ;; 分詞構文の否定は、分詞の直前に not を置く。
+
+@ english ;; 文法 ;; 比較 ;; hs1
+1 ;; (　)に入る語句を選べ。\nMy brother is three years (　) than I. ;; *older ;; old ;; oldest ;; more old ;; than があるので比較級。差は three years で表す。
+1 ;; (　)に入る語句を選べ。\nThis is the (　) song in Japan now. ;; *most popular ;; more popular ;; popularest ;; popular ;; 日本でいちばん人気なので最上級。popular は長い語なので most をつける。
+1 ;; (　)に入る語句を選べ。\nKen can run as (　) as Tom. ;; *fast ;; faster ;; fastest ;; more fast ;; as 〜 as の間は原級。
+1 ;; (　)に入る語句を選べ。\nShe sings (　) than her sister. ;; *better ;; good ;; best ;; more well ;; well の比較級は better。
+1 ;; Tom is not as tall as Ken. の意味として正しいものを選べ。 ;; *トムはケンほど背が高くない ;; トムはケンと同じくらい背が高い ;; トムはケンより背が高い ;; ケンはトムほど背が高くない ;; not as 〜 as … は「…ほど〜ない」。
+1 ;; (　)に入る語を選べ。\nThis book is (　) more interesting than that one. ;; *much ;; very ;; so ;; too ;; 比較級を強めるときは much や far を使う。very は使えない。
+2 ;; (　)に入る語句を選べ。\nThis room is twice (　) that one. ;; *as large as ;; larger as ;; as larger as ;; large than ;; 倍数＋as 原級 as で「〜の…倍」。
+2 ;; (　)に入る語句を選べ。\nHe is one of the best (　) on the team. ;; *players ;; player ;; playing ;; play ;; one of the 最上級＋複数名詞 で「最も〜なものの1つ」。
+2 ;; (　)に入る語を選べ。\nWhich do you like (　), tea or coffee? ;; *better ;; more ;; best ;; much ;; 2つのうちどちらが好きかは like better でたずねる。
+2 ;; (　)に入る語句を選べ。\nOsaka is the (　) largest city in Japan. ;; *second ;; two ;; twice ;; secondly ;; the second 最上級 で「2番目に〜な」。
+2 ;; (　)に入る語を選べ。\nThis car is superior (　) that one. ;; *to ;; than ;; for ;; with ;; superior（〜よりすぐれた）は than ではなく to をとる。inferior to も同じ。
+2 ;; (　)に入る語を選べ。\nThis question is (　) difficult than that one. ;; *less ;; fewer ;; little ;; least ;; less 原級 than で「…ほど〜ない」。difficult は形容詞なので fewer は使えない。
+3 ;; (　)に入る語句を選べ。\nThe (　), the better. ;; *sooner ;; soon ;; soonest ;; more soon ;; The 比較級, the 比較級 の省略形で「早ければ早いほどよい」。
+3 ;; (　)に入る語句を選べ。\nPlease come as early as (　). ;; *possible ;; possibly ;; can ;; able ;; as 〜 as possible で「できるだけ〜」。as early as you can も同じ意味。
+3 ;; He is the last person to tell a lie. の意味として正しいものを選べ。 ;; *彼は決してうそをつくような人ではない ;; 彼は最後にうそをついた人だ ;; 彼は最後までうそをつき続けた ;; 彼はうそをつく最後の機会をのがした ;; the last 名詞 to 〜 は「最も〜しそうにない」という意味。
+@ english ;; 文法 ;; 関係詞 ;; hs1
+1 ;; (　)に入る語を選べ。\nThe man (　) is talking with Ken is our teacher. ;; *who ;; which ;; whose ;; what ;; 先行詞が人で、関係詞が is talking の主語になるので who。
+1 ;; (　)に入る語を選べ。\nThis is the bike (　) my father gave me. ;; *which ;; who ;; whose ;; where ;; 先行詞が物（the bike）で gave の目的語になるので which。省略してもよい。
+1 ;; (　)に入る語を選べ。\nI have a cat (　) eyes are blue. ;; *whose ;; which ;; that ;; who ;; 「その目が青いネコ」と所有を表すので whose。先行詞が動物でも whose を使える。
+1 ;; (　)に入る語を選べ。\nThis is the park (　) we played as children. ;; *where ;; which ;; when ;; who ;; 場所の先行詞で、後ろが we played（完全な文）なので関係副詞 where。
+1 ;; (　)に入る語を選べ。\nI can't believe (　) you told me. ;; *what ;; which ;; that ;; who ;; 「あなたが私に言ったこと」は先行詞をふくむ what で表す。
+1 ;; (　)に入る語を選べ。\nI know the reason (　) she was angry. ;; *why ;; where ;; when ;; what ;; 理由を表す the reason のあとは関係副詞 why。
+2 ;; (　)に入る語を選べ。\nThis is the best movie (　) I have ever seen. ;; *that ;; what ;; whose ;; where ;; 先行詞に最上級がつくときは、関係代名詞は that がよく使われる。
+2 ;; (　)に入る語句を選べ。\nHe is the person (　) I spoke yesterday. ;; *to whom ;; whom to ;; to who ;; who to ;; speak to 人 の to を関係代名詞の前に出すと to whom。前置詞のあとは whom。
+2 ;; (　)に入る語を選べ。\nI went to Kyoto in 2010, (　) I was a student. ;; *when ;; where ;; which ;; that ;; 時を表す語句に、コンマのあとで説明を加える非制限用法の when。
+2 ;; (　)に入る語を選べ。\nLook at the house (　) roof is red. ;; *whose ;; which ;; that ;; whom ;; 「その屋根が赤い家」なので所有を表す whose。
+2 ;; (　)に入る語句を選べ。\nHe is (　) is called a genius. ;; *what ;; which ;; that ;; who ;; what is called 〜 で「いわゆる〜」。
+2 ;; (　)に入る語を選べ。\nThis is (　) I solved the problem. ;; *how ;; what ;; which ;; whose ;; This is how 〜 で「このようにして〜した」。how は方法を表す関係副詞。
+3 ;; (　)に入る語を選べ。\n(　) happens, I will be on your side. ;; *Whatever ;; However ;; Whoever ;; Whichever ;; Whatever happens で「何が起ころうとも」。
+3 ;; (　)に入る語を選べ。\nYou can sit (　) you like. ;; *wherever ;; whatever ;; whoever ;; however ;; wherever は「〜するところならどこでも」。
+3 ;; (　)に入る語を選べ。\n(　) hard you try, you can't finish it in a day. ;; *However ;; Whatever ;; Whenever ;; Whoever ;; However 形容詞・副詞 主語 動詞 で「どんなに〜しても」。
+
+@ english ;; 文法 ;; 仮定法 ;; hs2
+1 ;; (　)に入る語句を選べ。\nIf I (　) wings, I could fly to you. ;; *had ;; have ;; will have ;; having ;; 今の事実に反する仮定なので、if 節は過去形（仮定法過去）。
+1 ;; (　)に入る語句を選べ。\nI wish it (　) sunny today. ;; *were ;; is ;; will be ;; be ;; 今かなわない願望なので I wish 仮定法過去。be 動詞は were を使うことが多い。
+1 ;; (　)に入る語句を選べ。\nIf I (　) you, I would tell her the truth. ;; *were ;; am ;; be ;; have been ;; If I were you で「もし私があなたなら」。
+1 ;; (　)に入る語句を選べ。\nShe looks as if she (　) a ghost. ;; *had seen ;; sees ;; has seen ;; will see ;; 「まるで（それより前に）幽霊を見たかのように」なので as if 仮定法過去完了。
+1 ;; (　)に入る語句を選べ。\nIf I had known her address, I (　) to her. ;; *would have written ;; would write ;; will write ;; had written ;; 過去の事実に反する仮定なので、主節は would have 過去分詞。
+1 ;; (　)に入る語句を選べ。\nI wish I (　) to the party last night. ;; *had gone ;; went ;; go ;; would go ;; 昨夜（過去）のことへの後悔なので、I wish 仮定法過去完了。
+2 ;; (　)に入る語句を選べ。\nWithout your help, I (　) have failed. ;; *would ;; will ;; can ;; must ;; Without 〜 が if 節のかわり。過去の仮定なので would have 過去分詞。
+2 ;; (　)に入る語句を選べ。\nIf (　) I had listened to my mother! ;; *only ;; ever ;; even ;; once ;; If only 〜! は「〜でありさえすればなあ」という強い願望。
+2 ;; (　)に入る語句を選べ。\nI left home early; (　) I would have missed the train. ;; *otherwise ;; however ;; therefore ;; besides ;; otherwise は「そうでなければ」で、if 節のかわりになる。
+2 ;; (　)に入る語句を選べ。\nIf the sun were (　) rise in the west, I would not change my mind. ;; *to ;; for ;; as ;; should ;; If 主語 were to 原形 は「仮に〜するとしたら」。実現の可能性がほとんどないことを表す。
+2 ;; (　)に入る語句を選べ。\nI'd rather you (　) home now. ;; *went ;; go ;; will go ;; going ;; would rather 主語 仮定法過去 で「（人に）むしろ〜してほしい」。
+2 ;; (　)に入る語句を選べ。\n(　) you won the lottery, what would you do? ;; *Suppose ;; Unless ;; Although ;; Because ;; Suppose（Supposing）〜 は「もし〜だとしたら」。if のかわりに使える。
+3 ;; (　)に入る語句を選べ。\nIt's high time you (　) your room. ;; *cleaned ;; clean ;; will clean ;; have cleaned ;; It's high time 仮定法過去 で「とっくに〜していい時間だ」。
+3 ;; (　)に入る語句を選べ。\n(　) it not been for his advice, I would have failed. ;; *Had ;; If ;; Were ;; Has ;; If it had not been for 〜 の if を省略すると Had it not been for 〜 になる。
+3 ;; (　)に入る語句を選べ。\nHe treats me as though I (　) a child. ;; *were ;; am ;; will be ;; have been ;; as though は as if と同じ。今の事実に反するので仮定法過去。
