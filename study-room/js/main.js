@@ -97,7 +97,11 @@ function showLogin(mode = 'login') {
       S.useUser(r.id);
       await Sync.adopt(r.data);
       if (r.moved) toast('この端末の記録を、ネットに引っ越しました', 3000);
+      // 新しく始めた人へ：新規登録記念のレアチケット10枚をプレゼントBOXに
+      const welcome = mode === 'signup' && !r.moved;
+      if (welcome) { try { S.addGift({ id: 'welcome', kind: 'ticket', amount: 10, title: '新規登録記念', from: 'operator' }); S.save(); } catch (e) { console.warn('welcome', e); } }
       startAs(Auth.currentUser());
+      if (welcome) setTimeout(() => toast('新規登録記念のプレゼントが、プレゼントBOXに届いています', 3600), 1500);
     } catch (ex) { err.textContent = ex.message; vibrate(80); btn.disabled = false; }
   };
 }
@@ -1250,7 +1254,7 @@ function photoMode() {
 
 // =========================== 更新のお知らせ ===========================
 // このプログラムの版（version.json と同じにする。公開のたびに上げる）
-const APP_VERSION = '2.15.0';
+const APP_VERSION = '1.0.0';
 // 新しい版が出たら、みんな同じタイミングでそろうように強制で再起動する。
 // 開いた時・画面に戻った時・1分ごとに version.json を見る
 async function latestVersion() {
