@@ -23,3 +23,5 @@
 - ユーザーが「許可」「OK」などと言ったら、`node study-room-beta/tools/release/release.js` で本番に写し、プルリクエスト → main にマージ → 本番に出る。
 - テスト版：https://blackt0461-arch.github.io/-/study-room-beta/ ／ 本番：https://blackt0461-arch.github.io/-/study-room/
 - くわしくは study-room-beta/SPEC.md の「23. 新しい版の出し方」。
+- 更新のお知らせ（version.json の notes）は、何が変わったかが一目でわかる短い文にする。「〜しました」で終える（例：「パズル機能を追加しました」「BGMを追加しました」）。「パズルの実装」のような言葉だけの書き方はしない。3つまで、1つ20字くらいまで。数字や細かい説明は入れない。
+- 本番に出すときは、前に本番に出した版からの変更を全部まとめてお知らせに書く（テスト版を何回か出していても、本番の人には1回分しか見えないため）。
