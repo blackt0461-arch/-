@@ -1,0 +1,68 @@
+# 英語 文法（追加 第2弾 その1）
+@ english ;; 文法 ;; 時制 ;; hs1
+1 ;; (　)に入る語句を選べ。\nShe (　) TV now. ;; *is watching ;; watches ;; watched ;; has watched ;; now があるので「今〜しているところ」の現在進行形。
+1 ;; (　)に入る語句を選べ。\nMy father (　) to Tokyo last week. ;; *went ;; goes ;; has gone ;; will go ;; last week（先週）は過去の時点なので過去形。
+1 ;; (　)に入る語句を選べ。\nI (　) breakfast yet. ;; *haven't had ;; didn't have ;; don't have ;; won't have ;; 否定文の yet（まだ）は現在完了の完了用法とよく使う。
+1 ;; (　)に入る語句を選べ。\nWater (　) at 100℃. ;; *boils ;; boiled ;; is boiling ;; will boil ;; いつも成り立つ一般的な事実は現在形で表す。
+1 ;; (　)に入る語句を選べ。\nThey (　) tennis when it began to rain. ;; *were playing ;; are playing ;; play ;; have played ;; 雨が降り始めたとき（過去の一時点）に進行中だった動作なので過去進行形。
+1 ;; (　)に入る語句を選べ。\nI (　) visit my aunt next Sunday. ;; *am going to ;; was going ;; have ;; did ;; be going to 原形 で予定を表す。next Sunday は未来。
+2 ;; (　)に入る語句を選べ。\nI (　) my homework just now. ;; *finished ;; have finished ;; had finished ;; finish ;; just now（たった今）は過去を表す語句なので、現在完了ではなく過去形を使う。just なら現在完了。
+2 ;; (　)に入る語句を選べ。\nWhen (　) you come to Japan? ;; *did ;; have ;; do ;; are ;; When で始まる疑問文は、はっきりした時を問うので現在完了は使えない。過去形の疑問文。
+2 ;; (　)に入る語句を選べ。\nHe (　) to Paris twice. ;; *has been ;; has gone ;; went to ;; is going ;; have been to 〜 で「〜に行ったことがある」（経験）。twice（2回）は経験の回数。
+2 ;; (　)に入る語句を選べ。\nShe isn't here. She (　) to Paris. ;; *has gone ;; has been ;; goes ;; was going ;; have gone to 〜 は「〜へ行ってしまった（今ここにいない）」という完了・結果。
+2 ;; (　)に入る語句を選べ。\nIf it (　) fine tomorrow, let's go on a picnic. ;; *is ;; will be ;; was ;; were ;; 条件を表す if 節の中では、未来のことも現在形で表す。
+2 ;; (　)に入る語句を選べ。\nI (　) for the bus when I saw Ken. ;; *was waiting ;; am waiting ;; have waited ;; wait ;; ケンを見かけたとき、バスを待っている最中だったので過去進行形。
+3 ;; (　)に入る語句を選べ。\nBy next April, I (　) English for five years. ;; *will have studied ;; have studied ;; will study ;; had studied ;; 未来の時点（来年の4月）までの継続は未来完了形で表す。
+3 ;; (　)に入る語句を選べ。\nHe said that he (　) tired. ;; *was ;; is ;; will be ;; has been ;; 主節が過去（said）なので、that 節の動詞も過去に合わせる（時制の一致）。
+3 ;; (　)に入る語句を選べ。\nOur teacher told us that the earth (　) around the sun. ;; *goes ;; went ;; had gone ;; would go ;; 地球が太陽のまわりを回るのは不変の真理なので、時制の一致を受けずに現在形のまま。
+
+@ english ;; 文法 ;; 助動詞 ;; hs1
+1 ;; (　)に入る語句を選べ。\nYou (　) not play soccer here. It's dangerous. ;; *must ;; need ;; would ;; will ;; must not で「〜してはいけない」という禁止。
+1 ;; (　)に入る語句を選べ。\n(　) you help me with my homework? ;; *Could ;; Must ;; Should ;; Shall ;; Could you 〜? は「〜していただけますか」というていねいな依頼。
+1 ;; (　)に入る語句を選べ。\n"(　) I carry your bag?" "Yes, please." ;; *Shall ;; Will ;; Must ;; Do ;; Shall I 〜? は「（私が）〜しましょうか」という申し出。
+1 ;; (　)に入る語句を選べ。\n"(　) we go to the park?" "Yes, let's." ;; *Shall ;; Will ;; Must ;; May ;; Shall we 〜? は「（いっしょに）〜しましょうか」という誘い。Yes, let's. で答える。
+1 ;; He must be hungry. の意味として正しいものを選べ。 ;; *彼はおなかがすいているにちがいない ;; 彼はおなかをすかせなければならない ;; 彼はおなかがすいているかもしれない ;; 彼はおなかがすいているはずがない ;; be 動詞の前の must はふつう「〜にちがいない」という推量。
+1 ;; You should see this movie. の意味として正しいものを選べ。 ;; *あなたはこの映画を見るべきだ ;; あなたはこの映画を見てはいけない ;; あなたはこの映画を見たにちがいない ;; あなたはこの映画を見る必要がない ;; should は「〜すべきだ」「〜したほうがよい」。
+2 ;; (　)に入る語句を選べ。\nTomorrow is Sunday. You (　) get up early. ;; *don't have to ;; must not ;; can't ;; should ;; 日曜日なので早起きする必要はない。must not にすると「早起きしてはいけない」になる。
+2 ;; (　)に入る語句を選べ。\nHe (　) be at home. All the lights are off. ;; *can't ;; must ;; should ;; will ;; 電気がすべて消えているので「家にいるはずがない」。can't は強い否定の推量。
+2 ;; (　)に入る語句を選べ。\nI (　) rather not go out tonight. ;; *would ;; should ;; could ;; had ;; would rather not 原形 で「むしろ〜したくない」。not の位置に注意。
+2 ;; (　)に入る語句を選べ。\nIt's late. You (　) as well go home now. ;; *may ;; must ;; can't ;; should not ;; may as well 原形 で「〜したほうがよい（〜するのも悪くない）」。
+2 ;; (　)に入る語句を選べ。\nWill you (　) the window? ;; *open ;; opening ;; to open ;; opened ;; Will you 〜? は依頼の表現。助動詞のあとは原形。
+2 ;; (　)に入る語句を選べ。\nWhen I was a child, I (　) often go fishing with my father. ;; *would ;; will ;; should ;; must ;; 過去の習慣「よく〜したものだ」は would（often）で表せる。
+3 ;; She may have forgotten the promise. の意味として正しいものを選べ。 ;; *彼女は約束を忘れたのかもしれない ;; 彼女は約束を忘れたにちがいない ;; 彼女は約束を忘れたはずがない ;; 彼女は約束を忘れるべきではなかった ;; may have 過去分詞 は「〜したかもしれない」という過去への推量。
+3 ;; You must have been tired yesterday. の意味として正しいものを選べ。 ;; *あなたはきのう疲れていたにちがいない ;; あなたはきのう疲れていなければならなかった ;; あなたはきのう疲れていたかもしれない ;; あなたはきのう疲れていたはずがない ;; must have 過去分詞 は「〜したにちがいない」。
+3 ;; (　)に入る語句を選べ。\nIt is necessary that he (　) there at once. ;; *go ;; went ;; going ;; to go ;; necessary（必要な）などに続く that 節では (should) 動詞の原形を使う。
+
+@ english ;; 文法 ;; 受動態 ;; hs1
+1 ;; (　)に入る語句を選べ。\nThis picture (　) by my sister. ;; *was painted ;; painted ;; is painting ;; was painting ;; 絵は「描かれた」側なので受動態の過去形。
+1 ;; (　)に入る語句を選べ。\nThese cars are (　) in Japan. ;; *made ;; make ;; making ;; to make ;; be made in 〜 で「〜でつくられている」。be 動詞のあとは過去分詞。
+1 ;; (　)に入る語句を選べ。\nThe window was (　) by Tom. ;; *broken ;; broke ;; break ;; breaking ;; break の過去分詞は broken。broke は過去形。
+1 ;; (　)に入る語句を選べ。\n(　) English taught at this school? ;; *Is ;; Does ;; Do ;; Has ;; 受動態の疑問文は be 動詞を文頭に出す。taught は過去分詞。
+1 ;; (　)に入る語句を選べ。\nThe door was not (　). ;; *locked ;; lock ;; locking ;; to lock ;; 受動態の否定文は be 動詞のあとに not を置き、過去分詞を続ける。
+1 ;; (　)に入る語句を選べ。\nMany stars can (　) tonight. ;; *be seen ;; see ;; seen ;; be seeing ;; 助動詞のある受動態は 助動詞＋be＋過去分詞。星は「見られる」側。
+2 ;; (　)に入る語句を選べ。\nThe baby was (　) Hanako after her grandmother. ;; *named ;; naming ;; name ;; to name ;; name A B（A を B と名づける）の受動態で A is named B。after は「〜にちなんで」。
+2 ;; (　)に入る語を選べ。\nI was born (　) 2008. ;; *in ;; on ;; at ;; by ;; 年には in を使う。be born は受動態の形をとる。
+2 ;; (　)に入る語句を選べ。\nI had my bag (　) on the train. ;; *stolen ;; steal ;; stole ;; stealing ;; have 物 過去分詞 で「物を〜される（被害）」。I was stolen my bag. とはいえない。
+2 ;; (　)に入る語を選べ。\nThe room was filled (　) smoke. ;; *with ;; by ;; of ;; in ;; be filled with 〜 で「〜でいっぱいである」。
+2 ;; (　)に入る語を選べ。\nHe was laughed (　) by everyone. ;; *at ;; to ;; with ;; for ;; laugh at 〜（〜を笑う）の受動態は be laughed at by 〜。at を落とさない。
+2 ;; (　)に入る語を選べ。\nThis song is known (　) many people. ;; *to ;; by ;; with ;; for ;; be known to 〜 で「〜に知られている」。
+3 ;; The problem is being discussed now. の意味として正しいものを選べ。 ;; *その問題は今話し合われているところだ ;; その問題は今話し合われたところだ ;; その問題は今話し合っている ;; その問題はもう話し合う必要がない ;; is being 過去分詞 は進行形の受動態で「〜されているところだ」。
+3 ;; (　)に入る語を選べ。\nPaper is made (　) wood. ;; *from ;; of ;; by ;; into ;; 紙は木から作られるが、見た目では木と分からないほど変化しているので from。
+3 ;; Nobody has seen him since. とほぼ同じ意味の文はどれか。 ;; *He hasn't been seen by anybody since. ;; He has been seen by nobody yet. ;; He hasn't seen anybody since. ;; Anybody hasn't seen him since. ;; nobody が主語の文を受動態にすると、not＋by anybody の形になる。Anybody 〜 not の語順は使わない。
+
+@ english ;; 文法 ;; 不定詞と動名詞 ;; hs1
+1 ;; (　)に入る語句を選べ。\nI hope (　) you again soon. ;; *to see ;; seeing ;; see ;; saw ;; hope は to 不定詞を目的語にとる。
+1 ;; (　)に入る語句を選べ。\nThank you for (　) me. ;; *helping ;; help ;; to help ;; helped ;; 前置詞 for のあとは動名詞。
+1 ;; (　)に入る語句を選べ。\nMy dream is (　) a teacher. ;; *to become ;; become ;; became ;; becomes ;; 「先生になること」と補語になる名詞的用法の to 不定詞。
+1 ;; (　)に入る語句を選べ。\nI don't know what (　). ;; *to do ;; doing ;; do ;; done ;; 疑問詞＋to 不定詞で「何を〜すべきか」。
+1 ;; (　)に入る語句を選べ。\nI was glad (　) the news. ;; *to hear ;; hearing ;; hear ;; heard ;; 感情を表す形容詞のあとの to 不定詞は「〜して」と感情の原因を表す。
+1 ;; Swimming in this river is dangerous. の文の主語はどれか。 ;; *Swimming in this river ;; this river ;; river ;; dangerous ;; 動名詞のかたまり「この川で泳ぐこと」が主語。だから動詞は単数の is。
+2 ;; (　)に入る語句を選べ。\nWould you mind (　) the door? ;; *closing ;; to close ;; close ;; closed ;; mind は動名詞だけを目的語にとる。「ドアを閉めていただけますか」。
+2 ;; (　)に入る語句を選べ。\nI tried (　) the box, but it was too heavy. ;; *to lift ;; lifting ;; lift ;; lifted ;; try to 〜 は「〜しようとする（実際にはできなかった）」。try 〜ing は「ためしに〜してみる」。
+2 ;; (　)に入る語句を選べ。\nHe told me (　) here. ;; *to wait ;; wait ;; waiting ;; waited ;; tell 人 to 〜 で「人に〜するように言う」。
+2 ;; (　)に入る語句を選べ。\nIt is difficult for me (　) this book. ;; *to read ;; reading ;; read ;; reads ;; It is 形容詞 for 人 to 〜 で「（人が）〜するのは…だ」。
+2 ;; (　)に入る語句を選べ。\nShe is proud of (　) a doctor. ;; *being ;; be ;; to be ;; been ;; 前置詞 of のあとは動名詞。be proud of 〜 で「〜を誇りに思う」。
+2 ;; (　)に入る語句を選べ。\nI have no friends to play (　). ;; *with ;; to ;; for ;; on ;; play with friends（友達と遊ぶ）なので、friends を後ろから説明するときも with が必要。
+3 ;; (　)に入る語句を選べ。\nHe was so kind as (　) me the way. ;; *to show ;; showing ;; show ;; shown ;; so 形容詞 as to 〜 で「〜するほど…だ」。「親切にも道を教えてくれた」。
+3 ;; (　)に入る語句を選べ。\nI'm sorry for not (　) to you sooner. ;; *writing ;; to write ;; write ;; written ;; 動名詞を否定するときは not を直前に置く。前置詞 for のあとなので動名詞。
+3 ;; (　)に入る語を選べ。\nThere is no (　) what will happen tomorrow. ;; *telling ;; tell ;; to tell ;; told ;; There is no 〜ing で「〜することはできない」。
