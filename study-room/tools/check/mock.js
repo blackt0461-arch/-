@@ -11,6 +11,7 @@ module.exports = async function mock(ctx) {
     if (name === 'sr_load') return db.users[un] ? ok({ username: un, data: db.users[un].data }) : ng('bad_token');
     if (name === 'sr_save') { if (db.users[un]) db.users[un].data = body.p_data; return ok({ updated_at: new Date().toISOString() }); }
     if (name === 'sr_friend_list') return ok([]);
+    if (name === 'sr_gift_list') return ok([{ id: 1, title: 'いつもありがとう', kind: 'ticket', amount: 3, item_id: null, created_at: new Date().toISOString() }]);
     return ok(null);
   });
 };

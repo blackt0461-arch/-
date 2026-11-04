@@ -340,7 +340,7 @@ h3.sec { font-size: 14px; color: var(--muted); margin: 18px 4px 8px; font-weight
 .nc-top small { color: var(--muted); font-size: 12px; }
 .nc-new { font-style: normal; font-size: 10px; font-weight: 900; padding: 2px 7px; border-radius: 99px; background: #ff6b5a; color: #fff; }
 .news-form { display: grid; gap: 10px; }
-.news-form input, .news-form textarea { background: rgba(255,255,255,.07); border: 1px solid var(--line); border-radius: 12px; padding: 12px; color: var(--text); font: inherit; font-size: 16px; resize: vertical; }
+.news-form input, .news-form textarea, .news-form select { background: rgba(255,255,255,.07); border: 1px solid var(--line); border-radius: 12px; padding: 12px; color: var(--text); font: inherit; font-size: 16px; resize: vertical; }
 .row2 { display: grid; grid-template-columns: 1fr 1.4fr; gap: 10px; }
 .admin .compose { width: 100%; margin-bottom: 14px; flex-direction: row; }
 
