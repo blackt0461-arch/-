@@ -18,6 +18,7 @@ import * as Auth from './auth.js';
 import * as DL from './download.js';
 import * as Sync from './sync.js';
 import { rpc } from './cloud.js';
+import { PUZZLES, puzzleById, levelInfo, mountPuzzle } from './puzzles.js';
 
 const SUBJECTS = [
   { id: 'physics', name: '物理', ready: true },
@@ -62,6 +63,16 @@ async function loadSavedPacks() {
   const u = Auth.currentUser();
   let granted = [];
   if (u) { try { granted = (await rpc('sr_my_codes', { p_token: u.token })) || []; } catch (e) { /* まだ準備できていない・オフライン */ } }
+  // 「MODE:puzzle:時刻」は、管理者がモードを変えた知らせ（問題集ではない）。いちばん新しいものを使う
+  const modes = granted.filter(c => /^MODE:/.test(c)).map(c => c.split(':')).map(([, m, t]) => ({ m, t: +t || 0 })).filter(x => x.m === 'study' || x.m === 'puzzle').sort((a, b) => a.t - b.t);
+  granted = granted.filter(c => !/^MODE:/.test(c));
+  const last = modes[modes.length - 1];
+  if (last && last.t > (pr.modeAt || 0)) {
+    const changed = pr.mode !== last.m;
+    pr.mode = last.m; pr.modeAt = last.t; S.save(); Sync.push?.();
+    app.querySelector('.mode-sheet')?.remove();
+    if (changed && app.querySelector('.home')) { showHome(); toast(`管理者が「${last.m === 'puzzle' ? 'パズル' : '勉強'}」に変えました`, 3200); }
+  }
   const fresh = granted.map(normCode).filter(c => !(pr.codes || []).includes(c));
   const got = [];
   for (const c of [...(pr.codes || []), ...fresh]) {
@@ -98,6 +109,9 @@ function vibrate(p) { try { navigator.vibrate && navigator.vibrate(p); } catch (
 function sub() { return S.subject(subjectId); }
 const HS = () => S.house();
 const isAdmin = () => Auth.isAdmin();
+const isPuzzle = () => S.profile().mode === 'puzzle';
+// 家具が買えるまで、あと何回（勉強なら問題の数、パズルならクリアの数）
+const needText = (gap) => isPuzzle() ? `あと${Math.max(1, Math.ceil(gap / 36))}回` : `あと${Math.max(1, Math.ceil(gap / 24))}問`;
 const rankNow = () => S.rankInfo();
 function closeSheets() { app.querySelectorAll('.sheet, .float-bar').forEach(e => e.remove()); }
 function sheet(html, cls = '') {
@@ -185,10 +199,11 @@ function tabbar(active) {
     <div class="slots">${slots.map(([k, ic, n]) => `
       <button data-t="${k}" class="sl ${k === active ? 'on' : ''} ${k === 'buy' && buy ? 'hot' : ''}" aria-label="${n}">${icon(ic)}<span class="sl-t">${n}</span>${dot(k) ? '<i class="dot"></i>' : ''}${k === 'buy' && buy ? '<span class="buy-tip">買える！</span>' : ''}</button>`).join('')}</div>
     <div class="solve-wrap">
-      ${!buy && active === 'room' ? `<span class="solve-need">あと${need}問</span>` : ''}
+      ${!buy && active === 'room' ? `<span class="solve-need">${needText(max - hs.gauge)}</span>` : ''}
       ${buy && active === 'room' ? `<span class="solve-need full">${icon('sparkle')}満タン</span>` : ''}
-      <button data-t="play" class="solve-ring ${buy ? 'full' : ''}" style="--p:${pct}" aria-label="解く">
-        <span class="sr-in">${icon(resume ? 'refresh' : 'pencil')}<b>${resume ? '続きから' : '解く'}</b></span>${resume || due || !S.playedToday() ? '<i class="dot"></i>' : ''}
+      ${isPuzzle() ? `<button data-t="play" class="solve-ring ${buy ? 'full' : ''}" style="--p:${pct}" aria-label="パズル">
+        <span class="sr-in">${icon('grid')}<b>パズル</b></span>${!S.playedToday() ? '<i class="dot"></i>' : ''}` : `<button data-t="play" class="solve-ring ${buy ? 'full' : ''}" style="--p:${pct}" aria-label="解く">
+        <span class="sr-in">${icon(resume ? 'refresh' : 'pencil')}<b>${resume ? '続きから' : '解く'}</b></span>${resume || due || !S.playedToday() ? '<i class="dot"></i>' : ''}`}
       </button>
     </div>
   </nav>`);
@@ -207,13 +222,13 @@ function goTab(t) {
   if (t === 'room') return showHome();
   if (t === 'buy') {
     if (canBuyNow()) return buyFlow();
-    const hs = HS(), need = Math.max(1, Math.ceil((S.gaugeMax(hs) - hs.gauge) / 24));
-    return toast(`あと${need}問 解くと、家具が買えます`, 2200);
+    const hs = HS(), gap = S.gaugeMax(hs) - hs.gauge;
+    return toast(isPuzzle() ? `${needText(gap)} パズルをクリアすると、家具が買えます` : `${needText(gap)} 解くと、家具が買えます`, 2200);
   }
   if (t === 'edit') return showEdit();
   if (t === 'furn') return halfFurniture();
   if (t === 'gacha') return showGacha();
-  if (t === 'play') return chooseSubject();
+  if (t === 'play') return isPuzzle() ? showPuzzleHub() : chooseSubject();
   if (t === 'zukan') return showZukan();
   if (t === 'social') return halfSocial();
   if (t === 'menu') return showMenu();
@@ -631,7 +646,7 @@ function curRoom() { return HS().rooms[HS().current]; }
 function curDef() { return roomDef(curRoom().id); }
 
 async function enterHouse() {
-  loadSavedPacks();
+  const packsReady = loadSavedPacks();
   const added = ensureRooms();
   if (!room3d) {
     room3d = new Room3D(canvas);
@@ -647,6 +662,11 @@ async function enterHouse() {
   showHome();
   await room3d.show(curDef(), curRoom());
   receiveSpecials();
+  if (!S.profile().mode) {
+    // 管理者が先にモードを決めていれば、それを受け取ってから（少しだけ待つ）
+    await Promise.race([packsReady, new Promise(r => setTimeout(r, 1500))]);
+    if (!S.profile().mode) await askMode();
+  }
   const lbShown = showLoginBonus();
   if (added.length > 1) toast(`新しい部屋「${added.map(r => r.name).join('・')}」が開きました`, 3000);
   if (!lbShown && !curRoom().style) askStyle(); // ログインボーナスがあれば、閉じたあとに出す
@@ -1322,7 +1342,7 @@ function photoMode() {
 
 // =========================== 更新のお知らせ ===========================
 // このプログラムの版（version.json と同じにする。公開のたびに上げる）
-const APP_VERSION = '1.3.0';
+const APP_VERSION = '1.4.0';
 // 新しい版が出たら、みんな同じタイミングでそろうように強制で再起動する。
 // 開いた時・画面に戻った時・1分ごとに version.json を見る
 async function latestVersion() {
@@ -1431,6 +1451,101 @@ function showDownload() {
 
 
 // =========================== 解く：科目えらび ===========================
+// =========================== はじめに：勉強かパズルか ===========================
+// 1回だけ選ぶ。あとから自分では変えられない（管理者が見る・変える）
+function askMode() {
+  return new Promise((done) => {
+    const el = sheet(`
+      <div class="sh-head"><span class="sh-ic">${icon('home')}</span><div><h3>なにで部屋をつくる？</h3><p>あとから変えることはできません</p></div></div>
+      <div class="mode-pick">
+        <button data-m="study"><span class="mp-ic">${icon('pencil')}</span><b>勉強</b><small>問題を解いてゲージをためる</small></button>
+        <button data-m="puzzle"><span class="mp-ic">${icon('grid')}</span><b>パズル</b><small>頭をつかうパズルをクリアしてためる</small></button>
+      </div>`, 'mode-sheet');
+    app.querySelector('.tabbar')?.classList.add('hide');
+    el.querySelectorAll('[data-m]').forEach(b => b.onclick = () => {
+      const m = b.dataset.m, name = m === 'puzzle' ? 'パズル' : '勉強';
+      if (!confirm(`「${name}」で部屋をつくります。あとから変えられませんが、よいですか？`)) return;
+      const pr = S.profile(); pr.mode = m; pr.modeAt = Date.now(); S.save(); Sync.push?.();
+      el.remove(); showHome();
+      toast(m === 'puzzle' ? '右下の「パズル」から始めよう' : '右下の「解く」から始めよう', 3000);
+      done();
+    });
+  });
+}
+
+// =========================== パズル ===========================
+function showPuzzleHub() {
+  if (!app.querySelector('.home')) showHome();
+  const el = sheet(`
+    <div class="sh-head"><span class="sh-ic">${icon('grid')}</span><div><h3>どのパズルにする？</h3><p>クリアするとレベルが上がって、むずかしくなります</p></div></div>
+    <div class="pz-hub">${PUZZLES.map(z => { const ps = S.puzzleState(z.id); return `
+      <button class="pz-pick" data-p="${z.id}"><span class="s-ic">${icon(z.icon)}</span>
+        <span class="pz-pick-t"><b>${z.name}</b><small>${z.short}</small></span>
+        <span class="pz-lv">Lv<b>${ps.lv}</b><small>${levelInfo(z.id, ps.lv)}</small></span></button>`; }).join('')}</div>
+    <button class="link close">とじる</button>`, 'subj-sheet puzzle-sheet');
+  app.querySelector('.tabbar')?.classList.add('hide');
+  el.querySelector('.close').onclick = () => { el.remove(); showHome(); };
+  el.querySelectorAll('[data-p]').forEach(b => b.onclick = () => { el.remove(); playPuzzle(b.dataset.p); });
+}
+function playPuzzle(id) {
+  const z = puzzleById(id), ps = S.puzzleState(id), lv = ps.lv;
+  room3d?.setActive(false);
+  canvas.classList.add('dim');
+  app.innerHTML = '';
+  const el = h(`
+    <div class="screen puzzle-screen">
+      <header class="bar">
+        <button class="icon back" aria-label="部屋にもどる">${icon('x')}</button>
+        <h2>${z.name}<small>Lv${lv}</small></h2>
+        <span class="pz-life" aria-label="のこり">${'<i class="on"></i>'.repeat(3)}</span>
+      </header>
+      <p class="pz-rule">${z.rule}</p>
+      <p class="pz-moves" hidden></p>
+      <div class="pz-host"></div>
+    </div>`);
+  app.append(el);
+  el.querySelector('.back').onclick = () => { S.save(); showHome(); };
+  const life = el.querySelector('.pz-life'), mv = el.querySelector('.pz-moves');
+  const t0 = Date.now();
+  mountPuzzle(id, lv, el.querySelector('.pz-host'), {
+    onChange: (n) => { life.innerHTML = '<i class="on"></i>'.repeat(n) + '<i></i>'.repeat(3 - n); vibrate(60); },
+    onMoves: (n, max) => { mv.hidden = false; mv.innerHTML = `手数 <b>${n}</b> / ${max}`; mv.classList.toggle('warn', max - n <= 3); },
+    onWin: (r) => setTimeout(() => puzzleResult(id, lv, true, r, (Date.now() - t0) / 1000), r.picture ? 900 : 350),
+    onLose: (why) => setTimeout(() => puzzleResult(id, lv, false, { why }, 0), 500),
+  });
+}
+function puzzleResult(id, lv, won, r, secs) {
+  const z = puzzleById(id);
+  let pts = 0, xp = null;
+  if (won) {
+    const hs = HS();
+    pts = S.puzzleGauge(lv, r.mistakes || 0);
+    if (S.solvedToday() < S.BONUS_PER_DAY) pts = Math.round(pts * 1.5); // 今日の最初のうちは1.5倍（勉強と同じ）
+    hs.gauge += pts;
+    xp = S.addPuzzleClear(id, r.mistakes || 0);
+    const first = S.markPlayedToday();
+    if (first) setTimeout(() => toast(`連続 ${S.currentStreak()}日目！`), 600);
+    S.save(); Sync.push?.();
+    vibrate([20, 30, 20]);
+  } else vibrate([60, 40, 60]);
+  const mm = Math.floor(secs / 60), ss = Math.round(secs % 60);
+  const el = sheet(`
+    <div class="res ${won ? 'ok' : 'ng'} pz-res">
+      <div class="ttl">${won ? 'クリア！' : 'しっぱい…'}</div>
+      ${won ? `<p class="pz-sub">${r.picture ? `あらわれたのは「${esc(r.picture)}」！ ・ ` : ''}${r.moves ? `${r.moves}手${r.best ? '（最短！）' : ''} ・ ` : ''}${mm ? mm + '分' : ''}${ss}秒・まちがい ${r.mistakes || 0}回</p>
+        <div class="pts">+${pts}<small>ゲージ</small></div>
+        <div class="xpgain">${icon('level')}+${xp.gained} XP${xp.rankUp ? `<b>Lv${xp.rank}にアップ！</b>` : ''}</div>
+        <p class="pz-up">${z.name} が <b>Lv${lv + 1}</b> に強化（${levelInfo(id, lv + 1)}）</p>`
+      : `<p class="pz-sub">${r.why === 'moves' ? '手数の上限になりました。' : 'まちがいが3回になりました。'}同じレベルで、もう一度ちょうせんできます</p>`}
+    </div>
+    <div class="pz-res-btns">
+      <button class="btn primary big next">${won ? '次の問題' : 'もう一度'}</button>
+      <button class="btn ghost home">部屋にもどる</button>
+    </div>`, 'pz-res-sheet');
+  el.querySelector('.next').onclick = () => playPuzzle(id);
+  el.querySelector('.home').onclick = () => { showHome(); if (won && canBuyNow()) setTimeout(() => toast('ゲージ満タン！「買う」で家具を1つ買えます', 3000), 400); };
+}
+
 function chooseSubject() {
   if (!app.querySelector('.home')) showHome();
   const el = sheet(`
@@ -1545,6 +1660,9 @@ function showRecords(subj = subjectId) {
       <div>${icon('check')}<b>${pf.solved ? Math.round(pf.correct / pf.solved * 100) : 0}%</b><span>正解率</span></div>
       <div>${icon('trophy')}<b>${mastered}</b><span>克服</span></div>
     </div>
+    ${isPuzzle() ? `<h3 class="sec">パズル（クリア ${pf.puzzleClears || 0}回）</h3>
+    <div class="unit-list">${PUZZLES.map(z => { const ps = S.puzzleState(z.id); return `
+      <div class="unit-row"><b>${z.name}</b><span>Lv${ps.lv}<small>クリア ${ps.clears}・ノーミス ${ps.perfect}</small></span></div>`; }).join('')}</div>` : ''}
     <div class="rec-subj">${SUBJECTS.filter(x => probs(x.id).length).map(x => `
       <button data-s="${x.id}" class="${x.id === subj ? 'on' : ''}"><span class="ic2">${icon(SUBJECT_ICON[x.id] || 'book')}</span><b>${x.name}</b><small>${solvedOf(x.id)}問</small></button>`).join('')}</div>
     <h3 class="sec">分野ごと（${subjName}）</h3>
@@ -1720,7 +1838,7 @@ async function showRanking() {
   const [y, mo, d] = wk.split('-').map(Number);
   const end = new Date(y, mo - 1, d + 6);
   const el = screenWithTabs('ranking', `<h2>みんな</h2><span></span>`, 'social', `<div class="seg bagtabs soc"><button data-s="ranking" class="${'ranking' === 'ranking' ? 'on' : ''}">${icon('trophy')}ランキング</button><button data-s="friends" class="${'ranking' === 'friends' ? 'on' : ''}">${icon('users')}フレンド${friendBadge ? '<i class="badge">' + friendBadge + '</i>' : ''}</button></div>`+`
-    <p class="rk-term">${mo}/${d}（月）〜 ${end.getMonth() + 1}/${end.getDate()}（日）に解いた問題の数</p>
+    <p class="rk-term">${mo}/${d}（月）〜 ${end.getMonth() + 1}/${end.getDate()}（日）に${isPuzzle() ? 'クリアしたパズルの数（パズルの人どうし）' : '解いた問題の数'}</p>
     <div class="rk-me"></div>
     <div class="rk-list"><p class="empty">読み込み中…</p></div>`);
   bindSocialTabs(el);
@@ -1734,8 +1852,8 @@ async function showRanking() {
     <div><b>あなた</b><small>${r.total || 0}人中 ・ 今週 ${mine}問</small></div>${icon('pencil')}</div>`;
   const medal = (p) => p <= 3 ? `<span class="medal m${p}">${p}</span>` : `<span class="rk-n">${p}</span>`;
   el.querySelector('.rk-list').innerHTML = (r.top || []).length ? r.top.map(x => `
-    <div class="rk-row ${x.me ? 'me' : ''}">${medal(x.pos)}<b>${esc(x.username)}</b><span>${x.solved}問<small>正解 ${x.correct}</small></span></div>`).join('')
-    : '<p class="empty">今週はまだだれも解いていません。いちばん乗りしよう！</p>';
+    <div class="rk-row ${x.me ? 'me' : ''}">${medal(x.pos)}<b>${esc(x.username)}</b><span>${x.solved}${unit}<small>${pz ? 'ノーミス' : '正解'} ${x.correct}</small></span></div>`).join('')
+    : `<p class="empty">今週はまだだれも${pz ? 'クリアして' : '解いて'}いません。いちばん乗りしよう！</p>`;
 }
 
 // =========================== 図鑑 ===========================

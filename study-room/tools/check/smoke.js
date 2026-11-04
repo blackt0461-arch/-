@@ -53,6 +53,9 @@ function serve() {
   check(/登録/.test(btnText), `初めての端末では、最初から登録の画面（ボタン：${btnText.trim()}）`);
   if (!/登録/.test(btnText)) await page.click('.swap');
   await page.fill('input[name=name]', 'smoketest'); await page.fill('input[name=pw]', 'test1234'); await page.click('button[type=submit]');
+  // はじめに「勉強」を選ぶ（確かめの画面は OK）
+  page.on('dialog', d => d.accept());
+  await page.waitForSelector('.mode-sheet [data-m=study]', { timeout: 60000 }); await page.click('.mode-sheet [data-m=study]');
   await page.waitForSelector('.lb-screen.show', { timeout: 60000 }); await page.click('.lb-screen .ok', { force: true });
   await page.waitForSelector('.style-sheet .stylecard', { timeout: 15000 }).catch(() => {});
   if (await page.locator('.style-sheet .stylecard').count()) { await page.evaluate(() => document.querySelector('.stylecard').click()); await page.waitForTimeout(300); await page.evaluate(() => document.querySelector('.style-sheet .ok').click()); }
