@@ -1,0 +1,17 @@
+[
+  {"id":null,"subject":"chem","genre":"化学","unit":"有機化合物","grade":"hs3","level":1,"text":"炭素原子は、ふつう何本の共有結合（結合の手）をつくるか。","choices":["4本","2本","3本","1本"],"answer":0,"explain":"炭素は価電子4個で、4本の結合をつくる。二重結合は2本分として数える。"},
+  {"id":null,"subject":"chem","genre":"化学","unit":"有機化合物","grade":"hs3","level":1,"text":"アルカンの一般式はどれか。","choices":["CₙH₂ₙ₊₂","CₙH₂ₙ","CₙH₂ₙ₋₂","CₙHₙ"],"answer":0,"explain":"メタン CH₄、エタン C₂H₆ のように CₙH₂ₙ₊₂。CₙH₂ₙ はアルケン、CₙH₂ₙ₋₂ はアルキン。"},
+  {"id":null,"subject":"chem","genre":"化学","unit":"有機化合物","grade":"hs3","level":1,"text":"エタノール C₂H₅OH がもつ官能基はどれか。","choices":["カルボキシ基","ホルミル基","ヒドロキシ基","エステル結合"],"answer":2,"explain":"−OH がヒドロキシ基。カルボキシ基は −COOH、ホルミル基（アルデヒド基）は −CHO。"},
+  {"id":null,"subject":"chem","genre":"化学","unit":"有機化合物","grade":"hs3","level":1,"text":"酢酸 CH₃COOH は、次のどれに分類されるか。","choices":["カルボン酸","アルコール","アルデヒド","エーテル"],"answer":0,"explain":"−COOH（カルボキシ基）をもつのでカルボン酸。"},
+  {"id":null,"subject":"chem","genre":"化学","unit":"有機化合物","grade":"hs3","level":1,"text":"分子式 C₄H₁₀ で表される化合物の構造異性体は何種類あるか。","choices":["3種類","1種類","4種類","2種類"],"answer":3,"explain":"直鎖のブタンと、枝分かれした 2-メチルプロパンの2種類。"},
+  {"id":null,"subject":"chem","genre":"化学","unit":"有機化合物","grade":"hs3","level":1,"text":"ベンゼンの分子式はどれか。","choices":["C₆H₁₂","C₆H₁₄","C₆H₆","C₆H₅OH"],"answer":2,"explain":"ベンゼンは C₆H₆ の環状の化合物。C₆H₁₂ はシクロヘキサン、C₆H₅OH はフェノール。"},
+  {"id":null,"subject":"chem","genre":"化学","unit":"有機化合物","grade":"hs3","level":2,"text":"エタノールをおだやかに酸化すると何ができるか。","choices":["アセトアルデヒド","酢酸","エチレン","ジエチルエーテル"],"answer":0,"explain":"第一級アルコールを酸化するとアルデヒドになり、さらに酸化するとカルボン酸（酢酸）になる。"},
+  {"id":null,"subject":"chem","genre":"化学","unit":"有機化合物","grade":"hs3","level":2,"text":"次のうち、銀鏡反応を示す物質はどれか。","choices":["エタノール","アセトアルデヒド","アセトン","酢酸"],"answer":1,"explain":"銀鏡反応はホルミル基（−CHO）をもつ物質が示す。アセトンはケトンなので示さない。"},
+  {"id":null,"subject":"chem","genre":"化学","unit":"有機化合物","grade":"hs3","level":2,"text":"次のうち、ヨードホルム反応を示す物質はどれか。","choices":["メタノール","アセトン","酢酸","ギ酸"],"answer":1,"explain":"CH₃CO− や CH₃CH(OH)− の構造をもつ物質が示し、黄色の CHI₃ ができる。酢酸はこの形でも示さない。"},
+  {"id":null,"subject":"chem","genre":"化学","unit":"有機化合物","grade":"hs3","level":2,"text":"酢酸とエタノールに濃硫酸を少量加えて温めると、何ができるか。","choices":["ジエチルエーテル","酢酸エチル","アセトアルデヒド","エチレン"],"answer":1,"explain":"カルボン酸とアルコールから水がとれてエステルができる（エステル化）。果物のようなにおいがする。"},
+  {"id":null,"subject":"chem","genre":"化学","unit":"有機化合物","grade":"hs3","level":2,"text":"エチレンに臭素水を加えると、臭素の赤褐色が消える。このとき起こる反応はどれか。","choices":["置換反応","縮合反応","付加反応","中和反応"],"answer":2,"explain":"C＝C の二重結合に Br₂ が結びつく付加反応。二重結合や三重結合があるかを調べるのに使う。"},
+  {"id":null,"subject":"chem","genre":"化学","unit":"有機化合物","grade":"hs3","level":2,"text":"フェノールの水溶液に塩化鉄(III)水溶液を加えると、何色になるか。","choices":["黄色","青色","紫色","赤色"],"answer":2,"explain":"ベンゼン環に −OH が直接ついたフェノール類は、塩化鉄(III)で紫色になる。エタノールなどのアルコールは変化しない。"},
+  {"id":null,"subject":"chem","genre":"化学","unit":"有機化合物","grade":"hs3","level":3,"text":"分子式 C₅H₁₂ で表される化合物の構造異性体は何種類あるか。","choices":["2種類","4種類","3種類","5種類"],"answer":2,"explain":"ペンタン、2-メチルブタン、2,2-ジメチルプロパンの3種類。"},
+  {"id":null,"subject":"chem","genre":"化学","unit":"有機化合物","grade":"hs3","level":3,"text":"アニリンの水溶液にさらし粉水溶液を加えると、何色になるか。","choices":["赤紫色","青色","黄色","緑色"],"answer":0,"explain":"さらし粉によってアニリンが酸化され赤紫色になる。アニリンの検出に使う。"},
+  {"id":null,"subject":"chem","genre":"化学","unit":"有機化合物","grade":"hs3","level":3,"text":"油脂 1 mol を完全にけん化するのに必要な水酸化ナトリウムは何 mol か。","choices":["3 mol","1 mol","2 mol","6 mol"],"answer":0,"explain":"油脂はグリセリン1分子に脂肪酸3分子がエステル結合したもの。3か所のエステル結合をけん化するので 3 mol。"}
+]
