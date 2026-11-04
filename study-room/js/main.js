@@ -335,6 +335,7 @@ function halfFurniture() {
     { ic: 'book', name: '図鑑', go: showZukan },
     { ic: 'box', name: '持ち物', go: () => showBag() },
     { ic: 'door', name: '部屋えらび', go: () => app.querySelector('.room-name')?.click() },
+    { ic: 'grid', name: '自動で並べる', sub: '家具を選んで、いい感じに', go: () => showArrange() },
   ];
   if (isAdmin() && hs.gauge < max) items.push({ ic: 'sparkle', name: '管理者', sub: 'ゲージを満タン', go: () => { hs.gauge = max; S.save(); showHome(); } });
   halfSheet('家具', items);
@@ -1321,7 +1322,7 @@ function photoMode() {
 
 // =========================== 更新のお知らせ ===========================
 // このプログラムの版（version.json と同じにする。公開のたびに上げる）
-const APP_VERSION = '1.2.2';
+const APP_VERSION = '1.3.0';
 // 新しい版が出たら、みんな同じタイミングでそろうように強制で再起動する。
 // 開いた時・画面に戻った時・1分ごとに version.json を見る
 async function latestVersion() {
@@ -1605,6 +1606,76 @@ async function showFeedbackInbox() {
     el.querySelectorAll('.done-btn').forEach(b => b.onclick = async () => { await rpc('sr_feedback_done', { p_token: tk, p_id: +b.dataset.id, p_done: b.dataset.done === '1' }); load(); });
   };
   load();
+}
+
+// =========================== 自動で並べる ===========================
+// 置きたい家具と数を選び、並べ方を選ぶと、家具どうしの関係で部屋に並べる（room3d.arrangeRoom）
+const ARR_STYLES = [['auto', 'おまかせ', 'sparkle', '家具で選ぶ'], ['talk', '団らん', 'users', 'かこむ'], ['tv', 'テレビ', 'image', 'テレビの前'], ['window', '窓辺', 'sun', '窓を向く'], ['cafe', 'カフェ', 'cook', '食卓']];
+const ARR_NAME = Object.fromEntries(ARR_STYLES.map(x => [x[0], x[1]]));
+let arrSel = null, arrStyle = 'auto', arrGenre = '';
+function showArrange(reset = true) {
+  const r = curRoom();
+  const here = {}; r.placed.forEach(p => { here[p.item] = (here[p.item] || 0) + 1; });
+  if (reset || !arrSel) arrSel = { ...here };
+  const avail = (id) => S.owned(id) - (S.placedCount(id) - (here[id] || 0));
+  const hs = HS();
+  const ids = S.isUnlimited() ? [...new Set([...ITEMS, ...G.GACHA_ITEMS].map(i => i.id))] : Object.keys(hs.inventory);
+  const list = ids.map(itemById).filter(it => it && it.place !== 'surface' && it.place !== 'skin' && avail(it.id) > 0 && (!arrGenre || it.genre === arrGenre))
+    .sort((a, b) => (arrSel[b.id] ? 1 : 0) - (arrSel[a.id] ? 1 : 0));
+  const total = Object.values(arrSel).reduce((n, v) => n + v, 0), cap = S.capacity();
+  const el = screenWithTabs('arrange', `<button class="icon back">${icon('back')}</button><h2>自動で並べる</h2><span class="ar-count"><b>${total}</b> / ${cap}</span>`, 'furn', `
+    <p class="ar-lead">置きたい家具を選んでください（押すたびに数がふえます）。選んだ家具だけを、この部屋に並べなおします。</p>
+    <div class="zk-tabs ar-tabs"><button data-g="" class="${!arrGenre ? 'on' : ''}">すべて</button>${GENRES.filter(g => g.id !== 'interior' && g.id !== 'fixture').map(g => `<button data-g="${g.id}" class="${arrGenre === g.id ? 'on' : ''}">${icon(GENRE_ICON[g.id] || 'box')}${g.name}</button>`).join('')}</div>
+    <div class="invgrid ar-grid">${list.map(it => `<button class="inv-item ar-item ${arrSel[it.id] ? 'on' : ''}" data-id="${it.id}"><span class="thumb">${thumbHTML(it)}</span><b>${esc(it.name)}</b>${arrSel[it.id] ? `<i class="ar-n">${arrSel[it.id]}${avail(it.id) > 1 ? '/' + avail(it.id) : ''}</i>` : ''}</button>`).join('') || '<p class="empty">置ける家具がありません</p>'}</div>
+    <div class="ar-foot">
+      <div class="ar-styles">${ARR_STYLES.map(([k, n, ic, sub]) => `<button data-st="${k}" class="${arrStyle === k ? 'on' : ''}">${icon(ic)}<b>${n}</b><small>${sub}</small></button>`).join('')}</div>
+      <div class="row2"><button class="btn ghost ar-clear">選ぶのをやめる</button><button class="btn gold big ar-go" ${total ? '' : 'disabled'}>${icon('grid')}自動で並べる</button></div>
+    </div>`);
+  el.querySelector('.back').onclick = () => showHome();
+  el.querySelectorAll('.ar-tabs button').forEach(b => b.onclick = () => { arrGenre = b.dataset.g; showArrange(false); });
+  el.querySelectorAll('.ar-item').forEach(b => b.onclick = () => {
+    const id = b.dataset.id, n = arrSel[id] || 0, a = avail(id);
+    const next = n >= a ? 0 : n + 1;
+    if (next > n && total >= cap) return toast(`この部屋に置けるのは ${cap}個までです（Lvが上がるとふえます）`, 2600);
+    if (next) arrSel[id] = next; else delete arrSel[id];
+    showArrange(false);
+  });
+  el.querySelectorAll('.ar-styles button').forEach(b => b.onclick = () => { arrStyle = b.dataset.st; showArrange(false); });
+  el.querySelector('.ar-clear').onclick = () => { arrSel = {}; showArrange(false); };
+  el.querySelector('.ar-go').onclick = () => runArrange(arrStyle);
+}
+async function runArrange(style, backup = null) {
+  const r = curRoom();
+  backup = backup || JSON.parse(JSON.stringify(r.placed));
+  const ps = [];
+  for (const [id, n] of Object.entries(arrSel || {})) for (let k = 0; k < n; k++) ps.push({ uid: S.newUid(), item: id });
+  showHome();
+  app.querySelector('.tabbar')?.classList.add('hide');
+  toast('並べています…', 8000);
+  const res = await room3d.arrangeRoom(ps, style);
+  r.placed = ps.filter(p => !res.failed.includes(p.uid));
+  S.save();
+  room3d.overview();
+  const failNames = res.failed.map(uid => itemById(ps.find(p => p.uid === uid)?.item)?.name).filter(Boolean);
+  toast(failNames.length ? `${failNames.length}個は場所がなく、持ち物に入れました` : `「${ARR_NAME[res.style]}」で並べました`, 3000);
+  const order = ['talk', 'tv', 'window', 'cafe'];
+  const nextStyle = order[(order.indexOf(res.style) + 1) % order.length];
+  const sh = sheet(`
+    <div class="sh-head"><span class="sh-ic gold">${icon('grid')}</span><div><h3>「${ARR_NAME[res.style]}」で並べました</h3><p>${failNames.length ? `置けなかった物：${esc(failNames.join('、'))}` : '指で部屋を見まわして、確かめてください'}</p></div></div>
+    <div class="ar-after">
+      <button class="btn gold big ar-ok">${icon('check')}これでOK</button>
+      <div class="row2"><button class="btn ghost ar-next">${icon('refresh')}「${ARR_NAME[nextStyle]}」で並べる</button><button class="btn ghost ar-undo">${icon('back')}元に戻す</button></div>
+      <button class="link ar-edit">模様がえで手直しする</button>
+    </div>`, 'ar-sheet');
+  sh.querySelector('.ar-ok').onclick = () => { sh.remove(); showHome(); };
+  sh.querySelector('.ar-next').onclick = () => { sh.remove(); runArrange(nextStyle, backup); };
+  sh.querySelector('.ar-undo').onclick = async () => {
+    sh.remove();
+    r.placed = backup; S.save();
+    room3d.roomDef = null; await room3d.show(curDef(), r);
+    showHome(); toast('元に戻しました');
+  };
+  sh.querySelector('.ar-edit').onclick = () => { sh.remove(); showEdit(); };
 }
 
 // =========================== 持ち物 ===========================
@@ -2505,4 +2576,4 @@ if ('serviceWorker' in navigator && location.protocol === 'https:') {
   navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(r => r.update()).catch(() => {});
 }
 // テスト用
-window.__app = { putIntoRoom, get room3d() { return room3d; }, S, sub, HS, switchRoom, ensureRooms, goHome, showHome, curRoom, visitFriend, leaveVisit, showLoginBonus, showGiftBox };
+window.__app = { putIntoRoom, get room3d() { return room3d; }, S, sub, HS, switchRoom, ensureRooms, goHome, showHome, curRoom, visitFriend, leaveVisit, showLoginBonus, showGiftBox, showArrange, arrange: (sel, style) => { arrSel = sel; return runArrange(style); } };
