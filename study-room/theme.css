@@ -193,7 +193,7 @@ b, strong { font-weight: 700; }
 /* 数字は「1」が「I」に見えないよう、ふつうの高さの数字にする */
 .rankchip .lv b, .pc-lv b, .stats4 b, .lb-day b, .res .pts, .rr-now b, .rr-lv, .qn, .fcard { font-variant-numeric: lining-nums tabular-nums; }
 .half-sheet .hc.hot svg { color: var(--sk-sel-fg); opacity: 1; }
-.menu-list button > .ic { flex: none; width: auto; } .menu-list button > span:not(.ic) { flex: 1; min-width: 0; }
+.menu-list button > .ic { flex: 0 0 24px; width: 24px; height: 24px; font-size: 22px; } .menu-list button > .ic:last-child { flex-basis: 18px; width: 18px; height: 18px; } .menu-list button > span:not(.ic) { flex: 1; min-width: 0; }
 /* 明るい着せ替えでは、全体の画面にうすい地の色を敷いて、文字を読みやすくする */
 .screen { background: var(--sk-screen-bg, transparent); }
 .tabbar.hotbar:not(.on-room) { background: linear-gradient(180deg, transparent, var(--sk-fade, rgba(0,0,0,.55)) 45%); }
@@ -212,3 +212,10 @@ b, strong { font-weight: 700; }
 .skin-card.locked { opacity: .5; } .skin-card.locked img { filter: grayscale(1); }
 .skins .note { color: var(--sk-muted); font-size: 13px; line-height: 1.7; margin: 0 2px 12px; }
 .sk-count { font-size: 13px; color: var(--sk-muted); } .sk-count b { color: var(--sk-text); font-family: var(--sk-num); font-size: 17px; }
+/* アイコンの大きさは、どの端末でも決まった大きさに（Safari で大きくふくらまないように） */
+.hub-card .ic, .half-sheet .hc .ic, .skin-card .ic, .rec-subj .ic, .menu-list .ic { flex-shrink: 0; }
+.ic svg { max-width: 100%; max-height: 100%; }
+/* メニュー上のLvの箱を小さく */
+.pc-lv { width: 52px; height: 52px; border-radius: 14px; }
+.pc-lv span { font-size: 10px; } .pc-lv b { font-size: 22px; }
+.profile-card { padding: 12px 14px; }
