@@ -1,0 +1,68 @@
+# 英語 文法（第3弾 その2）
+@ english ;; 文法 ;; 分詞 ;; hs1
+1 ;; (　)に入る語句を選べ。\nThe police found the (　) car. ;; *stolen ;; stealing ;; steal ;; stole ;; 車は「盗まれた」側なので過去分詞。
+1 ;; (　)に入る語句を選べ。\nDo you know the girl (　) a red hat? ;; *wearing ;; worn ;; wears ;; to wear ;; 「赤い帽子をかぶっている女の子」。現在分詞が後ろから名詞を説明する。
+1 ;; (　)に入る語句を選べ。\nI got a letter (　) in English. ;; *written ;; writing ;; wrote ;; writes ;; 手紙は「書かれた」側なので過去分詞。
+1 ;; (　)に入る語句を選べ。\nI'm (　) in Japanese history. ;; *interested ;; interesting ;; interest ;; to interest ;; 人が「興味をもたされている」ので過去分詞 interested。
+1 ;; (　)に入る語句を選べ。\nThe view from the top was (　). ;; *amazing ;; amazed ;; amaze ;; to amaze ;; 景色が人を驚かせる側なので amazing。
+1 ;; (　)に入る語句を選べ。\nA (　) dog seldom bites. ;; *barking ;; barked ;; bark ;; barks ;; 「ほえている犬」。ことわざ「ほえる犬はめったにかまない」。
+2 ;; (　)に入る語句を選べ。\nThere is a man (　) for you at the gate. ;; *waiting ;; waited ;; to waiting ;; waits ;; 「門のところであなたを待っている男性」。
+2 ;; (　)に入る語句を選べ。\nI found the door (　). ;; *locked ;; locking ;; lock ;; to lock ;; find O C で「O が C だとわかる」。ドアは「かぎをかけられた」状態。
+2 ;; (　)に入る語句を選べ。\n(　) tired, I went to bed early. ;; *Feeling ;; Felt ;; To feel ;; Feel ;; 分詞構文で「疲れを感じたので」。主語 I が感じる側なので現在分詞。
+2 ;; (　)に入る語句を選べ。\n(　) in easy English, this book is good for beginners. ;; *Written ;; Writing ;; To write ;; Wrote ;; 主語 this book は「書かれた」側なので過去分詞の分詞構文。
+2 ;; (　)に入る語句を選べ。\nShe came (　) into the room. ;; *running ;; ran ;; run ;; to run ;; come 〜ing で「〜しながら来る」。
+2 ;; (　)に入る語句を選べ。\nI had my picture (　) by my friend. ;; *taken ;; take ;; taking ;; took ;; have 物 過去分詞 で「物を〜してもらう」。写真は「とられる」側。
+3 ;; (　)に入る語句を選べ。\n(　) speaking, this is not correct. ;; *Strictly ;; Strict ;; Strictness ;; To strict ;; Strictly speaking で「厳密に言えば」という慣用的な分詞構文。
+3 ;; (　)に入る語句を選べ。\n(　) my homework, I went out to play. ;; *Having finished ;; Finishing ;; Finished ;; To finish ;; 宿題を終えたのは外出より前なので、完了形の分詞構文 Having 過去分詞。
+3 ;; (　)に入る語句を選べ。\nThere (　) no bus, we had to walk home. ;; *being ;; is ;; been ;; to be ;; As there was no bus を分詞構文にすると There being 〜。There を残した独立分詞構文。
+
+@ english ;; 文法 ;; 比較 ;; hs1
+1 ;; (　)に入る語句を選べ。\nThis box is (　) than that one. ;; *bigger ;; big ;; biggest ;; more big ;; big の比較級は g を重ねて bigger。
+1 ;; (　)に入る語句を選べ。\nHe is the (　) of the three brothers. ;; *oldest ;; older ;; old ;; most old ;; 3人の中で一番なので最上級。
+1 ;; (　)に入る語句を選べ。\nThis flower is (　) beautiful than that one. ;; *more ;; most ;; much ;; very ;; beautiful のような長い語の比較級は more をつける。
+1 ;; (　)に入る語句を選べ。\nShe likes summer the (　) of all seasons. ;; *best ;; better ;; good ;; well ;; like 〜 the best で「〜がいちばん好き」。
+1 ;; (　)に入る語を選べ。\nMy bag is as heavy (　) yours. ;; *as ;; than ;; so ;; that ;; as 原級 as で「〜と同じくらい」。
+1 ;; (　)に入る語句を選べ。\nThis is the (　) interesting book I have ever read. ;; *most ;; more ;; much ;; very ;; 最上級＋I have ever 過去分詞 で「今まで〜した中で一番」。
+2 ;; (　)に入る語を選べ。\nHe is (　) taller than his father. ;; *much ;; very ;; more ;; so ;; 比較級を強めるのは much。very は使えない。
+2 ;; (　)に入る語句を選べ。\nShe has twice as (　) books as I do. ;; *many ;; much ;; more ;; most ;; 倍数 as many（数えられる名詞）as。
+2 ;; Nothing is more important than health. の意味として正しいものを選べ。 ;; *健康ほど大切なものはない ;; 健康は何よりも大切ではない ;; 健康より大切なものがたくさんある ;; 健康は大切でない ;; 否定の主語＋比較級＋than で、最上級の意味を表す。
+2 ;; (　)に入る語を選べ。\nI prefer tea (　) coffee. ;; *to ;; than ;; for ;; from ;; prefer A to B で「B より A を好む」。than は使わない。
+2 ;; (　)に入る語を選べ。\nHe is three years senior (　) me. ;; *to ;; than ;; for ;; of ;; senior（年上の）、junior（年下の）は than ではなく to をとる。
+2 ;; (　)に入る語句を選べ。\nThe more you read, the (　) you will learn. ;; *more ;; most ;; much ;; many ;; the 比較級 〜, the 比較級 … で「〜すればするほど…」。
+3 ;; He has no less than 1,000 books. の no less than の意味として正しいものを選べ。 ;; *〜も（多くの） ;; せいぜい〜 ;; 〜しか ;; 少なくとも〜 ;; no less than は as many（much）as と同じで「〜も」。no more than は「〜しか」。
+3 ;; not more than の意味として正しいものを選べ。 ;; *多くても、せいぜい ;; 少なくとも ;; 〜も ;; 〜しか ;; not more than＝at most（せいぜい）。not less than＝at least（少なくとも）。
+3 ;; (　)に入る語句を選べ。\nI like him all the (　) for his faults. ;; *better ;; best ;; more good ;; well ;; all the 比較級 for 〜 で「〜なのでいっそう…」。
+
+@ english ;; 文法 ;; 関係詞 ;; hs1
+1 ;; (　)に入る語を選べ。\nI have an uncle (　) lives in Canada. ;; *who ;; which ;; whose ;; where ;; 先行詞が人で、lives の主語になるので who。
+1 ;; (　)に入る語を選べ。\nThis is the cake (　) my mother made. ;; *which ;; who ;; whose ;; where ;; 先行詞が物で、made の目的語になるので which。省略もできる。
+1 ;; (　)に入る語を選べ。\nI know a boy (　) father is a pilot. ;; *whose ;; who ;; which ;; that ;; 「その子の父親がパイロットである少年」なので所有格 whose。
+1 ;; (　)に入る語を選べ。\nThis is the library (　) I often study. ;; *where ;; which ;; who ;; when ;; 場所の先行詞で、後ろが完全な文なので関係副詞 where。
+1 ;; (　)に入る語を選べ。\nShow me (　) you have in your hand. ;; *what ;; which ;; that ;; who ;; 「あなたが手に持っているもの」。先行詞をふくむ what。
+1 ;; (　)に入る語を選べ。\nThe dog (　) is running over there is mine. ;; *that ;; whom ;; whose ;; what ;; 先行詞が動物で主語になるので that（which）。
+2 ;; (　)に入る語を選べ。\nThis is all (　) I have. ;; *that ;; what ;; which ;; who ;; 先行詞に all がつくときは関係代名詞 that がよく使われる。
+2 ;; (　)に入る語を選べ。\nHe was the first man (　) came here. ;; *that ;; which ;; whose ;; what ;; 先行詞に the first や最上級がつくときも that が好まれる。
+2 ;; (　)に入る語句を選べ。\nI remember the day (　) we first met. ;; *on which ;; in which ;; at which ;; for which ;; day には前置詞 on を使うので on which（＝when）。
+2 ;; (　)に入る語を選べ。\nThe woman (　) I met yesterday was very kind. ;; *whom ;; whose ;; which ;; what ;; met の目的語になる人なので目的格 whom（who、that、省略も可）。
+2 ;; (　)に入る語を選べ。\nAnyone (　) wants to join is welcome. ;; *who ;; which ;; whose ;; whom ;; 先行詞 anyone（人）で、wants の主語になるので who。
+2 ;; (　)に入る語を選べ。\nThat is the house (　) roof is blue. ;; *whose ;; which ;; that ;; where ;; 「その屋根が青い家」なので所有格 whose。
+3 ;; (　)に入る語を選べ。\nI have never seen such a beautiful flower (　) this. ;; *as ;; that ;; which ;; what ;; such 〜 as … の as は関係代名詞のようにはたらく。
+3 ;; (　)に入る語を選べ。\nHe gave me what (　) money he had. ;; *little ;; few ;; much ;; many ;; what little 名詞 で「わずかながら全部の〜」。
+3 ;; (　)に入る語を選べ。\nThere are more books (　) are needed. ;; *than ;; as ;; which ;; that ;; 比較級のあとの than が関係代名詞のようにはたらき、are needed の主語になっている。
+
+@ english ;; 文法 ;; 仮定法 ;; hs2
+1 ;; (　)に入る語句を選べ。\nIf I (　) a bird, I would fly to you. ;; *were ;; am ;; be ;; will be ;; 現実ではありえない仮定なので仮定法過去。
+1 ;; (　)に入る語句を選べ。\nI wish I (　) a car. ;; *had ;; have ;; will have ;; having ;; 今かなわない願望なので I wish 仮定法過去。
+1 ;; (　)に入る語句を選べ。\nHe speaks as if he (　) a teacher. ;; *were ;; is ;; will be ;; has been ;; 本当は先生ではないので、as if 仮定法過去。
+1 ;; (　)に入る語句を選べ。\nIf he studied harder, he (　) pass the exam. ;; *could ;; can ;; will ;; does ;; 仮定法過去の主節は would / could / might＋原形。
+1 ;; If I had time, I would help you. の意味として正しいものを選べ。 ;; *もし時間があれば、あなたを手伝うのに（実際は時間がない） ;; 時間があったので、あなたを手伝った ;; 時間があるので、あなたを手伝う ;; 時間がなくても、あなたを手伝う ;; 仮定法過去は今の事実に反することを表す。
+1 ;; (　)に入る語句を選べ。\nI wish I (　) speak English well. ;; *could ;; can ;; will ;; am ;; 今できないことへの願望なので could。
+2 ;; (　)に入る語句を選べ。\nIf I had known her phone number, I (　) her. ;; *would have called ;; would call ;; will call ;; called ;; 過去の事実に反する仮定なので、仮定法過去完了。
+2 ;; (　)に入る語句を選べ。\n(　) it not for the sun, nothing could live. ;; *Were ;; If ;; Had ;; Was ;; If it were not for 〜 の if を省略すると Were it not for 〜。
+2 ;; (　)に入る語句を選べ。\nI wish I (　) gone to the concert yesterday. ;; *had ;; have ;; could ;; would ;; 過去の後悔は I wish 仮定法過去完了 had 過去分詞。
+2 ;; (　)に入る語句を選べ。\nIt's time we (　) home. ;; *went ;; go ;; will go ;; going ;; It's time 主語 過去形 で「もう〜する時間だ」。
+2 ;; (　)に入る語句を選べ。\nIf it (　) rain tomorrow, the game will be canceled. ;; *should ;; would ;; could ;; might have ;; If 主語 should 原形 は「万一〜したら」。主節は will でもよい。
+2 ;; (　)に入る語句を選べ。\nWithout his help, we (　) have finished the work. ;; *couldn't ;; can't ;; won't ;; don't ;; Without 〜 が if 節のかわり。過去の仮定なので couldn't have 過去分詞。
+3 ;; (　)に入る語句を選べ。\n(　) I known the truth, I would have told you. ;; *Had ;; If ;; Have ;; Were ;; If I had known の if を省略して Had を前に出した形。
+3 ;; (　)に入る語句を選べ。\nIf I had not missed the bus, I (　) at school now. ;; *would be ;; would have been ;; will be ;; had been ;; if 節は過去、主節は今（now）の仮定なので、主節は仮定法過去。
+3 ;; (　)に入る語句を選べ。\nHe is a very busy man; (　) he would come to the party. ;; *otherwise ;; therefore ;; however ;; moreover ;; otherwise は「もしそうでなければ」で、仮定法の if 節のかわりになる。
