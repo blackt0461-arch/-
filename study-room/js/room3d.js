@@ -1039,6 +1039,39 @@ export class Room3D {
     return o;
   }
 
+  // 買う前のおためし：決まった配置の場所に、実際に置いて見せる（まだ持ち物にも記録にも入れない）
+  async showPreview(item) {
+    this.clearPreview();
+    const tok = (this.previewTok = {});
+    const o = await this.addPlaced({ uid: '__preview', item: item.id }, true);
+    if (this.previewTok !== tok) { if (o) this.removeObject('__preview'); return null; }
+    if (!o) return null;
+    this.preview = o;
+    // 下半分は買う画面でかくれるので、家具が画面の上のほうに見えるよう、少し下をねらう
+    const c = new THREE.Box3().setFromObject(o).getCenter(new THREE.Vector3());
+    this.lookAt(new THREE.Vector3(c.x, c.y - 1.0, c.z));
+    this.select('__preview'); // まわりに枠を出して、どこに置かれるか分かるように
+    return o.userData.p;
+  }
+  clearPreview() {
+    this.previewTok = null;
+    if (this.objByUid?.['__preview']) { this.removeObject('__preview'); }
+    this.preview = null;
+  }
+  // おためしを、そのまま本当に置いた物にする（uid をつけかえる）
+  commitPreview(uid) {
+    const o = this.objByUid?.['__preview'];
+    if (!o) return null;
+    if (this.selected === '__preview') this.select(null);
+    delete this.objByUid['__preview'];
+    o.userData.uid = uid; o.userData.p.uid = uid;
+    this.objByUid[uid] = o;
+    const b = this.blobs?.children.find(x => x.userData.uid === '__preview');
+    if (b) b.userData.uid = uid;
+    this.preview = null;
+    return o.userData.p;
+  }
+
   // 新しく買った物を置く場所の候補（見ている方向の、空いていそうな所）
   suggestPlacement(item) {
     const sh = this.sh;

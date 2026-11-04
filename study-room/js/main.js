@@ -435,6 +435,7 @@ function remainCapacity(room = curRoom()) {
 
 let notesChecked = false;
 function showHome() {
+  room3d?.clearPreview();
   S.setUnlimited(isAdmin());
   applySkin();
   if (isAdmin()) adminTopUp();
@@ -716,13 +717,25 @@ function chooseCandidate(genreId) {
         <b>${esc(it.name)}</b>
         <span class="chips">${(it.styles || []).slice(0, 2).map(s => `<i>${styleDef(s).name}</i>`).join('')}</span>
       </button>`).join('')}</div>
+    <p class="pv-tip">選ぶと、部屋のどこに置かれるかが見られます</p>
     <button class="btn gold big ok" disabled>${icon('check')}これを買う</button>`, 'cand-sheet');
   app.querySelector('.tabbar')?.classList.add('hide');
-  el.querySelector('.sh-back').onclick = buyFlow;
-  el.querySelectorAll('.cand').forEach(b => b.onclick = () => {
+  el.querySelector('.sh-back').onclick = () => { room3d?.clearPreview(); buyFlow(); };
+  // 選んだら、部屋の決まった場所に実際に置いて見せる（壁紙・床などと、置ける数がいっぱいのときは見せない）
+  const canPreview = (it) => it.place !== 'surface' && remainCapacity(curRoom()) > 0;
+  el.querySelectorAll('.cand').forEach(b => b.onclick = async () => {
     picked = itemById(b.dataset.id);
     el.querySelectorAll('.cand').forEach(x => x.classList.toggle('on', x === b));
     el.querySelector('.ok').disabled = false;
+    const tip = el.querySelector('.pv-tip');
+    if (canPreview(picked)) {
+      tip.textContent = '部屋のどこに置かれるか、見せています…';
+      const p = await room3d.showPreview(picked);
+      if (picked && b.classList.contains('on')) tip.textContent = p ? '光っている場所に置かれます。あとで模様がえで動かせます' : '空いている場所がないので、持ち物に入ります';
+    } else {
+      room3d?.clearPreview();
+      tip.textContent = picked.place === 'surface' ? '買うと、すぐ部屋の見た目が変わります' : `置ける数がいっぱいなので、持ち物に入ります（Lvが上がると増えます）`;
+    }
   });
   el.querySelector('.ok').onclick = async () => {
     if (!picked) return;
@@ -733,7 +746,17 @@ function chooseCandidate(genreId) {
     S.own(picked.id);
     el.remove();
     vibrate([30, 40, 60]);
-    await putIntoRoom(picked, true);
+    // おためしで置いて見せていた物は、そのまま本当に置く
+    const pv = room3d?.preview && room3d.preview.userData.item?.id === picked.id ? room3d.commitPreview(S.newUid()) : null;
+    if (pv) {
+      curRoom().placed.push(pv);
+      S.save();
+      if (!HS().villa) ensureRooms();
+      toast(`${picked.name}を置きました。模様がえで動かせます`, 2600);
+    } else {
+      room3d?.clearPreview();
+      await putIntoRoom(picked, true);
+    }
     S.save();
     showHome();
   };
@@ -999,7 +1022,7 @@ function photoMode() {
 
 // =========================== 更新のお知らせ ===========================
 // このプログラムの版（version.json と同じにする。公開のたびに上げる）
-const APP_VERSION = '2.7.2';
+const APP_VERSION = '2.8.0';
 // 新しい版が出たら、みんな同じタイミングでそろうように強制で再起動する。
 // 開いた時・画面に戻った時・1分ごとに version.json を見る
 async function latestVersion() {
