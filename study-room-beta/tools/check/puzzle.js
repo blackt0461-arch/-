@@ -55,7 +55,7 @@ const serve = () => new Promise(res => { const srv = http.createServer((req, rsp
     // 注意：遊び方のカードが動いている間は、ためし用のブラウザで画面の写真がとれない（実機では問題なし）。写真はとじてからとる
     await page.evaluate(() => document.querySelector('.ph-close')?.click()); await page.waitForTimeout(400);
     await page.screenshot({ path: path.join(OUT, `puzzle-2-${id}.png`) });
-    check(!(await page.locator('.ph-sheet').count()) && !(await page.locator('.pz-ibtn.pulse').count()), `${id}：とじると「i」が光らなくなる`);
+    check(!(await page.locator('.ph-sheet').count()) && (await page.locator('.pz-ibtn').count()) === 1, `${id}：とじると、右上に「i」が残る`);
     const before = await page.evaluate(() => ({ g: window.__app.HS().gauge, xp: window.__app.S.profile().xp }));
     // わざとまちがえる（おひっこしは無し）
     if (id !== 'hikkoshi') {
