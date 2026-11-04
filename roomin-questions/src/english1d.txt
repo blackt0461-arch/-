@@ -46,7 +46,7 @@
 2 ;; (　)に入る語を選べ。\nWe were caught (　) a shower on our way home. ;; *in ;; at ;; by ;; on ;; be caught in a shower で「にわか雨にあう」。
 2 ;; (　)に入る語句を選べ。\nThe game will (　) tomorrow. ;; *be played ;; play ;; played ;; be playing ;; 未来の受動態は will be 過去分詞。試合は「行われる」側。
 2 ;; (　)に入る語句を選べ。\nWhy (　) the meeting canceled? ;; *was ;; did ;; has ;; does ;; 受動態の疑問文。疑問詞のあとに be 動詞を置く。
-3 ;; It is believed that he was a great scientist. とほぼ同じ意味の文はどれか。 ;; *He is believed to have been a great scientist. ;; He is believed to be a great scientist. ;; He believed to have been a great scientist. ;; He was believed being a great scientist. ;; 信じられているのは今、科学者だったのは過去なので完了不定詞を使う。
+3 ;; It is believed that he was a great poet. とほぼ同じ意味の文はどれか。 ;; *He is believed to have been a great poet. ;; He is believed to be a great poet. ;; He believed to have been a great poet. ;; He was believed being a great poet. ;; 信じられているのは今、科学者だったのは過去なので完了不定詞を使う。
 3 ;; (　)に入る語句を選べ。\nHe got (　) in a traffic accident. ;; *injured ;; injure ;; injuring ;; to injure ;; get＋過去分詞 で「〜される」（受け身）。変化や動作を強調する。
 3 ;; (　)に入る語句を選べ。\nThe room was kept (　) by the students. ;; *clean ;; cleanly ;; cleaned up ;; cleaning ;; keep O C（O を C の状態に保つ）の受動態。C の形容詞 clean はそのまま残る。
 
