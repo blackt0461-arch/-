@@ -340,7 +340,7 @@ export class Room3D {
       const k = 1 - Math.pow(0.02, dt);
       this.yaw += (this.targetLook.yaw - this.yaw) * k;
       this.pitch += (this.targetLook.pitch - this.pitch) * k;
-      if (Math.abs(this.targetLook.yaw - this.yaw) < 0.002) this.targetLook = null;
+      if (Math.abs(this.targetLook.yaw - this.yaw) < 0.002 && Math.abs(this.targetLook.pitch - this.pitch) < 0.002) this.targetLook = null;
     } else if (!this.dragging) {
       // 指をはなしたあとの慣性
       this.yaw += this.vyaw; this.pitch += this.vpitch;
@@ -511,7 +511,21 @@ export class Room3D {
     await this.buildShell();
   }
 
+  // 買う前に、ドア・窓・カーテン・壁・床をためしに部屋に映す（null で元に戻す）。そのほうへ振り向く
+  async previewSurfaceItem(item) {
+    this.surfPreview = item || null;
+    await this.buildShell();
+    if (!item) return;
+    const sh = this.sh;
+    // 下半分は買う画面でかくれるので、選んだ物が画面の上のほうに来るよう少し下を向く
+    const look = (pt) => { this.lookAt(pt); if (this.targetLook) this.targetLook.pitch = Math.max(-0.9, this.targetLook.pitch - 0.3); };
+    if (item.surface === 'door') { const s = segOf(sh, sh.door.wall); if (s) look(segPoint(s, sh.door.a, 1.05, 0)); }
+    else if (item.surface === 'window' || item.surface === 'curtain') { const w = sh.windows[0], s = w && segOf(sh, w.wall); if (s) look(segPoint(s, w.a, 1.4, 0)); }
+    else if (item.surface === 'floor') this.targetLook = { yaw: this.yaw, pitch: -0.7 };
+    else if (item.surface === 'wall') this.targetLook = { yaw: this.yaw, pitch: 0.05 };
+  }
   surfItem(kind) {
+    if (this.surfPreview && this.surfPreview.surface === kind) return this.surfPreview;
     const id = this.st?.surf?.[kind] ?? STARTER?.[kind];
     return id ? itemById(id) : null;
   }
@@ -1168,7 +1182,8 @@ export class Room3D {
     this.select('__preview'); // まわりに枠を出して、どこに置かれるか分かるように
     return o.userData.p;
   }
-  clearPreview() {
+  clearPreview(keepSurf = false) {
+    if (!keepSurf && this.surfPreview) this.previewSurfaceItem(null);
     this.previewTok = null;
     if (this.objByUid?.['__preview']) { this.removeObject('__preview'); }
     this.preview = null;
