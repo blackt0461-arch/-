@@ -365,7 +365,8 @@ async function settle(obj, maxMs = 1500, minMs = 0) {
 }
 
 // 1つ描いて dataURL を返す
-async function drawItem(item) {
+// 家具の 3D の形を作る（サムネイルと、くるくる回る画面で使う）
+export async function itemObject(item) {
   const src = item.src || {};
   let obj = null, kind = 'object', own = []; // own: あとで捨てる材質
   let disposeGeo = true;
@@ -395,7 +396,14 @@ async function drawItem(item) {
     obj = curtainObj(src.curtain); kind = 'wall';
     obj.traverse((o) => o.isMesh && own.push(o.material));
   }
-  if (!obj) return null;
+  return obj ? { obj, kind, own, disposeGeo } : null;
+}
+
+async function drawItem(item) {
+  const src = item.src || {};
+  const made = await itemObject(item);
+  if (!made) return null;
+  const { obj, kind, own, disposeGeo } = made;
 
   const { renderer, scene, camera, key, fill, ground, stage } = studio();
   const wall = kind === 'wall' || item.place === 'wall' || (item.place === 'surface' && kind !== 'swatch');
@@ -507,4 +515,115 @@ function fitCamera(camera, box, center, dir, fill) {
   camera.far = d * 10;
   camera.lookAt(target);
   camera.updateProjectionMatrix();
+}
+
+// ---------------------------------------------------------------
+// くるくる回る画面（ガチャの「出る家具」を大きく見る）
+// 指で横にドラッグすると回せる。はなすとまたゆっくり回る
+// ---------------------------------------------------------------
+export async function spinViewer(host, item) {
+  const canvas = document.createElement('canvas');
+  host.appendChild(canvas);
+  const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
+  renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+  renderer.setClearColor(0x000000, 0);
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.05;
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  const scene = new THREE.Scene();
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+  scene.environmentIntensity = 0.6;
+  pmrem.dispose();
+  const camera = new THREE.PerspectiveCamera(30, 1, 0.01, 100);
+  const key = new THREE.DirectionalLight(0xfff4e6, 2.2);
+  key.castShadow = true; key.shadow.mapSize.set(1024, 1024); key.shadow.radius = 6; key.shadow.bias = -0.0005;
+  const fill = new THREE.DirectionalLight(0xdfe8ff, 0.7);
+  scene.add(key, key.target, fill, fill.target, new THREE.HemisphereLight(0xffffff, 0x444033, 0.35));
+  const ground = new THREE.Mesh(new THREE.CircleGeometry(1, 48), new THREE.ShadowMaterial({ opacity: 0.28 }));
+  ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true;
+  scene.add(ground);
+  const pivot = new THREE.Group(); scene.add(pivot);
+
+  let alive = true, raf = 0, made = null, lamp = null;
+  const size = () => {
+    const w = host.clientWidth || 300, h = host.clientHeight || w;
+    renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
+  };
+  size();
+  const ro = new ResizeObserver(size); ro.observe(host);
+
+  // 指で回す
+  let drag = null, spin = 0.6, angle = 0.6, lastT = performance.now();
+  const down = (e) => { drag = { x: e.clientX, a: angle }; canvas.setPointerCapture?.(e.pointerId); };
+  const move = (e) => { if (!drag) return; angle = drag.a + (e.clientX - drag.x) * 0.012; };
+  const up = () => { drag = null; };
+  canvas.addEventListener('pointerdown', down);
+  canvas.addEventListener('pointermove', move);
+  canvas.addEventListener('pointerup', up);
+  canvas.addEventListener('pointercancel', up);
+  canvas.style.touchAction = 'none';
+
+  try { made = await itemObject(item); } catch (e) { console.warn('spin', e); }
+  if (!alive) return dispose;
+  if (made) {
+    const { obj, kind } = made;
+    obj.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+    await settle(obj, 1500, item.src?.proc ? 700 : 0);
+    if (!alive) return dispose;
+    obj.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(obj);
+    const c = box.getCenter(new THREE.Vector3()), sz = box.getSize(new THREE.Vector3());
+    obj.position.sub(new THREE.Vector3(c.x, box.min.y, c.z)); // 足もとの真ん中を回る中心に
+    pivot.add(obj);
+    const rad = Math.max(sz.x, sz.y, sz.z) || 1;
+    const L = obj.userData && obj.userData.light;
+    if (L) { lamp = new THREE.PointLight(L.color || '#ffd9a8', (L.intensity ?? 1) * 1.2 * rad * rad, 0, 2); obj.add(lamp); lamp.position.y = L.y || 0; }
+    // 回してもはみ出さないように、横の広がりは対角線で見る
+    const span = Math.hypot(sz.x, sz.z);
+    const vb = new THREE.Box3(new THREE.Vector3(-span / 2, 0, -span / 2), new THREE.Vector3(span / 2, sz.y, span / 2));
+    const center = vb.getCenter(new THREE.Vector3());
+    const wall = kind === 'wall' || kind === 'swatch' || item.place === 'wall' || item.place === 'surface';
+    const el = wall ? 0.08 : 0.3;
+    const dir = new THREE.Vector3(0, Math.sin(el), Math.cos(el));
+    fitCamera(camera, vb, center, dir, 0.86);
+    const kd = rad * 3;
+    key.position.copy(center).add(new THREE.Vector3(-0.9, 1.6, 1.3).normalize().multiplyScalar(kd)); key.target.position.copy(center);
+    const sc = key.shadow.camera; sc.left = sc.bottom = -rad * 1.4; sc.right = sc.top = rad * 1.4; sc.near = 0.01; sc.far = kd * 3; sc.updateProjectionMatrix();
+    fill.position.copy(center).add(new THREE.Vector3(1.2, 0.5, 0.8).normalize().multiplyScalar(kd)); fill.target.position.copy(center);
+    ground.visible = !wall && item.place !== 'ceiling';
+    ground.scale.setScalar(rad * 2);
+    if (wall) spin = 0; // 壁紙・床などは回さず正面から
+    host.classList.add('ready');
+  } else host.classList.add('failed');
+
+  const loop = (t) => {
+    if (!alive) return;
+    const dt = Math.min(0.05, (t - lastT) / 1000); lastT = t;
+    if (!drag) angle += spin * dt;
+    pivot.rotation.y = angle;
+    made?.obj.userData?.tick?.(t / 1000, dt);
+    renderer.render(scene, camera);
+    raf = requestAnimationFrame(loop);
+  };
+  raf = requestAnimationFrame(loop);
+
+  function dispose() {
+    if (!alive) return;
+    alive = false; cancelAnimationFrame(raf); ro.disconnect();
+    if (made) {
+      const { obj, own, disposeGeo, kind } = made;
+      pivot.remove(obj);
+      if (lamp) { obj.remove(lamp); lamp.dispose(); }
+      obj.traverse((o) => { if (o.isMesh && disposeGeo) o.geometry?.dispose(); });
+      for (const m of own) { if (kind === 'swatch') for (const k of ['map', 'normalMap', 'roughnessMap']) m[k]?.dispose(); m.dispose(); }
+    }
+    ground.geometry.dispose(); ground.material.dispose();
+    scene.environment?.dispose();
+    renderer.dispose(); renderer.forceContextLoss?.();
+    canvas.remove();
+  }
+  return dispose;
 }

@@ -341,8 +341,8 @@ function showGacha(banner = null) {
   // 出る家具：★5 → ★4 の順に5つ
   const lineup = (b) => {
     const pool = b.limited ? G.bySeries(b.id) : [...G.byRarity(5), ...G.byRarity(4)].filter(i => !i.limited && i.place !== 'skin');
-    const r5 = pool.filter(i => i.rarity === 5), r4 = pool.filter(i => i.rarity === 4);
-    return [...r5.slice(0, 2), ...r4.slice(0, 3), ...r5.slice(2), ...r4.slice(3)].slice(0, 5);
+    // 全部（★5 → ★4 → ★3 の順）。横にスライドして見る
+    return [...pool].sort((x, y) => (y.rarity || 0) - (x.rarity || 0));
   };
   const daysLeft = (b) => b.end ? Math.max(0, Math.ceil((Date.parse(b.end) - Date.now()) / 864e5)) : null;
   const el = screenWithTabs('gacha', `<button class="icon back">${icon('back')}</button><h2>レアガチャ</h2><span class="gc-have">${ticketSVG('ticket', 'mini')}<b>${t1}</b></span>`, 'gacha', `
@@ -360,7 +360,7 @@ function showGacha(banner = null) {
         ${x.hero ? `<span class="gc-hero thumb">${thumbHTML(x.hero)}</span>` : ''}
       </button>`).join('')}</div>
     ${banners.length > 1 ? `<div class="gc-dots">${banners.map((x, k) => `<i data-k="${k}"></i>`).join('')}</div>` : ''}
-    <div class="gc-line"><p class="gc-h">出る家具</p><div class="gc-row"></div></div>
+    <div class="gc-line"><p class="gc-h">出る家具<span class="gc-n"></span><small>横にスライド・押すと3Dで見られる</small></p><div class="gc-row"></div></div>
     <div class="gc-chips">
       <button class="chip shard-btn" data-r="4"><span class="shard s4">${icon('sparkle')}</span>★4かけら <b>${s4}/${G.SHARD_COST}</b></button>
       <button class="chip shard-btn" data-r="5"><span class="shard s5">${icon('sparkle')}</span>★5かけら <b>${s5}/${G.SHARD_COST}</b></button>
@@ -384,7 +384,10 @@ function showGacha(banner = null) {
     row.innerHTML = lineup(b).map(it => `<button class="gc-it r${it.rarity || 3} ${gachaOwned(it.id) ? 'have' : ''}" data-id="${it.id}">
       <span class="thumb">${thumbHTML(it)}</span><i class="gc-r">★${it.rarity || 3}</i>${gachaOwned(it.id) ? `<i class="gc-ok">${icon('check')}</i>` : ''}</button>`).join('');
     hydrateThumbs(row);
-    row.querySelectorAll('.gc-it').forEach(x => x.onclick = () => gachaItemSheet(itemById(x.dataset.id) || G.gachaById(x.dataset.id)));
+    const list = lineup(b).map(it => itemById(it.id) || it);
+    row.scrollLeft = 0;
+    el.querySelector('.gc-n').textContent = `${list.length}種類`;
+    row.querySelectorAll('.gc-it').forEach((x, k) => x.onclick = () => gachaItemViewer(list, k));
   };
   // 横にめくり終わったら、真ん中のカードを選んだことにする
   let t = 0;
@@ -421,16 +424,43 @@ function showGacha(banner = null) {
     shardExchange(r, cur().id);
   });
 }
-// 出る家具を大きく見る
-function gachaItemSheet(it) {
-  if (!it) return;
-  const n = S.realOwned(it.id);
-  const sh = sheet(`<div class="gi-big thumb">${thumbHTML(it)}</div>
-    <div class="gi-t"><span class="gi-r r${it.rarity || 3}">${'★'.repeat(it.rarity || 3)}</span><h3>${esc(it.name)}</h3>
-    <p>${n ? `持っている（${n}）` : 'まだ持っていません'}</p></div>
-    <button class="link close">とじる</button>`, 'gi-sheet');
-  hydrateThumbs(sh);
-  sh.querySelector('.close').onclick = () => sh.remove();
+// 出る家具を大きく見る：3D でくるくる回る。左右の矢印で次の家具へ
+async function gachaItemViewer(list, k) {
+  const { spinViewer } = await import('./thumbs.js');
+  let dispose = null;
+  const ov = document.createElement('div');
+  ov.className = 'gi-view';
+  ov.innerHTML = `<div class="gi-bg"></div>
+    <button class="icon gi-x" aria-label="とじる">${icon('x')}</button>
+    <div class="gi-stage"></div>
+    <button class="icon gi-prev" aria-label="前の家具">${icon('back')}</button>
+    <button class="icon gi-next" aria-label="次の家具">${icon('chevronRight')}</button>
+    <div class="gi-info"></div>`;
+  app.appendChild(ov);
+  const stage = ov.querySelector('.gi-stage');
+  const show = async (n) => {
+    k = (n + list.length) % list.length;
+    const it = list[k];
+    dispose?.(); dispose = null;
+    stage.className = 'gi-stage';
+    stage.innerHTML = '';
+    const have = S.realOwned(it.id);
+    ov.querySelector('.gi-info').innerHTML = `<span class="gi-r r${it.rarity || 3}">${'★'.repeat(it.rarity || 3)}</span>
+      <h3>${esc(it.name)}</h3><p>${have ? `${icon('check')}持っている` : 'まだ持っていません'}・${k + 1} / ${list.length}</p>
+      <small>${it.place === 'skin' ? '画面の着せ替え' : '指で左右になぞると回せます'}</small>`;
+    if (it.place === 'skin' || it.src?.skin) { stage.innerHTML = `<span class="thumb gi-flat">${thumbHTML(it)}</span>`; hydrateThumbs(stage); return; }
+    stage.insertAdjacentHTML('beforeend', `<span class="gi-load">${thumbHTML(it)}</span>`);
+    hydrateThumbs(stage);
+    const d = await spinViewer(stage, it);
+    if (list[k] !== it || !ov.isConnected) { d(); return; }
+    dispose = d;
+  };
+  const close = () => { dispose?.(); ov.remove(); };
+  ov.querySelector('.gi-x').onclick = close;
+  ov.querySelector('.gi-bg').onclick = close;
+  ov.querySelector('.gi-prev').onclick = () => show(k - 1);
+  ov.querySelector('.gi-next').onclick = () => show(k + 1);
+  show(k);
 }
 // 限定シリーズの「全部そろえた部屋」の見本（見るだけ。フレンドの部屋と同じしくみで見せる）
 const SAMPLE_ROOMS = { band: () => import('./bandsample.js').then(m => m.BAND_SAMPLE) };
@@ -1220,7 +1250,7 @@ function photoMode() {
 
 // =========================== 更新のお知らせ ===========================
 // このプログラムの版（version.json と同じにする。公開のたびに上げる）
-const APP_VERSION = '2.12.1';
+const APP_VERSION = '2.13.0';
 // 新しい版が出たら、みんな同じタイミングでそろうように強制で再起動する。
 // 開いた時・画面に戻った時・1分ごとに version.json を見る
 async function latestVersion() {
