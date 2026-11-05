@@ -1,10 +1,10 @@
 // LYRIC BOOK 本体：画面の切りかえと操作
-import { rpc, LOCAL_TOKEN, SUPABASE_URL, SUPABASE_KEY } from './cloud.js';
+import { rpc, LOCAL_TOKEN } from './cloud.js';
 import * as N from './notes.js';
 import * as L from './lyrics.js';
 import * as R from './recorder.js';
 
-export const APP_VERSION = '1.1.0';
+export const APP_VERSION = '1.2.0';
 
 // ---------- 小さな道具 ----------
 const $ = (s, el = document) => el.querySelector(s);
@@ -321,9 +321,11 @@ function renderLogin(mode = 'login', err = '') {
     <div class="err" role="alert">${esc(err)}</div>
     <button class="btn" type="submit">${{ login: 'ログイン', signup: '登録してはじめる', reset: 'パスワードを作り直す' }[mode]}</button>
     <button class="link" type="button" id="trial">ログインせずにためす（この端末だけに保存）</button>
+    <button class="link" type="button" id="first">はじめての準備（1回だけ・グーグルドライブ）</button>
   </form></div>`;
   $$('.tabs button', app).forEach(b => b.onclick = e => { e.preventDefault(); renderLogin(b.dataset.m); });
   $('#trial').onclick = () => { lsSet('lb_token', LOCAL_TOKEN); boot(); };
+  $('#first').onclick = openFirstSetup;
   $('#lf').onsubmit = async e => {
     e.preventDefault();
     const btn = $('#lf button[type="submit"]'); btn.disabled = true;
@@ -1287,56 +1289,44 @@ function renderSettings() {
   $$('[data-ed]', app).forEach(b => b.onclick = () => editListItem(b.dataset.ed, +b.dataset.i));
   $$('[data-add]', app).forEach(b => b.onclick = () => editListItem(b.dataset.add, -1));
   $('#logout').onclick = () => logout(false);
-  $('#bk-setup')?.addEventListener('click', openBackupSetup);
   $('#bk-restore')?.addEventListener('click', restoreFromFile);
 }
 
 // ---------- グーグルドライブへのバックアップ ----------
 function backupRows() {
-  if (S.token === LOCAL_TOKEN) return `<div class="set-row"><span class="muted">ためし中は使えません。ログインすると使えます。</span></div>`;
+  if (S.token === LOCAL_TOKEN) return `<div class="set-row"><span class="muted">ためし中はこの端末だけに保存しています。ログインすると、グーグルドライブに保存されます。</span></div>`;
   const b = S.backup || {};
-  let state;
-  if (!b.enabled) state = '<span class="muted">まだ設定していません</span>';
-  else if (!b.at) state = '<span class="muted">準備中（Googleの画面で「setup」を実行すると始まります）</span>';
-  else state = `<span>最後のバックアップ：${fmtDate(b.at)}${b.info?.songs != null ? `<br><span class="muted" style="font-size:.8rem">曲 ${b.info.songs}・録音 ${b.info.recordings}　変えると5分以内に保存されます</span>` : ''}</span>`;
-  return `<div class="set-row">${state}</div>
+  return `<div class="set-row"><span>歌詞・録音は、あなたのグーグルドライブの「LYRIC BOOK」フォルダに保存しています。</span></div>
+    <div class="set-row"><span>${b.at ? `最後のバックアップ：${fmtDate(b.at)}${b.info?.songs != null ? `<br><span class="muted" style="font-size:.8rem">曲 ${b.info.songs}・録音 ${b.info.recordings}　1日1つ、30日分残します</span>` : ''}` : '<span class="muted">バックアップは、変えてから10分以内に作られます</span>'}</span></div>
     ${b.info?.folder ? `<div class="set-row"><span>ドライブのフォルダ</span><a class="btn sub small" href="${esc(b.info.folder)}" target="_blank" rel="noopener">開く</a></div>` : ''}
-    <div class="set-row"><span class="muted" style="font-size:.85rem">${b.enabled ? '設定しなおす（新しいコードになります）' : '5分ごとに、変わった所を自動で保存します'}</span><button class="btn small" id="bk-setup">${b.enabled ? '設定しなおす' : '設定する'}</button></div>
-    <div class="set-row"><span class="muted" style="font-size:.85rem">ドライブの「LYRIC BOOK 最新.json」などから戻す</span><button class="btn sub small" id="bk-restore">戻す</button></div>`;
+    <div class="set-row"><span class="muted" style="font-size:.85rem">「日ごと」フォルダのファイルから戻す</span><button class="btn sub small" id="bk-restore">戻す</button></div>`;
 }
 
-async function openBackupSetup() {
-  if (S.backup?.enabled && !(await confirmAsk('設定しなおしますか？', '前に貼ったコードは使えなくなります。新しいコードを、前と同じGoogleの画面に貼りなおしてください。', '設定しなおす'))) return;
-  let code;
-  try {
-    const key = await rpc('lb_backup_new_key', { p_token: S.token });
-    const tpl = await (await fetch('backup/Code.gs?v=' + APP_VERSION)).text();
-    code = tpl.replace('{{SUPABASE_URL}}', SUPABASE_URL).replace('{{SUPABASE_KEY}}', SUPABASE_KEY).replace('{{BACKUP_KEY}}', key);
-    S.backup = { enabled: true, at: null, info: null };
-    cacheSoon();
-  } catch (e) { fail(e); return; }
-  const sheet = openSheet(`<h3>グーグルドライブにバックアップ</h3>
-    <p>はじめに1回だけ、あなたのGoogleアカウントに「バックアップ係」を置きます。<b>パソコンかiPadでやるのがおすすめです。</b></p>
+// はじめての準備：Googleの画面に受け口のコードを貼ってもらう
+async function openFirstSetup() {
+  let code = '';
+  try { code = await (await fetch('server/Code.gs?v=' + APP_VERSION)).text(); }
+  catch (e) { toast('コードを読みこめませんでした。電波のよい所でもう一度ためしてください'); return; }
+  openSheet(`<h3>はじめての準備（1回だけ）</h3>
+    <p>あなたのグーグルドライブに、LYRIC BOOK の置き場所を作ります。<b>パソコンかiPadでやるのがおすすめです。</b></p>
     <ol class="steps">
       <li>下の「コードをコピー」を押す</li>
-      <li><b>script.google.com</b> を開いて、バックアップしたいGoogleアカウントでログイン →「新しいプロジェクト」</li>
-      <li>最初から書いてある文字を全部消して、コピーしたコードを貼りつける → 保存のマーク（フロッピー）を押す</li>
-      <li>上の「実行する関数」で <b>setup</b> を選んで「実行」を押す</li>
-      <li>「承認が必要です」と出たら：権限を確認 → 自分のアカウント →「詳細」→「（安全ではないページ）に移動」→「許可」<br><span class="muted">自分で作ったものなので大丈夫です</span></li>
-      <li>下に「準備ができました」と出たら終わり。ドライブに「LYRIC BOOK バックアップ」フォルダができます</li>
+      <li>「Googleの画面を開く」を押す（使いたいGoogleアカウントで）</li>
+      <li>最初から書いてある文字を全部消して、コピーしたコードを貼る → 保存のマーク（フロッピー）を押す</li>
+      <li>上の「実行する関数」で <b>setup</b> を選んで「実行」<br>「承認が必要です」→ 権限を確認 → 自分のアカウント →「詳細」→「（安全ではないページ）に移動」→「許可」<br><span class="muted">自分で作ったものなので大丈夫です</span></li>
+      <li>右上の「デプロイ」→「新しいデプロイ」→ 歯車のマークで「ウェブアプリ」を選ぶ<br>「次のユーザーとして実行」は<b>自分</b>、「アクセスできるユーザー」は<b>全員</b> →「デプロイ」</li>
+      <li>出てきた「ウェブアプリ」のURL（https://script.google.com/macros/s/…/exec）をコピーして、アプリを作っている人に送る</li>
     </ol>
-    <textarea class="textarea code" id="bk-code" readonly>${esc(code)}</textarea>
+    <textarea class="textarea code" id="fs-code" readonly>${esc(code)}</textarea>
     <div class="acts"><a class="btn sub" href="https://script.google.com/home/projects/create" target="_blank" rel="noopener">Googleの画面を開く</a><button class="btn" data-s="copy">コードをコピー</button></div>
-    <p class="muted" style="font-size:.8rem">このコードには、あなた専用の鍵が入っています。ほかの人には見せないでください。</p>
     <button class="btn sub" data-s="no">とじる</button>`, {
     copy: (_, sh) => {
-      const ta = $('#bk-code', sh);
+      const ta = $('#fs-code', sh);
       const done = () => toast('コピーしました。Googleの画面に貼りつけてください');
       navigator.clipboard?.writeText(code).then(done, () => { ta.focus(); ta.select(); document.execCommand('copy') ? done() : toast('コードを長押しして「すべてを選択」→「コピー」してください'); });
     },
     no: () => closeSheet(),
-  }, () => { if (S.view === 'settings') renderSettings(); });
-  void sheet;
+  });
 }
 
 // バックアップのファイルから戻す。今のデータは消さない。
