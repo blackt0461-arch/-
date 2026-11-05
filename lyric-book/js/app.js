@@ -4,7 +4,7 @@ import * as N from './notes.js';
 import * as L from './lyrics.js';
 import * as R from './recorder.js';
 
-export const APP_VERSION = '1.2.1';
+export const APP_VERSION = '1.3.0';
 
 // ---------- 小さな道具 ----------
 const $ = (s, el = document) => el.querySelector(s);
@@ -75,7 +75,7 @@ const S = {
   artists: new Map(), songs: new Map(), recs: [],
   tab: lsGet('lb_tab') || 'real', themeFilter: 'all', query: '',
   sel: null, view: '', saveTimers: new Map(),
-  backup: null, offline: false, lastRefresh: 0,
+  backup: null, offline: false, lastRefresh: 0, isOwner: false, serverVersion: 2,
 };
 const app = $('#app');
 
@@ -171,7 +171,7 @@ const CACHE_KEY = 'lb_cache', QUEUE_KEY = 'lb_queue';
 function cacheNow() {
   if (!S.token) return;
   lsSet(CACHE_KEY, JSON.stringify({
-    token: S.token, username: S.username, settings: S.settings, backup: S.backup,
+    token: S.token, username: S.username, settings: S.settings, backup: S.backup, is_owner: S.isOwner, server_version: S.serverVersion,
     artists: Array.from(S.artists.values()), songs: Array.from(S.songs.values()), recordings: S.recs,
   }));
 }
@@ -185,6 +185,8 @@ function applyLoad(d) {
   S.songs = new Map((d.songs || []).map(s => [s.id, s]));
   S.recs = d.recordings || [];
   S.backup = d.backup || null;
+  S.isOwner = !!d.is_owner;
+  S.serverVersion = d.server_version || 1;
   S.lastRefresh = Date.now();
 }
 function setOffline(on) {
@@ -316,6 +318,7 @@ function renderLogin(mode = 'login', err = '') {
     <h1 class="logo">LYRIC BOOK<small>歌詞と歌い方のノート</small></h1>
     <div class="tabs">${tab('login', 'ログイン')}${tab('signup', 'はじめて')}${tab('reset', '忘れたとき')}</div>
     <label class="field"><span>ユーザー名</span><input class="input" id="lf-user" autocomplete="username" autocapitalize="off" required></label>
+    ${mode === 'signup' ? `<label class="field"><span>招待の合言葉（2人目からいります。はじめての人は空のまま）</span><input class="input" id="lf-inv" autocapitalize="characters" placeholder="ABCD-EFGH"></label>` : ''}
     ${mode === 'reset' ? `<label class="field"><span>復活用の合言葉</span><input class="input" id="lf-rec" autocapitalize="characters" placeholder="ABCD-EFGH-JKLM" required></label>` : ''}
     <label class="field"><span>${mode === 'reset' ? '新しいパスワード' : 'パスワード'}</span><input class="input" id="lf-pass" type="password" autocomplete="${mode === 'login' ? 'current-password' : 'new-password'}" required></label>
     <div class="err" role="alert">${esc(err)}</div>
@@ -333,7 +336,7 @@ function renderLogin(mode = 'login', err = '') {
     try {
       let r;
       if (mode === 'login') r = await rpc('lb_login', { p_username: u, p_password: p });
-      else if (mode === 'signup') r = await rpc('lb_signup', { p_username: u, p_password: p });
+      else if (mode === 'signup') r = await rpc('lb_signup', { p_username: u, p_password: p, p_invite: $('#lf-inv').value.trim() });
       else r = await rpc('lb_reset', { p_username: u, p_recovery: $('#lf-rec').value, p_password: p });
       lsSet('lb_token', r.token);
       if (r.recovery) showRecovery(r.recovery, boot); else boot();
@@ -1273,6 +1276,8 @@ function renderSettings() {
       <p class="sec-lbl">色</p>
       <div class="card">${st.colors.map((c, i) => `<div class="set-row"><span class="l"><i class="dot" style="--c:${esc(c.color)}"></i>${esc(c.name)}</span><button class="btn sub small" data-ed="colors" data-i="${i}">変える</button></div>`).join('')}
         <div class="set-row"><span class="muted">色を足す</span><button class="btn small" data-add="colors">＋ 追加</button></div></div>
+      ${S.token !== LOCAL_TOKEN && S.serverVersion < 2 ? `<div class="hint">Googleの画面に貼ったコードが古い版です。ログイン画面の「はじめての準備」でコードをコピーして貼りかえ、「デプロイ」→「デプロイを管理」→ えんぴつ →「新バージョン」→「デプロイ」をしてください。</div>` : ''}
+      ${S.isOwner ? `<p class="sec-lbl">メンバー（管理している人だけに見えます）</p><div class="card" id="members"><div class="set-row"><span class="muted">読みこんでいます…</span></div></div>` : ''}
       <p class="sec-lbl">グーグルドライブへのバックアップ</p>
       <div class="card">${backupRows()}</div>
       <p class="sec-lbl">アカウント</p>
@@ -1290,12 +1295,38 @@ function renderSettings() {
   $$('[data-add]', app).forEach(b => b.onclick = () => editListItem(b.dataset.add, -1));
   $('#logout').onclick = () => logout(false);
   $('#bk-restore')?.addEventListener('click', restoreFromFile);
+  if (S.isOwner) loadMembers();
+}
+
+// ---------- メンバーの管理（管理している人だけ） ----------
+async function loadMembers() {
+  const box = $('#members'); if (!box) return;
+  let d;
+  try { d = await rpc('lb_admin', { p_token: S.token }); }
+  catch (e) { box.innerHTML = `<div class="set-row"><span class="muted">${esc(e.message)}</span></div>`; return; }
+  if (!$('#members')) return;
+  box.innerHTML = `<div class="set-row"><span>招待の合言葉<br><b class="invite">${esc(d.invite)}</b><br><span class="muted" style="font-size:.78rem">使ってほしい人にだけ教えてください。登録のときに入れてもらいます。</span></span>
+      <span style="display:flex;flex-direction:column;gap:6px"><button class="btn small" id="inv-copy">コピー</button><button class="btn sub small" id="inv-new">作りなおす</button></span></div>
+    ${d.members.length ? d.members.map(m => `<div class="set-row"><span>${esc(m.username)}<br><span class="muted" style="font-size:.78rem">曲 ${m.songs}・録音 ${m.recordings}${m.changed_at ? `・最後に使った日 ${fmtDate(m.changed_at, false)}` : ''}</span></span><button class="btn danger small" data-out="${esc(m.id)}" data-nm="${esc(m.username)}">外す</button></div>`).join('')
+      : '<div class="set-row"><span class="muted">まだメンバーはいません。招待の合言葉を教えると、その人が「はじめて」から登録できます。</span></div>'}
+    <div class="set-row"><span class="muted" style="font-size:.78rem">メンバーの歌詞や録音も、あなたのドライブの「LYRIC BOOK / メンバー」に保存されます。</span></div>`;
+  $('#inv-copy').onclick = () => navigator.clipboard?.writeText(d.invite).then(() => toast('コピーしました'), () => toast('長押しでコピーしてください'));
+  $('#inv-new').onclick = async () => {
+    if (!(await confirmAsk('招待の合言葉を作りなおしますか？', '前の合言葉では登録できなくなります。登録ずみのメンバーはそのまま使えます。', '作りなおす'))) return;
+    try { await rpc('lb_new_invite', { p_token: S.token }); loadMembers(); } catch (e) { fail(e); }
+  };
+  $$('[data-out]', box).forEach(b => b.onclick = async () => {
+    if (!(await confirmAsk(`「${b.dataset.nm}」を外しますか？`, 'その人はログインできなくなり、アプリの中の歌詞も消えます。ドライブのその人のフォルダ（バックアップ・録音）は残ります。', '外す', true))) return;
+    try { await rpc('lb_remove_member', { p_token: S.token, p_uid: b.dataset.out }); toast('外しました'); loadMembers(); } catch (e) { fail(e); }
+  });
 }
 
 // ---------- グーグルドライブへのバックアップ ----------
 function backupRows() {
   if (S.token === LOCAL_TOKEN) return `<div class="set-row"><span class="muted">ためし中はこの端末だけに保存しています。ログインすると、グーグルドライブに保存されます。</span></div>`;
   const b = S.backup || {};
+  if (!S.isOwner && S.serverVersion >= 2) return `<div class="set-row"><span>歌詞・録音は、管理している人のグーグルドライブに保存されています。</span></div>
+    <div class="set-row"><span>${b.at ? `最後のバックアップ：${fmtDate(b.at)}` : '<span class="muted">バックアップは、変えてから10分以内に作られます</span>'}<br><span class="muted" style="font-size:.8rem">1日1つ、30日分残します。戻したいときは、管理している人に頼んでください。</span></span></div>`;
   return `<div class="set-row"><span>歌詞・録音は、あなたのグーグルドライブの「LYRIC BOOK」フォルダに保存しています。</span></div>
     <div class="set-row"><span>${b.at ? `最後のバックアップ：${fmtDate(b.at)}${b.info?.songs != null ? `<br><span class="muted" style="font-size:.8rem">曲 ${b.info.songs}・録音 ${b.info.recordings}　1日1つ、30日分残します</span>` : ''}` : '<span class="muted">バックアップは、変えてから10分以内に作られます</span>'}</span></div>
     ${b.info?.folder ? `<div class="set-row"><span>ドライブのフォルダ</span><a class="btn sub small" href="${esc(b.info.folder)}" target="_blank" rel="noopener">開く</a></div>` : ''}
