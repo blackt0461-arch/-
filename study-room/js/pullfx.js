@@ -230,8 +230,10 @@ export function playPullFX(res, opt) {
       // 線が作れないとき（着せ替えなど）は、色が変わる演出だけにして、そのまま絵を見せる
       for (let s = 1; s < cols.length; s++) { await wait(400); setColor(cols[s]); flash(0.45); vibrate(40); }
       ghost.innerHTML = thumbHTML(it); hydrateThumbs(ghost);
-      const im = ghost.querySelector('img');
+      const im = ghost.querySelector('img'), sv = ghost.querySelector('svg');
       if (im && !im.classList.contains('thumb-wait')) real.src = im.src;
+      // プロフィールのアイコン（絵が svg）は、その絵をそのまま見せる
+      else if (sv) real.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(new XMLSerializer().serializeToString(sv));
       else { const { renderThumb } = await import('./thumbs.js'); const u = await Promise.race([renderThumb(it), new Promise(z => setTimeout(() => z(null), skipped ? 0 : 3000))]); if (u) real.src = u; }
       ghost.innerHTML = '';
     }

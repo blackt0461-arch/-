@@ -183,20 +183,21 @@ add(5, [
   ['skin-e5', '着せ替え：バンドルーム', 'skin', 'i', { skin: 'e5' }, 1, SK],
 ], { series: 'band' });
 
-// ───────── プロフィールのアイコン（夜の切り絵）：バンドの6つは OVERDRIVE 限定、ほかはいつでも ─────────
+// ───────── プロフィールのアイコン（夜の切り絵）：そのガチャを引いた回数のごほうび（ランダムには出ない） ─────────
 const AV = { place: 'avatar' };
 const avRow = (a) => ['av-' + a.id, 'アイコン：' + a.name, 'avatar', 'i', { avatar: a.id }, 1, AV];
 add(4, GACHA_AVATARS.filter(a => a.r === 4 && a.series === 'band').map(avRow), { series: 'band' });
 add(5, GACHA_AVATARS.filter(a => a.r === 5 && a.series === 'band').map(avRow), { series: 'band' });
 add(4, GACHA_AVATARS.filter(a => a.r === 4 && !a.series).map(avRow));
 add(5, GACHA_AVATARS.filter(a => a.r === 5 && !a.series).map(avRow));
+for (const it of GACHA_ITEMS) if (it.place === 'avatar') it.reward = true; // 引いた回数のごほうび。ガチャからランダムには出ない
 
 export const GACHA_BY_ID = Object.fromEntries(GACHA_ITEMS.map((it) => [it.id, it]));
 export const gachaById = (id) => GACHA_BY_ID[id] || null;
 export const seriesById = (id) => SERIES.find((s) => s.id === id) || null;
 export const byRarity = (r) => GACHA_ITEMS.filter((it) => it.rarity === r);
 // シリーズの家具（★5 が先）
-export const bySeries = (id) => GACHA_ITEMS.filter((it) => it.series === id).sort((a, b) => b.rarity - a.rarity);
+export const bySeries = (id) => GACHA_ITEMS.filter((it) => it.series === id && !it.reward).sort((a, b) => b.rarity - a.rarity);
 // 今ひらいている限定シリーズ（start〜end の間。null は「いつでも」）
 export function activeSeries(now = new Date()) {
   const t = +now;
@@ -211,9 +212,9 @@ export function gachaSpec(item) {
 // ───────── 引くしくみ ─────────
 // いつでも出る物（限定シリーズの物は、そのシリーズのバナーでだけ出る）
 const POOL = {
-  3: GACHA_ITEMS.filter((it) => it.rarity === 3 && !it.limited),
-  4: GACHA_ITEMS.filter((it) => it.rarity === 4 && !it.limited),
-  5: GACHA_ITEMS.filter((it) => it.rarity === 5 && !it.limited), // ★5 恒常
+  3: GACHA_ITEMS.filter((it) => it.rarity === 3 && !it.limited && !it.reward),
+  4: GACHA_ITEMS.filter((it) => it.rarity === 4 && !it.limited && !it.reward),
+  5: GACHA_ITEMS.filter((it) => it.rarity === 5 && !it.limited && !it.reward), // ★5 恒常
 };
 // ふつうの家具リスト（items.js）の「レア」の物も、★3 としてガチャに入れる（items.js から呼ぶ）
 export function addToPool(items, rarity = 3) {
@@ -290,7 +291,7 @@ export function pullWithTicket(kind = 'ticket', owned = () => 0, rng = Math.rand
 // opts.series = 今開催中のシリーズ id → そのシリーズの限定（★4・★5）も候補に入れる
 // opts.includeLimited = true（series なし）→ すべての限定を候補に入れる
 export function exchangeable(rarity, owned = () => 0, opts = {}) {
-  let pool = byRarity(rarity);
+  let pool = byRarity(rarity).filter((it) => !it.reward);
   if (opts.series) pool = pool.filter((it) => !it.limited || it.series === opts.series);
   else if (!opts.includeLimited) pool = pool.filter((it) => !it.limited);
   const left = pool.filter((it) => !(owned(it.id) > 0));

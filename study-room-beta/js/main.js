@@ -21,7 +21,7 @@ import { rpc } from './cloud.js';
 import { PUZZLES, puzzleById, levelInfo, mountPuzzle, livesOf } from './puzzles.js';
 import { openPuzzleHelp } from './puzzlehelp.js';
 import * as BGM from './bgm.js';
-import { AVATARS, AVATAR_COLORS, GACHA_AVATARS, NIGHT_COLORS, avatarHTML, avatarItemId } from './avatars.js';
+import { AVATARS, AVATAR_COLORS, GACHA_AVATARS, NIGHT_COLORS, avatarHTML, avatarItemId, pullRewards } from './avatars.js';
 import { studyParams, puzzleParams, radarSVG, TITLES, titleById, earnedTitles } from './profile.js';
 
 // bank：data/bank/<科目>.json の問題バンク（教科書に合わせた 教科 → ジャンル → 単元）。あとから読みこむ
@@ -343,7 +343,7 @@ function updateGiftBadge() {
 }
 function showGiftBox() {
   const list = [...S.gifts()].sort((a, b) => (b.at || 0) - (a.at || 0));
-  const from = { rank: 'Lvアップ', play: 'がんばったごほうび', master: '克服', operator: '運営から' };
+  const from = { rank: 'Lvアップ', play: 'がんばったごほうび', master: '克服', operator: '運営から', gacha: 'ガチャのごほうび' };
   const day = (t) => t ? new Date(t).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' }) : '';
   const el = screenWithTabs('gifts', `<button class="icon back">${icon('back')}</button><h2>プレゼントBOX</h2><span class="gb-count"><b>${list.length}</b> 件</span>`, 'room', `
     ${list.length ? `<button class="btn primary big gb-all">${icon('gift')}まとめて受け取る</button>
@@ -518,6 +518,7 @@ function showGacha(banner = null) {
         ${x.hero ? `<span class="gc-hero thumb">${thumbHTML(x.hero)}</span>` : ''}
       </button>`).join('')}</div>
     ${banners.length > 1 ? `<div class="gc-dots">${banners.map((x, k) => `<i data-k="${k}"></i>`).join('')}</div>` : ''}
+    <div class="gc-reward"></div>
     <div class="gc-line"><p class="gc-h">出る家具<span class="gc-n"></span><small>横にスライド・押すと3Dで見られる</small></p><div class="gc-row"></div></div>
     <div class="gc-chips">
       <button class="chip shard-btn" data-r="4"><span class="shard s4">${icon('sparkle')}</span>★4かけら <b>${s4}/${G.SHARD_COST}</b></button>
@@ -545,6 +546,11 @@ function showGacha(banner = null) {
     const list = lineup(b).map(it => itemById(it.id) || it);
     row.scrollLeft = 0;
     el.querySelector('.gc-n').textContent = `${list.length}種類`;
+    // このガチャを引いた回数のごほうび（アイコン）
+    const bk = b.limited ? b.id : 'standard', rw = pullRewards(bk), n = S.profile().pulls?.[bk] || 0, next = rw.find(a => a.at > n);
+    el.querySelector('.gc-reward').innerHTML = rw.length ? `<div class="gr-head">${icon('gift')}<b>引いた回数のごほうび</b><small>このガチャ ${n}回</small></div>
+      <div class="gr-row">${rw.map(a => `<span class="gr-it ${n >= a.at ? 'got' : ''} ${next === a ? 'next' : ''}">${avatarHTML({ avatar: a.id }, 'avatar')}<i>${a.at}回</i></span>`).join('')}</div>
+      <p class="gr-next">${next ? `あと <b>${next.at - n}回</b> でアイコン「${esc(next.name)}」` : 'ぜんぶもらいました！'}</p>` : '';
     row.querySelectorAll('.gc-it').forEach((x, k) => x.onclick = () => gachaItemViewer(list, k));
   };
   // 横にめくり終わったら、真ん中のカードを選んだことにする
@@ -639,6 +645,12 @@ function doPull(roll, cost, bannerId) {
   hs.rareTickets4 = have.ticket4 - (cost.ticket4 || 0);
   hs.rareTickets5 = have.ticket5 - (cost.ticket5 || 0);
   const res = roll();
+  // そのガチャを引いた回数を数え、決まった回数でアイコンをプレゼントBOXへ（1.10.1）
+  const bk = bannerId && bannerId !== 'standard' ? bannerId : 'standard';
+  const pf = S.profile(), pulls = pf.pulls || (pf.pulls = {}), before = pulls[bk] || 0;
+  pulls[bk] = before + res.length;
+  const gotIcons = pullRewards(bk).filter(a => before < a.at && a.at <= pulls[bk]);
+  for (const a of gotIcons) S.addGift({ id: 'pull-' + a.id, kind: 'item', itemId: avatarItemId(a.id), title: `ガチャ${a.at}回のごほうび`, from: 'gacha' });
   for (const r of res) {
     if (r.shard === 4) hs.shards4 = (hs.shards4 || 0) + 1;
     else if (r.shard === 5) hs.shards5 = (hs.shards5 || 0) + 1;
@@ -647,12 +659,16 @@ function doPull(roll, cost, bannerId) {
   S.save();
   try { Sync.push?.(true); } catch (e) { /* オフライン。あとで保存される */ } // 演出のとちゅうで閉じても、引いた結果は残るように
   const kind = cost.ticket5 ? 'ticket5' : cost.ticket4 ? 'ticket4' : 'ticket';
-  playPull(res, bannerId, kind, () => doPull(roll, cost, bannerId));
+  playPull(res, bannerId, kind, () => doPull(roll, cost, bannerId), gotIcons);
 }
 // 引いたときの演出（js/pullfx.js）。「もう一度」は同じ引き方をもう1回
-function playPull(res, bannerId, kind = 'ticket', again = null) {
+function playPull(res, bannerId, kind = 'ticket', again = null, gotIcons = []) {
   playPullFX(res, { thumbHTML, hydrateThumbs, esc, vibrate, icon, ticketSVG, kind,
-    onDone: (more) => { showGacha(bannerId); if (more && again) again(); } });
+    onDone: (more) => {
+      showGacha(bannerId);
+      if (gotIcons.length) { updateGiftBadge(); toast(`ガチャ${gotIcons[gotIcons.length - 1].at}回のごほうび！ アイコン「${gotIcons.map(a => a.name).join('」「')}」がプレゼントBOXに届きました`, 3800); vibrate([30, 40, 60]); }
+      if (more && again) again();
+    } });
 }
 // かけらで交換
 function shardExchange(rarity, bannerId) {
@@ -1426,7 +1442,7 @@ function photoMode() {
 
 // =========================== 更新のお知らせ ===========================
 // このプログラムの版（version.json と同じにする。公開のたびに上げる）
-const APP_VERSION = '1.10.0';
+const APP_VERSION = '1.10.1';
 // 新しい版が出たら、みんな同じタイミングでそろうように強制で再起動する。
 // 開いた時・画面に戻った時・1分ごとに version.json を見る
 async function latestVersion() {
@@ -1861,8 +1877,8 @@ function pickAvatar(after) {
     <div class="sh-head"><span class="sh-ic">${icon('user')}</span><div><h3>アイコン</h3><p>イラストと色をえらびます</p></div></div>
     <div class="av-preview"></div>
     <div class="av-grid">${AVATARS.map(a => { const lock = a.lv && rk < a.lv && !isAdmin(); return `<button class="av-pick" data-a="${a.id}" ${lock ? 'disabled' : ''} aria-label="${a.name}${lock ? `（Lv${a.lv}から）` : ''}">${avatarHTML({ avatar: a.id, avatarColor: col }, 'avatar')}${lock ? `<span class="av-lock">${icon('lock')}Lv${a.lv}</span>` : ''}</button>`; }).join('')}</div>
-    <h4 class="av-sub">${icon('star')}ガチャのアイコン<small>${GACHA_AVATARS.filter(a => hasG(a.id)).length} / ${GACHA_AVATARS.length}</small></h4>
-    <div class="av-grid">${GACHA_AVATARS.map(a => { const lock = !hasG(a.id); return `<button class="av-pick g" data-a="${a.id}" ${lock ? 'disabled' : ''} aria-label="${a.name}${lock ? '（ガチャで手に入る）' : ''}">${avatarHTML({ avatar: a.id, avatarColor: 0 }, 'avatar')}${lock ? `<span class="av-lock">${icon('lock')}${'★'.repeat(a.r)}</span>` : ''}</button>`; }).join('')}</div>
+    <h4 class="av-sub">${icon('star')}ガチャのごほうびのアイコン<small>${GACHA_AVATARS.filter(a => hasG(a.id)).length} / ${GACHA_AVATARS.length}</small></h4>
+    <div class="av-grid">${GACHA_AVATARS.map(a => { const lock = !hasG(a.id); return `<button class="av-pick g" data-a="${a.id}" ${lock ? 'disabled' : ''} aria-label="${a.name}${lock ? `（${a.series === 'band' ? 'OVERDRIVE' : 'スタンダード'}のガチャを${a.at}回引くともらえる）` : ''}">${avatarHTML({ avatar: a.id, avatarColor: 0 }, 'avatar')}${lock ? `<span class="av-lock">${icon('lock')}${a.at}回</span>` : ''}</button>`; }).join('')}</div>
     <div class="av-colors"></div>
     <div class="row2"><button class="btn ghost back2">やめる</button><button class="btn primary ok">これにする</button></div>`, 'news-sheet av-sheet');
   const draw = () => {

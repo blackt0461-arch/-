@@ -21,6 +21,8 @@ import { rpc } from './cloud.js';
 import { PUZZLES, puzzleById, levelInfo, mountPuzzle, livesOf } from './puzzles.js';
 import { openPuzzleHelp } from './puzzlehelp.js';
 import * as BGM from './bgm.js';
+import { AVATARS, AVATAR_COLORS, GACHA_AVATARS, NIGHT_COLORS, avatarHTML, avatarItemId, pullRewards } from './avatars.js';
+import { studyParams, puzzleParams, radarSVG, TITLES, titleById, earnedTitles } from './profile.js';
 
 // bank：data/bank/<科目>.json の問題バンク（教科書に合わせた 教科 → ジャンル → 単元）。あとから読みこむ
 const SUBJECTS = [
@@ -341,7 +343,7 @@ function updateGiftBadge() {
 }
 function showGiftBox() {
   const list = [...S.gifts()].sort((a, b) => (b.at || 0) - (a.at || 0));
-  const from = { rank: 'Lvアップ', play: 'がんばったごほうび', master: '克服', operator: '運営から' };
+  const from = { rank: 'Lvアップ', play: 'がんばったごほうび', master: '克服', operator: '運営から', gacha: 'ガチャのごほうび' };
   const day = (t) => t ? new Date(t).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' }) : '';
   const el = screenWithTabs('gifts', `<button class="icon back">${icon('back')}</button><h2>プレゼントBOX</h2><span class="gb-count"><b>${list.length}</b> 件</span>`, 'room', `
     ${list.length ? `<button class="btn primary big gb-all">${icon('gift')}まとめて受け取る</button>
@@ -427,7 +429,7 @@ function halfFurniture() {
 }
 function halfSocial() {
   halfSheet('みんな', [
-    { ic: 'trophy', name: 'ランキング', sub: '今週の解いた数', go: showRanking },
+    { ic: 'trophy', name: 'ランキング', sub: '今週かせいだポイント', go: showRanking },
     { ic: 'users', name: 'フレンド', sub: friendBadge ? `申請 ${friendBadge}件` : '部屋を見に行く', dot: friendBadge > 0, go: showFriends },
     { ic: 'camera', name: '写真', sub: '部屋をとる', go: () => { showHome(); photoMode(); } },
   ]);
@@ -496,7 +498,7 @@ function showGacha(banner = null) {
   const s4 = hs.shards4 || 0, s5 = hs.shards5 || 0;
   // 出る家具：★5 → ★4 の順に5つ
   const lineup = (b) => {
-    const pool = b.limited ? G.bySeries(b.id) : [...G.byRarity(5), ...G.byRarity(4)].filter(i => !i.limited && i.place !== 'skin');
+    const pool = b.limited ? G.bySeries(b.id) : [...G.byRarity(5), ...G.byRarity(4)].filter(i => !i.limited && i.place !== 'skin' && i.place !== 'avatar');
     // 全部（★5 → ★4 → ★3 の順）。横にスライドして見る
     return [...pool].sort((x, y) => (y.rarity || 0) - (x.rarity || 0));
   };
@@ -516,6 +518,7 @@ function showGacha(banner = null) {
         ${x.hero ? `<span class="gc-hero thumb">${thumbHTML(x.hero)}</span>` : ''}
       </button>`).join('')}</div>
     ${banners.length > 1 ? `<div class="gc-dots">${banners.map((x, k) => `<i data-k="${k}"></i>`).join('')}</div>` : ''}
+    <div class="gc-reward"></div>
     <div class="gc-line"><p class="gc-h">出る家具<span class="gc-n"></span><small>横にスライド・押すと3Dで見られる</small></p><div class="gc-row"></div></div>
     <div class="gc-chips">
       <button class="chip shard-btn" data-r="4"><span class="shard s4">${icon('sparkle')}</span>★4かけら <b>${s4}/${G.SHARD_COST}</b></button>
@@ -543,6 +546,11 @@ function showGacha(banner = null) {
     const list = lineup(b).map(it => itemById(it.id) || it);
     row.scrollLeft = 0;
     el.querySelector('.gc-n').textContent = `${list.length}種類`;
+    // このガチャを引いた回数のごほうび（アイコン）
+    const bk = b.limited ? b.id : 'standard', rw = pullRewards(bk), n = S.profile().pulls?.[bk] || 0, next = rw.find(a => a.at > n);
+    el.querySelector('.gc-reward').innerHTML = rw.length ? `<div class="gr-head">${icon('gift')}<b>引いた回数のごほうび</b><small>このガチャ ${n}回</small></div>
+      <div class="gr-row">${rw.map(a => `<span class="gr-it ${n >= a.at ? 'got' : ''} ${next === a ? 'next' : ''}">${avatarHTML({ avatar: a.id }, 'avatar')}<i>${a.at}回</i></span>`).join('')}</div>
+      <p class="gr-next">${next ? `あと <b>${next.at - n}回</b> でアイコン「${esc(next.name)}」` : 'ぜんぶもらいました！'}</p>` : '';
     row.querySelectorAll('.gc-it').forEach((x, k) => x.onclick = () => gachaItemViewer(list, k));
   };
   // 横にめくり終わったら、真ん中のカードを選んだことにする
@@ -603,8 +611,8 @@ async function gachaItemViewer(list, k) {
     const have = S.realOwned(it.id);
     ov.querySelector('.gi-info').innerHTML = `<span class="gi-r r${it.rarity || 3}">${'★'.repeat(it.rarity || 3)}</span>
       <h3>${esc(it.name)}</h3><p>${have ? `${icon('check')}持っている` : 'まだ持っていません'}・${k + 1} / ${list.length}</p>
-      <small>${it.place === 'skin' ? '画面の着せ替え' : '指で左右になぞると回せます'}</small>`;
-    if (it.place === 'skin' || it.src?.skin) { stage.innerHTML = `<span class="thumb gi-flat">${thumbHTML(it)}</span>`; hydrateThumbs(stage); return; }
+      <small>${it.place === 'skin' ? '画面の着せ替え' : it.place === 'avatar' ? 'プロフィールのアイコン（プロフィールで使えます）' : '指で左右になぞると回せます'}</small>`;
+    if (it.place === 'skin' || it.src?.skin || it.place === 'avatar') { stage.innerHTML = `<span class="thumb gi-flat">${thumbHTML(it)}</span>`; hydrateThumbs(stage); return; }
     stage.insertAdjacentHTML('beforeend', `<span class="gi-load">${thumbHTML(it)}</span>`);
     hydrateThumbs(stage);
     const d = await spinViewer(stage, it);
@@ -637,6 +645,12 @@ function doPull(roll, cost, bannerId) {
   hs.rareTickets4 = have.ticket4 - (cost.ticket4 || 0);
   hs.rareTickets5 = have.ticket5 - (cost.ticket5 || 0);
   const res = roll();
+  // そのガチャを引いた回数を数え、決まった回数でアイコンをプレゼントBOXへ（1.10.1）
+  const bk = bannerId && bannerId !== 'standard' ? bannerId : 'standard';
+  const pf = S.profile(), pulls = pf.pulls || (pf.pulls = {}), before = pulls[bk] || 0;
+  pulls[bk] = before + res.length;
+  const gotIcons = pullRewards(bk).filter(a => before < a.at && a.at <= pulls[bk]);
+  for (const a of gotIcons) S.addGift({ id: 'pull-' + a.id, kind: 'item', itemId: avatarItemId(a.id), title: `ガチャ${a.at}回のごほうび`, from: 'gacha' });
   for (const r of res) {
     if (r.shard === 4) hs.shards4 = (hs.shards4 || 0) + 1;
     else if (r.shard === 5) hs.shards5 = (hs.shards5 || 0) + 1;
@@ -645,12 +659,16 @@ function doPull(roll, cost, bannerId) {
   S.save();
   try { Sync.push?.(true); } catch (e) { /* オフライン。あとで保存される */ } // 演出のとちゅうで閉じても、引いた結果は残るように
   const kind = cost.ticket5 ? 'ticket5' : cost.ticket4 ? 'ticket4' : 'ticket';
-  playPull(res, bannerId, kind, () => doPull(roll, cost, bannerId));
+  playPull(res, bannerId, kind, () => doPull(roll, cost, bannerId), gotIcons);
 }
 // 引いたときの演出（js/pullfx.js）。「もう一度」は同じ引き方をもう1回
-function playPull(res, bannerId, kind = 'ticket', again = null) {
+function playPull(res, bannerId, kind = 'ticket', again = null, gotIcons = []) {
   playPullFX(res, { thumbHTML, hydrateThumbs, esc, vibrate, icon, ticketSVG, kind,
-    onDone: (more) => { showGacha(bannerId); if (more && again) again(); } });
+    onDone: (more) => {
+      showGacha(bannerId);
+      if (gotIcons.length) { updateGiftBadge(); toast(`ガチャ${gotIcons[gotIcons.length - 1].at}回のごほうび！ アイコン「${gotIcons.map(a => a.name).join('」「')}」がプレゼントBOXに届きました`, 3800); vibrate([30, 40, 60]); }
+      if (more && again) again();
+    } });
 }
 // かけらで交換
 function shardExchange(rarity, bannerId) {
@@ -757,6 +775,7 @@ function remainCapacity(room = curRoom()) {
 let notesChecked = false;
 function showHome() {
   BGM.duck(false);
+  try { checkNewTitles(); } catch (e) { console.warn('titles', e); }
   // ログイン情報がない（ログアウトされた）のに部屋を出そうとしたら、ログイン画面へ（こわれた画面にしない）
   if (!Auth.currentUser()) return showLogin('login');
   room3d?.clearPreview();
@@ -1331,7 +1350,7 @@ function showSwap(uid) {
 function showInventory() {
   const inv = HS().inventory;
   const ids = S.isUnlimited() ? [...new Set([...ITEMS, ...G.GACHA_ITEMS].map(i => i.id))] : Object.keys(inv);
-  const list = ids.map(itemById).filter(it => it && it.place !== 'surface' && it.place !== 'skin' && S.owned(it.id) > S.placedCount(it.id));
+  const list = ids.map(itemById).filter(it => it && it.place !== 'surface' && it.place !== 'skin' && it.place !== 'avatar' && S.owned(it.id) > S.placedCount(it.id));
   const el = sheet(`
     <div class="sh-head"><span class="sh-ic">${icon('box')}</span><div><h3>持ち物</h3><p>タップすると部屋に置きます（あと ${Math.max(0, remainCapacity())} 個置けます）</p></div></div>
     ${list.length ? `<div class="invgrid">${list.map(it => `
@@ -1423,7 +1442,7 @@ function photoMode() {
 
 // =========================== 更新のお知らせ ===========================
 // このプログラムの版（version.json と同じにする。公開のたびに上げる）
-const APP_VERSION = '1.8.3';
+const APP_VERSION = '1.10.1';
 // 新しい版が出たら、みんな同じタイミングでそろうように強制で再起動する。
 // 開いた時・画面に戻った時・1分ごとに version.json を見る
 async function latestVersion() {
@@ -1635,6 +1654,7 @@ function puzzleResult(id, star, won, r, secs) {
     pts = S.puzzleGauge(star, r.mistakes || 0);
     if (S.solvedToday() < S.BONUS_PER_DAY) pts = Math.round(pts * 1.5); // 今日の最初のうちは1.5倍（勉強と同じ）
     hs.gauge += pts;
+    S.addPoints(pts); // ランキングのポイント
     xp = S.addPuzzleClear(id, star, r.mistakes || 0);
     const first = S.markPlayedToday();
     if (first) setTimeout(() => toast(`連続 ${S.currentStreak()}日目！`), 600);
@@ -1746,13 +1766,15 @@ function screenWithTabs(cls, title, active, body) {
 }
 function showMenu() {
   const rk = rankNow();
+  const pf0 = S.profile(), myTitle = titleById(pf0.title);
   const el = screenWithTabs('menu', `<h2>メニュー</h2><span class="sync"></span>`, 'menu', `
-    <section class="profile-card">
-      <div class="pc-lv"><span>Lv</span><b>${rk.rank}</b></div>
-      <div class="pc-main"><b>${esc(user.name)}</b>
+    <button class="profile-card pc-tap" aria-label="プロフィールを見る">
+      ${avatarHTML(pf0, 'avatar pc-av')}
+      <div class="pc-main"><b>${esc(user.name)}<span class="pc-lvs">Lv${rk.rank}</span></b>${myTitle ? `<span class="title-chip">${esc(myTitle.name)}</span>` : ''}
         <div class="xpbar big"><i style="width:${Math.round(rk.into / rk.need * 100)}%"></i></div>
         <small>次のLvまで ${rk.need - rk.into} XP ・ 置ける家具 ${S.capacity()}個</small></div>
-    </section>
+      ${icon('chevronRight')}
+    </button>
     <nav class="menu-list">
       <button data-m="skins">${icon('palette')}<span>着せ替え<small>画面の見た目を変える（ガチャで集める）</small></span>${icon('chevronRight')}</button>
       <button data-m="records">${icon('chart')}<span>記録<small>分野ごとの成績・連続日数</small></span>${icon('chevronRight')}</button>
@@ -1762,8 +1784,119 @@ function showMenu() {
       ${isAdmin() ? `<button data-m="beta">${icon(BETA ? 'home' : 'flask')}<span>${BETA ? 'いつもの版にもどる' : 'テスト版を開く'}<small>${BETA ? 'みんなが使っている版' : '次に出す版を、先に管理者だけでためす'}</small></span>${icon('chevronRight')}</button>` : ''}
       ${isAdmin() ? `<button data-m="admin">${icon('shield')}<span>管理者<small>みんなの記録と部屋</small></span>${icon('chevronRight')}</button>` : ''}
     </nav>`);
+  el.querySelector('.pc-tap').onclick = () => showProfile();
   el.querySelectorAll('.menu-list button').forEach(b => b.onclick = () => ({ skins: () => showSkins(), records: showRecords, feedback: () => showFeedback(), bag: () => showBag(), news: showNews, ranking: showRanking, friends: showFriends, settings: showSettings, admin: showAdmin, beta: () => { location.href = BETA ? '../study-room/' : '../study-room-beta/'; } })[b.dataset.m]());
   paintSync();
+}
+
+// =========================== プロフィール ===========================
+// v を渡すと、ほかの人のプロフィール（sr_profile の返り値）から作る
+function profileCtx(v = null) {
+  if (v) {
+    const pf = v.profile || {}, col = new Set(v.collected || []);
+    return { solved: pf.solved || 0, acc: pf.solved ? (pf.correct || 0) / pf.solved : 0, streak: S.streakOf(v.streak), rank: S.rankInfo(pf.xp || 0).rank,
+      study: studyParams(sid => ({ units: v.units?.[sid] || {} })), puzzle: puzzleParams(id => (pf.puzzle || {})[id] || {}),
+      pzClears: pf.puzzleClears || 0, collected: col.size, star5: G.GACHA_ITEMS.filter(i => i.rarity === 5 && col.has(i.id)).length, admin: !!v.admin };
+  }
+  const pf = S.profile(), hs = HS();
+  const study = studyParams(sid => S.subject(sid));
+  const puzzle = puzzleParams(id => S.puzzleState(id));
+  const collected = Object.keys(hs.collected || {}).length;
+  const star5 = G.GACHA_ITEMS.filter(i => i.rarity === 5 && hs.collected?.[i.id]).length;
+  return { solved: pf.solved || 0, acc: pf.solved ? (pf.correct || 0) / pf.solved : 0, streak: S.currentStreak(), rank: rankNow().rank,
+    study, puzzle, pzClears: pf.puzzleClears || 0, collected, star5, admin: isAdmin() };
+}
+// 新しく手に入れた称号を知らせる（はじめては、まとめて1回だけ）
+function checkNewTitles() {
+  const pf = S.profile(), got = earnedTitles(profileCtx()).map(t => t.id);
+  const first = !pf.titlesSeen;
+  const seen = new Set(pf.titlesSeen || []);
+  const fresh = got.filter(id => !seen.has(id));
+  if (!fresh.length) return;
+  pf.titlesSeen = [...seen, ...fresh]; S.save();
+  setTimeout(() => toast(first ? `称号が ${fresh.length}つ 手に入っています。プロフィールで選べます` : `称号「${titleById(fresh[0]).name}」を手に入れました${fresh.length > 1 ? ` ほか${fresh.length - 1}つ` : ''}`, 3200), 900);
+}
+// view：ほかの人のプロフィール（なければ自分）。back：もどる先
+function showProfile(view = null, back = null) {
+  const mine = !view;
+  const pf = mine ? S.profile() : (view.profile || {}), c = profileCtx(view), rk = mine ? rankNow() : S.rankInfo(pf.xp || 0);
+  const earned = new Set(earnedTitles(c).map(t => t.id));
+  const tt = titleById(pf.title), puzzleMain = mine ? isPuzzle() : pf.mode === 'puzzle';
+  const name = mine ? user.name : view.username;
+  const accPct = Math.round(c.acc * 100);
+  const studySec = `<section class="pf-sec"><h3 class="sec">${icon('pencil')}勉強のパラメータ</h3>
+      <div class="pf-radar">${radarSVG(c.study, { color: '#f2b84b' })}</div>
+      <div class="pf-list">${c.study.map(a => `<div class="pf-row"><b>${a.label}</b><span class="pf-rank r-${a.rank}">${a.rank}</span><span class="pf-bar"><i style="width:${a.value}%"></i></span><small>${a.solved}問・${a.solved ? Math.round(a.acc * 100) : 0}%</small></div>`).join('')}</div>
+      <p class="pf-note">解いた数が多いほど、正解率が高いほど上がります</p></section>`;
+  const puzzleSec = `<section class="pf-sec"><h3 class="sec">${icon('grid')}パズルのパラメータ</h3>
+      <div class="pf-radar">${radarSVG(c.puzzle, { color: '#6cbf8a' })}</div>
+      <div class="pf-list">${c.puzzle.map(a => `<div class="pf-row"><b>${a.label}<small>${a.sub}</small></b><span class="pf-rank r-${a.rank}">${a.rank}</span><span class="pf-bar g"><i style="width:${a.value}%"></i></span><small>${a.best ? `★${a.best}` : '—'}・${a.clears}回</small></div>`).join('')}</div>
+      <p class="pf-note">クリアした★が高いほど、回数とノーミスが多いほど上がります</p></section>`;
+  const list = TITLES.filter(t => !t.secret || earned.has(t.id));
+  const el = screenWithTabs('profile', `<button class="icon back">${icon('back')}</button><h2>${mine ? 'プロフィール' : `${esc(name)}さん`}</h2><span></span>`, mine ? 'menu' : 'social', `
+    <section class="pf-head">
+      ${mine ? `<button class="pf-avbtn" aria-label="アイコンを変える">${avatarHTML(pf, 'avatar pf-av')}<span class="pf-edit">${icon('brush')}</span></button>` : avatarHTML(pf, 'avatar pf-av')}
+      <div class="pf-who"><b>${esc(name)}</b>
+        ${mine ? `<button class="title-chip big pf-tbtn">${tt ? esc(tt.name) : '称号をえらぶ'}${icon('chevronRight')}</button>` : tt ? `<span class="title-chip big">${esc(tt.name)}</span>` : ''}
+        <small>Lv${rk.rank} ・ ${puzzleMain ? 'パズル' : '勉強'}で部屋づくり</small></div>
+    </section>
+    <div class="stats4">
+      <div>${icon('pencil')}<b>${c.solved}</b><span>解いた数</span></div>
+      <div>${icon('check')}<b>${accPct}%</b><span>正解率</span></div>
+      <div>${icon('grid')}<b>${c.pzClears}</b><span>パズル</span></div>
+      <div>${icon('flame')}<b>${c.streak}</b><span>連続日数</span></div>
+    </div>
+    ${puzzleMain ? puzzleSec + studySec : studySec + puzzleSec}
+    <section class="pf-sec"><h3 class="sec">${icon('trophy')}称号<small>${earned.size} / ${list.length}</small></h3>
+      <div class="pf-titles">${list.map(t => `<button class="pf-t ${earned.has(t.id) ? 'got' : ''} ${pf.title === t.id ? 'on' : ''}" data-t="${t.id}" ${earned.has(t.id) && mine ? '' : 'disabled'}><b>${earned.has(t.id) ? esc(t.name) : '？？？'}</b><small>${esc(t.how)}</small></button>`).join('')}</div>
+      ${mine ? '<p class="pf-note">手に入れた称号を押すと、名前の下に出せます（フレンドにも見えます）</p>' : ''}</section>`);
+  el.querySelector('.back').onclick = back || showMenu;
+  if (!mine) return;
+  el.querySelector('.pf-avbtn').onclick = () => pickAvatar(() => showProfile());
+  el.querySelector('.pf-tbtn').onclick = () => el.querySelector('.pf-titles').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  el.querySelectorAll('.pf-t.got').forEach(b => b.onclick = () => {
+    const id = b.dataset.t; pf.title = pf.title === id ? null : id; S.save(); Sync.push?.();
+    toast(pf.title ? `称号を「${titleById(id).name}」にしました` : '称号を外しました', 1800);
+    showProfile();
+  });
+}
+// ほかの人のプロフィールを開く（ランキング・フレンド・管理者画面から）
+async function openUserProfile(username, back) {
+  if (username === user?.name) return showProfile(null, back);
+  let v;
+  try { v = await rpc('sr_profile', { p_token: Auth.currentUser()?.token, p_username: username }); }
+  catch (e) { return toast(e.message, 3000); }
+  showProfile(v, back);
+}
+function pickAvatar(after) {
+  const pf = S.profile(), rk = rankNow().rank;
+  let av = pf.avatar || 'cat', col = pf.avatarColor ?? 0;
+  const isG = (id) => GACHA_AVATARS.some(a => a.id === id);
+  const hasG = (id) => S.owned(avatarItemId(id)) > 0;
+  const el = sheet(`
+    <div class="sh-head"><span class="sh-ic">${icon('user')}</span><div><h3>アイコン</h3><p>イラストと色をえらびます</p></div></div>
+    <div class="av-preview"></div>
+    <div class="av-grid">${AVATARS.map(a => { const lock = a.lv && rk < a.lv && !isAdmin(); return `<button class="av-pick" data-a="${a.id}" ${lock ? 'disabled' : ''} aria-label="${a.name}${lock ? `（Lv${a.lv}から）` : ''}">${avatarHTML({ avatar: a.id, avatarColor: col }, 'avatar')}${lock ? `<span class="av-lock">${icon('lock')}Lv${a.lv}</span>` : ''}</button>`; }).join('')}</div>
+    <h4 class="av-sub">${icon('star')}ガチャのごほうびのアイコン<small>${GACHA_AVATARS.filter(a => hasG(a.id)).length} / ${GACHA_AVATARS.length}</small></h4>
+    <div class="av-grid">${GACHA_AVATARS.map(a => { const lock = !hasG(a.id); return `<button class="av-pick g" data-a="${a.id}" ${lock ? 'disabled' : ''} aria-label="${a.name}${lock ? `（${a.series === 'band' ? 'OVERDRIVE' : 'スタンダード'}のガチャを${a.at}回引くともらえる）` : ''}">${avatarHTML({ avatar: a.id, avatarColor: 0 }, 'avatar')}${lock ? `<span class="av-lock">${icon('lock')}${a.at}回</span>` : ''}</button>`; }).join('')}</div>
+    <div class="av-colors"></div>
+    <div class="row2"><button class="btn ghost back2">やめる</button><button class="btn primary ok">これにする</button></div>`, 'news-sheet av-sheet');
+  const draw = () => {
+    const pal = isG(av) ? NIGHT_COLORS : AVATAR_COLORS;
+    if (col >= pal.length) col = 0;
+    el.querySelector('.av-preview').innerHTML = avatarHTML({ avatar: av, avatarColor: col }, 'avatar big');
+    el.querySelectorAll('.av-pick').forEach(b => {
+      b.classList.toggle('on', b.dataset.a === av);
+      const c = b.classList.contains('g') ? (isG(av) ? col : 0) : (isG(av) ? 0 : col);
+      b.querySelector('.avatar').outerHTML = avatarHTML({ avatar: b.dataset.a, avatarColor: c }, 'avatar');
+    });
+    el.querySelector('.av-colors').innerHTML = pal.map((c, i) => `<button class="av-col ${i === col ? 'on' : ''}" data-c="${i}" style="background:${c}" aria-label="色${i + 1}"></button>`).join('');
+    el.querySelectorAll('.av-col').forEach(b => b.onclick = () => { col = +b.dataset.c; draw(); });
+  };
+  el.querySelectorAll('.av-pick').forEach(b => b.onclick = () => { if (isG(b.dataset.a) !== isG(av)) col = 0; av = b.dataset.a; draw(); });
+  el.querySelector('.back2').onclick = () => { el.remove(); after?.(); };
+  el.querySelector('.ok').onclick = () => { pf.avatar = av; pf.avatarColor = col; S.save(); Sync.push?.(); el.remove(); toast('アイコンを変えました', 1500); after?.(); };
+  draw();
 }
 
 // =========================== 記録 ===========================
@@ -1906,7 +2039,7 @@ function showArrange(reset = true) {
   const avail = (id) => S.owned(id) - (S.placedCount(id) - (here[id] || 0));
   const hs = HS();
   const ids = S.isUnlimited() ? [...new Set([...ITEMS, ...G.GACHA_ITEMS].map(i => i.id))] : Object.keys(hs.inventory);
-  const list = ids.map(itemById).filter(it => it && it.place !== 'surface' && it.place !== 'skin' && avail(it.id) > 0 && (!arrGenre || it.genre === arrGenre))
+  const list = ids.map(itemById).filter(it => it && it.place !== 'surface' && it.place !== 'skin' && it.place !== 'avatar' && avail(it.id) > 0 && (!arrGenre || it.genre === arrGenre))
     .sort((a, b) => (arrSel[b.id] ? 1 : 0) - (arrSel[a.id] ? 1 : 0));
   const total = Object.values(arrSel).reduce((n, v) => n + v, 0), cap = S.capacity();
   const el = screenWithTabs('arrange', `<button class="icon back">${icon('back')}</button><h2>自動で並べる</h2><span class="ar-count"><b>${total}</b> / ${cap}</span>`, 'furn', `
@@ -1970,7 +2103,7 @@ function showBag(tab = 'furniture', genre = '') {
   if (isAdmin()) adminTopUp();
   const hs = HS();
   const ids = S.isUnlimited() ? [...new Set([...ITEMS, ...G.GACHA_ITEMS].map(i => i.id))] : Object.keys(hs.inventory);
-  const owned = ids.map(itemById).filter(it => it && S.owned(it.id) > 0 && it.place !== 'surface' && it.place !== 'skin' && (!genre || it.genre === genre));
+  const owned = ids.map(itemById).filter(it => it && S.owned(it.id) > 0 && it.place !== 'surface' && it.place !== 'skin' && it.place !== 'avatar' && (!genre || it.genre === genre));
   const surf = ids.map(itemById).filter(it => it && it.place === 'surface');
   const items = [
     ['ticket', hs.rareTickets || 0, ticketSVG('ticket', 'mini'), 'ガチャを1回引ける'],
@@ -2005,24 +2138,24 @@ async function showRanking() {
   const wk = S.weekKey();
   const [y, mo, d] = wk.split('-').map(Number);
   const end = new Date(y, mo - 1, d + 6);
-  const el = screenWithTabs('ranking', `<h2>みんな</h2><span></span>`, 'social', `<div class="seg bagtabs soc"><button data-s="ranking" class="${'ranking' === 'ranking' ? 'on' : ''}">${icon('trophy')}ランキング</button><button data-s="friends" class="${'ranking' === 'friends' ? 'on' : ''}">${icon('users')}フレンド${friendBadge ? '<i class="badge">' + friendBadge + '</i>' : ''}</button></div>`+`
-    <p class="rk-term">${mo}/${d}（月）〜 ${end.getMonth() + 1}/${end.getDate()}（日）に${isPuzzle() ? 'クリアしたパズルの数（パズルの人どうし）' : '解いた問題の数'}</p>
+  const el = screenWithTabs('ranking', `<h2>みんな</h2><span></span>`, 'social', `<div class="seg bagtabs soc"><button data-s="ranking" class="on">${icon('trophy')}ランキング</button><button data-s="friends">${icon('users')}フレンド${friendBadge ? '<i class="badge">' + friendBadge + '</i>' : ''}</button></div>
+    <p class="rk-term">${mo}/${d}（月）〜 ${end.getMonth() + 1}/${end.getDate()}（日）にかせいだポイント<small>勉強で正解しても、パズルをクリアしても、もらったゲージの数がポイントになります</small></p>
     <div class="rk-me"></div>
     <div class="rk-list"><p class="empty">読み込み中…</p></div>`);
   bindSocialTabs(el);
   // 自分の最新の数をネットに送ってから見る
   try { await Sync.push(); } catch (e) { /* なし */ }
   let r;
-  const pz = isPuzzle(), unit = pz ? '回' : '問';
-  try { r = await rpc(pz ? 'sr_weekly_puzzle' : 'sr_weekly_ranking', { p_token: Auth.currentUser()?.token, p_week: wk }); }
+  try { r = await rpc('sr_weekly_points', { p_token: Auth.currentUser()?.token, p_week: wk }); }
   catch (e) { el.querySelector('.rk-list').innerHTML = `<p class="empty">${esc(e.message)}</p>`; return; }
-  const mine = S.profile().week?.key === wk ? (pz ? S.profile().week.puzzle || 0 : S.profile().week.solved) : 0;
+  const pf = S.profile(), wkd = pf.week?.key === wk ? pf.week : {};
   el.querySelector('.rk-me').innerHTML = `<div class="rk-mecard"><span class="rk-pos">${r.me ? r.me.pos + '<small>位</small>' : '—'}</span>
-    <div><b>あなた</b><small>${r.total || 0}人中 ・ 今週 ${mine}${unit}</small></div>${icon(pz ? 'grid' : 'pencil')}</div>`;
+    ${avatarHTML(pf, 'avatar rk-av')}<div><b>あなた<span class="rk-pt">${S.weekPoints()}<small>pt</small></span></b><small>${r.total || 0}人中 ・ 問題 ${wkd.solved || 0}問・パズル ${wkd.puzzle || 0}回</small></div></div>`;
   const medal = (p) => p <= 3 ? `<span class="medal m${p}">${p}</span>` : `<span class="rk-n">${p}</span>`;
   el.querySelector('.rk-list').innerHTML = (r.top || []).length ? r.top.map(x => `
-    <div class="rk-row ${x.me ? 'me' : ''}">${medal(x.pos)}<b>${esc(x.username)}</b><span>${x.solved}${unit}<small>${pz ? 'ノーミス' : '正解'} ${x.correct}</small></span></div>`).join('')
-    : `<p class="empty">今週はまだだれも${pz ? 'クリアして' : '解いて'}いません。いちばん乗りしよう！</p>`;
+    <button class="rk-row ${x.me ? 'me' : ''}" data-u="${esc(x.username)}">${medal(x.pos)}${avatarHTML(x, 'avatar rk-av')}<b>${esc(x.username)}${x.title && titleById(x.title) ? `<small class="rk-title">${esc(titleById(x.title).name)}</small>` : ''}</b><span><span class="rk-pts">${x.points}<small>pt</small></span><small>${[x.solved ? `問題 ${x.solved}` : '', x.puzzle ? `パズル ${x.puzzle}` : ''].filter(Boolean).join('・') || '—'}</small></span></button>`).join('')
+    : `<p class="empty">今週はまだだれもポイントをかせいでいません。いちばん乗りしよう！</p>`;
+  el.querySelectorAll('.rk-row[data-u]').forEach(b => b.onclick = () => openUserProfile(b.dataset.u, showRanking));
 }
 
 // =========================== 図鑑 ===========================
@@ -2141,7 +2274,7 @@ function composeGift() {
       <input name="t" maxlength="40" placeholder="ひとこと（例：いつもありがとう）" required>
       <select name="k">${kinds.map(k => `<option value="${k}">${GIFT_LABEL[k]}</option>`).join('')}</select>
       <input name="n" type="number" min="1" max="99" value="1" placeholder="数">
-      <select name="i" hidden>${ITEMS.filter(it => !it.place || it.place !== 'skin').map(it => `<option value="${it.id}">${esc(it.name)}</option>`).join('')}</select>
+      <select name="i" hidden>${ITEMS.filter(it => !it.place || it.place !== 'skin' && it.place !== 'avatar').map(it => `<option value="${it.id}">${esc(it.name)}</option>`).join('')}</select>
       <label class="nf-adm">受け取れる期間 <input name="d" type="number" min="1" max="365" value="14" style="width:5em"> 日</label>
       <button class="btn gold big">${icon('check')}内容を確認する</button>
     </form>
@@ -2192,10 +2325,10 @@ async function showFriends() {
     const lv = f => S.rankInfo(f.summary?.xp || 0).rank;
     listEl.innerHTML =
       sec('申請が来ています', list.filter(f => f.status === 'incoming'), f => `
-        <div class="frow"><span class="av">${icon('user')}</span><b>${esc(f.username)}<small>Lv${lv(f)}</small></b>
+        <div class="frow"><button class="pf-open" data-u="${esc(f.username)}" aria-label="${esc(f.username)}さんのプロフィール">${avatarHTML(f.summary || {}, 'avatar av')}</button><b class="pf-open" data-u="${esc(f.username)}">${esc(f.username)}<small>Lv${lv(f)}${f.summary?.title && titleById(f.summary.title) ? ` ・ ${esc(titleById(f.summary.title).name)}` : ''}</small></b>
           <button class="btn primary sm acc" data-u="${esc(f.username)}">${icon('check')}承認</button><button class="btn ghost sm dec" data-u="${esc(f.username)}">${icon('x')}</button></div>`) +
       sec('フレンド', list.filter(f => f.status === 'friend'), f => `
-        <div class="frow"><span class="av">${icon('user')}</span><b>${esc(f.username)}<small>Lv${lv(f)} ・ ${icon('flame')}${f.summary?.streak || 0}日 ・ ${f.summary?.solved || 0}問</small></b>
+        <div class="frow"><button class="pf-open" data-u="${esc(f.username)}" aria-label="${esc(f.username)}さんのプロフィール">${avatarHTML(f.summary || {}, 'avatar av')}</button><b class="pf-open" data-u="${esc(f.username)}">${esc(f.username)}<small>${f.summary?.title && titleById(f.summary.title) ? `${esc(titleById(f.summary.title).name)} ・ ` : ''}Lv${lv(f)} ・ ${icon('flame')}${f.summary?.streak || 0}日 ・ ${f.summary?.solved || 0}問</small></b>
           <button class="btn gold sm visit" data-u="${esc(f.username)}">${icon('eye')}部屋を見る</button><button class="btn ghost sm del" data-u="${esc(f.username)}">${icon('trash')}</button></div>`) +
       sec('申請中', list.filter(f => f.status === 'outgoing'), f => `
         <div class="frow"><span class="av">${icon('user')}</span><b>${esc(f.username)}<small>承認を待っています</small></b>
@@ -2205,6 +2338,7 @@ async function showFriends() {
     listEl.querySelectorAll('.dec').forEach(b => b.onclick = async () => { await rpc('sr_friend_respond', { p_token: u?.token, p_username: b.dataset.u, p_accept: false }); load(); });
     listEl.querySelectorAll('.del').forEach(b => b.onclick = async () => { if (!confirm(`${b.dataset.u}さんをフレンドから外しますか？`)) return; await rpc('sr_friend_remove', { p_token: u?.token, p_username: b.dataset.u }); load(); });
     listEl.querySelectorAll('.visit').forEach(b => b.onclick = () => visitFriend(b.dataset.u));
+    listEl.querySelectorAll('.pf-open').forEach(b => b.onclick = () => openUserProfile(b.dataset.u, showFriends));
   };
   el.querySelector('.addf').onsubmit = async (e) => {
     e.preventDefault();
@@ -2284,7 +2418,8 @@ async function showAdmin() {
     const s = a.summary || {};
     const units = a.units || {};
     return `<div class="acard">
-      <div class="ac-top"><span class="av">${icon('user')}</span><b>${esc(a.username)}</b><span class="lvb">Lv${S.rankInfo(s.xp || 0).rank}</span></div>
+      <div class="ac-top"><button class="pf-open" data-u="${esc(a.username)}" aria-label="${esc(a.username)}さんのプロフィール">${avatarHTML(s, 'avatar av')}</button><b class="pf-open" data-u="${esc(a.username)}">${esc(a.username)}${s.title && titleById(s.title) ? `<small class="ac-title">${esc(titleById(s.title).name)}</small>` : ''}</b><span class="lvb">Lv${S.rankInfo(s.xp || 0).rank}</span></div>
+      <div class="ac-mode"><span class="mode-tag ${s.mode || 'none'}">${icon(s.mode === 'puzzle' ? 'grid' : s.mode === 'study' ? 'pencil' : 'info')}${s.mode === 'puzzle' ? 'パズル' : s.mode === 'study' ? '勉強' : 'まだ選んでいない'}</span>${s.puzzle ? `<small>パズル ${s.puzzle}回</small>` : ''}<button class="btn ghost sm ac-mode-btn" data-u="${esc(a.username)}" data-m="${s.mode || ''}">${icon('refresh')}切りかえ</button></div>
       <div class="ac-stats"><span>${icon('pencil')}${s.solved || 0}問</span><span>${icon('check')}${s.solved ? Math.round((s.correct || 0) / s.solved * 100) : 0}%</span><span>${icon('flame')}${s.streak || 0}日（合計${s.days || 0}日）</span></div>
       <div class="ac-units">${UNITS.map(un => `<span>${un} ${units[un]?.solved || 0}問</span>`).join('')}</div>
       <div class="ac-foot"><small>登録 ${day(a.created_at)} ・ 最後 ${day(a.last_login)}</small><span class="ac-btns"><button class="btn ghost sm visit" data-u="${esc(a.username)}">${icon('eye')}部屋</button>${Object.keys(packCode).length ? `<button class="btn ghost sm ac-give" data-u="${esc(a.username)}">${icon('gift')}問題集</button>` : ''}${a.username !== u.name ? `<button class="btn ghost sm ac-del" data-u="${esc(a.username)}" aria-label="${esc(a.username)}のアカウントを消す">${icon('trash')}消す</button>` : ''}</span></div>
@@ -2293,6 +2428,29 @@ async function showAdmin() {
   el.querySelectorAll('.visit').forEach(b => b.onclick = () => visitFriend(b.dataset.u, showAdmin));
   el.querySelectorAll('.ac-del').forEach(b => b.onclick = () => confirmDeleteUser(b.dataset.u));
   el.querySelectorAll('.ac-give').forEach(b => b.onclick = () => givePack(b.dataset.u));
+  el.querySelectorAll('.ac-mode-btn').forEach(b => b.onclick = () => changeMode(b.dataset.u, b.dataset.m));
+  el.querySelectorAll('.pf-open').forEach(b => b.onclick = () => openUserProfile(b.dataset.u, showAdmin));
+}
+// 管理者：その人のモード（勉強メイン・パズルメイン）を切りかえる。本人のアプリが次に開いた時に切りかわる
+function changeMode(name, now) {
+  const cf = sheet(`
+    <div class="sh-head"><span class="sh-ic">${icon('shield')}</span><div><h3>「${esc(name)}」の部屋づくりのしかた</h3><p>変えると、その人が次にアプリを開いた時に切りかわります。部屋・家具・記録はそのまま残ります</p></div></div>
+    <div class="mode-pick">
+      <button data-m="study" class="${now === 'study' ? 'on' : ''}"><span class="mp-ic">${icon('pencil')}</span><b>勉強メイン</b></button>
+      <button data-m="puzzle" class="${now === 'puzzle' ? 'on' : ''}"><span class="mp-ic">${icon('grid')}</span><b>パズルメイン</b></button>
+    </div>
+    <button class="link close">やめる</button>`, 'news-sheet');
+  cf.querySelector('.close').onclick = () => cf.remove();
+  cf.querySelectorAll('[data-m]').forEach(b => b.onclick = async () => {
+    const m = b.dataset.m, t = Date.now();
+    if (m === now) return cf.remove();
+    cf.querySelectorAll('[data-m]').forEach(x => { x.disabled = true; });
+    try {
+      if (name === Auth.currentUser()?.name) setMode(m, true);
+      else await rpc('sr_admin_grant_code', { p_token: Auth.currentUser()?.token, p_username: name, p_code: `MODE:${m}:${t}` });
+      toast(`「${name}」を「${m === 'puzzle' ? 'パズルメイン' : '勉強メイン'}」にしました`); cf.remove(); showAdmin();
+    } catch (ex) { toast(String(ex.message || ex), 3400); cf.querySelectorAll('[data-m]').forEach(x => { x.disabled = false; }); }
+  });
 }
 // ---- 式の見せ方（問題集用）----
 // V_GS・I_D・g_m のような記号を、教科書と同じ添え字にする（文字はすでに esc したあとに当てる）
@@ -2661,6 +2819,7 @@ function awardResult(st, ss, p, perfect, ok, isReview, secs) {
       pts = S.gaugePoints(perfect, ok && !perfect, secs);
       if (ss.bonus) pts = Math.round(pts * 1.5);
       HS().gauge += pts;
+      S.addPoints(pts); // ランキングのポイント
       ss.gained += pts;
       const tBefore = { solved: S.profile().solved, streak: S.currentStreak(), mastered: S.stats(st, probs()).mastered };
       ({ mastered } = S.recordResult(st, p.id, perfect, isReview));
