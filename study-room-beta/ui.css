@@ -1000,3 +1000,9 @@ button.pf-open { border: 0; background: none; padding: 0; display: inline-flex; 
 .cand-sheet.folded .candgrid, .cand-sheet.folded .pv-tip, .cand-sheet.folded .sh-head p { display: none; }
 .cand-sheet.folded { padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px)); }
 .cand-sheet.folded .sh-head { margin-bottom: 8px; }
+
+/* 1.11.1：切りかえは右下のボタンの上に「のせる」（横幅をとらず、左下のボタンを押しつぶさない） */
+.hotbar .solve-wrap .mode-toggle { position: absolute; right: 0; bottom: calc(100% + 6px); margin: 0; white-space: nowrap; pointer-events: auto; background: rgba(18, 18, 21, .78); border-color: rgba(255, 255, 255, .14); }
+.hotbar .mode-toggle button { padding: 5px 9px; font-size: 11.5px; color: rgba(242, 239, 233, .72); }
+.hotbar .mode-toggle button.on { background: #f2efe9; color: #17171a; }
+.hotbar .mode-toggle button .ic { width: 13px; height: 13px; }
