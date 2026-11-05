@@ -1,4 +1,5 @@
 import { skinThumbURL } from './skins.js';
+import { avatarHTML } from './avatars.js';
 // 家具のサムネイル（小さな絵）
 // - Poly Haven のモデル（色を変えていない物）→ Poly Haven の CDN の画像をそのまま使う
 // - 自作家具・色を変えたモデル・質感・単色・カーテン → 小さな 3D 画面で描いて dataURL にする
@@ -109,7 +110,7 @@ function locked(fn) { const p = lockP.then(fn, fn); lockP = p.catch(() => {}); r
 
 // ガチャの設計図の演出用：線（segs）・色つきの絵（url）・大きさ（dims, ミリ）
 export function blueprintArt(item) {
-  if (!item || item.place === 'skin' || item.src?.skin) return Promise.resolve(null);
+  if (!item || item.place === 'skin' || item.src?.skin || item.src?.avatar) return Promise.resolve(null);
   return locked(() => drawItem(item, { blueprint: true, size: 512 })).catch(() => null);
 }
 
@@ -164,6 +165,8 @@ const esc = (s) => String(s).replace(/[&"<>]/g, (c) => ({ '&': '&amp;', '"': '&q
 export function thumbHTML(item) {
   if (!item) return '';
   // 着せ替えは、色で描いた小さなスマホの絵
+  // プロフィールのアイコン（ガチャの景品）は、アイコンの絵そのもの
+  if (item.src?.avatar) return avatarHTML({ avatar: item.src.avatar }, 'thumb avatar-thumb');
   if (item.src?.skin) return `<img class="thumb skin-thumb" src="${skinThumbURL(item.src.skin)}" alt="${esc(item.name || '')}" draggable="false">`;
   const url = thumbURL(item);
   const alt = esc(item.name || '');

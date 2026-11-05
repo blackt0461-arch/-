@@ -62,8 +62,23 @@ const serve = () => new Promise(res => { const srv = http.createServer((req, rsp
   check(pf.avatar === 'bear' && pf.avatarColor === 3, `アイコンを覚えている（${pf.avatar}・色${pf.avatarColor}）`);
 
   console.log('3b. ガチャのアイコン');
-  const pool = await page.evaluate(async () => { const G = await import('/js/gacha.js'); const av = G.GACHA_ITEMS.filter(i => i.place === 'avatar'); return { n: av.length, band: av.filter(i => i.series === 'band').length, always5: av.filter(i => !i.limited && i.rarity === 5).map(i => i.id) }; });
-  check(pool.n === 12 && pool.band === 6 && pool.always5.length === 3, `ガチャの景品に入っている（全${pool.n}・OVERDRIVE限定${pool.band}・いつでも★5 ${pool.always5.join(',')}）`);
+  const pool = await page.evaluate(async () => { const G = await import('/js/gacha.js'); const av = G.GACHA_ITEMS.filter(i => i.place === 'avatar'); let hit = 0; for (let k = 0; k < 3000; k++) for (const b of ['standard', 'band']) if (G.pullWithTicket('ticket', () => 0, Math.random, { banner: b }).item.place === 'avatar') hit++; return { n: av.length, reward: av.filter(i => i.reward).length, hit }; });
+  check(pool.n === 12 && pool.reward === 12 && pool.hit === 0, `アイコンは12種類で、ガチャからランダムには出ない（6000回引いて ${pool.hit}回）`);
+  // 9回引いた所から1回引く → 10回目のごほうび「三日月」がプレゼントBOXへ
+  await page.evaluate(() => { const S = window.__app.S; S.profile().pulls = { standard: 9 }; window.__app.HS().rareTickets = 5; S.save(); window.__app.showHome(); });
+  await page.waitForTimeout(400);
+  await page.evaluate(() => document.querySelector('[data-t=gacha]')?.click()); await page.waitForSelector('.gc-reward .gr-next');
+  await page.evaluate(() => { const c = [...document.querySelectorAll('.gc-card')]; const k = c.findIndex(x => x.classList.contains('b-standard')); document.querySelectorAll('.gc-dots i')[k]?.click(); });
+  await page.waitForFunction(() => /三日月/.test(document.querySelector('.gc-reward .gr-next')?.textContent || ''), null, { timeout: 5000 }).catch(() => {});
+  const nextTxt = await page.locator('.gc-reward .gr-next').textContent();
+  check(/あと\s*1回/.test(nextTxt) && /三日月/.test(nextTxt), `ガチャ画面に「${nextTxt.trim()}」`);
+  await page.screenshot({ path: path.join(OUT, 'gacha-reward.png') });
+  await page.click('.pull1'); await page.waitForTimeout(1200);
+  const g = await page.evaluate(() => window.__app.S.gifts().find(x => x.id === 'pull-moon'));
+  check(g && g.itemId === 'av-moon', '10回目で、三日月のアイコンがプレゼントBOXに届く');
+  await page.evaluate(() => document.querySelector('.pfx')?.remove()); await page.evaluate(() => window.__app.showHome()); await page.waitForTimeout(400);
+  await page.evaluate(() => document.querySelector('[data-t=menu]')?.click()); await page.waitForTimeout(400);
+  await page.click('.pc-tap'); await page.waitForSelector('.pf-head');
   await page.evaluate(() => { window.__app.S.own('av-crown'); window.__app.S.save(); });
   await page.click('.pf-avbtn'); await page.waitForSelector('.av-grid');
   check(await page.locator('.av-pick.g[data-a=crown]:not(:disabled)').count() === 1, 'ガチャで手に入れた「王冠」は選べる');

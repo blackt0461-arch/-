@@ -958,3 +958,19 @@ button.pf-open { border: 0; background: none; padding: 0; display: inline-flex; 
 .thumb.avatar-thumb { display: block; width: 100%; height: 100%; }
 .thumb.avatar-thumb svg { width: 100%; height: 100%; }
 .av-col { box-shadow: 0 0 0 1px rgba(255,255,255,.28); }
+
+/* ガチャ：引いた回数のごほうび（1.10.1） */
+.gc-reward { margin: 4px 0 10px; padding: 12px 14px; border-radius: 16px; background: var(--sk-card, var(--card)); border: 1px solid var(--sk-card-line, var(--card-line)); }
+.gc-reward:empty { display: none; }
+.gr-head { display: flex; align-items: center; gap: 6px; font-size: 13.5px; }
+.gr-head .ic { width: 16px; height: 16px; color: #e6c068; }
+.gr-head small { margin-left: auto; color: var(--sk-muted, var(--muted)); font-size: 12px; }
+.gr-row { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; margin: 10px 0 6px; }
+.gr-it { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 0; }
+.gr-it .avatar { width: 100%; max-width: 48px; height: auto; aspect-ratio: 1; filter: grayscale(.7) brightness(.55); }
+.gr-it.got .avatar { filter: none; }
+.gr-it.next .avatar { filter: none; opacity: .75; outline: 2px dashed #e6c068; outline-offset: 2px; border-radius: 50%; }
+.gr-it i { font-style: normal; font-size: 10.5px; color: var(--sk-muted, var(--muted)); font-variant-numeric: tabular-nums; }
+.gr-it.got i { color: #e6c068; }
+.gr-next { margin: 2px 0 0; font-size: 12.5px; text-align: center; }
+.gr-next b { color: #e6c068; }

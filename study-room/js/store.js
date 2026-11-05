@@ -138,6 +138,8 @@ export function markPlayedToday() {
   s.total += 1;
   return true;
 }
+// ほかの人の連続日数（プロフィールを見る時。streak = { count, last }）
+export function streakOf(st) { const today = dayKey(); return st && (st.last === today || st.last === addDays(today, -1)) ? st.count || 0 : 0; }
 export function currentStreak() {
   const s = state.streak;
   const today = dayKey();
@@ -286,6 +288,15 @@ export function addAnswer(sub, unit, kind) {
   return { gained, rankUp: after > before, rank: after, rewards };
 }
 export function profile() { return state.profile || (state.profile = blankProfile()); }
+// ランキングのポイント（勉強もパズルも、もらったゲージの数をそのまま足す）。週ごと（月曜の朝6時で区切る）と、これまでの合計
+export function addPoints(pts) {
+  if (!(pts > 0)) return;
+  const p = profile(), wk = weekKey();
+  if (!p.week || p.week.key !== wk) p.week = { key: wk, solved: 0, correct: 0 };
+  p.week.points = (p.week.points || 0) + pts;
+  p.points = (p.points || 0) + pts;
+}
+export const weekPoints = () => { const w = profile().week; return w && w.key === weekKey() ? w.points || 0 : 0; };
 
 // --- パズルモード ---
 // 種類ごとの記録。best＝クリアしたいちばん高い★（その1つ上まで選べる）、last＝前に選んだ★
