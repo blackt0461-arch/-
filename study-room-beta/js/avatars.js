@@ -19,8 +19,36 @@ export const AVATARS = [
   { id: 'mug', name: 'マグカップ', art: `<path d="M16 22 H42 V44 Q42 52 34 52 H24 Q16 52 16 44 Z" fill="#fff" stroke="${K}" stroke-width="2" stroke-linejoin="round"/><path d="M42 28 Q52 28 52 36 Q52 44 42 44" fill="none" stroke="${K}" stroke-width="2.5"/><path d="M24 14 Q22 10 25 7 M31 14 Q29 10 32 7" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"/>${eyes(34, 6, 2.2).replace(/cx="(\d+)"/g, (m, x) => `cx="${+x - 3}"`)}<path d="M26 40 Q29 42.5 32 40" fill="none" stroke="${K}" stroke-width="1.5" stroke-linecap="round"/>` },
 ];
 export const avatarById = (id) => AVATARS.find(a => a.id === id) || AVATARS[0];
+// 色を明るく・暗くする
+const mix = (hex, to, a) => { const n = parseInt(hex.slice(1), 16), t = to ? 255 : 0; const c = [n >> 16, (n >> 8) & 255, n & 255].map(v => Math.round(v + (t - v) * a)); return `rgb(${c.join(',')})`; };
+// 切り絵の雰囲気（1.9.3〜）：白い形は紙の色にして線をなくし、うしろに影の紙を1枚重ねる。こい色の部品は、背景の色を暗くした色
+const cache = new Map();
+function paperInner(av, col) {
+  const key = av.id + '|' + col;
+  if (cache.has(key)) return cache.get(key);
+  const g = document.createElementNS('http://www.w3.org/2000/svg', 'g'); g.innerHTML = av.art;
+  const ink = mix(col, false, 0.6), shade = mix(col, false, 0.45);
+  let shadow = '', front = '';
+  for (const el of [...g.children]) {
+    const f = (el.getAttribute('fill') || '').toLowerCase(), st = el.getAttribute('stroke');
+    if (f === '#fff') {
+      const sh = el.cloneNode(); sh.removeAttribute('stroke'); sh.setAttribute('fill', shade); sh.setAttribute('opacity', '.35'); shadow += sh.outerHTML;
+      el.setAttribute('fill', '#fffaf0'); el.removeAttribute('stroke'); el.removeAttribute('stroke-width');
+    } else if (f === K) el.setAttribute('fill', ink);
+    else if ((f === 'none' || !f) && st === K) el.setAttribute('stroke', ink);
+    front += el.outerHTML;
+  }
+  const id = 'avp' + AVATAR_COLORS.indexOf(col);
+  const out = `<defs><pattern id="${id}" width="4" height="4" patternUnits="userSpaceOnUse"><rect width="4" height="4" fill="${col}"/><circle cx="1" cy="1" r=".5" fill="#fff" opacity=".18"/></pattern></defs>
+    <circle cx="32" cy="32" r="32" fill="url(#${id})"/><circle cx="32" cy="32" r="25" fill="${mix(col, true, 0.25)}"/>
+    <g transform="translate(2.2 2.6)">${shadow}</g>${front}`;
+  cache.set(key, out);
+  return out;
+}
 // アイコンの HTML。a = { avatar, avatarColor }
 export function avatarHTML(a = {}, cls = 'avatar') {
-  const av = avatarById(a.avatar || 'cat'), col = AVATAR_COLORS[a.avatarColor ?? 0] || AVATAR_COLORS[0];
-  return `<span class="${cls}" aria-label="${av.name}"><svg viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="32" fill="${col}"/>${av.art}</svg></span>`;
+  const av = avatarById(a.avatar || 'cat'), col = AVATAR_COLORS[+(a.avatarColor ?? 0)] || AVATAR_COLORS[0];
+  let inner;
+  try { inner = paperInner(av, col); } catch (e) { inner = `<circle cx="32" cy="32" r="32" fill="${col}"/>${av.art}`; } // 描けない時は前の形
+  return `<span class="${cls}" aria-label="${av.name}"><svg viewBox="0 0 64 64" aria-hidden="true">${inner}</svg></span>`;
 }
