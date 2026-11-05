@@ -4,7 +4,7 @@ import * as N from './notes.js';
 import * as L from './lyrics.js';
 import * as R from './recorder.js';
 
-export const APP_VERSION = '1.2.0';
+export const APP_VERSION = '1.2.1';
 
 // ---------- 小さな道具 ----------
 const $ = (s, el = document) => el.querySelector(s);
