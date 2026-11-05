@@ -429,7 +429,7 @@ function halfFurniture() {
 }
 function halfSocial() {
   halfSheet('みんな', [
-    { ic: 'trophy', name: 'ランキング', sub: '今週の解いた数', go: showRanking },
+    { ic: 'trophy', name: 'ランキング', sub: '今週かせいだポイント', go: showRanking },
     { ic: 'users', name: 'フレンド', sub: friendBadge ? `申請 ${friendBadge}件` : '部屋を見に行く', dot: friendBadge > 0, go: showFriends },
     { ic: 'camera', name: '写真', sub: '部屋をとる', go: () => { showHome(); photoMode(); } },
   ]);
@@ -1426,7 +1426,7 @@ function photoMode() {
 
 // =========================== 更新のお知らせ ===========================
 // このプログラムの版（version.json と同じにする。公開のたびに上げる）
-const APP_VERSION = '1.9.1';
+const APP_VERSION = '1.9.2';
 // 新しい版が出たら、みんな同じタイミングでそろうように強制で再起動する。
 // 開いた時・画面に戻った時・1分ごとに version.json を見る
 async function latestVersion() {
@@ -1638,6 +1638,7 @@ function puzzleResult(id, star, won, r, secs) {
     pts = S.puzzleGauge(star, r.mistakes || 0);
     if (S.solvedToday() < S.BONUS_PER_DAY) pts = Math.round(pts * 1.5); // 今日の最初のうちは1.5倍（勉強と同じ）
     hs.gauge += pts;
+    S.addPoints(pts); // ランキングのポイント
     xp = S.addPuzzleClear(id, star, r.mistakes || 0);
     const first = S.markPlayedToday();
     if (first) setTimeout(() => toast(`連続 ${S.currentStreak()}日目！`), 600);
@@ -2111,24 +2112,23 @@ async function showRanking() {
   const wk = S.weekKey();
   const [y, mo, d] = wk.split('-').map(Number);
   const end = new Date(y, mo - 1, d + 6);
-  const el = screenWithTabs('ranking', `<h2>みんな</h2><span></span>`, 'social', `<div class="seg bagtabs soc"><button data-s="ranking" class="${'ranking' === 'ranking' ? 'on' : ''}">${icon('trophy')}ランキング</button><button data-s="friends" class="${'ranking' === 'friends' ? 'on' : ''}">${icon('users')}フレンド${friendBadge ? '<i class="badge">' + friendBadge + '</i>' : ''}</button></div>`+`
-    <p class="rk-term">${mo}/${d}（月）〜 ${end.getMonth() + 1}/${end.getDate()}（日）に${isPuzzle() ? 'クリアしたパズルの数（パズルの人どうし）' : '解いた問題の数'}</p>
+  const el = screenWithTabs('ranking', `<h2>みんな</h2><span></span>`, 'social', `<div class="seg bagtabs soc"><button data-s="ranking" class="on">${icon('trophy')}ランキング</button><button data-s="friends">${icon('users')}フレンド${friendBadge ? '<i class="badge">' + friendBadge + '</i>' : ''}</button></div>
+    <p class="rk-term">${mo}/${d}（月）〜 ${end.getMonth() + 1}/${end.getDate()}（日）にかせいだポイント<small>勉強で正解しても、パズルをクリアしても、もらったゲージの数がポイントになります</small></p>
     <div class="rk-me"></div>
     <div class="rk-list"><p class="empty">読み込み中…</p></div>`);
   bindSocialTabs(el);
   // 自分の最新の数をネットに送ってから見る
   try { await Sync.push(); } catch (e) { /* なし */ }
   let r;
-  const pz = isPuzzle(), unit = pz ? '回' : '問';
-  try { r = await rpc(pz ? 'sr_weekly_puzzle' : 'sr_weekly_ranking', { p_token: Auth.currentUser()?.token, p_week: wk }); }
+  try { r = await rpc('sr_weekly_points', { p_token: Auth.currentUser()?.token, p_week: wk }); }
   catch (e) { el.querySelector('.rk-list').innerHTML = `<p class="empty">${esc(e.message)}</p>`; return; }
-  const mine = S.profile().week?.key === wk ? (pz ? S.profile().week.puzzle || 0 : S.profile().week.solved) : 0;
+  const pf = S.profile(), wkd = pf.week?.key === wk ? pf.week : {};
   el.querySelector('.rk-me').innerHTML = `<div class="rk-mecard"><span class="rk-pos">${r.me ? r.me.pos + '<small>位</small>' : '—'}</span>
-    <div><b>あなた</b><small>${r.total || 0}人中 ・ 今週 ${mine}${unit}</small></div>${icon(pz ? 'grid' : 'pencil')}</div>`;
+    ${avatarHTML(pf, 'avatar rk-av')}<div><b>あなた<span class="rk-pt">${S.weekPoints()}<small>pt</small></span></b><small>${r.total || 0}人中 ・ 問題 ${wkd.solved || 0}問・パズル ${wkd.puzzle || 0}回</small></div></div>`;
   const medal = (p) => p <= 3 ? `<span class="medal m${p}">${p}</span>` : `<span class="rk-n">${p}</span>`;
   el.querySelector('.rk-list').innerHTML = (r.top || []).length ? r.top.map(x => `
-    <button class="rk-row ${x.me ? 'me' : ''}" data-u="${esc(x.username)}">${medal(x.pos)}${avatarHTML(x, 'avatar rk-av')}<b>${esc(x.username)}${x.title && titleById(x.title) ? `<small class="rk-title">${esc(titleById(x.title).name)}</small>` : ''}</b><span>${x.solved}${unit}<small>${pz ? 'ノーミス' : '正解'} ${x.correct}</small></span></button>`).join('')
-    : `<p class="empty">今週はまだだれも${pz ? 'クリアして' : '解いて'}いません。いちばん乗りしよう！</p>`;
+    <button class="rk-row ${x.me ? 'me' : ''}" data-u="${esc(x.username)}">${medal(x.pos)}${avatarHTML(x, 'avatar rk-av')}<b>${esc(x.username)}${x.title && titleById(x.title) ? `<small class="rk-title">${esc(titleById(x.title).name)}</small>` : ''}</b><span><span class="rk-pts">${x.points}<small>pt</small></span><small>${[x.solved ? `問題 ${x.solved}` : '', x.puzzle ? `パズル ${x.puzzle}` : ''].filter(Boolean).join('・') || '—'}</small></span></button>`).join('')
+    : `<p class="empty">今週はまだだれもポイントをかせいでいません。いちばん乗りしよう！</p>`;
   el.querySelectorAll('.rk-row[data-u]').forEach(b => b.onclick = () => openUserProfile(b.dataset.u, showRanking));
 }
 
@@ -2793,6 +2793,7 @@ function awardResult(st, ss, p, perfect, ok, isReview, secs) {
       pts = S.gaugePoints(perfect, ok && !perfect, secs);
       if (ss.bonus) pts = Math.round(pts * 1.5);
       HS().gauge += pts;
+      S.addPoints(pts); // ランキングのポイント
       ss.gained += pts;
       const tBefore = { solved: S.profile().solved, streak: S.currentStreak(), mastered: S.stats(st, probs()).mastered };
       ({ mastered } = S.recordResult(st, p.id, perfect, isReview));
