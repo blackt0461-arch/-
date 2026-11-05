@@ -927,3 +927,11 @@ h3.sec { font-size: 14px; color: var(--muted); margin: 18px 4px 8px; font-weight
 .av-col.on { border-color: var(--sk-text, #fff); }
 .ac-title { display: block; font-size: 11px; font-weight: 600; color: #f2c14e; }
 @media (max-width: 380px) { .pf-row { grid-template-columns: 5.5em 1.4em 1fr auto; } .av-grid { grid-template-columns: repeat(4, 1fr); } }
+
+/* ほかの人のプロフィールを開く（1.9.1） */
+.rk-row { width: 100%; text-align: left; font: inherit; color: inherit; cursor: pointer; }
+.rk-row .rk-av { width: 34px; height: 34px; }
+.rk-row b { display: flex; flex-direction: column; min-width: 0; }
+.rk-title { font-size: 10.5px; font-weight: 600; color: #f2c14e; }
+.pf-open { cursor: pointer; }
+button.pf-open { border: 0; background: none; padding: 0; display: inline-flex; flex: none; }

@@ -138,6 +138,8 @@ export function markPlayedToday() {
   s.total += 1;
   return true;
 }
+// ほかの人の連続日数（プロフィールを見る時。streak = { count, last }）
+export function streakOf(st) { const today = dayKey(); return st && (st.last === today || st.last === addDays(today, -1)) ? st.count || 0 : 0; }
 export function currentStreak() {
   const s = state.streak;
   const today = dayKey();
