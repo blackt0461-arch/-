@@ -251,7 +251,9 @@ export function claimGift(id) {
   if (i < 0) return null;
   const g = list[i];
   const h = house();
-  if (g.kind === 'item') { if (g.itemId) own(g.itemId, g.amount || 1); }
+  // レベルの補填（管理者から。itemId = 'lv:16'）：そのLvのはじめまで経験値を上げる（下がることはない）
+  if (g.kind === 'item' && /^lv:\d+$/.test(g.itemId || '')) { const L = Math.min(MAX_RANK, +g.itemId.slice(3)), p = profile(); p.xp = Math.max(p.xp || 0, xpAtRank(L)); }
+  else if (g.kind === 'item') { if (g.itemId) own(g.itemId, g.amount || 1); }
   else if (GIFT_KEY[g.kind]) h[GIFT_KEY[g.kind]] = (h[GIFT_KEY[g.kind]] || 0) + (g.amount || 1);
   list.splice(i, 1);
   return g;
