@@ -7,21 +7,34 @@ import * as S from './store.js';
 import * as Auth from './auth.js';
 
 let timer = null, dirty = false, sending = false;
-let onExpired = null, onStatus = null;
-export function setHandlers(h) { onExpired = h.onExpired; onStatus = h.onStatus; }
+// ready：このログインで、ネットの記録をまだ見ていない間は送らない（古い端末の記録で、ほかの端末の新しい記録を上書きしないため。1.11.0）
+let ready = false;
+let onExpired = null, onStatus = null, onReplaced = null;
+export function setHandlers(h) { onExpired = h.onExpired; onStatus = h.onStatus; onReplaced = h.onReplaced || null; }
+export function reset() { ready = false; } // ログインしなおした時
 function status(s) { onStatus && onStatus(s); }
 
 function hasData(d) { return d && d.version === 1; }
 
-// ネットの記録と端末の記録の、新しいほうを使う。戻り値：ネットの記録に置きかえたら true
+// どれだけ進んでいるか：経験値（ふえるだけ）→ 解いた数＋パズルの回数 → 保存した時刻 の順にくらべる
+function progress(d) { const p = d?.profile || {}; return [p.xp || 0, (p.solved || 0) + (p.puzzleClears || 0), d?.savedAt || 0]; }
+function ahead(a, b) { for (let i = 0; i < a.length; i++) { if (a[i] !== b[i]) return a[i] > b[i]; } return false; }
+// ネットの記録と端末の記録の、進んでいるほうを使う（1.11.0 から。前は保存した時刻だけでくらべていて、
+// 電波が悪いと古い端末の記録が「新しい」ことになり、ほかの端末の記録を上書きしてしまった）
+// 戻り値：ネットの記録に置きかえたら true
 export async function adopt(cloudData) {
   const local = S.getState();
-  if (hasData(cloudData) && (cloudData.savedAt || 0) >= (local.savedAt || 0)) {
+  ready = true;
+  if (hasData(cloudData) && !ahead(progress(local), progress(cloudData))) {
+    // 置きかえる前に、端末の記録を1つとっておく（もしもの時に戻せるように）
+    try { if (local.savedAt) localStorage.setItem('studyroom.backup.' + (Auth.currentUser()?.id || 'x'), JSON.stringify(local)); } catch (e) { /* 入りきらない時は、とっておかない */ }
+    const changed = (local.savedAt || 0) !== (cloudData.savedAt || 0);
     S.replaceState(cloudData);
     status('saved');
+    if (changed && onReplaced) onReplaced();
     return true;
   }
-  // 端末のほうが新しい（またはネットが空）なら送る
+  // 端末のほうが進んでいる（またはネットが空）なら送る
   if (local.savedAt) await push();
   return false;
 }
@@ -29,6 +42,7 @@ export async function adopt(cloudData) {
 export async function pull() {
   const u = Auth.currentUser();
   if (!u) return false;
+  ready = false;
   try {
     const r = await rpc('sr_load', { p_token: u.token });
     if (r.is_admin !== undefined) Auth.setAdmin(r.is_admin);
@@ -36,6 +50,7 @@ export async function pull() {
   } catch (e) {
     if (e.code === 'bad_token') { onExpired && onExpired(); return false; }
     status('offline');
+    // ネットにつながらない：つながったら、まずネットの記録を見てから送る
     return false;
   }
 }
@@ -50,6 +65,7 @@ export function schedule() {
 export async function push(keepalive = false) {
   const u = Auth.currentUser();
   if (!u || sending) return;
+  if (!ready) { dirty = true; status('pending'); return; } // ネットの記録を見てから送る
   clearTimeout(timer);
   sending = true; dirty = false;
   try {
@@ -68,7 +84,7 @@ export async function push(keepalive = false) {
 S.setSaveHook(schedule);
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden' && dirty) push(true); });
 window.addEventListener('pagehide', () => { if (dirty) push(true); });
-window.addEventListener('online', () => { if (dirty) push(); });
+window.addEventListener('online', () => { if (!ready) pull(); else if (dirty) push(); });
 
 // ほかの端末でログインされたら、この端末はログアウトする（1分ごと・画面に戻ったときに確かめる）
 async function ping() {

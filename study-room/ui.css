@@ -974,3 +974,29 @@ button.pf-open { border: 0; background: none; padding: 0; display: inline-flex; 
 .gr-it.got i { color: #e6c068; }
 .gr-next { margin: 2px 0 0; font-size: 12.5px; text-align: center; }
 .gr-next b { color: #e6c068; }
+
+/* 勉強｜パズル の切りかえ（1.11.0） */
+.solve-wrap { position: relative; }
+.mode-toggle { pointer-events: auto; display: flex; padding: 3px; border-radius: 999px; background: var(--sk-panel, rgba(18,18,21,.7)); border: 1px solid var(--sk-panel-line, rgba(255,255,255,.12)); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); margin-bottom: 6px; }
+.mode-toggle button { position: relative; display: inline-flex; align-items: center; gap: 4px; padding: 6px 10px; border: 0; border-radius: 999px; background: none; color: var(--sk-muted, #bbb); font: 700 12px var(--sk-font, sans-serif); }
+.mode-toggle button .ic { width: 14px; height: 14px; }
+.mode-toggle button.on { background: var(--sk-btn-bg, #f2efe9); color: var(--sk-btn-fg, #17171a); }
+.mt-n { position: absolute; top: -6px; right: -4px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: #e86f5a; color: #fff; font: 700 10px/16px sans-serif; font-style: normal; text-align: center; }
+/* 下から出る画面の、右上の × */
+.sh-head { position: relative; }
+.sh-x { margin-left: auto; flex: none; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; border: 1px solid var(--sk-card-line, rgba(255,255,255,.12)); background: var(--sk-icon-bg, rgba(255,255,255,.06)); color: var(--sk-text, #f2efe9); padding: 0; }
+.sh-x .ic { width: 16px; height: 16px; }
+.sheet-foot:empty { display: none; }
+/* スタディサイドのパズルの回数 */
+.pz-tix { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 2px 10px; padding: 10px 12px; margin: 0 0 10px; border-radius: 14px; background: var(--sk-card, var(--card)); border: 1px solid #e6c068; }
+.pz-tix .ic { grid-row: span 2; width: 22px; height: 22px; color: #e6c068; }
+.pz-tix b { color: #e6c068; font-size: 16px; }
+.pz-tix small { color: var(--sk-muted, var(--muted)); font-size: 11.5px; }
+.pz-tix.empty { border-color: var(--sk-card-line, var(--card-line)); }
+
+/* 家具を買う：たたんで部屋を見る（1.11.0） */
+.sh-fold { margin-left: auto; flex: none; display: inline-flex; align-items: center; gap: 4px; padding: 7px 11px; border-radius: 999px; border: 1px solid var(--sk-card-line, rgba(255,255,255,.14)); background: var(--sk-icon-bg, rgba(255,255,255,.06)); color: var(--sk-text, #f2efe9); font: 700 12px var(--sk-font, sans-serif); }
+.sh-fold .ic { width: 15px; height: 15px; }
+.cand-sheet.folded .candgrid, .cand-sheet.folded .pv-tip, .cand-sheet.folded .sh-head p { display: none; }
+.cand-sheet.folded { padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px)); }
+.cand-sheet.folded .sh-head { margin-bottom: 8px; }
