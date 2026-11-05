@@ -21,6 +21,8 @@ import { rpc } from './cloud.js';
 import { PUZZLES, puzzleById, levelInfo, mountPuzzle, livesOf } from './puzzles.js';
 import { openPuzzleHelp } from './puzzlehelp.js';
 import * as BGM from './bgm.js';
+import { AVATARS, AVATAR_COLORS, avatarHTML } from './avatars.js';
+import { studyParams, puzzleParams, radarSVG, TITLES, titleById, earnedTitles } from './profile.js';
 
 // bank：data/bank/<科目>.json の問題バンク（教科書に合わせた 教科 → ジャンル → 単元）。あとから読みこむ
 const SUBJECTS = [
@@ -757,6 +759,7 @@ function remainCapacity(room = curRoom()) {
 let notesChecked = false;
 function showHome() {
   BGM.duck(false);
+  try { checkNewTitles(); } catch (e) { console.warn('titles', e); }
   // ログイン情報がない（ログアウトされた）のに部屋を出そうとしたら、ログイン画面へ（こわれた画面にしない）
   if (!Auth.currentUser()) return showLogin('login');
   room3d?.clearPreview();
@@ -1423,7 +1426,7 @@ function photoMode() {
 
 // =========================== 更新のお知らせ ===========================
 // このプログラムの版（version.json と同じにする。公開のたびに上げる）
-const APP_VERSION = '1.8.3';
+const APP_VERSION = '1.9.0';
 // 新しい版が出たら、みんな同じタイミングでそろうように強制で再起動する。
 // 開いた時・画面に戻った時・1分ごとに version.json を見る
 async function latestVersion() {
@@ -1746,13 +1749,15 @@ function screenWithTabs(cls, title, active, body) {
 }
 function showMenu() {
   const rk = rankNow();
+  const pf0 = S.profile(), myTitle = titleById(pf0.title);
   const el = screenWithTabs('menu', `<h2>メニュー</h2><span class="sync"></span>`, 'menu', `
-    <section class="profile-card">
-      <div class="pc-lv"><span>Lv</span><b>${rk.rank}</b></div>
-      <div class="pc-main"><b>${esc(user.name)}</b>
+    <button class="profile-card pc-tap" aria-label="プロフィールを見る">
+      ${avatarHTML(pf0, 'avatar pc-av')}
+      <div class="pc-main"><b>${esc(user.name)}<span class="pc-lvs">Lv${rk.rank}</span></b>${myTitle ? `<span class="title-chip">${esc(myTitle.name)}</span>` : ''}
         <div class="xpbar big"><i style="width:${Math.round(rk.into / rk.need * 100)}%"></i></div>
         <small>次のLvまで ${rk.need - rk.into} XP ・ 置ける家具 ${S.capacity()}個</small></div>
-    </section>
+      ${icon('chevronRight')}
+    </button>
     <nav class="menu-list">
       <button data-m="skins">${icon('palette')}<span>着せ替え<small>画面の見た目を変える（ガチャで集める）</small></span>${icon('chevronRight')}</button>
       <button data-m="records">${icon('chart')}<span>記録<small>分野ごとの成績・連続日数</small></span>${icon('chevronRight')}</button>
@@ -1762,8 +1767,89 @@ function showMenu() {
       ${isAdmin() ? `<button data-m="beta">${icon(BETA ? 'home' : 'flask')}<span>${BETA ? 'いつもの版にもどる' : 'テスト版を開く'}<small>${BETA ? 'みんなが使っている版' : '次に出す版を、先に管理者だけでためす'}</small></span>${icon('chevronRight')}</button>` : ''}
       ${isAdmin() ? `<button data-m="admin">${icon('shield')}<span>管理者<small>みんなの記録と部屋</small></span>${icon('chevronRight')}</button>` : ''}
     </nav>`);
+  el.querySelector('.pc-tap').onclick = () => showProfile();
   el.querySelectorAll('.menu-list button').forEach(b => b.onclick = () => ({ skins: () => showSkins(), records: showRecords, feedback: () => showFeedback(), bag: () => showBag(), news: showNews, ranking: showRanking, friends: showFriends, settings: showSettings, admin: showAdmin, beta: () => { location.href = BETA ? '../study-room/' : '../study-room-beta/'; } })[b.dataset.m]());
   paintSync();
+}
+
+// =========================== プロフィール ===========================
+function profileCtx() {
+  const pf = S.profile(), hs = HS();
+  const study = studyParams(sid => S.subject(sid));
+  const puzzle = puzzleParams(id => S.puzzleState(id));
+  const collected = Object.keys(hs.collected || {}).length;
+  const star5 = G.GACHA_ITEMS.filter(i => i.rarity === 5 && hs.collected?.[i.id]).length;
+  return { solved: pf.solved || 0, acc: pf.solved ? (pf.correct || 0) / pf.solved : 0, streak: S.currentStreak(), rank: rankNow().rank,
+    study, puzzle, pzClears: pf.puzzleClears || 0, collected, star5, admin: isAdmin() };
+}
+// 新しく手に入れた称号を知らせる（はじめては、まとめて1回だけ）
+function checkNewTitles() {
+  const pf = S.profile(), got = earnedTitles(profileCtx()).map(t => t.id);
+  const first = !pf.titlesSeen;
+  const seen = new Set(pf.titlesSeen || []);
+  const fresh = got.filter(id => !seen.has(id));
+  if (!fresh.length) return;
+  pf.titlesSeen = [...seen, ...fresh]; S.save();
+  setTimeout(() => toast(first ? `称号が ${fresh.length}つ 手に入っています。プロフィールで選べます` : `称号「${titleById(fresh[0]).name}」を手に入れました${fresh.length > 1 ? ` ほか${fresh.length - 1}つ` : ''}`, 3200), 900);
+}
+function showProfile() {
+  const pf = S.profile(), rk = rankNow(), c = profileCtx(), earned = new Set(earnedTitles(c).map(t => t.id));
+  const tt = titleById(pf.title), puzzleMain = isPuzzle();
+  const accPct = Math.round(c.acc * 100);
+  const studySec = `<section class="pf-sec"><h3 class="sec">${icon('pencil')}勉強のパラメータ</h3>
+      <div class="pf-radar">${radarSVG(c.study, { color: '#f2b84b' })}</div>
+      <div class="pf-list">${c.study.map(a => `<div class="pf-row"><b>${a.label}</b><span class="pf-rank r-${a.rank}">${a.rank}</span><span class="pf-bar"><i style="width:${a.value}%"></i></span><small>${a.solved}問・${a.solved ? Math.round(a.acc * 100) : 0}%</small></div>`).join('')}</div>
+      <p class="pf-note">解いた数が多いほど、正解率が高いほど上がります</p></section>`;
+  const puzzleSec = `<section class="pf-sec"><h3 class="sec">${icon('grid')}パズルのパラメータ</h3>
+      <div class="pf-radar">${radarSVG(c.puzzle, { color: '#6cbf8a' })}</div>
+      <div class="pf-list">${c.puzzle.map(a => `<div class="pf-row"><b>${a.label}<small>${a.sub}</small></b><span class="pf-rank r-${a.rank}">${a.rank}</span><span class="pf-bar g"><i style="width:${a.value}%"></i></span><small>${a.best ? `★${a.best}` : '—'}・${a.clears}回</small></div>`).join('')}</div>
+      <p class="pf-note">クリアした★が高いほど、回数とノーミスが多いほど上がります</p></section>`;
+  const list = TITLES.filter(t => !t.secret || earned.has(t.id));
+  const el = screenWithTabs('profile', `<button class="icon back">${icon('back')}</button><h2>プロフィール</h2><span></span>`, 'menu', `
+    <section class="pf-head">
+      <button class="pf-avbtn" aria-label="アイコンを変える">${avatarHTML(pf, 'avatar pf-av')}<span class="pf-edit">${icon('brush')}</span></button>
+      <div class="pf-who"><b>${esc(user.name)}</b>
+        <button class="title-chip big pf-tbtn">${tt ? esc(tt.name) : '称号をえらぶ'}${icon('chevronRight')}</button>
+        <small>Lv${rk.rank} ・ ${puzzleMain ? 'パズル' : '勉強'}で部屋づくり</small></div>
+    </section>
+    <div class="stats4">
+      <div>${icon('pencil')}<b>${c.solved}</b><span>解いた数</span></div>
+      <div>${icon('check')}<b>${accPct}%</b><span>正解率</span></div>
+      <div>${icon('grid')}<b>${c.pzClears}</b><span>パズル</span></div>
+      <div>${icon('flame')}<b>${c.streak}</b><span>連続日数</span></div>
+    </div>
+    ${puzzleMain ? puzzleSec + studySec : studySec + puzzleSec}
+    <section class="pf-sec"><h3 class="sec">${icon('trophy')}称号<small>${earned.size} / ${list.length}</small></h3>
+      <div class="pf-titles">${list.map(t => `<button class="pf-t ${earned.has(t.id) ? 'got' : ''} ${pf.title === t.id ? 'on' : ''}" data-t="${t.id}" ${earned.has(t.id) ? '' : 'disabled'}><b>${earned.has(t.id) ? esc(t.name) : '？？？'}</b><small>${esc(t.how)}</small></button>`).join('')}</div>
+      <p class="pf-note">手に入れた称号を押すと、名前の下に出せます（フレンドにも見えます）</p></section>`);
+  el.querySelector('.back').onclick = showMenu;
+  el.querySelector('.pf-avbtn').onclick = () => pickAvatar(showProfile);
+  el.querySelector('.pf-tbtn').onclick = () => el.querySelector('.pf-titles').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  el.querySelectorAll('.pf-t.got').forEach(b => b.onclick = () => {
+    const id = b.dataset.t; pf.title = pf.title === id ? null : id; S.save(); Sync.push?.();
+    toast(pf.title ? `称号を「${titleById(id).name}」にしました` : '称号を外しました', 1800);
+    showProfile();
+  });
+}
+function pickAvatar(after) {
+  const pf = S.profile(), rk = rankNow().rank;
+  let av = pf.avatar || 'cat', col = pf.avatarColor ?? 0;
+  const el = sheet(`
+    <div class="sh-head"><span class="sh-ic">${icon('user')}</span><div><h3>アイコン</h3><p>イラストと色をえらびます</p></div></div>
+    <div class="av-preview"></div>
+    <div class="av-grid">${AVATARS.map(a => { const lock = a.lv && rk < a.lv && !isAdmin(); return `<button class="av-pick" data-a="${a.id}" ${lock ? 'disabled' : ''} aria-label="${a.name}${lock ? `（Lv${a.lv}から）` : ''}">${avatarHTML({ avatar: a.id, avatarColor: col }, 'avatar')}${lock ? `<span class="av-lock">${icon('lock')}Lv${a.lv}</span>` : ''}</button>`; }).join('')}</div>
+    <div class="av-colors">${AVATAR_COLORS.map((c, i) => `<button class="av-col" data-c="${i}" style="background:${c}" aria-label="色${i + 1}"></button>`).join('')}</div>
+    <div class="row2"><button class="btn ghost back2">やめる</button><button class="btn primary ok">これにする</button></div>`, 'news-sheet av-sheet');
+  const draw = () => {
+    el.querySelector('.av-preview').innerHTML = avatarHTML({ avatar: av, avatarColor: col }, 'avatar big');
+    el.querySelectorAll('.av-pick').forEach(b => { b.classList.toggle('on', b.dataset.a === av); b.querySelector('.avatar').outerHTML = avatarHTML({ avatar: b.dataset.a, avatarColor: col }, 'avatar'); });
+    el.querySelectorAll('.av-col').forEach(b => b.classList.toggle('on', +b.dataset.c === col));
+  };
+  el.querySelectorAll('.av-pick').forEach(b => b.onclick = () => { av = b.dataset.a; draw(); });
+  el.querySelectorAll('.av-col').forEach(b => b.onclick = () => { col = +b.dataset.c; draw(); });
+  el.querySelector('.back2').onclick = () => { el.remove(); after?.(); };
+  el.querySelector('.ok').onclick = () => { pf.avatar = av; pf.avatarColor = col; S.save(); Sync.push?.(); el.remove(); toast('アイコンを変えました', 1500); after?.(); };
+  draw();
 }
 
 // =========================== 記録 ===========================
@@ -2192,10 +2278,10 @@ async function showFriends() {
     const lv = f => S.rankInfo(f.summary?.xp || 0).rank;
     listEl.innerHTML =
       sec('申請が来ています', list.filter(f => f.status === 'incoming'), f => `
-        <div class="frow"><span class="av">${icon('user')}</span><b>${esc(f.username)}<small>Lv${lv(f)}</small></b>
+        <div class="frow">${avatarHTML(f.summary || {}, 'avatar av')}<b>${esc(f.username)}<small>Lv${lv(f)}${f.summary?.title && titleById(f.summary.title) ? ` ・ ${esc(titleById(f.summary.title).name)}` : ''}</small></b>
           <button class="btn primary sm acc" data-u="${esc(f.username)}">${icon('check')}承認</button><button class="btn ghost sm dec" data-u="${esc(f.username)}">${icon('x')}</button></div>`) +
       sec('フレンド', list.filter(f => f.status === 'friend'), f => `
-        <div class="frow"><span class="av">${icon('user')}</span><b>${esc(f.username)}<small>Lv${lv(f)} ・ ${icon('flame')}${f.summary?.streak || 0}日 ・ ${f.summary?.solved || 0}問</small></b>
+        <div class="frow">${avatarHTML(f.summary || {}, 'avatar av')}<b>${esc(f.username)}<small>${f.summary?.title && titleById(f.summary.title) ? `${esc(titleById(f.summary.title).name)} ・ ` : ''}Lv${lv(f)} ・ ${icon('flame')}${f.summary?.streak || 0}日 ・ ${f.summary?.solved || 0}問</small></b>
           <button class="btn gold sm visit" data-u="${esc(f.username)}">${icon('eye')}部屋を見る</button><button class="btn ghost sm del" data-u="${esc(f.username)}">${icon('trash')}</button></div>`) +
       sec('申請中', list.filter(f => f.status === 'outgoing'), f => `
         <div class="frow"><span class="av">${icon('user')}</span><b>${esc(f.username)}<small>承認を待っています</small></b>
@@ -2284,7 +2370,7 @@ async function showAdmin() {
     const s = a.summary || {};
     const units = a.units || {};
     return `<div class="acard">
-      <div class="ac-top"><span class="av">${icon('user')}</span><b>${esc(a.username)}</b><span class="lvb">Lv${S.rankInfo(s.xp || 0).rank}</span></div>
+      <div class="ac-top">${avatarHTML(s, 'avatar av')}<b>${esc(a.username)}${s.title && titleById(s.title) ? `<small class="ac-title">${esc(titleById(s.title).name)}</small>` : ''}</b><span class="lvb">Lv${S.rankInfo(s.xp || 0).rank}</span></div>
       <div class="ac-stats"><span>${icon('pencil')}${s.solved || 0}問</span><span>${icon('check')}${s.solved ? Math.round((s.correct || 0) / s.solved * 100) : 0}%</span><span>${icon('flame')}${s.streak || 0}日（合計${s.days || 0}日）</span></div>
       <div class="ac-units">${UNITS.map(un => `<span>${un} ${units[un]?.solved || 0}問</span>`).join('')}</div>
       <div class="ac-foot"><small>登録 ${day(a.created_at)} ・ 最後 ${day(a.last_login)}</small><span class="ac-btns"><button class="btn ghost sm visit" data-u="${esc(a.username)}">${icon('eye')}部屋</button>${Object.keys(packCode).length ? `<button class="btn ghost sm ac-give" data-u="${esc(a.username)}">${icon('gift')}問題集</button>` : ''}${a.username !== u.name ? `<button class="btn ghost sm ac-del" data-u="${esc(a.username)}" aria-label="${esc(a.username)}のアカウントを消す">${icon('trash')}消す</button>` : ''}</span></div>
