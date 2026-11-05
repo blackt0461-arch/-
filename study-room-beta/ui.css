@@ -944,3 +944,17 @@ button.pf-open { border: 0; background: none; padding: 0; display: inline-flex; 
 .rk-mecard .rk-av { width: 40px; height: 40px; }
 .rk-mecard b { display: flex; align-items: baseline; gap: 10px; }
 .rk-pt { font-size: 18px; color: var(--sk-accent, #d8c3a0); font-variant-numeric: tabular-nums; }
+
+/* ガチャのアイコンの星のまたたき（1.10.0） */
+@keyframes avTw { 0%, 100% { opacity: .25 } 50% { opacity: 1 } }
+.avatar .av-tw { animation: avTw 2.4s ease-in-out infinite; }
+.avatar .av-tw:nth-of-type(2n) { animation-delay: -1.2s; }
+@media (prefers-reduced-motion: reduce) { .avatar .av-tw { animation: none } }
+.av-sub { display: flex; align-items: center; gap: 6px; margin: 16px 0 8px; font-size: 14px; }
+.av-sub .ic { width: 16px; height: 16px; color: #e6c068; }
+.av-sub small { margin-left: auto; font-size: 12px; font-weight: 500; color: var(--sk-muted, var(--muted)); }
+.av-sheet { max-height: 88vh; overflow-y: auto; }
+.av-pick.g:disabled .avatar { filter: grayscale(.6) brightness(.5); }
+.thumb.avatar-thumb { display: block; width: 100%; height: 100%; }
+.thumb.avatar-thumb svg { width: 100%; height: 100%; }
+.av-col { box-shadow: 0 0 0 1px rgba(255,255,255,.28); }

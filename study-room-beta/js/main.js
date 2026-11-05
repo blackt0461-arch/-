@@ -21,7 +21,7 @@ import { rpc } from './cloud.js';
 import { PUZZLES, puzzleById, levelInfo, mountPuzzle, livesOf } from './puzzles.js';
 import { openPuzzleHelp } from './puzzlehelp.js';
 import * as BGM from './bgm.js';
-import { AVATARS, AVATAR_COLORS, avatarHTML } from './avatars.js';
+import { AVATARS, AVATAR_COLORS, GACHA_AVATARS, NIGHT_COLORS, avatarHTML, avatarItemId } from './avatars.js';
 import { studyParams, puzzleParams, radarSVG, TITLES, titleById, earnedTitles } from './profile.js';
 
 // bank：data/bank/<科目>.json の問題バンク（教科書に合わせた 教科 → ジャンル → 単元）。あとから読みこむ
@@ -498,7 +498,7 @@ function showGacha(banner = null) {
   const s4 = hs.shards4 || 0, s5 = hs.shards5 || 0;
   // 出る家具：★5 → ★4 の順に5つ
   const lineup = (b) => {
-    const pool = b.limited ? G.bySeries(b.id) : [...G.byRarity(5), ...G.byRarity(4)].filter(i => !i.limited && i.place !== 'skin');
+    const pool = b.limited ? G.bySeries(b.id) : [...G.byRarity(5), ...G.byRarity(4)].filter(i => !i.limited && i.place !== 'skin' && i.place !== 'avatar');
     // 全部（★5 → ★4 → ★3 の順）。横にスライドして見る
     return [...pool].sort((x, y) => (y.rarity || 0) - (x.rarity || 0));
   };
@@ -605,8 +605,8 @@ async function gachaItemViewer(list, k) {
     const have = S.realOwned(it.id);
     ov.querySelector('.gi-info').innerHTML = `<span class="gi-r r${it.rarity || 3}">${'★'.repeat(it.rarity || 3)}</span>
       <h3>${esc(it.name)}</h3><p>${have ? `${icon('check')}持っている` : 'まだ持っていません'}・${k + 1} / ${list.length}</p>
-      <small>${it.place === 'skin' ? '画面の着せ替え' : '指で左右になぞると回せます'}</small>`;
-    if (it.place === 'skin' || it.src?.skin) { stage.innerHTML = `<span class="thumb gi-flat">${thumbHTML(it)}</span>`; hydrateThumbs(stage); return; }
+      <small>${it.place === 'skin' ? '画面の着せ替え' : it.place === 'avatar' ? 'プロフィールのアイコン（プロフィールで使えます）' : '指で左右になぞると回せます'}</small>`;
+    if (it.place === 'skin' || it.src?.skin || it.place === 'avatar') { stage.innerHTML = `<span class="thumb gi-flat">${thumbHTML(it)}</span>`; hydrateThumbs(stage); return; }
     stage.insertAdjacentHTML('beforeend', `<span class="gi-load">${thumbHTML(it)}</span>`);
     hydrateThumbs(stage);
     const d = await spinViewer(stage, it);
@@ -1334,7 +1334,7 @@ function showSwap(uid) {
 function showInventory() {
   const inv = HS().inventory;
   const ids = S.isUnlimited() ? [...new Set([...ITEMS, ...G.GACHA_ITEMS].map(i => i.id))] : Object.keys(inv);
-  const list = ids.map(itemById).filter(it => it && it.place !== 'surface' && it.place !== 'skin' && S.owned(it.id) > S.placedCount(it.id));
+  const list = ids.map(itemById).filter(it => it && it.place !== 'surface' && it.place !== 'skin' && it.place !== 'avatar' && S.owned(it.id) > S.placedCount(it.id));
   const el = sheet(`
     <div class="sh-head"><span class="sh-ic">${icon('box')}</span><div><h3>持ち物</h3><p>タップすると部屋に置きます（あと ${Math.max(0, remainCapacity())} 個置けます）</p></div></div>
     ${list.length ? `<div class="invgrid">${list.map(it => `
@@ -1426,7 +1426,7 @@ function photoMode() {
 
 // =========================== 更新のお知らせ ===========================
 // このプログラムの版（version.json と同じにする。公開のたびに上げる）
-const APP_VERSION = '1.9.3';
+const APP_VERSION = '1.10.0';
 // 新しい版が出たら、みんな同じタイミングでそろうように強制で再起動する。
 // 開いた時・画面に戻った時・1分ごとに version.json を見る
 async function latestVersion() {
@@ -1855,19 +1855,29 @@ async function openUserProfile(username, back) {
 function pickAvatar(after) {
   const pf = S.profile(), rk = rankNow().rank;
   let av = pf.avatar || 'cat', col = pf.avatarColor ?? 0;
+  const isG = (id) => GACHA_AVATARS.some(a => a.id === id);
+  const hasG = (id) => S.owned(avatarItemId(id)) > 0;
   const el = sheet(`
     <div class="sh-head"><span class="sh-ic">${icon('user')}</span><div><h3>アイコン</h3><p>イラストと色をえらびます</p></div></div>
     <div class="av-preview"></div>
     <div class="av-grid">${AVATARS.map(a => { const lock = a.lv && rk < a.lv && !isAdmin(); return `<button class="av-pick" data-a="${a.id}" ${lock ? 'disabled' : ''} aria-label="${a.name}${lock ? `（Lv${a.lv}から）` : ''}">${avatarHTML({ avatar: a.id, avatarColor: col }, 'avatar')}${lock ? `<span class="av-lock">${icon('lock')}Lv${a.lv}</span>` : ''}</button>`; }).join('')}</div>
-    <div class="av-colors">${AVATAR_COLORS.map((c, i) => `<button class="av-col" data-c="${i}" style="background:${c}" aria-label="色${i + 1}"></button>`).join('')}</div>
+    <h4 class="av-sub">${icon('star')}ガチャのアイコン<small>${GACHA_AVATARS.filter(a => hasG(a.id)).length} / ${GACHA_AVATARS.length}</small></h4>
+    <div class="av-grid">${GACHA_AVATARS.map(a => { const lock = !hasG(a.id); return `<button class="av-pick g" data-a="${a.id}" ${lock ? 'disabled' : ''} aria-label="${a.name}${lock ? '（ガチャで手に入る）' : ''}">${avatarHTML({ avatar: a.id, avatarColor: 0 }, 'avatar')}${lock ? `<span class="av-lock">${icon('lock')}${'★'.repeat(a.r)}</span>` : ''}</button>`; }).join('')}</div>
+    <div class="av-colors"></div>
     <div class="row2"><button class="btn ghost back2">やめる</button><button class="btn primary ok">これにする</button></div>`, 'news-sheet av-sheet');
   const draw = () => {
+    const pal = isG(av) ? NIGHT_COLORS : AVATAR_COLORS;
+    if (col >= pal.length) col = 0;
     el.querySelector('.av-preview').innerHTML = avatarHTML({ avatar: av, avatarColor: col }, 'avatar big');
-    el.querySelectorAll('.av-pick').forEach(b => { b.classList.toggle('on', b.dataset.a === av); b.querySelector('.avatar').outerHTML = avatarHTML({ avatar: b.dataset.a, avatarColor: col }, 'avatar'); });
-    el.querySelectorAll('.av-col').forEach(b => b.classList.toggle('on', +b.dataset.c === col));
+    el.querySelectorAll('.av-pick').forEach(b => {
+      b.classList.toggle('on', b.dataset.a === av);
+      const c = b.classList.contains('g') ? (isG(av) ? col : 0) : (isG(av) ? 0 : col);
+      b.querySelector('.avatar').outerHTML = avatarHTML({ avatar: b.dataset.a, avatarColor: c }, 'avatar');
+    });
+    el.querySelector('.av-colors').innerHTML = pal.map((c, i) => `<button class="av-col ${i === col ? 'on' : ''}" data-c="${i}" style="background:${c}" aria-label="色${i + 1}"></button>`).join('');
+    el.querySelectorAll('.av-col').forEach(b => b.onclick = () => { col = +b.dataset.c; draw(); });
   };
-  el.querySelectorAll('.av-pick').forEach(b => b.onclick = () => { av = b.dataset.a; draw(); });
-  el.querySelectorAll('.av-col').forEach(b => b.onclick = () => { col = +b.dataset.c; draw(); });
+  el.querySelectorAll('.av-pick').forEach(b => b.onclick = () => { if (isG(b.dataset.a) !== isG(av)) col = 0; av = b.dataset.a; draw(); });
   el.querySelector('.back2').onclick = () => { el.remove(); after?.(); };
   el.querySelector('.ok').onclick = () => { pf.avatar = av; pf.avatarColor = col; S.save(); Sync.push?.(); el.remove(); toast('アイコンを変えました', 1500); after?.(); };
   draw();
@@ -2013,7 +2023,7 @@ function showArrange(reset = true) {
   const avail = (id) => S.owned(id) - (S.placedCount(id) - (here[id] || 0));
   const hs = HS();
   const ids = S.isUnlimited() ? [...new Set([...ITEMS, ...G.GACHA_ITEMS].map(i => i.id))] : Object.keys(hs.inventory);
-  const list = ids.map(itemById).filter(it => it && it.place !== 'surface' && it.place !== 'skin' && avail(it.id) > 0 && (!arrGenre || it.genre === arrGenre))
+  const list = ids.map(itemById).filter(it => it && it.place !== 'surface' && it.place !== 'skin' && it.place !== 'avatar' && avail(it.id) > 0 && (!arrGenre || it.genre === arrGenre))
     .sort((a, b) => (arrSel[b.id] ? 1 : 0) - (arrSel[a.id] ? 1 : 0));
   const total = Object.values(arrSel).reduce((n, v) => n + v, 0), cap = S.capacity();
   const el = screenWithTabs('arrange', `<button class="icon back">${icon('back')}</button><h2>自動で並べる</h2><span class="ar-count"><b>${total}</b> / ${cap}</span>`, 'furn', `
@@ -2077,7 +2087,7 @@ function showBag(tab = 'furniture', genre = '') {
   if (isAdmin()) adminTopUp();
   const hs = HS();
   const ids = S.isUnlimited() ? [...new Set([...ITEMS, ...G.GACHA_ITEMS].map(i => i.id))] : Object.keys(hs.inventory);
-  const owned = ids.map(itemById).filter(it => it && S.owned(it.id) > 0 && it.place !== 'surface' && it.place !== 'skin' && (!genre || it.genre === genre));
+  const owned = ids.map(itemById).filter(it => it && S.owned(it.id) > 0 && it.place !== 'surface' && it.place !== 'skin' && it.place !== 'avatar' && (!genre || it.genre === genre));
   const surf = ids.map(itemById).filter(it => it && it.place === 'surface');
   const items = [
     ['ticket', hs.rareTickets || 0, ticketSVG('ticket', 'mini'), 'ガチャを1回引ける'],
@@ -2248,7 +2258,7 @@ function composeGift() {
       <input name="t" maxlength="40" placeholder="ひとこと（例：いつもありがとう）" required>
       <select name="k">${kinds.map(k => `<option value="${k}">${GIFT_LABEL[k]}</option>`).join('')}</select>
       <input name="n" type="number" min="1" max="99" value="1" placeholder="数">
-      <select name="i" hidden>${ITEMS.filter(it => !it.place || it.place !== 'skin').map(it => `<option value="${it.id}">${esc(it.name)}</option>`).join('')}</select>
+      <select name="i" hidden>${ITEMS.filter(it => !it.place || it.place !== 'skin' && it.place !== 'avatar').map(it => `<option value="${it.id}">${esc(it.name)}</option>`).join('')}</select>
       <label class="nf-adm">受け取れる期間 <input name="d" type="number" min="1" max="365" value="14" style="width:5em"> 日</label>
       <button class="btn gold big">${icon('check')}内容を確認する</button>
     </form>
