@@ -1006,3 +1006,19 @@ button.pf-open { border: 0; background: none; padding: 0; display: inline-flex; 
 .hotbar .mode-toggle button { padding: 5px 9px; font-size: 11.5px; color: rgba(242, 239, 233, .72); }
 .hotbar .mode-toggle button.on { background: #f2efe9; color: #17171a; }
 .hotbar .mode-toggle button .ic { width: 13px; height: 13px; }
+
+/* 管理者：補填（1.11.2） */
+.comp-form { display: flex; flex-direction: column; gap: 8px; max-height: 62vh; overflow-y: auto; }
+.comp-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 12px; border-radius: 12px; background: var(--sk-card, var(--card)); border: 1px solid var(--sk-card-line, var(--card-line)); font-size: 14px; }
+.comp-row span { display: flex; flex-direction: column; }
+.comp-row small { font-size: 11px; color: var(--sk-muted, var(--muted)); }
+.comp-row input { width: 76px; padding: 7px 9px; border-radius: 9px; border: 1px solid var(--sk-card-line, rgba(255,255,255,.18)); background: rgba(0,0,0,.25); color: inherit; font: inherit; text-align: right; }
+.comp-row.col { flex-direction: column; align-items: stretch; }
+.comp-row.col input { width: 100%; text-align: left; }
+.comp-sum { list-style: none; margin: 8px 0 14px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.comp-sum li { display: flex; align-items: center; gap: 8px; padding: 9px 12px; border-radius: 12px; background: var(--sk-card, var(--card)); }
+.comp-sum .ic { width: 16px; height: 16px; color: #e6c068; }
+.gb-lv { display: grid; place-items: center; align-content: center; font-weight: 800; font-size: 16px; line-height: 1; }
+.gb-lv small { font-size: 9px; }
+.sheet.comp-sheet { background: #18181c; backdrop-filter: none; -webkit-backdrop-filter: none; max-height: 92vh; display: flex; flex-direction: column; }
+.sheet.comp-sheet .comp-form { max-height: none; flex: 1; min-height: 0; }

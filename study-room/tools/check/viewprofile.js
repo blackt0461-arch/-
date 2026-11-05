@@ -62,6 +62,23 @@ const serve = () => new Promise(res => { const srv = http.createServer((req, rsp
   await page.click('.acard .pf-open[data-u=friendA] >> nth=0'); await page.waitForSelector('.pf-head');
   check(/friendA/.test(await page.locator('.pf-head').textContent()), '管理者画面のアイコンを押すとプロフィール');
 
+  console.log('3b. 管理者の補填');
+  await page.evaluate(() => document.querySelector('[data-t=menu]')?.click()); await page.waitForTimeout(400);
+  await page.click('.menu-list [data-m=admin]'); await page.waitForSelector('.ac-comp[data-u=friendA]');
+  await page.click('.ac-comp[data-u=friendA]'); await page.waitForSelector('.comp-form');
+  await page.fill('.comp-form [name=lv]', '5'); await page.fill('.comp-form [name=ticket]', '3'); await page.fill('.comp-form [name=exchange]', '2');
+  await page.waitForTimeout(800); await page.screenshot({ path: path.join(OUT, 'admin-comp.png') });
+  await page.click('.comp-form button[type=submit]'); await page.waitForSelector('.comp-sum');
+  check(await page.locator('.comp-sum li').count() === 3, `送る前に中身を確かめる画面が出る（${(await page.locator('.comp-sum').textContent()).trim().replace(/\s+/g, ' ')}）`);
+  await page.click('.comp-sheet .go'); await page.waitForTimeout(800);
+  const gl = await page.evaluate(async () => { const { rpc } = await import('/js/cloud.js'); return rpc('sr_gift_list', { p_token: 't-friendA' }); });
+  check(gl.filter(g => g.title === 'データが消えてしまったおわび').length === 3, 'friendA にだけ 3件 届く');
+  const other = await page.evaluate(async () => { const { rpc } = await import('/js/cloud.js'); return rpc('sr_gift_list', { p_token: 't-admin' }); });
+  check(!other.some(g => g.title === 'データが消えてしまったおわび'), 'ほかの人には届かない');
+  // 受け取ると Lv5 になる（受け取る側のしくみ）
+  const lv = await page.evaluate(() => { const S = window.__app.S; const before = S.profile().xp; S.addGift({ id: 'test-lv', kind: 'item', itemId: 'lv:5', amount: 1, title: 't' }); S.claimGift('test-lv'); const r = S.rankInfo().rank; S.profile().xp = before; return r; });
+  check(lv === 5, `Lvの補填を受け取ると Lv${lv} になる`);
+
   console.log('4. 画面のエラー');
   check(!errors.length, errors.length ? `エラー：${errors.slice(0, 3).join(' / ')}` : 'エラーなし');
   await browser.close(); srv.close();

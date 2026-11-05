@@ -311,12 +311,14 @@ function goTab(t) {
 }
 // =========================== プレゼントBOX ===========================
 const GIFT_LABEL = { ticket: 'レアチケット', ticket4: '★4以上確定チケット', ticket5: '★5限定チケット', exchange: '家具の引きかえ券', shards4: '★4のかけら', shards5: '★5のかけら', gauge: 'ゲージ', item: '家具' };
+const lvGift = (g) => g.kind === 'item' && /^lv:\d+$/.test(g.itemId || '') ? +g.itemId.slice(3) : 0;
 function giftArt(g) {
+  if (lvGift(g)) return `<span class="gb-ic gb-lv"><small>Lv</small>${lvGift(g)}</span>`;
   if (g.kind === 'ticket' || g.kind === 'ticket4' || g.kind === 'ticket5') return ticketSVG(g.kind, 'mini');
   if (g.kind === 'item') { const it = itemById(g.itemId); return it ? `<span class="thumb">${thumbHTML(it)}</span>` : icon('gift'); }
   return `<span class="gb-ic">${icon(g.kind === 'gauge' ? 'level' : g.kind.startsWith('shards') ? 'sparkle' : 'gift')}</span>`;
 }
-function giftName(g) { return g.kind === 'item' ? (itemById(g.itemId)?.name || '家具') : GIFT_LABEL[g.kind] || 'プレゼント'; }
+function giftName(g) { if (lvGift(g)) return `Lv${lvGift(g)} まで上がる`; return g.kind === 'item' ? (itemById(g.itemId)?.name || '家具') : GIFT_LABEL[g.kind] || 'プレゼント'; }
 // 運営からのプレゼントを取りに行って、まだならBOXに入れる（1分に1回まで）
 let giftsCheckedAt = 0;
 async function refreshGifts(force = false) {
@@ -354,7 +356,7 @@ function showGiftBox() {
     <div class="gb-list">${list.map(g => `
       <div class="gb-row" data-id="${esc(g.id)}">
         <span class="gb-art">${giftArt(g)}</span>
-        <span class="gb-t"><b>${esc(giftName(g))}${g.amount > 1 || g.kind !== 'item' ? ` ×${g.amount || 1}` : ''}</b><small>${esc(g.title || from[g.from] || '')}${g.at ? '・' + day(g.at) : ''}</small></span>
+        <span class="gb-t"><b>${esc(giftName(g))}${(g.amount > 1 || g.kind !== 'item') && !lvGift(g) ? ` ×${g.amount || 1}` : ''}</b><small>${esc(g.title || from[g.from] || '')}${g.at ? '・' + day(g.at) : ''}</small></span>
         <button class="btn ghost sm gb-get">受け取る</button>
       </div>`).join('')}</div>`
       : `<div class="gb-empty">${icon('gift')}<p>いまは何も届いていません。<br>Lvが上がったときや、運営からのプレゼントがここに届きます。</p></div>`}`);
@@ -362,6 +364,7 @@ function showGiftBox() {
   const take = (ids) => {
     const got = ids.map(id => S.claimGift(id)).filter(Boolean);
     if (!got.length) return;
+    if (got.some(lvGift)) ensureRooms(); // レベルが上がったら、新しい部屋や置ける数も
     S.save(); vibrate([20, 40, 20]);
     toast(got.length === 1 ? `${giftName(got[0])}${got[0].kind !== 'item' ? ' ×' + (got[0].amount || 1) : ''}を受け取りました` : `${got.length}件 受け取りました`, 2200);
     showGiftBox();
@@ -1452,7 +1455,7 @@ function photoMode() {
 
 // =========================== 更新のお知らせ ===========================
 // このプログラムの版（version.json と同じにする。公開のたびに上げる）
-const APP_VERSION = '1.11.1';
+const APP_VERSION = '1.11.2';
 // 新しい版が出たら、みんな同じタイミングでそろうように強制で再起動する。
 // 開いた時・画面に戻った時・1分ごとに version.json を見る
 async function latestVersion() {
@@ -2435,14 +2438,58 @@ async function showAdmin() {
       <div class="ac-mode">${(() => { const sd = s.side || s.mode; return `<span class="mode-tag ${sd || 'none'}">${icon(sd === 'puzzle' ? 'grid' : sd === 'study' ? 'pencil' : 'info')}${sd === 'puzzle' ? 'パズルサイド' : sd === 'study' ? 'スタディサイド' : 'まだ選んでいない'}</span>${s.puzzle ? `<small>パズル ${s.puzzle}回</small>` : ''}<button class="btn ghost sm ac-mode-btn" data-u="${esc(a.username)}" data-m="${sd || ''}">${icon('refresh')}サイドを変える</button>`; })()}</div>
       <div class="ac-stats"><span>${icon('pencil')}${s.solved || 0}問</span><span>${icon('check')}${s.solved ? Math.round((s.correct || 0) / s.solved * 100) : 0}%</span><span>${icon('flame')}${s.streak || 0}日（合計${s.days || 0}日）</span></div>
       <div class="ac-units">${UNITS.map(un => `<span>${un} ${units[un]?.solved || 0}問</span>`).join('')}</div>
-      <div class="ac-foot"><small>登録 ${day(a.created_at)} ・ 最後 ${day(a.last_login)}</small><span class="ac-btns"><button class="btn ghost sm visit" data-u="${esc(a.username)}">${icon('eye')}部屋</button>${Object.keys(packCode).length ? `<button class="btn ghost sm ac-give" data-u="${esc(a.username)}">${icon('gift')}問題集</button>` : ''}${a.username !== u.name ? `<button class="btn ghost sm ac-del" data-u="${esc(a.username)}" aria-label="${esc(a.username)}のアカウントを消す">${icon('trash')}消す</button>` : ''}</span></div>
+      <div class="ac-foot"><small>登録 ${day(a.created_at)} ・ 最後 ${day(a.last_login)}</small><span class="ac-btns"><button class="btn ghost sm visit" data-u="${esc(a.username)}">${icon('eye')}部屋</button><button class="btn ghost sm ac-comp" data-u="${esc(a.username)}" data-lv="${S.rankInfo(s.xp || 0).rank}">${icon('gift')}補填</button>${Object.keys(packCode).length ? `<button class="btn ghost sm ac-give" data-u="${esc(a.username)}">${icon('gift')}問題集</button>` : ''}${a.username !== u.name ? `<button class="btn ghost sm ac-del" data-u="${esc(a.username)}" aria-label="${esc(a.username)}のアカウントを消す">${icon('trash')}消す</button>` : ''}</span></div>
     </div>`;
   }).join('');
   el.querySelectorAll('.visit').forEach(b => b.onclick = () => visitFriend(b.dataset.u, showAdmin));
   el.querySelectorAll('.ac-del').forEach(b => b.onclick = () => confirmDeleteUser(b.dataset.u));
   el.querySelectorAll('.ac-give').forEach(b => b.onclick = () => givePack(b.dataset.u));
   el.querySelectorAll('.ac-mode-btn').forEach(b => b.onclick = () => changeMode(b.dataset.u, b.dataset.m));
+  el.querySelectorAll('.ac-comp').forEach(b => b.onclick = () => compensate(b.dataset.u, +b.dataset.lv || 1));
   el.querySelectorAll('.pf-open').forEach(b => b.onclick = () => openUserProfile(b.dataset.u, showAdmin));
+}
+// 管理者：1人だけに補填を送る（データが消えた時など）。その人のプレゼントBOXに届き、本人が受け取る
+function compensate(name, lvNow) {
+  const F = [['ticket', 'レアチケット'], ['ticket4', '★4以上確定チケット'], ['ticket5', '★5限定チケット'], ['exchange', '家具の引きかえ券'], ['shards4', '★4のかけら'], ['shards5', '★5のかけら']];
+  const cf = sheet(`
+    <div class="sh-head"><span class="sh-ic">${icon('gift')}</span><div><h3>「${esc(name)}」に補填する</h3><p>その人のプレゼントBOXに届き、本人が受け取ります。いまは Lv${lvNow}</p></div><button class="sh-x close" aria-label="やめる">${icon('x')}</button></div>
+    <form class="comp-form">
+      <label class="comp-row"><span>レベル<small>このLvまで上げる（下がりません）</small></span><input name="lv" type="number" min="1" max="100" placeholder="${lvNow}" inputmode="numeric"></label>
+      ${F.map(([k, n]) => `<label class="comp-row"><span>${n}</span><input name="${k}" type="number" min="0" max="99" placeholder="0" inputmode="numeric"></label>`).join('')}
+      <label class="comp-row col"><span>家具<small>名前の一部を入れると候補が出ます（1つ）</small></span><input name="item" list="comp-items" placeholder="例：ソファ" autocomplete="off"></label>
+      <datalist id="comp-items">${[...ITEMS, ...G.GACHA_ITEMS].filter((it, i, a) => a.findIndex(x => x.id === it.id) === i).map(it => `<option value="${esc(it.name)}">`).join('')}</datalist>
+      <label class="comp-row col"><span>メッセージ（プレゼントBOXに出ます）</span><input name="title" value="データが消えてしまったおわび" maxlength="40"></label>
+      <p class="err"></p>
+      <button class="btn gold big" type="submit">${icon('gift')}確認する</button>
+    </form>`, 'news-sheet comp-sheet');
+  cf.querySelector('.close').onclick = () => cf.remove();
+  cf.querySelector('.comp-form').onsubmit = (e) => {
+    e.preventDefault();
+    const f = e.target, gifts = [];
+    const lv = Math.min(100, Math.max(0, +f.lv.value || 0));
+    if (lv > lvNow) gifts.push({ kind: 'item', amount: 1, item: 'lv:' + lv, label: `Lv${lv} まで上がる` });
+    for (const [k, n] of F) { const v = Math.min(99, Math.max(0, +f[k].value || 0)); if (v) gifts.push({ kind: k, amount: v, label: `${n} ×${v}` }); }
+    if (f.item.value.trim()) {
+      const all = [...ITEMS, ...G.GACHA_ITEMS], it = all.find(x => x.name === f.item.value.trim()) || all.find(x => x.name.includes(f.item.value.trim()));
+      if (!it) { f.querySelector('.err').textContent = 'その名前の家具が見つかりません'; return; }
+      gifts.push({ kind: 'item', amount: 1, item: it.id, label: it.name });
+    }
+    if (lv && lv <= lvNow) { f.querySelector('.err').textContent = `いまの Lv${lvNow} より大きいLvを入れてください`; return; }
+    if (!gifts.length) { f.querySelector('.err').textContent = '送る物を1つ以上入れてください'; return; }
+    const title = f.title.value.trim() || '補填';
+    // 確認：送る前に、中身を見せる
+    cf.innerHTML = `<div class="grab"></div><div class="sh-head"><span class="sh-ic">${icon('gift')}</span><div><h3>「${esc(name)}」に送りますか？</h3><p>メッセージ：${esc(title)}</p></div></div>
+      <ul class="comp-sum">${gifts.map(g => `<li>${icon('check')}${esc(g.label)}</li>`).join('')}</ul>
+      <div class="row2"><button class="btn ghost back2">もどる</button><button class="btn gold go">${icon('gift')}送る</button></div>`;
+    cf.querySelector('.back2').onclick = () => { cf.remove(); compensate(name, lvNow); };
+    cf.querySelector('.go').onclick = async () => {
+      const go = cf.querySelector('.go'); go.disabled = true;
+      try {
+        for (const g of gifts) await rpc('sr_admin_gift_user', { p_token: Auth.currentUser()?.token, p_username: name, p_title: title, p_kind: g.kind, p_amount: g.amount, p_item: g.item || null });
+        toast(`「${name}」に補填を送りました（${gifts.length}件）。次にアプリを開いた時に届きます`, 3600); cf.remove();
+      } catch (ex) { toast(String(ex.message || ex), 3600); go.disabled = false; }
+    };
+  };
 }
 // 管理者：その人のモード（勉強メイン・パズルメイン）を切りかえる。本人のアプリが次に開いた時に切りかわる
 function changeMode(name, now) {
