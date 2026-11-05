@@ -1,7 +1,7 @@
 // データのやりとり。グーグルドライブ（Google Apps Script の受け口）と、ためし用（この端末だけ）の2つ。
 // 受け口のURLは公開されても大丈夫（中身はユーザー名とパスワードで守る。登録できるのは1人だけ）。
 // 受け口のコードは server/Code.gs。
-export const SCRIPT_URL = '';
+export const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx0jdWouheEAWSM43mi_hRT9euc8B8GjB8TIEEUqs_dGGYU3m6CuwzkDrpuOd9qFCuUnQ/exec';
 
 const MESSAGES = {
   name_taken: 'そのユーザー名はもう使われています',
@@ -17,6 +17,7 @@ const MESSAGES = {
   closed: 'このアプリは、もう登録されています。ログインしてください',
   too_many: 'まちがいが続いたので、10分ほど待ってからためしてください',
   busy: '混みあっています。もう一度ためしてください',
+  no_access: 'グーグルドライブにつなげません。Googleの画面の「デプロイを管理」で「アクセスできるユーザー」を「全員」にしてください',
   server: 'うまくいきませんでした。少ししてからもう一度ためしてください',
   offline: 'ネットにつながりませんでした。電波のよい所でもう一度ためしてください',
 };
@@ -37,6 +38,9 @@ async function remote(name, body) {
     });
   } catch (e) { throw new CloudError('offline'); }
   let j = null;
+  // Googleのログイン画面（HTML）が返ってきたら、公開の設定が「全員」になっていない
+  const type = res.headers.get('content-type') || '';
+  if (res.ok && !type.includes('json')) throw new CloudError('no_access');
   try { j = await res.json(); } catch (e) { throw new CloudError(res.ok ? 'server' : 'offline'); }
   if (!j || j.error) throw new CloudError(MESSAGES[j?.error] ? j.error : 'server');
   return j.result;
