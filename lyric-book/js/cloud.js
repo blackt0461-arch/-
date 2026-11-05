@@ -1,7 +1,7 @@
-// データのやりとり。ネット（Supabase）と、ためし用（この端末だけ）の2つ。
-// ここに書くのは公開してよい値だけ（Project URL と Publishable key）。
-export const SUPABASE_URL = 'https://ytvocegvtlgrnxupmbnf.supabase.co';
-export const SUPABASE_KEY = 'sb_publishable_dRcpHiDz_wRt_SZz4P98TA_oNfDqqy7';
+// データのやりとり。グーグルドライブ（Google Apps Script の受け口）と、ためし用（この端末だけ）の2つ。
+// 受け口のURLは公開されても大丈夫（中身はユーザー名とパスワードで守る。登録できるのは1人だけ）。
+// 受け口のコードは server/Code.gs。
+export const SCRIPT_URL = '';
 
 const MESSAGES = {
   name_taken: 'そのユーザー名はもう使われています',
@@ -13,9 +13,10 @@ const MESSAGES = {
   not_found: '見つかりませんでした',
   too_big: '録音が長すぎます（10分まで）',
   conflict: '別の端末でも直されていました',
-  local_only: 'ためし中は、ドライブへのバックアップは使えません',
-  bad_key: 'バックアップの鍵がちがいます',
-  missing: '保存先の準備がまだです（Supabase に setup.sql を登録すると使えます）',
+  missing: 'まだ準備ができていません。ログイン画面の「はじめての準備」をしてください',
+  closed: 'このアプリは、もう登録されています。ログインしてください',
+  too_many: 'まちがいが続いたので、10分ほど待ってからためしてください',
+  busy: '混みあっています。もう一度ためしてください',
   server: 'うまくいきませんでした。少ししてからもう一度ためしてください',
   offline: 'ネットにつながりませんでした。電波のよい所でもう一度ためしてください',
 };
@@ -25,19 +26,20 @@ export class CloudError extends Error {
 }
 
 async function remote(name, body) {
+  if (!SCRIPT_URL) throw new CloudError('missing');
   let res;
   try {
-    res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${name}`, {
+    res = await fetch(SCRIPT_URL, {
       method: 'POST',
-      headers: { apikey: SUPABASE_KEY, 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // 余分な確認通信をさせない形
+      body: JSON.stringify({ fn: name, args: body }),
+      redirect: 'follow',
     });
   } catch (e) { throw new CloudError('offline'); }
-  const text = await res.text();
   let j = null;
-  try { j = text ? JSON.parse(text) : null; } catch (e) { j = null; }
-  if (!res.ok) throw new CloudError(j?.code === 'PGRST202' || res.status === 404 ? 'missing' : (MESSAGES[j?.message] ? j.message : 'server'));
-  return j;
+  try { j = await res.json(); } catch (e) { throw new CloudError(res.ok ? 'server' : 'offline'); }
+  if (!j || j.error) throw new CloudError(MESSAGES[j?.error] ? j.error : 'server');
+  return j.result;
 }
 
 // ---- ためし用：同じ関数を localStorage で真似する ----
@@ -99,7 +101,6 @@ const local = {
   lb_delete_recording({ p_id }) { const db = ldb() || blank(); delete db.recordings[p_id]; lsave(db); return null; },
   lb_get_recording({ p_id }) { const r = (ldb() || blank()).recordings[p_id]; if (!r) throw new CloudError('not_found'); return { mime: r.mime, audio: r.audio }; },
   lb_logout() { return null; },
-  lb_backup_new_key() { throw new CloudError('local_only'); },
 };
 
 export const LOCAL_TOKEN = 'local';
