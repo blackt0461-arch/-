@@ -1,4 +1,5 @@
--- LYRIC BOOK（歌詞ノート）の保存先。Supabase の SQL Editor に全部貼って1回だけ実行する。
+-- LYRIC BOOK（歌詞ノート）の保存先。Supabase の SQL Editor に全部貼って実行する。
+-- 何回実行しても大丈夫（データは消えない）。新しい版が出たら、もう一度全部貼って実行する。
 -- 表には直接さわれないようにし、下の lb_ 関数だけを呼べるようにする。
 
 create extension if not exists pgcrypto with schema extensions;
@@ -42,6 +43,13 @@ create table if not exists public.lb_recordings (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+-- 自動バックアップ用（あとから足した列）
+alter table public.lb_users add column if not exists changed_at timestamptz not null default now();
+alter table public.lb_users add column if not exists backup_hash text;
+alter table public.lb_users add column if not exists backup_at timestamptz;
+alter table public.lb_users add column if not exists backup_info jsonb;
+create unique index if not exists lb_users_backup on public.lb_users(backup_hash);
+
 create index if not exists lb_artists_user on public.lb_artists(user_id);
 create index if not exists lb_songs_user on public.lb_songs(user_id);
 create index if not exists lb_recordings_song on public.lb_recordings(song_id);
@@ -91,6 +99,12 @@ begin
   if uid is null then raise exception 'bad_token'; end if;
   return uid;
 end $$;
+
+-- 何か変わったら、その人の「変わった時刻」を進める（バックアップ係が見る）
+create or replace function public.lb_touch(uid uuid)
+returns void language sql security definer set search_path = public as $$
+  update lb_users set changed_at = now() where id = uid;
+$$;
 
 create or replace function public.lb_signup(p_username text, p_password text)
 returns json language plpgsql security definer set search_path = public, extensions as $$
@@ -143,6 +157,7 @@ begin
   return json_build_object(
     'username', (select username from lb_users where id = uid),
     'settings', (select settings from lb_users where id = uid),
+    'backup', (select json_build_object('enabled', backup_hash is not null, 'at', backup_at, 'info', backup_info, 'changed_at', changed_at) from lb_users where id = uid),
     'artists', coalesce((select json_agg(json_build_object('id', id, 'data', data, 'created_at', created_at, 'updated_at', updated_at)) from lb_artists where user_id = uid), '[]'::json),
     'songs', coalesce((select json_agg(json_build_object('id', id, 'data', data, 'created_at', created_at, 'updated_at', updated_at)) from lb_songs where user_id = uid), '[]'::json),
     'recordings', coalesce((select json_agg(json_build_object('id', id, 'song_id', song_id, 'name', name, 'mime', mime, 'duration', duration, 'size', octet_length(audio), 'created_at', created_at, 'updated_at', updated_at) order by created_at) from lb_recordings where user_id = uid), '[]'::json)
@@ -152,7 +167,7 @@ end $$;
 create or replace function public.lb_save_settings(p_token text, p_settings jsonb)
 returns void language plpgsql security definer set search_path = public as $$
 begin
-  update lb_users set settings = p_settings where id = lb_who(p_token);
+  update lb_users set settings = p_settings, changed_at = now() where id = lb_who(p_token);
 end $$;
 
 create or replace function public.lb_save_artist(p_token text, p_id uuid, p_data jsonb)
@@ -163,6 +178,7 @@ begin
   on conflict (id) do update set data = excluded.data, updated_at = now() where lb_artists.user_id = uid
   returning * into r;
   if r.id is null then raise exception 'not_found'; end if;
+  perform lb_touch(uid);
   return json_build_object('created_at', r.created_at, 'updated_at', r.updated_at);
 end $$;
 
@@ -173,16 +189,22 @@ declare uid uuid := lb_who(p_token);
 begin
   delete from lb_songs where user_id = uid and data->>'artist_id' = p_id::text;
   delete from lb_artists where user_id = uid and id = p_id;
+  perform lb_touch(uid);
 end $$;
 
-create or replace function public.lb_save_song(p_token text, p_id uuid, p_data jsonb)
+-- p_base：この端末が最後に見た「更新日時」。サーバーのほうが新しければ、別の端末で直されたので conflict を返す
+drop function if exists public.lb_save_song(text, uuid, jsonb);
+create or replace function public.lb_save_song(p_token text, p_id uuid, p_data jsonb, p_base timestamptz default null)
 returns json language plpgsql security definer set search_path = public as $$
-declare uid uuid := lb_who(p_token); r lb_songs;
+declare uid uuid := lb_who(p_token); r lb_songs; cur timestamptz;
 begin
+  select updated_at into cur from lb_songs where id = p_id and user_id = uid;
+  if cur is not null and p_base is not null and cur > p_base + interval '1 second' then raise exception 'conflict'; end if;
   insert into lb_songs (id, user_id, data) values (p_id, uid, p_data)
   on conflict (id) do update set data = excluded.data, updated_at = now() where lb_songs.user_id = uid
   returning * into r;
   if r.id is null then raise exception 'not_found'; end if;
+  perform lb_touch(uid);
   return json_build_object('created_at', r.created_at, 'updated_at', r.updated_at);
 end $$;
 
@@ -190,6 +212,7 @@ create or replace function public.lb_delete_song(p_token text, p_id uuid)
 returns void language plpgsql security definer set search_path = public as $$
 begin
   delete from lb_songs where user_id = lb_who(p_token) and id = p_id;
+  perform lb_touch(lb_who(p_token));
 end $$;
 
 create or replace function public.lb_add_recording(p_token text, p_song_id uuid, p_name text, p_mime text, p_duration real, p_audio text)
@@ -200,6 +223,7 @@ begin
   if octet_length(p_audio) > 8000000 then raise exception 'too_big'; end if;
   insert into lb_recordings (user_id, song_id, name, mime, duration, audio)
     values (uid, p_song_id, left(p_name, 40), p_mime, p_duration, p_audio) returning * into r;
+  perform lb_touch(uid);
   return json_build_object('id', r.id, 'song_id', r.song_id, 'name', r.name, 'mime', r.mime, 'duration', r.duration, 'size', octet_length(r.audio), 'created_at', r.created_at, 'updated_at', r.updated_at);
 end $$;
 
@@ -211,19 +235,22 @@ begin
   update lb_recordings set mime = p_mime, duration = p_duration, audio = p_audio, updated_at = now()
     where id = p_id and user_id = uid returning * into r;
   if r.id is null then raise exception 'not_found'; end if;
+  perform lb_touch(uid);
   return json_build_object('id', r.id, 'song_id', r.song_id, 'name', r.name, 'mime', r.mime, 'duration', r.duration, 'size', octet_length(r.audio), 'created_at', r.created_at, 'updated_at', r.updated_at);
 end $$;
 
 create or replace function public.lb_rename_recording(p_token text, p_id uuid, p_name text)
 returns void language plpgsql security definer set search_path = public as $$
 begin
-  update lb_recordings set name = left(p_name, 40) where id = p_id and user_id = lb_who(p_token);
+  update lb_recordings set name = left(p_name, 40), updated_at = now() where id = p_id and user_id = lb_who(p_token);
+  perform lb_touch(lb_who(p_token));
 end $$;
 
 create or replace function public.lb_delete_recording(p_token text, p_id uuid)
 returns void language plpgsql security definer set search_path = public as $$
 begin
   delete from lb_recordings where id = p_id and user_id = lb_who(p_token);
+  perform lb_touch(lb_who(p_token));
 end $$;
 
 create or replace function public.lb_get_recording(p_token text, p_id uuid)
@@ -235,13 +262,72 @@ begin
   return json_build_object('mime', r.mime, 'audio', r.audio);
 end $$;
 
+-- ===== グーグルドライブへの自動バックアップ =====
+-- アプリで「バックアップの鍵」を作る。鍵はバックアップ係（Google Apps Script）にだけ書く。
+-- 新しく作ると、前の鍵は使えなくなる。
+create or replace function public.lb_backup_new_key(p_token text)
+returns text language plpgsql security definer set search_path = public, extensions as $$
+declare uid uuid := lb_who(p_token); k text := encode(gen_random_bytes(24), 'hex');
+begin
+  update lb_users set backup_hash = encode(digest(k, 'sha256'), 'hex'), backup_at = null, backup_info = null where id = uid;
+  return k;
+end $$;
+
+create or replace function public.lb_backup_who(p_key text)
+returns uuid language plpgsql security definer set search_path = public, extensions as $$
+declare uid uuid;
+begin
+  select id into uid from lb_users where backup_hash = encode(digest(coalesce(p_key, ''), 'sha256'), 'hex');
+  if uid is null then raise exception 'bad_key'; end if;
+  return uid;
+end $$;
+
+create or replace function public.lb_backup_state(p_key text)
+returns json language plpgsql security definer set search_path = public as $$
+declare uid uuid := lb_backup_who(p_key);
+begin
+  return (select json_build_object('changed_at', changed_at, 'backup_at', backup_at) from lb_users where id = uid);
+end $$;
+
+create or replace function public.lb_backup_export(p_key text)
+returns json language plpgsql security definer set search_path = public as $$
+declare uid uuid := lb_backup_who(p_key);
+begin
+  return json_build_object(
+    'app', 'LYRIC BOOK', 'format', 1, 'exported_at', now(),
+    'username', (select username from lb_users where id = uid),
+    'changed_at', (select changed_at from lb_users where id = uid),
+    'settings', (select settings from lb_users where id = uid),
+    'artists', coalesce((select json_agg(json_build_object('id', id, 'data', data, 'created_at', created_at, 'updated_at', updated_at)) from lb_artists where user_id = uid), '[]'::json),
+    'songs', coalesce((select json_agg(json_build_object('id', id, 'data', data, 'created_at', created_at, 'updated_at', updated_at)) from lb_songs where user_id = uid), '[]'::json),
+    'recordings', coalesce((select json_agg(json_build_object('id', id, 'song_id', song_id, 'name', name, 'mime', mime, 'duration', duration, 'created_at', created_at, 'updated_at', updated_at) order by created_at) from lb_recordings where user_id = uid), '[]'::json)
+  );
+end $$;
+
+create or replace function public.lb_backup_recording(p_key text, p_id uuid)
+returns json language plpgsql security definer set search_path = public as $$
+declare r lb_recordings;
+begin
+  select * into r from lb_recordings where id = p_id and user_id = lb_backup_who(p_key);
+  if r.id is null then raise exception 'not_found'; end if;
+  return json_build_object('mime', r.mime, 'audio', r.audio);
+end $$;
+
+create or replace function public.lb_backup_done(p_key text, p_info jsonb)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  update lb_users set backup_at = now(), backup_info = p_info where id = lb_backup_who(p_key);
+end $$;
+
 -- 外から呼べるのは次の関数だけ
-revoke all on function public.lb_who(text), public.lb_new_session(uuid), public.lb_make_recovery() from public, anon, authenticated;
+revoke all on function public.lb_who(text), public.lb_new_session(uuid), public.lb_make_recovery(), public.lb_touch(uuid), public.lb_backup_who(text) from public, anon, authenticated;
 grant execute on function
   public.lb_signup(text, text), public.lb_login(text, text), public.lb_reset(text, text, text),
   public.lb_logout(text), public.lb_load(text), public.lb_save_settings(text, jsonb),
   public.lb_save_artist(text, uuid, jsonb), public.lb_delete_artist(text, uuid),
-  public.lb_save_song(text, uuid, jsonb), public.lb_delete_song(text, uuid),
+  public.lb_save_song(text, uuid, jsonb, timestamptz), public.lb_delete_song(text, uuid),
   public.lb_add_recording(text, uuid, text, text, real, text), public.lb_replace_recording(text, uuid, text, real, text),
-  public.lb_rename_recording(text, uuid, text), public.lb_delete_recording(text, uuid), public.lb_get_recording(text, uuid)
+  public.lb_rename_recording(text, uuid, text), public.lb_delete_recording(text, uuid), public.lb_get_recording(text, uuid),
+  public.lb_backup_new_key(text), public.lb_backup_state(text), public.lb_backup_export(text),
+  public.lb_backup_recording(text, uuid), public.lb_backup_done(text, jsonb)
 to anon;

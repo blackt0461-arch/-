@@ -12,6 +12,9 @@ const MESSAGES = {
   bad_token: 'ログインが切れました。もう一度ログインしてください',
   not_found: '見つかりませんでした',
   too_big: '録音が長すぎます（10分まで）',
+  conflict: '別の端末でも直されていました',
+  local_only: 'ためし中は、ドライブへのバックアップは使えません',
+  bad_key: 'バックアップの鍵がちがいます',
   missing: '保存先の準備がまだです（Supabase に setup.sql を登録すると使えます）',
   server: 'うまくいきませんでした。少ししてからもう一度ためしてください',
   offline: 'ネットにつながりませんでした。電波のよい所でもう一度ためしてください',
@@ -96,6 +99,7 @@ const local = {
   lb_delete_recording({ p_id }) { const db = ldb() || blank(); delete db.recordings[p_id]; lsave(db); return null; },
   lb_get_recording({ p_id }) { const r = (ldb() || blank()).recordings[p_id]; if (!r) throw new CloudError('not_found'); return { mime: r.mime, audio: r.audio }; },
   lb_logout() { return null; },
+  lb_backup_new_key() { throw new CloudError('local_only'); },
 };
 
 export const LOCAL_TOKEN = 'local';
