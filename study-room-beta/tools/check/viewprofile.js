@@ -30,7 +30,7 @@ const serve = () => new Promise(res => { const srv = http.createServer((req, rsp
   }
   console.log('1. friendA で問題を解く');
   await signup('friendA', 'study');
-  await page.evaluate(() => { const p = window.__app.S.profile(); p.avatar = 'fox'; p.avatarColor = 2; p.title = 'first'; p.solved = 12; p.correct = 9; const st = window.__app.S.subject('math'); st.units = { '二次関数': { solved: 12, correct: 9, perfect: 9 } }; window.__app.S.save(); });
+  await page.evaluate(() => { const p = window.__app.S.profile(); p.avatar = 'fox'; p.avatarColor = 2; p.title = 'first'; p.solved = 12; p.correct = 9; window.__app.S.addPoints(80); const st = window.__app.S.subject('math'); st.units = { '二次関数': { solved: 12, correct: 9, perfect: 9 } }; window.__app.S.save(); });
   await page.evaluate(async () => { const Sy = await import('/js/sync.js'); await Sy.push(); const A = await import('/js/auth.js'); A.logOut(); });
   await page.evaluate(() => localStorage.clear());
 
@@ -40,6 +40,7 @@ const serve = () => new Promise(res => { const srv = http.createServer((req, rsp
   await page.evaluate(() => [...document.querySelectorAll('.sheet button')].find(b => /ランキング/.test(b.textContent))?.click());
   await page.waitForSelector('.rk-row[data-u=friendA]', { timeout: 8000 }).catch(() => {});
   check(await page.locator('.rk-row[data-u=friendA] .avatar').count() === 1, 'ランキングにアイコンが出る');
+  check(/80\s*pt/.test(await page.locator('.rk-row[data-u=friendA]').textContent()), `ランキングはポイントで出る（${(await page.locator('.rk-row[data-u=friendA]').textContent()).trim().replace(/\s+/g, ' ')}）`);
   await page.screenshot({ path: path.join(OUT, 'view-ranking.png') });
   await page.click('.rk-row[data-u=friendA]'); await page.waitForSelector('.pf-head', { timeout: 8000 }).catch(() => {});
   const head = await page.locator('.pf-head').textContent().catch(() => '');

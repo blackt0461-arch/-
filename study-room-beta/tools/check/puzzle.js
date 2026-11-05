@@ -82,6 +82,7 @@ const serve = () => new Promise(res => { const srv = http.createServer((req, rsp
     }
   }
 
+  { const pts = await page.evaluate(() => window.__app.S.weekPoints()); check(pts > 0, `パズルをクリアすると、ランキングのポイントがたまる（${pts}pt）`); }
   console.log('3. ゲージのため置き・★5 のまちがい回数');
   {
     const r = await page.evaluate(() => { const hs = window.__app.HS(); hs.gauge = 500; return document.querySelector('.solve-ring') ? 1 : 0; });

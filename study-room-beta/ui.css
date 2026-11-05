@@ -935,3 +935,12 @@ h3.sec { font-size: 14px; color: var(--muted); margin: 18px 4px 8px; font-weight
 .rk-title { font-size: 10.5px; font-weight: 600; color: #f2c14e; }
 .pf-open { cursor: pointer; }
 button.pf-open { border: 0; background: none; padding: 0; display: inline-flex; flex: none; }
+
+/* ポイントのランキング（1.9.2） */
+.rk-term small { display: block; font-size: 11.5px; opacity: .8; margin-top: 2px; }
+.rk-pts { font-size: 17px; font-variant-numeric: tabular-nums; }
+.rk-pts small, .rk-pt small { font-size: 11px; margin-left: 2px; font-weight: 600; }
+.rk-row span:last-child > small { font-weight: 500; font-size: 11px; color: var(--sk-muted, var(--muted)); }
+.rk-mecard .rk-av { width: 40px; height: 40px; }
+.rk-mecard b { display: flex; align-items: baseline; gap: 10px; }
+.rk-pt { font-size: 18px; color: var(--sk-accent, #d8c3a0); font-variant-numeric: tabular-nums; }

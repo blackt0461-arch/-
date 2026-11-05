@@ -11,6 +11,7 @@ const serve = () => new Promise(res => { const srv = http.createServer((req, rsp
   const srv = await serve(), base = `http://localhost:${srv.address().port}/`;
   const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } }); await mock(ctx);
+  await ctx.route('**/rest/v1/rpc/sr_weekly_points', r => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ top: [], me: null, total: 0 }) }));
   await ctx.route('**/rest/v1/rpc/sr_weekly_puzzle', r => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ top: [], me: null, total: 0 }) }));
   await ctx.route('**/rest/v1/rpc/sr_weekly_ranking', r => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ top: [], me: null, total: 0 }) }));
   const page = await ctx.newPage();
