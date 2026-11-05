@@ -1,10 +1,10 @@
 // LYRIC BOOK 本体：画面の切りかえと操作
-import { rpc, LOCAL_TOKEN } from './cloud.js';
+import { rpc, LOCAL_TOKEN, SUPABASE_URL, SUPABASE_KEY } from './cloud.js';
 import * as N from './notes.js';
 import * as L from './lyrics.js';
 import * as R from './recorder.js';
 
-export const APP_VERSION = '1.0.0';
+export const APP_VERSION = '1.1.0';
 
 // ---------- 小さな道具 ----------
 const $ = (s, el = document) => el.querySelector(s);
@@ -75,6 +75,7 @@ const S = {
   artists: new Map(), songs: new Map(), recs: [],
   tab: lsGet('lb_tab') || 'real', themeFilter: 'all', query: '',
   sel: null, view: '', saveTimers: new Map(),
+  backup: null, offline: false, lastRefresh: 0,
 };
 const app = $('#app');
 
@@ -160,25 +161,131 @@ function setBarColor(c) { $('meta[name="theme-color"]')?.setAttribute('content',
 let settingsTimer;
 function saveSettings() {
   clearTimeout(settingsTimer);
-  settingsTimer = setTimeout(() => rpc('lb_save_settings', { p_token: S.token, p_settings: S.settings }).catch(fail), 400);
+  settingsTimer = setTimeout(() => send('lb_save_settings', { p_token: S.token, p_settings: S.settings }).catch(fail), 400);
 }
 const themeOf = id => S.settings.themes.find(t => t.id === id);
 function hashColor(s) { let h = 0; for (const c of s || '') h = (h * 31 + c.charCodeAt(0)) | 0; return ART_COLORS[Math.abs(h) % ART_COLORS.length]; }
+
+// ---------- 端末の中に前回のデータを残す ----------
+const CACHE_KEY = 'lb_cache', QUEUE_KEY = 'lb_queue';
+function cacheNow() {
+  if (!S.token) return;
+  lsSet(CACHE_KEY, JSON.stringify({
+    token: S.token, username: S.username, settings: S.settings, backup: S.backup,
+    artists: Array.from(S.artists.values()), songs: Array.from(S.songs.values()), recordings: S.recs,
+  }));
+}
+let cacheTimer;
+function cacheSoon() { clearTimeout(cacheTimer); cacheTimer = setTimeout(cacheNow, 400); }
+function loadCache() { try { return JSON.parse(lsGet(CACHE_KEY)); } catch (e) { return null; } }
+function applyLoad(d) {
+  S.username = d.username;
+  S.settings = mergeSettings(d.settings);
+  S.artists = new Map((d.artists || []).map(a => [a.id, a]));
+  S.songs = new Map((d.songs || []).map(s => [s.id, s]));
+  S.recs = d.recordings || [];
+  S.backup = d.backup || null;
+  S.lastRefresh = Date.now();
+}
+function setOffline(on) {
+  S.offline = on;
+  let el = $('#offline');
+  if (on && !el) {
+    el = document.createElement('div');
+    el.id = 'offline'; el.className = 'offline'; el.setAttribute('role', 'status');
+    el.textContent = '電波なし・つながったら送ります';
+    document.body.appendChild(el);
+  } else if (!on) el?.remove();
+}
+
+// 電波がなくて送れなかった変更は、ためておいて、つながったら送る
+function loadQueue() { try { return JSON.parse(lsGet(QUEUE_KEY)) || []; } catch (e) { return []; } }
+function saveQueue(q) { lsSet(QUEUE_KEY, q.length ? JSON.stringify(q) : null); }
+function enqueue(name, body) {
+  const q = loadQueue();
+  const same = (name === 'lb_save_song' || name === 'lb_save_artist') && q.find(x => x.name === name && x.body.p_id === body.p_id);
+  if (same) same.body.p_data = body.p_data; // 最初に見た更新日時（p_base）はそのまま
+  else q.push({ name, body });
+  saveQueue(q);
+}
+async function send(name, body) {
+  cacheSoon();
+  try { return await rpc(name, body); }
+  catch (e) {
+    if (e.code === 'offline' && S.token !== LOCAL_TOKEN) { enqueue(name, body); setOffline(true); return null; }
+    throw e;
+  }
+}
+let flushing = false;
+async function flush() {
+  if (flushing || !S.token || S.token === LOCAL_TOKEN) return;
+  const q = loadQueue();
+  if (!q.length) return;
+  flushing = true;
+  let both = false;
+  try {
+    while (q.length) {
+      const it = q[0];
+      it.body.p_token = S.token;
+      try {
+        const r = await rpc(it.name, it.body);
+        if (r && it.name === 'lb_save_song') { const s = S.songs.get(it.body.p_id); if (s) Object.assign(s, r); }
+        if (r && it.name === 'lb_save_artist') { const a = S.artists.get(it.body.p_id); if (a) Object.assign(a, r); }
+      } catch (e) {
+        if (e.code === 'offline') { setOffline(true); return; }
+        if (e.code === 'bad_token') return;
+        if (e.code === 'conflict' && it.name === 'lb_save_song') { await keepBoth(it.body.p_data); both = true; }
+        else console.error(e);
+      }
+      q.shift(); saveQueue(q);
+    }
+    setOffline(false);
+    cacheSoon();
+    if (both) await refresh(true);
+  } finally { flushing = false; }
+}
+// 同じ曲が別の端末でも直されていたら、この端末の版を別の曲として残す
+async function keepBoth(data) {
+  const copy = JSON.parse(JSON.stringify(data));
+  copy.title = (copy.title || '題名なし') + '（別の端末の版）';
+  const id = uuid();
+  const r = await rpc('lb_save_song', { p_token: S.token, p_id: id, p_data: copy });
+  S.songs.set(id, { id, data: copy, ...r });
+  toast('別の端末でも直されていたので、両方残しました（「別の端末の版」）');
+}
+// ほかの端末の変更を読みこみなおす
+async function refresh(force = false) {
+  if (!S.token || S.token === LOCAL_TOKEN) return;
+  if (!force && (S.saveTimers.size || loadQueue().length || S.view === 'edit' || sheetClose || S.sel)) return;
+  try {
+    const d = await rpc('lb_load', { p_token: S.token });
+    applyLoad(d); applyLook(); cacheNow(); setOffline(false);
+    const y = window.scrollY;
+    route(true);
+    window.scrollTo(0, y);
+  } catch (e) { if (e.code === 'offline') setOffline(true); }
+}
+window.addEventListener('online', () => flush().then(() => refresh()));
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && S.token && Date.now() - S.lastRefresh > 20000) flush().then(() => refresh());
+});
+setInterval(() => { if (loadQueue().length && navigator.onLine !== false) flush(); }, 30000);
 
 // ---------- 読みこみ ----------
 async function boot() {
   S.token = lsGet('lb_token');
   if (!S.token) { renderLogin(); return; }
   try {
+    await flush();
     const d = await rpc('lb_load', { p_token: S.token });
-    S.username = d.username;
-    S.settings = mergeSettings(d.settings);
-    S.artists = new Map((d.artists || []).map(a => [a.id, a]));
-    S.songs = new Map((d.songs || []).map(s => [s.id, s]));
-    S.recs = d.recordings || [];
+    applyLoad(d);
     applyLook();
+    cacheNow();
+    setOffline(false);
     route();
   } catch (e) {
+    const c = loadCache();
+    if (e.code === 'offline' && c && c.token === S.token) { applyLoad(c); applyLook(); setOffline(true); route(); return; }
     if (e.code === 'bad_token') { lsSet('lb_token', null); renderLogin(); toast(e.message); return; }
     app.innerHTML = `<div class="screen home"><div class="wrap content" style="padding-top:30vh;text-align:center">
       <p>${esc(e.message)}</p><p><button class="btn" id="retry">もう一度</button></p>
@@ -191,8 +298,8 @@ async function boot() {
 async function logout(silent) {
   if (!silent && !(await confirmAsk('ログアウトしますか？', S.token === LOCAL_TOKEN ? 'ためしに入れたデータはこの端末に残ります。' : '', 'ログアウト'))) return;
   if (S.token && S.token !== LOCAL_TOKEN) rpc('lb_logout', { p_token: S.token }).catch(() => {});
-  lsSet('lb_token', null);
-  S.token = null; S.artists = new Map(); S.songs = new Map(); S.recs = [];
+  lsSet('lb_token', null); lsSet(CACHE_KEY, null); saveQueue([]); setOffline(false);
+  S.token = null; S.artists = new Map(); S.songs = new Map(); S.recs = []; S.backup = null;
   S.settings = { ...DEFAULTS };
   applyLook();
   history.replaceState(null, '', location.pathname);
@@ -245,13 +352,13 @@ function showRecovery(code, then) {
 function go(hash) { if (location.hash === hash) route(); else location.hash = hash; }
 window.addEventListener('hashchange', () => { if (S.token) route(); });
 
-function route() {
-  closeSheet(); hideAnno(); stopPlayback();
+function route(keep = false) {
+  if (!keep) { closeSheet(); hideAnno(); stopPlayback(); }
   const h = location.hash.replace(/^#\/?/, '');
   const [path, qs] = h.split('?');
   const parts = path.split('/');
   const q = new URLSearchParams(qs || '');
-  window.scrollTo(0, 0);
+  if (!keep) window.scrollTo(0, 0);
   if (parts[0] === 'artist' && S.artists.has(parts[1])) return renderArtist(parts[1]);
   if (parts[0] === 'song' && S.songs.has(parts[1])) return renderSong(parts[1]);
   if (parts[0] === 'edit' && S.songs.has(parts[1])) return renderEdit(parts[1]);
@@ -387,15 +494,15 @@ async function newArtist() {
 async function createArtist(name, yomi = '') {
   const a = { id: uuid(), data: { name, yomi }, created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
   try {
-    const r = await rpc('lb_save_artist', { p_token: S.token, p_id: a.id, p_data: a.data });
-    Object.assign(a, r);
     S.artists.set(a.id, a);
+    const r = await send('lb_save_artist', { p_token: S.token, p_id: a.id, p_data: a.data });
+    if (r) Object.assign(a, r);
     fetchJacket(a);
     return a;
-  } catch (e) { fail(e); return null; }
+  } catch (e) { S.artists.delete(a.id); fail(e); return null; }
 }
 async function saveArtist(a) {
-  try { Object.assign(a, await rpc('lb_save_artist', { p_token: S.token, p_id: a.id, p_data: a.data })); }
+  try { const r = await send('lb_save_artist', { p_token: S.token, p_id: a.id, p_data: a.data }); if (r) Object.assign(a, r); }
   catch (e) { fail(e); }
 }
 
@@ -573,7 +680,7 @@ async function artistMenu(a) {
     const n = Array.from(S.songs.values()).filter(s => s.data.artist_id === a.id).length;
     if (!(await confirmAsk(`「${a.data.name}」を消しますか？`, n ? `この歌手の${n}曲と、その録音も消えます。元にはもどせません。` : '元にはもどせません。', '消す', true))) return;
     try {
-      await rpc('lb_delete_artist', { p_token: S.token, p_id: a.id });
+      await send('lb_delete_artist', { p_token: S.token, p_id: a.id });
       for (const s of Array.from(S.songs.values())) if (s.data.artist_id === a.id) { S.songs.delete(s.id); S.recs = S.recs.filter(r => r.song_id !== s.id); }
       S.artists.delete(a.id);
       go('#/');
@@ -678,7 +785,7 @@ async function deleteSong(s) {
   const n = S.recs.filter(r => r.song_id === s.id).length;
   if (!(await confirmAsk('この曲を消しますか？', (n ? `録音${n}個も消えます。` : '') + '元にはもどせません。', '消す', true))) return;
   try {
-    await rpc('lb_delete_song', { p_token: S.token, p_id: s.id });
+    await send('lb_delete_song', { p_token: S.token, p_id: s.id });
     S.songs.delete(s.id); S.recs = S.recs.filter(r => r.song_id !== s.id);
     const aid = s.data.artist_id;
     go(s.data.kind === 'real' && S.artists.has(aid) ? `#/artist/${aid}` : '#/');
@@ -690,8 +797,14 @@ function queueSave(s, now = false) {
   clearTimeout(S.saveTimers.get(s.id));
   const run = async () => {
     S.saveTimers.delete(s.id);
-    try { Object.assign(s, await rpc('lb_save_song', { p_token: S.token, p_id: s.id, p_data: s.data })); }
-    catch (e) { fail(e); }
+    try {
+      const r = await send('lb_save_song', { p_token: S.token, p_id: s.id, p_data: s.data, p_base: s.updated_at || null });
+      if (r) Object.assign(s, r);
+      cacheSoon();
+    } catch (e) {
+      if (e.code === 'conflict') { await keepBoth(s.data).catch(fail); await refresh(true); }
+      else fail(e);
+    }
   };
   if (now) return run();
   S.saveTimers.set(s.id, setTimeout(run, 700));
@@ -921,6 +1034,7 @@ function openRecorder(songId, replaceId = null) {
             r = await rpc('lb_add_recording', { p_token: S.token, p_song_id: songId, p_name: `録音 ${Math.max(0, ...nums) + 1}`, p_mime: mime, p_duration: duration, p_audio: audio });
             S.recs.push(r);
           }
+          cacheSoon();
           state = 'done';
           closeSheet();
           refreshRecs(songId);
@@ -1063,10 +1177,21 @@ function renderEdit(id, q = new URLSearchParams()) {
       } else { delete d.artist_id; delete d.yomi; }
       d.anno = L.realign(d.anno, d.text);
       const sid = s?.id || uuid();
-      const r = await rpc('lb_save_song', { p_token: S.token, p_id: sid, p_data: d });
-      const obj = s || { id: sid };
-      obj.data = d; Object.assign(obj, r);
+      const obj = s || { id: sid, created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+      const base = s?.updated_at || null;
+      obj.data = d;
       S.songs.set(sid, obj);
+      let r;
+      try { r = await send('lb_save_song', { p_token: S.token, p_id: sid, p_data: d, p_base: base }); }
+      catch (e) {
+        if (e.code !== 'conflict') throw e;
+        await keepBoth(d);
+        await refresh(true);
+        history.replaceState(null, '', '#/'); route();
+        return;
+      }
+      if (r) Object.assign(obj, r);
+      cacheSoon();
       if (s && navDepth > 0 && location.hash === `#/edit/${sid}`) { navDepth--; history.back(); }
       else { history.replaceState(null, '', `#/song/${sid}`); route(); }
       toast('保存しました');
@@ -1146,6 +1271,8 @@ function renderSettings() {
       <p class="sec-lbl">色</p>
       <div class="card">${st.colors.map((c, i) => `<div class="set-row"><span class="l"><i class="dot" style="--c:${esc(c.color)}"></i>${esc(c.name)}</span><button class="btn sub small" data-ed="colors" data-i="${i}">変える</button></div>`).join('')}
         <div class="set-row"><span class="muted">色を足す</span><button class="btn small" data-add="colors">＋ 追加</button></div></div>
+      <p class="sec-lbl">グーグルドライブへのバックアップ</p>
+      <div class="card">${backupRows()}</div>
       <p class="sec-lbl">アカウント</p>
       <div class="card">
         <div class="set-row"><span>${local ? 'ためし中（この端末だけに保存）' : `ユーザー名：${esc(S.username)}`}</span></div>
@@ -1160,6 +1287,102 @@ function renderSettings() {
   $$('[data-ed]', app).forEach(b => b.onclick = () => editListItem(b.dataset.ed, +b.dataset.i));
   $$('[data-add]', app).forEach(b => b.onclick = () => editListItem(b.dataset.add, -1));
   $('#logout').onclick = () => logout(false);
+  $('#bk-setup')?.addEventListener('click', openBackupSetup);
+  $('#bk-restore')?.addEventListener('click', restoreFromFile);
+}
+
+// ---------- グーグルドライブへのバックアップ ----------
+function backupRows() {
+  if (S.token === LOCAL_TOKEN) return `<div class="set-row"><span class="muted">ためし中は使えません。ログインすると使えます。</span></div>`;
+  const b = S.backup || {};
+  let state;
+  if (!b.enabled) state = '<span class="muted">まだ設定していません</span>';
+  else if (!b.at) state = '<span class="muted">準備中（Googleの画面で「setup」を実行すると始まります）</span>';
+  else state = `<span>最後のバックアップ：${fmtDate(b.at)}${b.info?.songs != null ? `<br><span class="muted" style="font-size:.8rem">曲 ${b.info.songs}・録音 ${b.info.recordings}　変えると5分以内に保存されます</span>` : ''}</span>`;
+  return `<div class="set-row">${state}</div>
+    ${b.info?.folder ? `<div class="set-row"><span>ドライブのフォルダ</span><a class="btn sub small" href="${esc(b.info.folder)}" target="_blank" rel="noopener">開く</a></div>` : ''}
+    <div class="set-row"><span class="muted" style="font-size:.85rem">${b.enabled ? '設定しなおす（新しいコードになります）' : '5分ごとに、変わった所を自動で保存します'}</span><button class="btn small" id="bk-setup">${b.enabled ? '設定しなおす' : '設定する'}</button></div>
+    <div class="set-row"><span class="muted" style="font-size:.85rem">ドライブの「LYRIC BOOK 最新.json」などから戻す</span><button class="btn sub small" id="bk-restore">戻す</button></div>`;
+}
+
+async function openBackupSetup() {
+  if (S.backup?.enabled && !(await confirmAsk('設定しなおしますか？', '前に貼ったコードは使えなくなります。新しいコードを、前と同じGoogleの画面に貼りなおしてください。', '設定しなおす'))) return;
+  let code;
+  try {
+    const key = await rpc('lb_backup_new_key', { p_token: S.token });
+    const tpl = await (await fetch('backup/Code.gs?v=' + APP_VERSION)).text();
+    code = tpl.replace('{{SUPABASE_URL}}', SUPABASE_URL).replace('{{SUPABASE_KEY}}', SUPABASE_KEY).replace('{{BACKUP_KEY}}', key);
+    S.backup = { enabled: true, at: null, info: null };
+    cacheSoon();
+  } catch (e) { fail(e); return; }
+  const sheet = openSheet(`<h3>グーグルドライブにバックアップ</h3>
+    <p>はじめに1回だけ、あなたのGoogleアカウントに「バックアップ係」を置きます。<b>パソコンかiPadでやるのがおすすめです。</b></p>
+    <ol class="steps">
+      <li>下の「コードをコピー」を押す</li>
+      <li><b>script.google.com</b> を開いて、バックアップしたいGoogleアカウントでログイン →「新しいプロジェクト」</li>
+      <li>最初から書いてある文字を全部消して、コピーしたコードを貼りつける → 保存のマーク（フロッピー）を押す</li>
+      <li>上の「実行する関数」で <b>setup</b> を選んで「実行」を押す</li>
+      <li>「承認が必要です」と出たら：権限を確認 → 自分のアカウント →「詳細」→「（安全ではないページ）に移動」→「許可」<br><span class="muted">自分で作ったものなので大丈夫です</span></li>
+      <li>下に「準備ができました」と出たら終わり。ドライブに「LYRIC BOOK バックアップ」フォルダができます</li>
+    </ol>
+    <textarea class="textarea code" id="bk-code" readonly>${esc(code)}</textarea>
+    <div class="acts"><a class="btn sub" href="https://script.google.com/home/projects/create" target="_blank" rel="noopener">Googleの画面を開く</a><button class="btn" data-s="copy">コードをコピー</button></div>
+    <p class="muted" style="font-size:.8rem">このコードには、あなた専用の鍵が入っています。ほかの人には見せないでください。</p>
+    <button class="btn sub" data-s="no">とじる</button>`, {
+    copy: (_, sh) => {
+      const ta = $('#bk-code', sh);
+      const done = () => toast('コピーしました。Googleの画面に貼りつけてください');
+      navigator.clipboard?.writeText(code).then(done, () => { ta.focus(); ta.select(); document.execCommand('copy') ? done() : toast('コードを長押しして「すべてを選択」→「コピー」してください'); });
+    },
+    no: () => closeSheet(),
+  }, () => { if (S.view === 'settings') renderSettings(); });
+  void sheet;
+}
+
+// バックアップのファイルから戻す。今のデータは消さない。
+function restoreFromFile() {
+  const inp = document.createElement('input');
+  inp.type = 'file'; inp.accept = '.json,application/json,text/plain';
+  inp.onchange = async () => {
+    const f = inp.files?.[0]; if (!f) return;
+    let d;
+    try { d = JSON.parse(await f.text()); } catch (e) { toast('そのファイルは読めませんでした'); return; }
+    if (d?.app !== 'LYRIC BOOK' || !Array.isArray(d.songs)) { toast('LYRIC BOOK のバックアップではないようです'); return; }
+    const when = d.exported_at ? fmtDate(d.exported_at) : '';
+    if (!(await confirmAsk(`${when} のバックアップから戻しますか？`,
+      `曲 ${d.songs.length}・歌手 ${(d.artists || []).length}。今のデータは消えません。ここにない曲は足して、中身がちがう曲は「（バックアップの版）」として残します。録音はドライブの「録音」フォルダにあります。`, '戻す'))) return;
+    let added = 0, copies = 0;
+    try {
+      for (const a of d.artists || []) {
+        if (S.artists.has(a.id)) continue;
+        const obj = { id: a.id, data: a.data, created_at: a.created_at, updated_at: a.updated_at };
+        S.artists.set(a.id, obj);
+        const r = await send('lb_save_artist', { p_token: S.token, p_id: a.id, p_data: a.data });
+        if (r) Object.assign(obj, r);
+      }
+      for (const b of d.songs) {
+        const cur = S.songs.get(b.id);
+        if (cur && JSON.stringify(cur.data) === JSON.stringify(b.data)) continue;
+        const id = cur ? uuid() : b.id;
+        const data = JSON.parse(JSON.stringify(b.data));
+        if (cur) { data.title = (data.title || '題名なし') + '（バックアップの版）'; copies++; } else added++;
+        const obj = { id, data, created_at: b.created_at, updated_at: b.updated_at };
+        S.songs.set(id, obj);
+        const r = await send('lb_save_song', { p_token: S.token, p_id: id, p_data: data });
+        if (r) Object.assign(obj, r);
+      }
+      // テーマ・記号・色は、ないものだけ足す
+      let st = false;
+      for (const k of ['themes', 'marks', 'colors']) for (const it of d.settings?.[k] || []) {
+        if (!S.settings[k].some(x => x.id === it.id)) { S.settings[k].push(it); st = true; }
+      }
+      if (st) saveSettings();
+      cacheSoon();
+      toast(added || copies ? `戻しました（足した曲 ${added}・バックアップの版 ${copies}）` : '今のデータと同じでした');
+      go('#/');
+    } catch (e) { fail(e); }
+  };
+  inp.click();
 }
 
 function editListItem(kind, i) {
