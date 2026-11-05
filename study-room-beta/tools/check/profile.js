@@ -53,12 +53,49 @@ const serve = () => new Promise(res => { const srv = http.createServer((req, rsp
 
   console.log('3. アイコン');
   await page.click('.pf-avbtn'); await page.waitForSelector('.av-grid');
-  check(await page.locator('.av-pick:disabled').count() === 4, 'Lv が足りないアイコンは選べない（4つ）');
+  check(await page.locator('.av-pick:not(.g):disabled').count() === 4, 'Lv が足りないアイコンは選べない（4つ）');
+  check(await page.locator('.av-pick.g:disabled').count() === 12, 'ガチャのアイコンは、持っていないと選べない（12こ）');
   await page.click('.av-pick[data-a=bear]'); await page.click('.av-col[data-c="3"]');
   await page.screenshot({ path: path.join(OUT, 'profile-2-avatar.png') });
   await page.click('.av-sheet .ok'); await page.waitForTimeout(400);
   const pf = await page.evaluate(() => window.__app.S.profile());
   check(pf.avatar === 'bear' && pf.avatarColor === 3, `アイコンを覚えている（${pf.avatar}・色${pf.avatarColor}）`);
+
+  console.log('3b. ガチャのアイコン');
+  const pool = await page.evaluate(async () => { const G = await import('/js/gacha.js'); const av = G.GACHA_ITEMS.filter(i => i.place === 'avatar'); return { n: av.length, band: av.filter(i => i.series === 'band').length, always5: av.filter(i => !i.limited && i.rarity === 5).map(i => i.id) }; });
+  check(pool.n === 12 && pool.band === 6 && pool.always5.length === 3, `ガチャの景品に入っている（全${pool.n}・OVERDRIVE限定${pool.band}・いつでも★5 ${pool.always5.join(',')}）`);
+  await page.evaluate(() => { window.__app.S.own('av-crown'); window.__app.S.save(); });
+  await page.click('.pf-avbtn'); await page.waitForSelector('.av-grid');
+  check(await page.locator('.av-pick.g[data-a=crown]:not(:disabled)').count() === 1, 'ガチャで手に入れた「王冠」は選べる');
+  await page.click('.av-pick.g[data-a=crown]'); await page.waitForTimeout(200);
+  check(await page.locator('.av-colors .av-col').count() === 4, '夜の切り絵は、夜の色4つから選べる');
+  await page.click('.av-col[data-c="1"]');
+  await page.screenshot({ path: path.join(OUT, 'profile-3-gacha-avatar.png') });
+  await page.click('.av-sheet .ok'); await page.waitForTimeout(400);
+  const pf2 = await page.evaluate(() => window.__app.S.profile());
+  check(pf2.avatar === 'crown' && pf2.avatarColor === 1, `王冠のアイコンになる（${pf2.avatar}・色${pf2.avatarColor}）`);
+
+  console.log('3c. ガチャの演出で、アイコンが出た時');
+  await page.evaluate(() => window.__app.showHome()); await page.waitForTimeout(400);
+  await page.evaluate(async () => {
+    const [{ playPullFX }, G, T, I] = await Promise.all([import('/js/pullfx.js'), import('/js/gacha.js'), import('/js/thumbs.js'), import('/js/icons.js')]);
+    window.__pfxDone = false;
+    playPullFX([{ item: G.gachaById('av-record'), rarity: 5 }], { thumbHTML: T.thumbHTML, hydrateThumbs: T.hydrateThumbs, esc: s => String(s), vibrate: () => {}, icon: I.icon, kind: 'ticket', onDone: () => { window.__pfxDone = true; } });
+  });
+  await page.waitForSelector('.od-sign canvas'); await page.waitForTimeout(500);
+  const b = await page.locator('.od-sign canvas').boundingBox();
+  await page.mouse.move(b.x + 20, b.y + 60); await page.mouse.down();
+  for (let k = 0; k < 8; k++) await page.mouse.move(b.x + 30 + k * 25, b.y + 40 + (k % 2) * 40, { steps: 3 });
+  await page.mouse.up();
+  let real = '';
+  for (let q = 0; q < 20 && !real; q++) { await page.waitForTimeout(500); real = await page.evaluate(() => document.querySelector('.bp-real')?.getAttribute('src') || ''); }
+  await page.waitForTimeout(1500);
+  await page.screenshot({ path: path.join(OUT, 'profile-4-pull.png') });
+  check(real.startsWith('data:image/svg+xml'), '設計図の枠に、アイコンの絵が出る');
+  let card = false;
+  for (let q = 0; q < 30 && !card; q++) { await page.evaluate(() => (document.querySelector('.bp') || document.querySelector('.pfx'))?.click()); await page.waitForTimeout(600); card = await page.evaluate(() => !!document.querySelector('.avatar-thumb') || !!window.__pfxDone); }
+  await page.screenshot({ path: path.join(OUT, 'profile-5-cards.png') });
+  check(card, '最後の結果まで進める');
 
   console.log('4. 画面のエラー');
   check(!errors.length, errors.length ? `エラー：${errors.slice(0, 3).join(' / ')}` : 'エラーなし');

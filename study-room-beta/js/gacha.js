@@ -1,6 +1,7 @@
 // レアガチャ：勉強でもらえる「レアチケット」で引く、ガチャ限定の家具。
 // 見た目は js/gachafurn.js の buildGacha({ type: src.gacha, ...そのほかの src }) で作る。
 // このファイルは画面や保存にさわらない（純粋な関数だけ）。three.js も読みこまない。
+import { GACHA_AVATARS } from './avatars.js';
 //
 // レア度：★3（70%）・★4（25%）・★5（5%）。10連は★4以上が1つ以上かならず出る。
 // ★4・★5 がかぶったら「かけら」（★4のかけら・★5のかけら）になる。SHARD_COST 個で、同じレア度の好きな家具と交換できる。
@@ -181,6 +182,14 @@ add(4, [
 add(5, [
   ['skin-e5', '着せ替え：バンドルーム', 'skin', 'i', { skin: 'e5' }, 1, SK],
 ], { series: 'band' });
+
+// ───────── プロフィールのアイコン（夜の切り絵）：バンドの6つは OVERDRIVE 限定、ほかはいつでも ─────────
+const AV = { place: 'avatar' };
+const avRow = (a) => ['av-' + a.id, 'アイコン：' + a.name, 'avatar', 'i', { avatar: a.id }, 1, AV];
+add(4, GACHA_AVATARS.filter(a => a.r === 4 && a.series === 'band').map(avRow), { series: 'band' });
+add(5, GACHA_AVATARS.filter(a => a.r === 5 && a.series === 'band').map(avRow), { series: 'band' });
+add(4, GACHA_AVATARS.filter(a => a.r === 4 && !a.series).map(avRow));
+add(5, GACHA_AVATARS.filter(a => a.r === 5 && !a.series).map(avRow));
 
 export const GACHA_BY_ID = Object.fromEntries(GACHA_ITEMS.map((it) => [it.id, it]));
 export const gachaById = (id) => GACHA_BY_ID[id] || null;
