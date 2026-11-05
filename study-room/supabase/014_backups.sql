@@ -25,6 +25,5 @@ begin
   delete from sr_user_backups where user_id = old.id and created_at < now() - interval '14 days';
   return new;
 end $$;
-drop trigger if exists sr_backup_before_save on public.sr_users;
-create trigger sr_backup_before_save before update of data on public.sr_users
+create or replace trigger sr_backup_before_save before update of data on public.sr_users
   for each row execute function public.sr_backup_before_save();
