@@ -4,7 +4,7 @@ import * as N from './notes.js';
 import * as L from './lyrics.js';
 import * as R from './recorder.js';
 
-export const APP_VERSION = '1.3.0';
+export const APP_VERSION = '1.3.1';
 
 // ---------- 小さな道具 ----------
 const $ = (s, el = document) => el.querySelector(s);
@@ -323,12 +323,8 @@ function renderLogin(mode = 'login', err = '') {
     <label class="field"><span>${mode === 'reset' ? '新しいパスワード' : 'パスワード'}</span><input class="input" id="lf-pass" type="password" autocomplete="${mode === 'login' ? 'current-password' : 'new-password'}" required></label>
     <div class="err" role="alert">${esc(err)}</div>
     <button class="btn" type="submit">${{ login: 'ログイン', signup: '登録してはじめる', reset: 'パスワードを作り直す' }[mode]}</button>
-    <button class="link" type="button" id="trial">ログインせずにためす（この端末だけに保存）</button>
-    <button class="link" type="button" id="first">はじめての準備（1回だけ・グーグルドライブ）</button>
   </form></div>`;
   $$('.tabs button', app).forEach(b => b.onclick = e => { e.preventDefault(); renderLogin(b.dataset.m); });
-  $('#trial').onclick = () => { lsSet('lb_token', LOCAL_TOKEN); boot(); };
-  $('#first').onclick = openFirstSetup;
   $('#lf').onsubmit = async e => {
     e.preventDefault();
     const btn = $('#lf button[type="submit"]'); btn.disabled = true;
@@ -1276,7 +1272,7 @@ function renderSettings() {
       <p class="sec-lbl">色</p>
       <div class="card">${st.colors.map((c, i) => `<div class="set-row"><span class="l"><i class="dot" style="--c:${esc(c.color)}"></i>${esc(c.name)}</span><button class="btn sub small" data-ed="colors" data-i="${i}">変える</button></div>`).join('')}
         <div class="set-row"><span class="muted">色を足す</span><button class="btn small" data-add="colors">＋ 追加</button></div></div>
-      ${S.token !== LOCAL_TOKEN && S.serverVersion < 2 ? `<div class="hint">Googleの画面に貼ったコードが古い版です。ログイン画面の「はじめての準備」でコードをコピーして貼りかえ、「デプロイ」→「デプロイを管理」→ えんぴつ →「新バージョン」→「デプロイ」をしてください。</div>` : ''}
+      ${S.token !== LOCAL_TOKEN && S.serverVersion < 2 ? `<div class="hint">Googleの画面に貼ったコードが古い版です。下のボタンでコードをコピーして貼りかえ、「デプロイ」→「デプロイを管理」→ えんぴつ →「新バージョン」→「デプロイ」をしてください。<br><button class="btn small" id="code-copy" style="margin-top:8px">コードをコピー</button></div>` : ''}
       ${S.isOwner ? `<p class="sec-lbl">メンバー（管理している人だけに見えます）</p><div class="card" id="members"><div class="set-row"><span class="muted">読みこんでいます…</span></div></div>` : ''}
       <p class="sec-lbl">グーグルドライブへのバックアップ</p>
       <div class="card">${backupRows()}</div>
@@ -1295,6 +1291,7 @@ function renderSettings() {
   $$('[data-add]', app).forEach(b => b.onclick = () => editListItem(b.dataset.add, -1));
   $('#logout').onclick = () => logout(false);
   $('#bk-restore')?.addEventListener('click', restoreFromFile);
+  $('#code-copy')?.addEventListener('click', openFirstSetup);
   if (S.isOwner) loadMembers();
 }
 
