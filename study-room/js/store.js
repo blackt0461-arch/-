@@ -251,8 +251,14 @@ export function claimGift(id) {
   if (i < 0) return null;
   const g = list[i];
   const h = house();
-  // レベルの補填（管理者から。itemId = 'lv:16'）：そのLvのはじめまで経験値を上げる（下がることはない）
-  if (g.kind === 'item' && /^lv:\d+$/.test(g.itemId || '')) { const L = Math.min(MAX_RANK, +g.itemId.slice(3)), p = profile(); p.xp = Math.max(p.xp || 0, xpAtRank(L)); }
+  // レベルの補填（管理者から。itemId = 'lv:16'）：そのLvのはじめまで経験値を上げる（下がることはない）。
+  // Lvが上がった分の「Lvアップのごほうび」（レアチケット・5ごとの★4以上確定・Lv50/100の★5限定）もプレゼントBOXに届く
+  if (g.kind === 'item' && /^lv:\d+$/.test(g.itemId || '')) {
+    const L = Math.min(MAX_RANK, +g.itemId.slice(3)), p = profile(), before = rankInfo(p.xp || 0).rank;
+    p.xp = Math.max(p.xp || 0, xpAtRank(L));
+    const after = rankInfo(p.xp).rank;
+    if (after > before) giveRankRewards(before, after);
+  }
   else if (g.kind === 'item') { if (g.itemId) own(g.itemId, g.amount || 1); }
   else if (GIFT_KEY[g.kind]) h[GIFT_KEY[g.kind]] = (h[GIFT_KEY[g.kind]] || 0) + (g.amount || 1);
   list.splice(i, 1);

@@ -76,8 +76,9 @@ const serve = () => new Promise(res => { const srv = http.createServer((req, rsp
   const other = await page.evaluate(async () => { const { rpc } = await import('/js/cloud.js'); return rpc('sr_gift_list', { p_token: 't-admin' }); });
   check(!other.some(g => g.title === 'データが消えてしまったおわび'), 'ほかの人には届かない');
   // 受け取ると Lv5 になる（受け取る側のしくみ）
-  const lv = await page.evaluate(() => { const S = window.__app.S; const before = S.profile().xp; S.addGift({ id: 'test-lv', kind: 'item', itemId: 'lv:5', amount: 1, title: 't' }); S.claimGift('test-lv'); const r = S.rankInfo().rank; S.profile().xp = before; return r; });
-  check(lv === 5, `Lvの補填を受け取ると Lv${lv} になる`);
+  const lv = await page.evaluate(() => { const S = window.__app.S; const before = S.profile().xp, n0 = S.gifts().length; S.addGift({ id: 'test-lv', kind: 'item', itemId: 'lv:10', amount: 1, title: 't' }); S.claimGift('test-lv'); const rw = S.gifts().slice(n0).filter(g => g.from === 'rank'); const r = S.rankInfo().rank; S.profile().xp = before; return { r, tickets: rw.filter(g => g.kind === 'ticket').length, t4: rw.filter(g => g.kind === 'ticket4').length }; });
+  check(lv.r === 10, `Lvの補填を受け取ると Lv${lv.r} になる`);
+  check(lv.tickets === 9 && lv.t4 === 2, `Lvアップのごほうびも届く（Lv1→10：レアチケット ${lv.tickets}つ・★4以上確定 ${lv.t4}つ）`);
 
   console.log('4. 画面のエラー');
   check(!errors.length, errors.length ? `エラー：${errors.slice(0, 3).join(' / ')}` : 'エラーなし');
