@@ -279,3 +279,7 @@ h1.big, h2.big { font-weight: 600; font-size: 1.8rem; line-height: 1.25; margin:
 .steps { margin: 0; padding-left: 1.4em; font-size: .88rem; line-height: 1.8; display: flex; flex-direction: column; gap: 6px; }
 .textarea.code { min-height: 110px; font-family: ui-monospace, Menlo, monospace; font-size: 11px; line-height: 1.4; -webkit-text-stroke: 0; white-space: pre; }
 a.btn { text-decoration: none; display: inline-flex; align-items: center; justify-content: center; }
+
+.invite { font-family: var(--gothic); font-size: 1.15rem; letter-spacing: .1em; color: var(--title); -webkit-text-stroke: 0; -webkit-user-select: all; user-select: all; }
+
+.btn.small { white-space: nowrap; flex: none; }
