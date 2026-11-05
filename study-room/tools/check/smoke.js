@@ -123,6 +123,39 @@ function serve() {
   check(/枕草子/.test(rs) || rs === '', `続きからのボタンに、えらんだ範囲が出る（${rs.trim() || 'セットが終わっていて続きなし'}）`);
   await page.evaluate(() => window.__app.showHome()); await page.waitForTimeout(400);
 
+  // ---- 2c. スタディサイド：勉強をするとパズルが遊べる ----
+  console.log('2c. スタディサイドのパズル');
+  await page.evaluate(() => window.__app.showHome()); await page.waitForTimeout(400);
+  const tix = await page.evaluate(() => ({ t: window.__app.S.puzzleTickets(), side: window.__app.S.sideOf(), solved: window.__app.S.profile().solved }));
+  check(tix.side === 'study' && tix.t === Math.floor(tix.solved / 5), `5問ごとにパズルが1回ふえる（${tix.solved}問 → ${tix.t}回）`);
+  await page.click('.mode-toggle [data-mode=puzzle]'); await page.waitForTimeout(300);
+  await page.evaluate(() => document.querySelector('.solve-ring')?.click()); await page.waitForSelector('.pz-hub');
+  check(await page.locator('.pz-tix').count() === 1, `パズルえらびに「あと${tix.t}回できます」が出る`);
+  await page.evaluate(() => document.querySelector('.pz-star[data-p=akari][data-s="1"]')?.click()); await page.waitForTimeout(800);
+  check(await page.locator('.puzzle-screen').count() === 1 && await page.evaluate(() => window.__app.S.puzzleTickets()) === tix.t - 1, 'パズルを始めると、回数が1つへる');
+  await page.evaluate(() => { document.querySelector('.ph-close')?.click(); document.querySelector('.puzzle-screen .back')?.click(); }); await page.waitForTimeout(400);
+  await page.evaluate(() => { window.__app.S.profile().puzzleTickets = 0; });
+  await page.evaluate(() => document.querySelector('.solve-ring')?.click()); await page.waitForSelector('.pz-hub');
+  await page.evaluate(() => document.querySelector('.pz-star[data-p=akari][data-s="1"]')?.click()); await page.waitForTimeout(600);
+  check(await page.locator('.puzzle-screen').count() === 0, '回数が0のときは、パズルを始められない');
+  await page.evaluate(() => window.__app.showHome()); await page.waitForTimeout(300);
+  await page.click('.mode-toggle [data-mode=study]'); await page.waitForTimeout(300);
+
+  // ---- 2d. 家具を買う画面をたたんで、部屋を見る ----
+  console.log('2d. 家具を買う画面をたたむ');
+  await page.evaluate(() => { const hs = window.__app.HS(); hs.gauge = 999; window.__app.showHome(); }); await page.waitForTimeout(400);
+  await page.evaluate(() => document.querySelector('[data-t=buy]')?.click()); await page.waitForSelector('.genre-row', { timeout: 8000 }).catch(() => {});
+  await page.evaluate(() => document.querySelector('.genre-row')?.click()); await page.waitForSelector('.cand-sheet .cand', { timeout: 8000 }).catch(() => {});
+  await page.evaluate(() => document.querySelector('.cand-sheet .cand')?.click()); await page.waitForTimeout(800);
+  const h0 = await page.evaluate(() => document.querySelector('.cand-sheet')?.getBoundingClientRect().height || 0);
+  await page.click('.cand-sheet .sh-fold'); await page.waitForTimeout(400);
+  const h1 = await page.evaluate(() => document.querySelector('.cand-sheet')?.getBoundingClientRect().height || 0);
+  check(h1 > 0 && h1 < h0 * 0.5 && await page.locator('.cand-sheet .ok').isVisible(), `「部屋を見る」で画面が小さくなり、買うボタンは残る（高さ ${Math.round(h0)} → ${Math.round(h1)}）`);
+  await page.screenshot({ path: path.join(OUT, 'smoke-2d-fold.png') });
+  await page.click('.cand-sheet .sh-fold'); await page.waitForTimeout(300);
+  check(await page.locator('.cand-sheet .candgrid').isVisible(), '「もどす」で元にもどる');
+  await page.evaluate(() => { window.__app.room3d?.clearPreview(); window.__app.showHome(); }); await page.waitForTimeout(400);
+
   // ---- 3. ガチャの演出（★5・昇格） ----
   console.log('3. ガチャの演出');
   await page.evaluate(() => window.__app.showHome()); await page.waitForTimeout(500);

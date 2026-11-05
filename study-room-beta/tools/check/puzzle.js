@@ -113,14 +113,18 @@ const serve = () => new Promise(res => { const srv = http.createServer((req, rsp
   check(/手数の上限/.test(await page.locator('.pz-res-sheet').textContent().catch(() => '')), `上限（${limit}手）をこえると失敗になる`);
   await page.screenshot({ path: path.join(OUT, 'puzzle-4-lose.png') });
 
-  console.log('4b. 管理者でない人は切りかえられない');
-  await page.evaluate(() => window.__app.showHome()); await page.waitForTimeout(300);
+  console.log('4b. パズルサイドは、勉強とパズルを自由に行き来できる');
+  await page.evaluate(() => window.__app.showHome()); await page.waitForTimeout(400);
+  check(await page.locator('.mode-toggle').count() === 1, '部屋の右下に「勉強｜パズル」の切りかえがある');
+  await page.click('.mode-toggle [data-mode=study]'); await page.waitForTimeout(300);
+  check(/解く|続きから/.test(await page.locator('.solve-ring').textContent()), '「勉強」を押すと、右下が「解く」になる');
+  await page.click('.mode-toggle [data-mode=puzzle]'); await page.waitForTimeout(300);
+  check(/パズル/.test(await page.locator('.solve-ring').textContent()), '「パズル」を押すと、右下が「パズル」にもどる');
   await page.evaluate(() => document.querySelector('.solve-ring').click()); await page.waitForSelector('.pz-hub');
-  check(await page.locator('.mode-switch').count() === 0, 'パズルえらびに切りかえのボタンが出ない');
-  await page.evaluate(() => window.__app.showHome()); await page.waitForTimeout(300);
-  await page.evaluate(() => document.querySelector('[data-t=menu]')?.click()); await page.waitForTimeout(400);
-  await page.click('.menu-list [data-m=settings]'); await page.waitForSelector('.bgm-set');
-  check(await page.locator('.mode-seg').count() === 0, '設定に切りかえの欄が出ない');
+  check(await page.locator('.pz-tix').count() === 0, 'パズルサイドには、パズルの回数の制限が出ない');
+  check(await page.locator('.puzzle-sheet .sh-x').count() === 1, 'パズルえらびの右上に × がある');
+  await page.click('.puzzle-sheet .sh-x'); await page.waitForTimeout(300);
+  check(await page.locator('.pz-hub').count() === 0, '× でとじる');
 
   console.log('5. 管理者がモードを変える');
   await page.evaluate(async () => { const { rpc } = await import('/js/cloud.js'); await rpc('sr_signup', { p_username: 'admin', p_password: 'x' }); });

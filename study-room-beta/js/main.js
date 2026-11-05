@@ -126,9 +126,9 @@ async function loadSavedPacks() {
   const last = modes[modes.length - 1];
   if (last && last.t > (pr.modeAt || 0)) {
     const changed = pr.mode !== last.m;
-    pr.mode = last.m; pr.modeAt = last.t; S.save(); Sync.push?.();
+    pr.side = last.m; pr.mode = last.m; pr.modeAt = last.t; S.save(); Sync.push?.();
     app.querySelector('.mode-sheet')?.remove();
-    if (changed && app.querySelector('.home')) { showHome(); toast(`管理者が「${last.m === 'puzzle' ? 'パズル' : '勉強'}」に変えました`, 3200); }
+    if (changed && app.querySelector('.home')) { showHome(); toast(`管理者が「${last.m === 'puzzle' ? 'パズルサイド' : 'スタディサイド'}」に変えました`, 3200); }
   }
   const fresh = granted.map(normCode).filter(c => !(pr.codes || []).includes(c));
   const got = [];
@@ -182,6 +182,7 @@ function showBetaOnly() {
   el.querySelector('.logout').onclick = () => { Auth.logOut(); showLogin('login'); };
 }
 const isPuzzle = () => S.profile().mode === 'puzzle';
+const freePuzzle = () => isAdmin() || S.sideOf() === 'puzzle'; // スタディサイドの人は、勉強した回数ぶんだけパズル
 // 家具が買えるまで、あと何回（勉強なら問題の数、パズルならクリアの数）
 const needText = (gap) => isPuzzle() ? `あと${Math.max(1, Math.ceil(gap / 36))}回` : `あと${Math.max(1, Math.ceil(gap / 24))}問`;
 const rankNow = () => S.rankInfo();
@@ -231,6 +232,7 @@ function showLogin(mode = usedHereBefore() ? 'login' : 'signup') {
     try {
       const r = mode === 'login' ? await Auth.logIn(f.name.value, f.pw.value) : await Auth.signUp(f.name.value, f.pw.value);
       S.useUser(r.id);
+      Sync.reset();
       await Sync.adopt(r.data);
       if (r.moved) toast('この端末の記録を、ネットに引っ越しました', 3000);
       // 新しく始めた人へ：新規登録記念のレアチケット10枚をプレゼントBOXに
@@ -271,6 +273,7 @@ function tabbar(active) {
     <div class="slots">${slots.map(([k, ic, n]) => `
       <button data-t="${k}" class="sl ${k === active ? 'on' : ''} ${k === 'buy' && buy ? 'hot' : ''}" aria-label="${n}">${icon(ic)}<span class="sl-t">${n}</span>${dot(k) ? '<i class="dot"></i>' : ''}${k === 'buy' && buy ? `<span class="buy-tip">${buyCount() > 1 ? `${buyCount()}つ買える！` : '買える！'}</span>` : ''}</button>`).join('')}</div>
     <div class="solve-wrap">
+      ${active === 'room' ? `<div class="mode-toggle" role="group" aria-label="勉強とパズルの切りかえ"><button data-mode="study" class="${isPuzzle() ? '' : 'on'}">${icon('pencil')}勉強</button><button data-mode="puzzle" class="${isPuzzle() ? 'on' : ''}">${icon('grid')}パズル${!freePuzzle() ? `<i class="mt-n">${S.puzzleTickets()}</i>` : ''}</button></div>` : ''}
       ${!buy && active === 'room' ? `<span class="solve-need">${needText(max - hs.gauge)}</span>` : ''}
       ${buy && active === 'room' ? `<span class="solve-need full">${icon('sparkle')}満タン${buyCount() > 1 ? ` ×${buyCount()}` : ''}</span>` : ''}
       ${isPuzzle() ? `<button data-t="play" class="solve-ring ${buy ? 'full' : ''}" style="--p:${pct}" aria-label="パズル">
@@ -280,6 +283,7 @@ function tabbar(active) {
     </div>
   </nav>`);
   el.querySelectorAll('[data-t]').forEach(b => b.onclick = () => goTab(b.dataset.t));
+  el.querySelectorAll('.mode-toggle [data-mode]').forEach(b => b.onclick = () => { if (b.classList.contains('on')) return; setMode(b.dataset.mode); vibrate(12); });
   // ゲージが満タンになった時に1回だけ知らせる
   if (active === 'room') {
     if (buy && !hs.fullNotified) {
@@ -739,8 +743,10 @@ function ensureRooms() {
 function curRoom() { return HS().rooms[HS().current]; }
 function curDef() { return roomDef(curRoom().id); }
 
+let houseEntered = false; // 部屋を一度でも出したか（ネットの記録に置きかわった時に読みこみなおすため）
 async function enterHouse() {
   if (BETA && !isAdmin()) return showBetaOnly();
+  houseEntered = true;
   setTimeout(loadAllBanks, 2500); // 問題バンクは、部屋が出てから裏で読みこむ
   const packsReady = loadSavedPacks();
   const added = ensureRooms();
@@ -1060,7 +1066,7 @@ function chooseCandidate(genreId) {
   for (const it of cands) if (it.src?.model) loadModel(it.src.model).catch(() => {});
   let picked = null;
   const el = sheet(`
-    <div class="sh-head"><button class="sh-back">${icon('back')}</button><div><h3>${g.name}</h3><p>買うと、部屋の合う場所に自動で置きます</p></div></div>
+    <div class="sh-head"><button class="sh-back">${icon('back')}</button><div><h3>${g.name}</h3><p>買うと、部屋の合う場所に自動で置きます</p></div><button class="sh-fold" aria-label="たたんで部屋を見る">${icon('eye')}<span>部屋を見る</span></button></div>
     <div class="candgrid">${cands.map(it => `
       <button class="cand ${it.rare || it.ticket ? 'rare' : ''} ${it.ticket ? 'ticket' : ''}" data-id="${it.id}">
         ${candArt(it)}
@@ -1072,6 +1078,10 @@ function chooseCandidate(genreId) {
     <button class="btn gold big ok" disabled>${icon('check')}これを買う</button>`, 'cand-sheet');
   app.querySelector('.tabbar')?.classList.add('hide');
   el.querySelector('.sh-back').onclick = () => { room3d?.clearPreview(); buyFlow(); };
+  // 「部屋を見る」：下の画面を小さくたたんで、置いた様子（ラグなど床の物も）を見られるように（1.11.0）
+  const fold = (on) => { el.classList.toggle('folded', on); el.querySelector('.sh-fold span').textContent = on ? 'もどす' : '部屋を見る'; el.querySelector('.sh-fold').setAttribute('aria-label', on ? '選ぶ画面にもどす' : 'たたんで部屋を見る'); };
+  el.querySelector('.sh-fold').onclick = () => fold(!el.classList.contains('folded'));
+  el.querySelector('.grab')?.addEventListener('click', () => fold(!el.classList.contains('folded')));
   // 選んだら、部屋の決まった場所に実際に置いて見せる（壁紙・床などと、置ける数がいっぱいのときは見せない）
   const canPreview = (it) => it.place !== 'surface' && remainCapacity(curRoom()) > 0;
   el.querySelectorAll('.cand').forEach(b => b.onclick = async () => {
@@ -1442,7 +1452,7 @@ function photoMode() {
 
 // =========================== 更新のお知らせ ===========================
 // このプログラムの版（version.json と同じにする。公開のたびに上げる）
-const APP_VERSION = '1.10.1';
+const APP_VERSION = '1.11.0';
 // 新しい版が出たら、みんな同じタイミングでそろうように強制で再起動する。
 // 開いた時・画面に戻った時・1分ごとに version.json を見る
 async function latestVersion() {
@@ -1556,16 +1566,15 @@ function showDownload() {
 function askMode() {
   return new Promise((done) => {
     const el = sheet(`
-      <div class="sh-head"><span class="sh-ic">${icon('home')}</span><div><h3>なにで部屋をつくる？</h3><p>あとから変えることはできません</p></div></div>
+      <div class="sh-head"><span class="sh-ic">${icon('home')}</span><div><h3>このアプリを、何のために使いますか？</h3><p>あてはまるほうを選んでください</p></div></div>
       <div class="mode-pick">
-        <button data-m="study"><span class="mp-ic">${icon('pencil')}</span><b>勉強</b><small>問題を解いてゲージをためる</small></button>
-        <button data-m="puzzle"><span class="mp-ic">${icon('grid')}</span><b>パズル</b><small>頭をつかうパズルをクリアしてためる</small></button>
+        <button data-m="study"><span class="mp-ic">${icon('pencil')}</span><b>勉強のため</b></button>
+        <button data-m="puzzle"><span class="mp-ic">${icon('grid')}</span><b>パズルで遊ぶため</b></button>
       </div>`, 'mode-sheet');
     app.querySelector('.tabbar')?.classList.add('hide');
     el.querySelectorAll('[data-m]').forEach(b => b.onclick = () => {
-      const m = b.dataset.m, name = m === 'puzzle' ? 'パズル' : '勉強';
-      if (!confirm(`「${name}」で部屋をつくります。あとから変えられませんが、よいですか？`)) return;
-      const pr = S.profile(); pr.mode = m; pr.modeAt = Date.now(); S.save(); Sync.push?.();
+      const m = b.dataset.m;
+      const pr = S.profile(); pr.side = m; pr.mode = m; pr.modeAt = Date.now(); S.save(); Sync.push?.();
       el.remove(); showHome();
       toast(m === 'puzzle' ? '右下の「パズル」から始めよう' : '右下の「解く」から始めよう', 3000);
       done();
@@ -1573,7 +1582,7 @@ function askMode() {
   });
 }
 
-// 勉強 ⇄ パズル を切りかえる。切りかえられるのは管理者だけ（自分のモード。ほかの人は管理者画面から）。部屋・家具・記録はそのまま
+// 勉強 ⇄ パズル を切りかえる（1.11.0 からだれでも。スタディサイドの人のパズルは、勉強した回数ぶんだけ）。部屋・家具・記録はそのまま
 function setMode(m, quiet) {
   const pr = S.profile();
   if (pr.mode === m) return;
@@ -1581,16 +1590,17 @@ function setMode(m, quiet) {
   // 下のボタン（右下の「解く」⇄「パズル」）をすぐ描きなおす
   const tb = app.querySelector('.tabbar');
   if (tb) { const act = tb.querySelector('.sl.on')?.dataset.t || 'room'; const nt = tabbar(act); if (tb.classList.contains('hide')) nt.classList.add('hide'); tb.replaceWith(nt); }
-  if (!quiet) toast(m === 'puzzle' ? 'パズルで部屋をつくります。右下の「パズル」から' : '勉強で部屋をつくります。右下の「解く」から', 2800);
+  if (!quiet) toast(m === 'puzzle' ? 'パズルにしました。右下の「パズル」から' : '勉強にしました。右下の「解く」から', 2400);
 }
-const switchBtn = (to) => !isAdmin() ? '' : `<button class="link mode-switch" data-to="${to}">${icon(to === 'puzzle' ? 'grid' : 'pencil')}${to === 'puzzle' ? 'パズルに切りかえる' : '勉強に切りかえる'}</button>`;
+const switchBtn = (to) => `<button class="link mode-switch" data-to="${to}">${icon(to === 'puzzle' ? 'grid' : 'pencil')}${to === 'puzzle' ? 'パズルに切りかえる' : '勉強に切りかえる'}</button>`;
 
 // =========================== パズル ===========================
 function showPuzzleHub() {
   if (!app.querySelector('.home')) showHome();
   const R = S.PUZZLE_REWARD.gauge;
   const el = sheet(`
-    <div class="sh-head"><span class="sh-ic">${icon('grid')}</span><div><h3>どのパズルにする？</h3><p>★を選んでスタート。★が高いほど、ゲージが多くたまります</p></div></div>
+    <div class="sh-head"><span class="sh-ic">${icon('grid')}</span><div><h3>どのパズルにする？</h3><p>★を選んでスタート。★が高いほど、ゲージが多くたまります</p></div><button class="sh-x close" aria-label="とじる">${icon('x')}</button></div>
+    ${freePuzzle() ? '' : `<div class="pz-tix ${S.puzzleTickets() ? '' : 'empty'}">${icon('grid')}<span>パズルをあと <b>${S.puzzleTickets()}回</b> できます</span><small>勉強を${S.STUDY_PER_PUZZLE}問するごとに1回ふえます（あと${S.studyToNextPuzzle()}問）</small></div>`}
     <div class="pz-hub">${PUZZLES.map(z => { const ps = S.puzzleState(z.id), open = S.puzzleOpen(z.id); return `
       <div class="pz-pick">
         <div class="pz-pick-top"><span class="s-ic">${icon(z.icon)}</span>
@@ -1600,13 +1610,17 @@ function showPuzzleHub() {
           : `<span class="pz-star locked" aria-label="★${st}（★${st - 1}をクリアすると選べます）">${icon('lock')}<small>★${st}</small></span>`).join('')}</div>
       </div>`; }).join('')}</div>
     <p class="pz-hub-note">★をクリアすると、次の★が選べるようになります。前の★にはいつでももどれます</p>
-    <div class="sheet-foot">${switchBtn('study')}<button class="link close">とじる</button></div>`, 'subj-sheet puzzle-sheet');
+    <div class="sheet-foot">${switchBtn('study')}</div>`, 'subj-sheet puzzle-sheet');
   app.querySelector('.tabbar')?.classList.add('hide');
   el.querySelector('.close').onclick = () => { el.remove(); showHome(); };
   el.querySelector('.mode-switch')?.addEventListener('click', () => { setMode('study'); el.remove(); showHome(); chooseSubject(); });
   el.querySelectorAll('.pz-star[data-p]').forEach(b => b.onclick = () => { el.remove(); playPuzzle(b.dataset.p, +b.dataset.s); });
 }
 function playPuzzle(id, star) {
+  if (!freePuzzle()) {
+    if (!S.usePuzzleTicket()) { toast(`パズルは、勉強を${S.STUDY_PER_PUZZLE}問するごとに1回できます（あと${S.studyToNextPuzzle()}問）`, 3200); return showHome(); }
+    S.save();
+  }
   const z = puzzleById(id), ps = S.puzzleState(id);
   star = Math.max(1, Math.min(star || ps.last || 1, S.puzzleOpen(id)));
   ps.last = star; S.save();
@@ -1690,9 +1704,9 @@ async function chooseSubject() {
   if (!app.querySelector('.home')) showHome();
   const loading = SUBJECTS.some(x => x.bank && !bankDone[x.id]);
   const el = sheet(`
-    <div class="sh-head"><span class="sh-ic">${icon('pencil')}</span><div><h3>どの教科を解く？</h3><p>どの教科を解いても、同じ家が育ちます</p></div></div>
+    <div class="sh-head"><span class="sh-ic">${icon('pencil')}</span><div><h3>どの教科を解く？</h3><p>どの教科を解いても、同じ家が育ちます</p></div><button class="sh-x close" aria-label="とじる">${icon('x')}</button></div>
     <div class="subjgrid"></div>
-    <div class="sheet-foot">${switchBtn('puzzle')}<button class="link close">とじる</button></div>`, 'subj-sheet');
+    <div class="sheet-foot">${switchBtn('puzzle')}</div>`, 'subj-sheet');
   app.querySelector('.tabbar')?.classList.add('hide');
   el.querySelector('.close').onclick = () => { el.remove(); showHome(); };
   el.querySelector('.mode-switch')?.addEventListener('click', () => { setMode('puzzle'); el.remove(); showHome(); showPuzzleHub(); });
@@ -1739,10 +1753,9 @@ function chooseScope(el, genre = null) {
       + us.map(u => row(`data-u="${esc(u)}"`, u, gl.filter(p => p.unit === u))).join('');
   }
   el.innerHTML = `<div class="grab"></div>
-    <div class="sh-head"><button class="icon sc-back" aria-label="もどる">${icon('back')}</button><div><h3>${esc(genre || subj.name)}</h3><p>${genre ? `${esc(subj.name)}・単元をえらぶ` : 'ジャンルをえらぶ'}</p></div></div>
+    <div class="sh-head"><button class="icon sc-back" aria-label="もどる">${icon('back')}</button><div><h3>${esc(genre || subj.name)}</h3><p>${genre ? `${esc(subj.name)}・単元をえらぶ` : 'ジャンルをえらぶ'}</p></div><button class="sh-x close" aria-label="とじる">${icon('x')}</button></div>
     ${resume ? `<button class="btn primary big sc-resume">${icon('refresh')}続きから<small>（${esc(scopeLabel(st.scope))}）</small></button>` : ''}
-    <div class="sc-list">${body}</div>
-    <button class="link close">とじる</button>`;
+    <div class="sc-list">${body}</div>`;
   el.querySelector('.close').onclick = () => { el.remove(); showHome(); };
   el.querySelector('.sc-back').onclick = () => { if (genre && genres.length > 1) chooseScope(el); else { el.remove(); chooseSubject(); } };
   el.querySelector('.sc-resume')?.addEventListener('click', () => { el.remove(); startSet(); });
@@ -2419,7 +2432,7 @@ async function showAdmin() {
     const units = a.units || {};
     return `<div class="acard">
       <div class="ac-top"><button class="pf-open" data-u="${esc(a.username)}" aria-label="${esc(a.username)}さんのプロフィール">${avatarHTML(s, 'avatar av')}</button><b class="pf-open" data-u="${esc(a.username)}">${esc(a.username)}${s.title && titleById(s.title) ? `<small class="ac-title">${esc(titleById(s.title).name)}</small>` : ''}</b><span class="lvb">Lv${S.rankInfo(s.xp || 0).rank}</span></div>
-      <div class="ac-mode"><span class="mode-tag ${s.mode || 'none'}">${icon(s.mode === 'puzzle' ? 'grid' : s.mode === 'study' ? 'pencil' : 'info')}${s.mode === 'puzzle' ? 'パズル' : s.mode === 'study' ? '勉強' : 'まだ選んでいない'}</span>${s.puzzle ? `<small>パズル ${s.puzzle}回</small>` : ''}<button class="btn ghost sm ac-mode-btn" data-u="${esc(a.username)}" data-m="${s.mode || ''}">${icon('refresh')}切りかえ</button></div>
+      <div class="ac-mode">${(() => { const sd = s.side || s.mode; return `<span class="mode-tag ${sd || 'none'}">${icon(sd === 'puzzle' ? 'grid' : sd === 'study' ? 'pencil' : 'info')}${sd === 'puzzle' ? 'パズルサイド' : sd === 'study' ? 'スタディサイド' : 'まだ選んでいない'}</span>${s.puzzle ? `<small>パズル ${s.puzzle}回</small>` : ''}<button class="btn ghost sm ac-mode-btn" data-u="${esc(a.username)}" data-m="${sd || ''}">${icon('refresh')}サイドを変える</button>`; })()}</div>
       <div class="ac-stats"><span>${icon('pencil')}${s.solved || 0}問</span><span>${icon('check')}${s.solved ? Math.round((s.correct || 0) / s.solved * 100) : 0}%</span><span>${icon('flame')}${s.streak || 0}日（合計${s.days || 0}日）</span></div>
       <div class="ac-units">${UNITS.map(un => `<span>${un} ${units[un]?.solved || 0}問</span>`).join('')}</div>
       <div class="ac-foot"><small>登録 ${day(a.created_at)} ・ 最後 ${day(a.last_login)}</small><span class="ac-btns"><button class="btn ghost sm visit" data-u="${esc(a.username)}">${icon('eye')}部屋</button>${Object.keys(packCode).length ? `<button class="btn ghost sm ac-give" data-u="${esc(a.username)}">${icon('gift')}問題集</button>` : ''}${a.username !== u.name ? `<button class="btn ghost sm ac-del" data-u="${esc(a.username)}" aria-label="${esc(a.username)}のアカウントを消す">${icon('trash')}消す</button>` : ''}</span></div>
@@ -2434,10 +2447,10 @@ async function showAdmin() {
 // 管理者：その人のモード（勉強メイン・パズルメイン）を切りかえる。本人のアプリが次に開いた時に切りかわる
 function changeMode(name, now) {
   const cf = sheet(`
-    <div class="sh-head"><span class="sh-ic">${icon('shield')}</span><div><h3>「${esc(name)}」の部屋づくりのしかた</h3><p>変えると、その人が次にアプリを開いた時に切りかわります。部屋・家具・記録はそのまま残ります</p></div></div>
+    <div class="sh-head"><span class="sh-ic">${icon('shield')}</span><div><h3>「${esc(name)}」のサイド</h3><p>スタディサイドは、勉強を${S.STUDY_PER_PUZZLE}問するごとにパズルが1回。パズルサイドは、勉強とパズルを自由に行き来。その人が次にアプリを開いた時に切りかわります。部屋・家具・記録はそのまま</p></div></div>
     <div class="mode-pick">
-      <button data-m="study" class="${now === 'study' ? 'on' : ''}"><span class="mp-ic">${icon('pencil')}</span><b>勉強メイン</b></button>
-      <button data-m="puzzle" class="${now === 'puzzle' ? 'on' : ''}"><span class="mp-ic">${icon('grid')}</span><b>パズルメイン</b></button>
+      <button data-m="study" class="${now === 'study' ? 'on' : ''}"><span class="mp-ic">${icon('pencil')}</span><b>スタディサイド</b></button>
+      <button data-m="puzzle" class="${now === 'puzzle' ? 'on' : ''}"><span class="mp-ic">${icon('grid')}</span><b>パズルサイド</b></button>
     </div>
     <button class="link close">やめる</button>`, 'news-sheet');
   cf.querySelector('.close').onclick = () => cf.remove();
@@ -2446,9 +2459,9 @@ function changeMode(name, now) {
     if (m === now) return cf.remove();
     cf.querySelectorAll('[data-m]').forEach(x => { x.disabled = true; });
     try {
-      if (name === Auth.currentUser()?.name) setMode(m, true);
+      if (name === Auth.currentUser()?.name) { const pr = S.profile(); pr.side = m; setMode(m, true); }
       else await rpc('sr_admin_grant_code', { p_token: Auth.currentUser()?.token, p_username: name, p_code: `MODE:${m}:${t}` });
-      toast(`「${name}」を「${m === 'puzzle' ? 'パズルメイン' : '勉強メイン'}」にしました`); cf.remove(); showAdmin();
+      toast(`「${name}」を「${m === 'puzzle' ? 'パズルサイド' : 'スタディサイド'}」にしました`); cf.remove(); showAdmin();
     } catch (ex) { toast(String(ex.message || ex), 3400); cf.querySelectorAll('[data-m]').forEach(x => { x.disabled = false; }); }
   });
 }
@@ -2534,11 +2547,6 @@ function showSettings() {
         <small>カクカクするときは「ふつう」か「かるい」に</small></div>
       ${DL.canDownload() ? `<button class="row-item tap dl"><span class="lbl">家具のデータ</span><span class="val">${DL.downloadState() === 'done' ? '保存ずみ' : 'まとめて保存する'}</span></button>` : ''}
     </section>
-    ${isAdmin() ? `<section class="group mode-set">
-      <div class="row-item col"><span class="lbl">部屋づくりのしかた</span>
-        <div class="seg mode-seg">${[['study', '勉強'], ['puzzle', 'パズル']].map(([k, n]) => `<button data-mode="${k}" class="${(S.profile().mode || 'study') === k ? 'on' : ''}">${n}</button>`).join('')}</div>
-        <small>管理者だけが切りかえられます。部屋・家具・記録はそのまま残ります</small></div>
-    </section>` : ''}
     <section class="group bgm-set">
       <div class="row-item col"><span class="lbl">${icon('music')}BGM</span>
         <div class="seg bgm-on">${[[true, 'オン'], [false, 'オフ']].map(([v, n]) => `<button data-on="${v}" class="${BGM.settings().on === v ? 'on' : ''}">${n}</button>`).join('')}</div>
@@ -2560,10 +2568,6 @@ function showSettings() {
     </section>` : ''}
     <p class="ver">ROOMIN ${esc(ver)}</p>`);
   el.querySelector('.back').onclick = showMenu;
-  el.querySelectorAll('.mode-seg button').forEach(b => b.onclick = () => {
-    setMode(b.dataset.mode);
-    el.querySelectorAll('.mode-seg button').forEach(x => x.classList.toggle('on', x === b));
-  });
   el.querySelectorAll('.bgm-on button').forEach(b => b.onclick = () => {
     BGM.setOn(b.dataset.on === 'true');
     el.querySelectorAll('.bgm-on button').forEach(x => x.classList.toggle('on', x === b));
@@ -2825,6 +2829,7 @@ function awardResult(st, ss, p, perfect, ok, isReview, secs) {
       ({ mastered } = S.recordResult(st, p.id, perfect, isReview));
       if (mastered) HS().pendingSpecials++;
       xp = S.addAnswer(st, p.unit, perfect ? 'perfect' : ok ? 'ok' : 'wrong');
+      if (S.countStudyForPuzzle()) setTimeout(() => toast('パズルが1回できるようになりました', 2400), 1200);
       const firstPlay = S.markPlayedToday();
       // 50問ごと・連続7日ごと・克服でたまにレアチケット
       const earned = G.ticketsEarned(tBefore, { solved: S.profile().solved, streak: S.currentStreak(), mastered: S.stats(st, probs()).mastered });
@@ -2956,6 +2961,8 @@ function paintSync() {
 }
 Sync.setHandlers({
   onStatus: (s) => { syncState = s; paintSync(); },
+  // 部屋を出したあとで、ネットの記録（ほかの端末で進めた記録）に置きかわった時は、読みこみなおす
+  onReplaced: () => { if (houseEntered && !document.querySelector('.title-screen')) { toast('ほかの端末の記録を読みこみました', 2000); setTimeout(() => location.reload(), 900); } },
   onExpired: () => {
     // 合い鍵が使えなくなった＝ほかの端末で同じアカウントにログインされた
     Auth.forget();
@@ -2992,6 +2999,7 @@ function showTitle() {
   if (u) {
     ready = (async () => {
       S.useUser(u.id);
+      Sync.reset();
       await Promise.race([Sync.pull(), new Promise(r => setTimeout(r, 3000))]);
       setP(0.35);
       user = Auth.currentUser() || u;

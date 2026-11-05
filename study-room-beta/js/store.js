@@ -288,6 +288,22 @@ export function addAnswer(sub, unit, kind) {
   return { gained, rankUp: after > before, rank: after, rewards };
 }
 export function profile() { return state.profile || (state.profile = blankProfile()); }
+// サイド（1.11.0）：はじめに選んだ目的。'puzzle'＝パズルサイド（勉強とパズルを自由に行き来）、'study'＝スタディサイド（勉強をすると、パズルが遊べる）
+export const STUDY_PER_PUZZLE = 5; // スタディサイドは、問題を5問解くごとにパズル1回
+export function sideOf() { const p = profile(); return p.side || p.mode || 'study'; }
+export const puzzleTickets = () => profile().puzzleTickets || 0;
+export const studyToNextPuzzle = () => STUDY_PER_PUZZLE - (profile().studyCount || 0);
+// 1問解いたら呼ぶ。パズルが1回ふえたら 1 を返す
+export function countStudyForPuzzle() {
+  const p = profile();
+  if (sideOf() !== 'study') return 0;
+  p.studyCount = (p.studyCount || 0) + 1;
+  if (p.studyCount < STUDY_PER_PUZZLE) return 0;
+  p.studyCount -= STUDY_PER_PUZZLE;
+  p.puzzleTickets = (p.puzzleTickets || 0) + 1;
+  return 1;
+}
+export function usePuzzleTicket() { const p = profile(); if (!(p.puzzleTickets > 0)) return false; p.puzzleTickets--; return true; }
 // ランキングのポイント（勉強もパズルも、もらったゲージの数をそのまま足す）。週ごと（月曜の朝6時で区切る）と、これまでの合計
 export function addPoints(pts) {
   if (!(pts > 0)) return;
