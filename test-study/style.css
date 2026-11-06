@@ -127,3 +127,17 @@ textarea.input { min-height: 150px; resize: vertical; }
 .today-num { margin-top: 8px; font-size: 16px; }
 .today-num b { font-size: 22px; color: var(--acc); }
 .date-in { border: 1px solid var(--line); background: var(--card); border-radius: 8px; padding: 4px 8px; }
+
+/* 覚えている度 */
+.memo { margin-top: 8px; }
+.memo > div:first-child { display: flex; justify-content: space-between; align-items: baseline; }
+.memo b { font-size: 24px; color: var(--acc); }
+.meter.big { height: 10px; }
+.small { font-size: 12px; }
+.lrow { display: grid; grid-template-columns: 4.2em 1fr 3em; align-items: center; gap: 8px; padding: 3px 0; }
+.lrow .meter { margin: 0; }
+.lname { font-size: 13px; color: var(--sub); }
+.lpct { font-size: 13px; text-align: right; font-variant-numeric: tabular-nums; }
+.how { margin-top: 8px; font-size: 13px; color: var(--sub); }
+.how summary { cursor: pointer; color: var(--acc); }
+.how p { margin: 6px 0; }

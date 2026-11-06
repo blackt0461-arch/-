@@ -1,8 +1,9 @@
 // テスト勉強アプリ。授業 → テスト → 勉強（ぜんぶ・カード・自動採点・記述・まちがい復習）
 // 問題は data/ の JSON（Claude がレジュメから作る）。記録はこの端末（localStorage と IndexedDB）。
 import * as store from './store.js';
+import * as cloud from './cloud.js';
 
-const APP_VERSION = '1.1.0';
+const APP_VERSION = '1.2.0';
 const $app = document.getElementById('app');
 let COURSES = [];
 const testCache = {};
@@ -51,36 +52,49 @@ function daysLeft(date) {
   const d = new Date(date + 'T00:00:00'); const now = new Date(); now.setHours(0, 0, 0, 0);
   return Math.round((d - now) / 86400000);
 }
-// ---------- 勉強計画 ----------
-// 「完璧」＝続けて2回正解した問題。テストの前の日までに全部を完璧にする量を毎日に分ける。前日は総復習、当日は見直し。
-const PERFECT = 2;
+// ---------- 勉強計画（memory.js の記憶モデルを使う） ----------
+// ・まだ解いていない問題は、テスト前日までの日数で割って毎日少しずつ「新しい問題」として出す（授業の回の順）。
+// ・解いた問題は、思い出せる確率が 90% を下回ったら「復習」として出す（忘れかけたころに復習＝間隔反復）。
+// ・前日は、テストの日に 90% を下回りそうな問題を総復習。当日は忘れかけている問題だけ見直し。
 const tkey = (c, t) => c.id + '/' + t.id;
 const testDate = (c, t) => store.getDate(tkey(c, t)) || t.date;
-function needOf(q) { const r = store.get(q.key); return Math.max(0, PERFECT - (r ? r.streak || 0 : 0)); }
+const examTime = (c, t) => { const s = testDate(c, t); return s ? new Date(s + 'T09:00:00').getTime() : null; };
+const pct = (x) => Math.round(x * 100);
+function memStats(qs, at) {
+  const now = Date.now();
+  let sumNow = 0, sumEx = 0, safe = 0;
+  for (const q of qs) {
+    sumNow += store.recall(q.key, now);
+    const e = store.recall(q.key, at || now); sumEx += e; if (e >= 0.9) safe++;
+  }
+  const n = Math.max(1, qs.length);
+  return { now: sumNow / n, exam: sumEx / n, safe };
+}
 function plan(c, t, d) {
   const dl = daysLeft(testDate(c, t));
   if (dl === null || dl < 0) return null;
   const qs = d.questions;
-  const left = qs.filter((q) => needOf(q) > 0);
-  const need = left.reduce((s, q) => s + needOf(q), 0);
-  const perfect = qs.length - left.length;
-  const done = store.todayCount(tkey(c, t));
-  let phase, target, pool;
+  const ex = examTime(c, t);
+  const byRecall = (a, b) => store.recall(a.key) - store.recall(b.key);
+  const unseen = qs.filter((q) => !store.get(q.key));
+  const due = qs.filter((q) => store.get(q.key) && store.isDue(q.key)).sort(byRecall);
+  let phase, pool;
   if (dl === 0) {
-    phase = 'テスト当日：まちがえた問題だけ見直し';
-    pool = qs.filter((q) => store.isWrong(q.key));
-    target = store.todayTarget(tkey(c, t), () => pool.length);
+    pool = due;
+    phase = `テスト当日：忘れかけている ${due.length}問だけ見直し`;
   } else if (dl === 1) {
-    phase = 'テスト前日：総復習';
-    pool = left.length ? left : qs;
-    target = store.todayTarget(tkey(c, t), () => (left.length ? need : Math.min(qs.length, 30)));
+    pool = [...due, ...qs.filter((q) => store.get(q.key) && !store.isDue(q.key) && store.recall(q.key, ex) < 0.9).sort(byRecall), ...unseen];
+    phase = `テスト前日：テストの日に忘れていそうな ${pool.length}問を総復習`;
   } else {
-    const days = dl - 1; // 前日は総復習にとっておく
-    phase = `全問を完璧に（続けて2回正解）できるよう、前日までの${days}日に分けています`;
-    pool = left;
-    target = store.todayTarget(tkey(c, t), () => Math.ceil(need / days));
+    const quota = Math.ceil(unseen.length / (dl - 1));
+    const fresh = unseen.slice(0, quota);
+    pool = [...due, ...fresh];
+    phase = `復習 ${due.length}問 ＋ 新しい問題 ${fresh.length}問`;
   }
-  return { dl, perfect, total: qs.length, need, done, target, rest: Math.max(0, target - done), pool, phase };
+  const done = store.todayCount(tkey(c, t));
+  const target = store.todayTarget(tkey(c, t), () => pool.length);
+  const m = memStats(qs, ex);
+  return { dl, total: qs.length, done, target, rest: pool.length ? Math.max(0, target - done) : 0, pool, phase, mem: m };
 }
 function startToday(c, t, d) {
   const p = plan(c, t, d);
@@ -89,6 +103,7 @@ function startToday(c, t, d) {
     id: 'today', name: '今日の勉強',
     back: home,
     // 1回は10問ずつ。今日の目標が残っていれば「続ける」を出す
+    keepOrder: true,
     refill: () => { const n = plan(c, t, d); return n && n.rest > 0 && n.pool.length ? { pool: n.pool, limit: Math.min(10, n.rest), rest: n.rest } : null; },
   };
   startQuiz(c, t, d, p.pool, mode, { limit: Math.min(10, p.rest || 10) });
@@ -111,15 +126,16 @@ async function home() {
   if (todays.length) {
     html += '<h2>今日の勉強</h2>';
     todays.forEach(({ c, t, p }, k) => {
-      const fin = p.target > 0 && p.done >= p.target;
-      const allPerfect = p.perfect === p.total;
+      const fin = p.rest === 0;
       html += `<div class="card today">
         <div class="today-top"><b>${esc(c.name)}・${esc(t.name)}</b><span class="badge ${p.dl <= 7 ? 'soon' : ''}">${dayLabel(p.dl)}</span></div>
-        <div class="muted">${esc(p.phase)}</div>
-        <div class="today-num">${fin ? '🎉 今日の分は終わり！' : p.target ? `今日の目標 <b>${p.target}問</b>　<span class="muted">済 ${Math.min(p.done, p.target)}問</span>` : allPerfect ? '✨ ぜんぶ完璧です' : '今日やる問題はありません'}</div>
-        <div class="meter"><i style="width:${p.target ? Math.min(100, (p.done / p.target) * 100) : 100}%"></i></div>
-        <div class="muted" style="margin-top:6px">完璧 ${p.perfect} / ${p.total}問</div>
-        ${p.pool.length ? `<button class="btn ${fin ? 'sub' : ''}" data-today="${k}">${fin ? 'もっとやる（10問）' : p.dl === 0 ? '見直しをはじめる' : '今日の分をはじめる'}</button>` : ''}
+        <div class="memo"><div><span class="muted">テストの日に覚えている（予想）</span><b>${pct(p.mem.exam)}%</b></div>
+          <div class="meter big"><i style="width:${pct(p.mem.exam)}%"></i></div>
+          <div class="muted small">90%以上思い出せそうな問題 ${p.mem.safe} / ${p.total}問</div></div>
+        <div class="muted" style="margin-top:8px">${esc(p.phase)}</div>
+        <div class="today-num">${fin ? (p.target ? '🎉 今日の分は終わり！' : '今日やる問題はありません') : `今日の目標 <b>${p.target}問</b>　<span class="muted">済 ${Math.min(p.done, p.target)}問</span>`}</div>
+        ${p.target ? `<div class="meter"><i style="width:${Math.min(100, (p.done / p.target) * 100)}%"></i></div>` : ''}
+        <button class="btn ${fin ? 'sub' : ''}" data-today="${k}">${fin ? 'もっとやる（10問）' : p.dl === 0 ? '見直しをはじめる' : '今日の分をはじめる'}</button>
       </div>`;
     });
   }
@@ -130,13 +146,17 @@ async function home() {
       <div class="meta">${next ? `<span class="badge ${next.d <= 7 ? 'soon' : ''}">${esc(next.t.name)}まで あと${next.d}日</span>` : ''}${(c.tests || []).length ? '' : 'まだ問題がありません'}</div></div><span class="arrow">›</span></button>`;
   }
   if (!COURSES.length) html += '<div class="empty">まだ授業がありません</div>';
+  const cc = cloud.config();
+  html += `<h2>ドライブ連携</h2><button class="item" data-cloud><div class="t"><div class="name">${cloud.connected() ? '☁️ つながっています' : 'ドライブにつなぐ'}</div>
+    <div class="meta">${cloud.connected() ? (cc.error ? '⚠️ ' + esc(cc.error) : cc.last ? '最後に保存：' + new Date(cc.last).toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '') : '記録と記述の答えをグーグルドライブに残します'}</div></div><span class="arrow">›</span></button>`;
   html += `<h2>使い方</h2><div class="card muted">問題は Claude がドライブのレジュメから作ります。ふやしたいときは Claude に「〇〇の期末の問題を作って」と頼んでください。</div>`;
   w.innerHTML = html;
+  w.querySelector('[data-cloud]').onclick = cloudScreen;
   w.querySelectorAll('[data-today]').forEach((b) => (b.onclick = () => {
     const x = todays[+b.dataset.today];
     const p = plan(x.c, x.t, x.d);
     if (p.rest > 0) startToday(x.c, x.t, x.d);
-    else startQuiz(x.c, x.t, x.d, p.pool, { id: 'today', name: 'もっとやる', back: home }, { limit: 10 });
+    else startQuiz(x.c, x.t, x.d, x.d.questions, { id: 'today', name: 'もっとやる', back: home }, { limit: 10 });
   }));
   w.querySelectorAll('[data-c]').forEach((b) => (b.onclick = () => course(COURSES.find((c) => c.id === b.dataset.c))));
 }
@@ -150,7 +170,7 @@ async function course(c) {
     try {
       const d = await loadTest(c, t);
       const s = store.summary(d.questions);
-      stat = `<div class="meta">${d.questions.length}問・できた ${s.mastered}問</div><div class="meter"><i style="width:${d.questions.length ? (s.mastered / d.questions.length) * 100 : 0}%"></i></div>`;
+      stat = `<div class="meta">${d.questions.length}問・覚えている ${s.mastered}問</div><div class="meter"><i style="width:${d.questions.length ? (s.mastered / d.questions.length) * 100 : 0}%"></i></div>`;
     } catch (e) { stat = '<div class="meta">まだ問題がありません</div>'; }
     const dl = daysLeft(testDate(c, t));
     html += `<button class="item" data-t="${esc(t.id)}"><div class="t"><div class="name">${esc(t.name)}
@@ -185,8 +205,9 @@ async function testMenu(c, t) {
       ${d.note ? `<div class="card muted">${esc(d.note)}</div>` : ''}
       <div class="card"><span class="muted">テストの日</span>　<input type="date" class="date-in" data-date value="${esc(testDate(c, t) || '')}">
         ${store.getDate(tkey(c, t)) ? '<button class="link" data-date-reset>もとの日にもどす</button>' : ''}</div>
-      <div class="card"><b>${qs.length}問</b>　<span class="muted">できた ${s.mastered}・まちがい ${s.wrong}・まだ ${s.unseen}</span>
+      <div class="card"><b>${qs.length}問</b>　<span class="muted">覚えている ${s.mastered}・まちがい ${s.wrong}・まだ ${s.unseen}</span>
         <div class="meter"><i style="width:${qs.length ? (s.mastered / qs.length) * 100 : 0}%"></i></div></div>
+      ${memoryHTML(c, t, qs, lectures)}
       <h2>勉強のしかた</h2>
       <div class="modes">${MODES.map((m) => {
         const n = inRange.filter(m.pick).length;
@@ -216,21 +237,37 @@ async function testMenu(c, t) {
   render();
 }
 
-// 出す順番：まちがい → まだ解いていない → 正解が少ない、の順に出やすく
+// 回ごとの「覚えている度」と、しくみの説明
+function memoryHTML(c, t, qs, lectures) {
+  const ex = examTime(c, t);
+  const rows = (lectures.length ? lectures : ['ぜんぶ']).map((l) => {
+    const sub = lectures.length ? qs.filter((q) => q.lecture === l) : qs;
+    const m = memStats(sub, ex);
+    return `<div class="lrow"><span class="lname">${esc(l)}</span><div class="meter"><i style="width:${pct(m.now)}%"></i></div><span class="lpct">${pct(m.now)}%</span></div>`;
+  }).join('');
+  return `<h2>いま覚えている度（回ごと）</h2><div class="card">${rows}
+    <details class="how"><summary>しくみ（記憶曲線）</summary>
+      <p>人は覚えたことを時間とともに忘れます（エビングハウスの忘却曲線）。このアプリは問題ごとに「いま思い出せる確率」を計算しています。</p>
+      <p>・思い出せる確率が 90% を下回ったころに復習として出します（間隔反復）。忘れかけたころに思い出すほど、記憶は長持ちするようになります。<br>
+      ・正解すると忘れにくくなり、まちがえると忘れやすい状態にもどります。何度もまちがえる問題は、短い間隔でくり返し出ます（正解率を使用）。<br>
+      ・テストの日の予想は、いまのままテストの日をむかえたときに思い出せる確率の平均です。</p>
+    </details></div>`;
+}
+
+// 出す順番：忘れかけている問題（思い出せる確率が低い順）→ まだ解いていない問題 → まだ覚えている問題
 function order(qs) {
   const score = (q) => {
-    const r = store.get(q.key);
-    if (store.isWrong(q.key)) return 0;
-    if (!r) return 1;
-    return 2 + r.ok / Math.max(1, r.n);
+    if (!store.get(q.key)) return 0.95;
+    const r = store.recall(q.key);
+    return store.isDue(q.key) ? r : 1 + r;
   };
-  return shuffle(qs).map((q) => ({ q, s: score(q) + Math.random() * 0.8 })).sort((a, b) => a.s - b.s).map((x) => x.q);
+  return qs.map((q) => ({ q, s: score(q) + Math.random() * 0.15 })).sort((a, b) => a.s - b.s).map((x) => x.q);
 }
 
 // ---------- 問題を解く ----------
 let fixResult = () => {};
 function startQuiz(c, t, d, pool, mode, opt = {}) {
-  let list = order(pool);
+  let list = mode.keepOrder ? pool.slice() : order(pool);
   const limit = opt.limit ?? UI.count;
   if (limit) list = list.slice(0, limit);
   const results = [];
@@ -434,12 +471,38 @@ async function answers(c, t, d) {
   const keys = new Set(d.questions.map((q) => q.key));
   const list = (await store.listAnswers()).filter((a) => keys.has(a.key)).reverse();
   if (!list.length) { w.innerHTML = '<div class="empty">まだ記述の答えはありません</div>'; return; }
-  w.innerHTML = `<div class="card muted">ここに保存した答えは、あとで Claude に採点してもらえます（ドライブに残す仕組みは次の版で入ります）。</div>` +
+  w.innerHTML = `<div class="card muted">ここに保存した答えは、ドライブにつないでいればドライブの「記述の答え」フォルダにも入ります。Claude に「記述の答えを採点して」と頼めます。</div>` +
     list.map((a) => `<div class="card"><div class="muted">${new Date(a.t).toLocaleString('ja-JP')}・自己採点 ${{ ok: '⭕', mid: '🔺', ng: '❌' }[a.self] || ''}</div>
       <div class="qtext" style="font-size:15px">${esc(a.q)}</div>
       ${a.text ? `<div class="explain" style="margin-top:6px">${esc(a.text)}</div>` : ''}
       ${a.photo ? `<img class="photo-prev" src="${URL.createObjectURL(a.photo)}" alt="答えの写真">` : ''}</div>`).join('');
   math(w);
+}
+
+// ---------- ドライブ連携の設定 ----------
+function cloudScreen() {
+  const w = screen('ドライブ連携', '', { back: home });
+  const cc = cloud.config();
+  if (cloud.connected()) {
+    w.innerHTML = `<div class="card">☁️ グーグルドライブの「テスト勉強」フォルダにつながっています。<div class="muted">${cc.last ? '最後に保存：' + new Date(cc.last).toLocaleString('ja-JP') : ''}${cc.error ? '<br>⚠️ ' + esc(cc.error) : ''}</div></div>
+      <button class="btn" data-now>いま保存する</button>
+      <div class="card muted">勉強の記録は「記録（さわらないでください）.json」、記述の答えと写真は「記述の答え」フォルダに入ります。ほかのスマホやパソコンでも、同じURLと合言葉でつなぐと記録が引きつがれます。</div>
+      <button class="btn sub" data-off>この端末のつながりを切る</button>`;
+    w.querySelector('[data-now]').onclick = async (e) => { e.target.disabled = true; e.target.textContent = '保存しています…'; await cloud.sync(); cloudScreen(); };
+    w.querySelector('[data-off]').onclick = () => { if (confirm('この端末のつながりを切りますか？（ドライブの記録は消えません）')) { cloud.disconnect(); cloudScreen(); } };
+    return;
+  }
+  w.innerHTML = `<div class="card muted">グーグルドライブの準備（1回だけ）は、Claude が案内した手順でやってください。最後に出てくる「ウェブアプリのURL」をここに貼ります。</div>
+    <h2>ウェブアプリのURL</h2><input class="input" data-url placeholder="https://script.google.com/macros/s/…/exec" value="${esc(cc.url)}" autocomplete="off">
+    <h2>合言葉（4文字以上）</h2><input class="input" data-key type="password" placeholder="はじめてなら、ここで決めます" autocomplete="off">
+    <div class="muted small" style="margin-top:4px">はじめてつなぐときに入れた合言葉が登録されます。ほかの端末でつなぐときも同じ合言葉を使います。</div>
+    <button class="btn" data-go>つなぐ</button><div class="muted" data-msg></div>`;
+  w.querySelector('[data-go]').onclick = async (e) => {
+    const msg = w.querySelector('[data-msg]');
+    e.target.disabled = true; msg.textContent = 'つないでいます…';
+    try { await cloud.connect(w.querySelector('[data-url]').value, w.querySelector('[data-key]').value); cloudScreen(); }
+    catch (err) { msg.textContent = '⚠️ ' + err.message; e.target.disabled = false; }
+  };
 }
 
 // ---------- はじめ ----------
@@ -448,6 +511,9 @@ async function answers(c, t, d) {
     const d = await getJSON('data/courses.json');
     COURSES = d.courses || [];
     home();
+    // ドライブの記録をとりこむ。最初の画面のままなら、とりこんだ内容で表示しなおす
+    cloud.onSynced((changed) => { if (changed && $app.querySelector('h1')?.textContent === 'テスト勉強') home(); });
+    cloud.sync();
   } catch (e) {
     $app.innerHTML = '<div class="loading">読みこめませんでした。電波のよい所でもう一度開いてください。</div>';
   }
