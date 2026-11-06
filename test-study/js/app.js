@@ -3,7 +3,7 @@
 import * as store from './store.js';
 import * as cloud from './cloud.js';
 
-const APP_VERSION = '1.7.0';
+const APP_VERSION = '1.8.0';
 const $app = document.getElementById('app');
 let COURSES = [];
 const testCache = {};
@@ -35,11 +35,90 @@ function math(el) {
         throwOnError: false,
       });
     } catch (e) { /* 数式が読めなくても文字のまま出す */ }
+    termify(el);
   } else if (el.textContent.includes('$')) {
-    pendingMath.add(el);
+    pendingMath.add(el); // 数式を描いてから言葉に点線をつける（先につけると数式が切れる）
     loadKatex();
+  } else {
+    termify(el);
   }
 }
+
+// ---------- むずかしい言葉の説明（用語集：data/<授業>/glossary.json） ----------
+// 用語に点線をつけ、長押し（ふつうの文ではタップでも）で説明を出す
+let GLOSS = null; // { cid, re, map }
+async function loadGlossary(c) {
+  if (GLOSS && GLOSS.cid === c.id) return;
+  const path = `data/${c.id}/glossary.json`;
+  let g = cachedJSON(path);
+  if (!g) { try { g = (await getJSON(path)).data; } catch (e) { g = null; } }
+  if (!g || !g.terms) { GLOSS = { cid: c.id, re: null, map: {} }; return; }
+  const map = {};
+  for (const tm of g.terms) for (const w of [tm.t, ...(tm.a || [])]) if (w && w.length >= 2) map[w] = tm;
+  const words = Object.keys(map).sort((x, y) => y.length - x.length).map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  GLOSS = { cid: c.id, re: words.length ? new RegExp(words.join('|'), 'g') : null, map };
+}
+const NO_TERM = '.katex, .term, .bar, .hero, .tabbar, .dock, .qtop, .sheet, .lname, .badge, .pill, .kicker, .gpop, input, textarea, svg';
+function termify(root) {
+  if (!GLOSS || !GLOSS.re || !root || !root.querySelectorAll) return;
+  const used = new Set();
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+    acceptNode: (n) => (n.nodeValue.trim() && !n.parentElement.closest(NO_TERM) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT),
+  });
+  const nodes = []; let n;
+  while ((n = walker.nextNode())) nodes.push(n);
+  for (const node of nodes) {
+    const text = node.nodeValue; GLOSS.re.lastIndex = 0;
+    let m, last = 0, hit = false;
+    const frag = document.createDocumentFragment();
+    while ((m = GLOSS.re.exec(text))) {
+      const w = m[0];
+      // 英字の言葉（MOS など）は、もっと長い英単語の一部（CMOS など）には当てない
+      if (/^[A-Za-z]/.test(w) && /[A-Za-z]/.test(text[m.index - 1] || '')) continue;
+      if (/[A-Za-z]$/.test(w) && /[A-Za-z]/.test(text[m.index + w.length] || '')) continue;
+      if (used.has(GLOSS.map[w].t)) continue; // 同じ言葉は1画面に1回だけ
+      used.add(GLOSS.map[w].t); hit = true;
+      frag.appendChild(document.createTextNode(text.slice(last, m.index)));
+      const sp = document.createElement('span'); sp.className = 'term'; sp.dataset.term = w; sp.textContent = w;
+      frag.appendChild(sp); last = m.index + w.length;
+    }
+    if (!hit) continue;
+    frag.appendChild(document.createTextNode(text.slice(last)));
+    node.parentNode.replaceChild(frag, node);
+  }
+}
+const MATH_OPT = { delimiters: [{ left: '$$', right: '$$', display: true }, { left: '$', right: '$', display: false }], throwOnError: false };
+function showTerm(w) {
+  const tm = GLOSS && GLOSS.map[w]; if (!tm) return;
+  const old = document.querySelector('.gpop-wrap'); if (old) old.parentNode.removeChild(old);
+  const wrap = document.createElement('div'); wrap.className = 'gpop-wrap';
+  wrap.innerHTML = `<div class="gpop"><div class="gh"><b>${esc(tm.t)}</b>${tm.r ? `<span>${esc(tm.r)}</span>` : ''}<button class="gx" aria-label="とじる">${icon('x')}</button></div>
+    <div class="gd">${md(tm.d)}</div>${tm.f ? `<div class="tex">$$${esc(tm.f)}$$</div>` : ''}</div>`;
+  document.body.appendChild(wrap);
+  wrap.onclick = (e) => { if (e.target === wrap || e.target.closest('.gx')) wrap.parentNode.removeChild(wrap); };
+  buzz(10);
+  const draw = () => { try { window.renderMathInElement(wrap, MATH_OPT); } catch (e) { /* */ } };
+  if (window.renderMathInElement) draw(); else loadKatex().then(() => window.renderMathInElement && draw());
+}
+// 長押し：450ms 押しつづけたら説明。そのあとのクリック（選択肢を選ぶなど）は止める
+(() => {
+  let timer = null, fired = false, sx = 0, sy = 0;
+  document.addEventListener('pointerdown', (e) => {
+    const t = e.target.closest && e.target.closest('.term'); if (!t) return;
+    fired = false; sx = e.clientX; sy = e.clientY;
+    timer = setTimeout(() => { fired = true; showTerm(t.dataset.term); }, 450);
+  });
+  const cancel = () => { clearTimeout(timer); timer = null; };
+  document.addEventListener('pointerup', cancel);
+  document.addEventListener('pointercancel', cancel);
+  document.addEventListener('pointermove', (e) => { if (timer && Math.hypot(e.clientX - sx, e.clientY - sy) > 10) cancel(); });
+  document.addEventListener('click', (e) => {
+    const t = e.target.closest && e.target.closest('.term'); if (!t) return;
+    if (fired) { e.preventDefault(); e.stopPropagation(); fired = false; return; }
+    if (!t.closest('button')) { e.preventDefault(); showTerm(t.dataset.term); } // ボタンの中でなければタップでも出す
+  }, true);
+  document.addEventListener('contextmenu', (e) => { if (e.target.closest && e.target.closest('.term')) e.preventDefault(); });
+})();
 
 // 線のアイコン
 const P = {
@@ -338,6 +417,7 @@ const MODES = [
 const UI = { count: 10, lectures: null };
 
 async function testMenu(c, t) {
+  await loadGlossary(c);
   let d;
   try { d = await loadTest(c, t); } catch (e) { screen(t.name, { back: home }).innerHTML = '<div class="empty">まだ問題がありません</div>'; return; }
   const back = (c.tests || []).length > 1 ? () => course(c) : home;
@@ -951,7 +1031,7 @@ function lessonsCard(c, t, d) {
 }
 function lessonList(c, t, d) {
   const w = screen('授業', { back: () => testMenu(c, t) });
-  w.innerHTML = `<div class="card flat muted small" style="margin-top:14px">上から順に見ると、テストの問題がぜんぶ解けるようになります。1本 10〜15分。とちゅうでやめても、続きから見られます。</div>` +
+  w.innerHTML = `<div class="card flat muted small" style="margin-top:14px">上から順に見ると、テストの問題がぜんぶ解けるようになります。1本 10〜15分。とちゅうでやめても、続きから見られます。<br>点線のついた言葉は、<b>長押し</b>（文の中ならタップでも）で説明が出ます。</div>` +
     (d.lessons || []).map((L, i) => {
       const st = store.lesson(lkey(c, t, L));
       const qs = d.questions.filter((q) => L.lecture && q.lecture === L.lecture);
