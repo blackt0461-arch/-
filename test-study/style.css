@@ -349,3 +349,43 @@ textarea.input { min-height: 160px; resize: vertical; }
 .qtext, .explain, .rlist .qq, .qitem .qq, .graded .gtext { min-width: 0; overflow-wrap: anywhere; }
 .qtext .katex, .explain .katex, .qq .katex { white-space: nowrap; }
 .qtext, .explain { overflow-x: auto; overflow-y: hidden; }
+
+/* ---- 授業（スライド） ---- */
+.slide { padding: 22px 20px; min-height: 52vh; animation: rise .25s ease; }
+.sl h2 { font-size: 24px; font-weight: 900; margin: 6px 0 10px; color: var(--fg); letter-spacing: 0; }
+.sl h3 { font-size: 19px; font-weight: 900; margin: 4px 0 12px; line-height: 1.45; }
+.sl p { margin: 8px 0; font-size: 16.5px; line-height: 1.8; }
+.sl ul { margin: 8px 0; padding-left: 20px; font-size: 16px; line-height: 1.75; }
+.sl mark { background: linear-gradient(transparent 55%, color-mix(in srgb, var(--gold) 55%, transparent) 55%); color: inherit; padding: 0 1px; }
+.sl b { color: var(--acc); }
+.kicker { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; color: var(--acc); background: var(--soft); border-radius: 99px; padding: 3px 12px; margin-bottom: 8px; }
+.kicker svg { width: 14px; height: 14px; }
+.sl.cover { text-align: center; padding-top: 12vh; }
+.sl.cover h2 { font-size: 28px; background: linear-gradient(135deg, var(--acc), var(--acc2)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.sl.cover p { color: var(--sub); }
+.sl.analogy .kicker { color: var(--mid); background: var(--mid-bg); }
+.sl.point .kicker, .sl.summary .kicker { color: var(--ok); background: var(--ok-bg); }
+.sl.quiz .kicker { color: var(--ng); background: var(--ng-bg); }
+.sl .tex { font-size: 1.25em; margin: 10px 0 14px; padding: 14px 8px; border-radius: 14px; background: var(--card2); overflow-x: auto; }
+.pts { list-style: none; padding: 0 !important; }
+.pts li { position: relative; padding: 10px 12px 10px 38px; margin: 8px 0; border-radius: 12px; background: var(--card2); }
+.pts li::before { content: ""; position: absolute; left: 12px; top: 15px; width: 16px; height: 16px; border-radius: 50%; background: linear-gradient(135deg, var(--ok), #3dd6a3); }
+.pts li p { margin: 0; font-size: 15.5px; line-height: 1.6; }
+.fl { display: flex; flex-direction: column; align-items: stretch; gap: 2px; margin: 8px 0; }
+.fb { text-align: center; padding: 12px; border-radius: 14px; background: var(--soft); font-weight: 700; }
+.fb p { margin: 0; }
+.fa { text-align: center; color: var(--acc); font-weight: 900; font-size: 18px; line-height: 1.2; }
+.st { padding-left: 0 !important; list-style: none; counter-reset: s; }
+.st li { counter-increment: s; position: relative; padding: 10px 12px 10px 44px; margin: 8px 0; border-radius: 12px; background: var(--card2); }
+.st li::before { content: counter(s); position: absolute; left: 10px; top: 10px; width: 24px; height: 24px; border-radius: 8px; display: grid; place-items: center; background: var(--acc); color: #fff; font-family: var(--num); font-weight: 800; font-size: 13px; }
+.st li p { margin: 0; font-size: 15.5px; line-height: 1.6; }
+.tw { overflow-x: auto; }
+.sl table { border-collapse: collapse; width: 100%; font-size: 14px; }
+.sl th, .sl td { border: 1px solid var(--line); padding: 6px 8px; text-align: left; vertical-align: top; }
+.sl th { background: var(--soft); }
+.sl th p, .sl td p { margin: 0; font-size: 14px; line-height: 1.5; }
+.sl .choice p { margin: 0; font-size: 15px; line-height: 1.5; }
+.qexp { margin-top: 10px; padding: 12px; border-radius: 12px; background: var(--card2); }
+.qexp p { font-size: 15px; margin: 4px 0; }
+.lessons-card { border-color: var(--ok); }
+.lesson-link { margin-top: 12px; }
