@@ -101,8 +101,38 @@ export function muscleShape(def, boneShapes) {
   if (groups) {
     const N = def.sheetN ?? 14;
     const tris = [], fill = [];
+    const tubeOf = (L) => smoothUnion(def.kTube ?? 0.6, ...L.slice(0, -1).map((a, i) => cone(a.p, L[i + 1].p, Math.max(0.35, a.r), Math.max(0.35, L[i + 1].r))));
     for (const g of groups) {
+      if (g.length === 1) { tris.push(tubeOf(lines[g[0]])); fill.push(lines[g[0]]); continue; }
       const R = g.map((i) => resample(lines[i], N));
+      // 膜を骨の外へ押し出しながら、ねじれ・折れ目をならす（ふちは動かさない）
+      const sheetBones = boneShapes.filter((b) => b.region !== 'tail');
+      const push = (q) => {
+        const p = q.p, margin = q.r + 0.9;
+        let best = Infinity, bb = null;
+        for (const b of sheetBones) {
+          const lo = b.shape.lo, hi = b.shape.hi;
+          if (p[0] < lo[0] - margin || p[0] > hi[0] + margin || p[1] < lo[1] - margin || p[1] > hi[1] + margin || p[2] < lo[2] - margin || p[2] > hi[2] + margin) continue;
+          const d = b.shape.f(p[0], p[1], p[2]);
+          if (d < best) { best = d; bb = b; }
+        }
+        if (!bb || best >= margin) return;
+        const e = 0.25, f = bb.shape.f;
+        const g = [f(p[0] + e, p[1], p[2]) - f(p[0] - e, p[1], p[2]), f(p[0], p[1] + e, p[2]) - f(p[0], p[1] - e, p[2]), f(p[0], p[1], p[2] + e) - f(p[0], p[1], p[2] - e)];
+        const l = Math.hypot(...g) || 1;
+        q.p = add(p, mul(g, (margin - best) / l));
+      };
+      for (let it = 0; it < (def.smoothSheet ?? 6); it++) {
+        for (const row of R) for (const q of row) push(q);
+        const next = R.map((row) => row.map((q) => ({ ...q })));
+        for (let a = 1; a < R.length - 1; a++) for (let k = 1; k < N - 1; k++) {
+          const nb = [R[a - 1][k].p, R[a + 1][k].p, R[a][k - 1].p, R[a][k + 1].p];
+          const avg = nb.reduce((x, y) => add(x, y), [0, 0, 0]).map((v) => v / 4);
+          next[a][k].p = lerp(R[a][k].p, avg, 0.5);
+        }
+        for (let a = 0; a < R.length; a++) R[a] = next[a];
+      }
+      for (let it = 0; it < 2; it++) for (const row of R) for (const q of row) push(q);
       for (let s = 0; s < R.length - 1; s++) for (let k = 0; k < N - 1; k++) {
         const a = R[s][k], b = R[s][k + 1], c = R[s + 1][k], d = R[s + 1][k + 1];
         tris.push(thickTri(a, b, d), thickTri(a, d, c));
@@ -118,7 +148,9 @@ export function muscleShape(def, boneShapes) {
     shape = smoothUnion(def.k ?? 1.6, ...tubes);
   }
   // 骨（と軟骨）にめりこまないように削る
-  const near = boneShapes.filter((b) => b.shape.lo.every((v, i) => v < shape.hi[i] + 1) && b.shape.hi.every((v, i) => v > shape.lo[i] - 1));
+  // 膜の筋肉は背骨のトゲで穴があかないよう、背骨では削らない
+  const skipRegions = groups ? ['spine', 'tail', 'thorax', 'forelimb', 'hindlimb', 'skull'] : [];
+  const near = boneShapes.filter((b) => !skipRegions.includes(b.region)).filter((b) => b.shape.lo.every((v, i) => v < shape.hi[i] + 1) && b.shape.hi.every((v, i) => v > shape.lo[i] - 1));
   if (near.length && !def.noCarve) {
     const pads = near.map((b) => ({ f: (x, y, z) => b.shape.f(x, y, z) - 0.3, lo: b.shape.lo.map((v) => v - 0.3), hi: b.shape.hi.map((v) => v + 0.3) }));
     shape = smoothSubtract(0.5, shape, ...pads);

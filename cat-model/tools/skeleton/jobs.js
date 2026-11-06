@@ -85,8 +85,37 @@ export async function meshMuscle(md, ctx, opts) {
   if (opts.fast) h *= 2;
   const raw = meshSDF(shape, h);
   if (!raw.indices.length) return null;
+  taubin(raw, 6);
   const m = simplify(raw, size, opts.err * 3.5);
   // 頂点ごとの重み（骨の名前と左右）
   const sw = skinWeights(m.positions, lines, (q) => q.bone + '|' + q.side);
   return { m, joints: sw.joints, weights: sw.weights, tendon: Array.from(sw.tendon) };
+}
+
+// 表面をならす（Taubin 法：縮まずになめらかにする）。そのあと法線を作り直す
+export function taubin(m, iters) {
+  const n = m.positions.length / 3, P = m.positions, I = m.indices;
+  const nb = Array.from({ length: n }, () => new Set());
+  for (let i = 0; i < I.length; i += 3) for (let a = 0; a < 3; a++) { const u = I[i + a], v = I[i + (a + 1) % 3]; nb[u].add(v); nb[v].add(u); }
+  const tmp = new Float32Array(P.length);
+  for (let it = 0; it < iters * 2; it++) {
+    const f = it % 2 === 0 ? 0.5 : -0.53;
+    for (let v = 0; v < n; v++) {
+      let x = 0, y = 0, z = 0, c = 0;
+      for (const w of nb[v]) { x += P[w * 3]; y += P[w * 3 + 1]; z += P[w * 3 + 2]; c++; }
+      if (!c) { tmp[v * 3] = P[v * 3]; tmp[v * 3 + 1] = P[v * 3 + 1]; tmp[v * 3 + 2] = P[v * 3 + 2]; continue; }
+      tmp[v * 3] = P[v * 3] + f * (x / c - P[v * 3]); tmp[v * 3 + 1] = P[v * 3 + 1] + f * (y / c - P[v * 3 + 1]); tmp[v * 3 + 2] = P[v * 3 + 2] + f * (z / c - P[v * 3 + 2]);
+    }
+    P.set(tmp);
+  }
+  const N = new Float32Array(P.length);
+  for (let i = 0; i < I.length; i += 3) {
+    const a = I[i] * 3, b = I[i + 1] * 3, c = I[i + 2] * 3;
+    const e1 = [P[b] - P[a], P[b + 1] - P[a + 1], P[b + 2] - P[a + 2]], e2 = [P[c] - P[a], P[c + 1] - P[a + 1], P[c + 2] - P[a + 2]];
+    const fn = [e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]];
+    for (const q of [a, b, c]) { N[q] += fn[0]; N[q + 1] += fn[1]; N[q + 2] += fn[2]; }
+  }
+  for (let v = 0; v < n; v++) { const l = Math.hypot(N[v * 3], N[v * 3 + 1], N[v * 3 + 2]) || 1; N[v * 3] /= l; N[v * 3 + 1] /= l; N[v * 3 + 2] /= l; }
+  m.normals = N;
+  return m;
 }

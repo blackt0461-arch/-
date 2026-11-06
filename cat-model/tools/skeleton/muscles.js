@@ -95,13 +95,13 @@ export function buildMuscles(api, lm) {
   const eo = [];
   for (let k = 0; k < 9; k++) {
     const z0 = 238 - k * 24;
-    eo.push(S([wall(z0, 0.0, -2.5), wall(z0 - 14, 0.45, -2.5), wall(z0 - 26, 0.72, -2.5), wall(Math.max(4, z0 - 34), 0.97, -2.5)], P(1.3, 0, 0.25, true)));
+    eo.push(S([wall(z0, 0.0, -2.5), wall(z0 - 14, 0.45, -2.5), wall(z0 - 26, 0.72, -2.5), wall(Math.max(4, z0 - 34), 0.92, -2.5)], P(1.3, 0, 0.25, true)));
   }
   M('ObliquusExt', '外腹斜筋', 'M. obliquus externus abdominis', 'trunk', 1, { origin: '第4〜13肋骨の外側・胸腰筋膜', insertion: '白線（お腹のまん中）・恥骨', action: 'お腹をしめる、体をまるめる・ひねる、息をはく' }, eo, { k: 2.4 });
   const io = [];
   for (let k = 0; k < 7; k++) {
     const z0 = 20 + k * 22;
-    io.push(S([wall(z0, 0.06, 0.2), wall(z0 + 10, 0.4, 0.2), wall(z0 + 20, 0.7, 0.2), wall(z0 + 28, 0.97, 0.2)], P(1.2, 0, 0.2, true)));
+    io.push(S([wall(z0, 0.06, 0.2), wall(z0 + 10, 0.4, 0.2), wall(z0 + 20, 0.7, 0.2), wall(z0 + 28, 0.92, 0.2)], P(1.2, 0, 0.2, true)));
   }
   M('ObliquusInt', '内腹斜筋', 'M. obliquus internus abdominis', 'trunk', 2, { origin: '胸腰筋膜・腸骨', insertion: '最後の数本の肋骨・白線', action: 'お腹をしめる、体をまるめる・ひねる' }, io, { k: 2.2 });
   M('RectusAbd', '腹直筋', 'M. rectus abdominis', 'trunk', 2, { origin: '恥骨（骨盤結合）', insertion: '胸骨と第1〜9肋軟骨', action: '体をまるめる（背中を丸める）、お腹をしめる' }, [
@@ -183,12 +183,18 @@ export function buildMuscles(api, lm) {
   M('Brachialis', '上腕筋', 'M. brachialis', 'forelimb', 2, { origin: '上腕骨の外側（近位）', insertion: '尺骨・橈骨の近位の内側', action: '肘を曲げる' }, [
     S([hu(12, -2, 6), hu(40, 2.5, 6.5), hu(Lh - 12, 5.5, 3.5), fa(8, 0.5, -1.5)], P(2.8, 0.03, 0.12)),
   ]);
-  M('Pectoralis', '胸筋群（浅胸筋・深胸筋・前腕胸筋・剣状上腕筋）', 'Mm. pectorales', 'forelimb', 1, { origin: '胸骨（胸骨柄〜剣状突起）', insertion: '上腕骨の大結節稜・前腕の筋膜', action: '前足を体に引きよせる、体を前足の上へ引く' }, [
-    S([at(stern(0, 0.3), 3, -3, 0), [16, 180, 300], hu(30, 7, -2), fa(12, -1, -7)], P(2.0, 0, 0.1, true)),
-    ...[0, 1, 2].map((i) => S([at(stern(i), 3, -3, 0), [14 + i, 175 - i * 3, 290 - i * 10], hu(25 + i * 8, 6, -1.5)], P(2.4, 0, 0.1, true))),
-    ...[2, 3, 4, 5].map((i) => S([at(stern(i), 3, -2, 0), [16, 170, 280 - i * 6], hu(10 + i * 3, 6, -2.5)], P(2.4, 0, 0.1, true))),
-    S([at(stern(7, 0.6), 3, -2, 0), [20, 152, 245], [24, 175, 268], hu(15, 6, -3)], P(1.8, 0, 0.12, true)),
-  ], { k: 2.0 });
+  {
+    // 胸筋群：前腕胸筋（細い帯）・浅胸筋（膜）・深胸筋（膜）・剣状上腕筋（細い帯）
+    const mid = (a, b, out, down) => { const m = lerp(a, b, 0.5); return [m[0] + out, m[1] - down, m[2]]; };
+    const strands = [];
+    const a0 = at(stern(0, 0.3), 3, -3, 0), b0 = fa(12, -1, -7);
+    strands.push(S([a0, mid(a0, b0, 8, 6), b0], P(2.0, 0, 0.12, true)));
+    for (let i = 0; i <= 3; i++) { const a = at(stern(i), 3, -3, 0), b = hu(18 + i * 8, 6.5, -1.5); strands.push(S([a, mid(a, b, 6, 5), b], P(2.2, 0, 0.1, true))); }
+    for (let i = 2; i <= 6; i++) { const a = at(stern(i), 4, -1.5, 0), b = hu(6 + (i - 2) * 5, 6, -3.5); strands.push(S([a, mid(a, b, 3, 3), b], P(2.4, 0, 0.1, true))); }
+    const ax = at(stern(7, 0.6), 3, -2, 0), bx = hu(15, 6, -3);
+    strands.push(S([ax, mid(ax, bx, 9, 4), bx], P(1.8, 0, 0.12, true)));
+    M('Pectoralis', '胸筋群（前腕胸筋・浅胸筋・深胸筋・剣状上腕筋）', 'Mm. pectorales', 'forelimb', 1, { origin: '胸骨（胸骨柄〜剣状突起）', insertion: '上腕骨の大結節稜・前腕の筋膜', action: '前足を体に引きよせる、体を前足の上へ引く' }, strands, { k: 2.0 });
+  }
   // 前腕
   M('Brachioradialis', '腕橈骨筋', 'M. brachioradialis', 'forelimb', 1, { origin: '上腕骨の外側顆上稜', insertion: '橈骨の遠位（内側）', action: '前腕を外へ回す（手のひらを上へ）' }, [
     S([hu(Lh - 25, 1, 6.5), fa(25, 6.5, 3), fa(Lr - 15, 5.5, -3), fa(Lr - 5, 3.5, -6.5)], P(1.4, 0.03, 0.2)),
@@ -329,5 +335,9 @@ export function buildMuscles(api, lm) {
     'SerratusVentralis', 'Supraspinatus', 'Infraspinatus', 'Subscapularis', 'Pectoralis', 'GluteusSup', 'GluteusMedius', 'Sartorius',
     'BicepsFemoris', 'Gracilis', 'Deltoideus', 'Diaphragm']);
   for (const m of list) if (SHEET.has(m.id)) m.sheet = true;
+  // 向きのちがう部分は別々の膜にする
+  const G = { Pectoralis: [[0], [1, 2, 3, 4], [5, 6, 7, 8, 9], [10]], SerratusVentralis: [[0, 1, 2, 3, 4, 5, 6, 7], [8]], Rhomboideus: [[0, 1, 2], [3]],
+    Triceps: null, Deltoideus: [[0], [1, 2]], GluteusSup: [[0, 1]], Temporalis: [[0, 1, 2, 3]] };
+  for (const m of list) if (G[m.id]) m.groups = G[m.id];
   return list;
 }
