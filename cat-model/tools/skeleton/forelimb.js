@@ -239,6 +239,14 @@ export function buildForelimb(api, lm) {
       dirM = norm(rotate([0, -0.12, 0.99], [0, 1, 0], splay * 1.3));
       lens = { 2: [9.5, 6.0, 6.5], 3: [11, 7, 7], 4: [11, 7, 7], 5: [9, 6, 6.2] }[m.d];
     }
+    // 筋肉づくり用：指の付け根・関節の位置
+    {
+      const p1b = add(head, mul(dirP, lens[0]));
+      const hasM = m.d !== 1;
+      const p2b = hasM ? add(p1b, mul(dirM, lens[1])) : p1b;
+      lm.F.digF ||= {};
+      lm.F.digF[m.d] = { mcBase: a, mcHead: b, head, p1b, p2b, dirP, dirM, lens, r: m.r };
+    }
     const bones = buildDigit({ name: 'F' + m.d, base: head, dirP, dirM, lens, r: m.d === 1 ? 1.0 : m.r * 0.92, side: 1, hasMiddle: m.d !== 1, prefix: '', region: 'forelimb', parentId: 'MC' + m.d, label: names[m.d] });
     for (const b2 of bones) reg({ ...b2, id: b2.id, h: b2.h ?? 0.15 });
   }

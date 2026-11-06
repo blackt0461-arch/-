@@ -57,7 +57,8 @@ export function buildSoft(api, lm) {
     const g = norm(add(mul(u, 0.82), mul(w, 0.57)));                         // 目の向き（前と少し外）
     const hv = norm(cross(v, g)), vv = norm(cross(g, hv));
     const R = 10.0;
-    lm.eyeOpen = { c: add(C, mul(g, R + 3.2)), axes: [g, hv, vv], r: [5.0, 6.8, 3.9] };     // まぶたのすきま（アーモンド形）
+    lm.eyeOpen = { c: add(C, mul(g, R + 3.2)), axes: [g, hv, vv], r: [5.0, 6.8, 3.9] };
+    lm.eyeCut = { c: add(C, mul(g, R + 7.0)), axes: [g, hv, vv], r: [9.5, 8.4, 6.0] };       // 皮ふを切る範囲（筋肉の厚みのぶん深く）     // まぶたのすきま（アーモンド形）
     lm.nostril = { c: Q(91.5, 10.8, 2.6), axes: [u, v, w], r: [2.6, 1.5, 1.3] };            // 鼻の穴
     api.bone({ id: 'Eye', pair: true, ja: '眼球', la: 'Bulbus oculi', region: 'organ', mat: 'eye', parent: 'Skull', joint: C, h: 0.13, noSimplify: true,
       shape: smoothUnion(1.5, sphere(C, R), sphere(add(C, mul(g, 4.2)), 7.2)), // 角膜のふくらみ

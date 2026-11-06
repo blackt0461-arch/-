@@ -105,7 +105,7 @@ for (const it of items) { const k = it.mat || 'bone'; counts[k] = (counts[k] || 
 let skin = null;
 if (mdefs.length) {
   const layerColor = [null, [0.66, 0.2, 0.17], [0.58, 0.16, 0.14], [0.5, 0.13, 0.12]];
-  const tendonColor = [0.9, 0.88, 0.82];
+  const tendonColor = [0.8, 0.84, 0.9]; // 腱は少し青みのある銀白色
   const boneNode = (key, side) => {
     const [id, s] = key.split('|');
     const ss = side === 'R' ? (s === 'L' ? 'R' : 'L') : s; // 右の筋肉は左右を入れかえる

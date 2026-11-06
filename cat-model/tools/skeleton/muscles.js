@@ -4,6 +4,7 @@
 // layer: 1=表層（いちばん外）、2=中間層、3=深層
 import { add, sub, mul, norm, lerp, spline } from './sdf.js';
 import { profile as P } from './muscle.js';
+import { buildFineMuscles } from './muscles_fine.js';
 
 export function buildMuscles(api, lm) {
   const F = lm.F, V = lm.vert;
@@ -329,6 +330,9 @@ export function buildMuscles(api, lm) {
   M('IntertransCaud', '尾の横突間筋', 'Mm. intertransversarii caudae', 'tail', 3, { origin: '尾椎の横突起', insertion: 'うしろの尾椎の横突起', action: 'しっぽを横に曲げる' }, [
     S([vt('S', 0, 0, 6), ...cds.map((id, i) => vt(id, 0, 0, cr(i) * 1.35))], tailProf(0.8)),
   ], { k: 1.0 });
+
+  // 顔の筋肉と手足の先の筋肉・腱
+  buildFineMuscles(lm, M, S);
 
   // 板（膜）のように広がる筋肉：となりあうすじのあいだを膜でうめる
   const SHEET = new Set(['Temporalis', 'Masseter', 'Splenius', 'Latissimus', 'ObliquusExt', 'ObliquusInt', 'Trapezius', 'Rhomboideus',

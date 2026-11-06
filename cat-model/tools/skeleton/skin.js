@@ -56,7 +56,7 @@ export function buildSkin({ sources, lm, nodeName, h = 1.0, closeR = 4.5, bigR =
   // ---- 格子 ----
   const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
   for (const s of sources) for (let i = 0; i < s.positions.length; i += 3) for (let k = 0; k < 3; k++) { lo[k] = Math.min(lo[k], s.positions[i + k]); hi[k] = Math.max(hi[k], s.positions[i + k]); }
-  for (let k = 0; k < 3; k++) { lo[k] -= 12; hi[k] += 12; }
+  for (let k = 0; k < 3; k++) { lo[k] -= 25; hi[k] += 25; }
   const nx = Math.ceil((hi[0] - lo[0]) / h) + 1, ny = Math.ceil((hi[1] - lo[1]) / h) + 1, nz = Math.ceil((hi[2] - lo[2]) / h) + 1;
   const N = nx * ny * nz;
   const idx = (i, j, k) => i + nx * (j + ny * k);
@@ -95,7 +95,7 @@ export function buildSkin({ sources, lm, nodeName, h = 1.0, closeR = 4.5, bigR =
   const rcAt = (q) => {
     const j = ((q / nx) | 0) % ny, k = (q / (nx * ny)) | 0;
     const y = lo[1] + j * h, z = lo[2] + k * h;
-    return (closeR + (bigR - closeR) * sm(80, 128, y) * sm(-28, -6, z)) / h;
+    return (closeR + (bigR - closeR) * sm(80, 128, y) * sm(-28, -6, z) * sm(385, 352, z)) / h; // 頭（z>385）は細かく包む
   };
   const out = new Uint8Array(N);
   const queue = new Int32Array(N);
@@ -117,7 +117,7 @@ export function buildSkin({ sources, lm, nodeName, h = 1.0, closeR = 4.5, bigR =
   const fatAt = (q) => {
     const j = ((q / nx) | 0) % ny, k = (q / (nx * ny)) | 0;
     const y = lo[1] + j * h, z = lo[2] + k * h;
-    return thick + 2.6 * sm(100, 150, y) * sm(-25, -5, z);
+    return (thick + 2.6 * sm(100, 150, y) * sm(-25, -5, z)) * (1 - 0.45 * sm(360, 395, z));
   };
   for (let q = 0; q < N; q++) val[q] = (rcAt(q) - fatAt(q) / h - E[q]) * h;
   // ぼかしてなめらかに（1方向ずつ）
@@ -138,7 +138,7 @@ export function buildSkin({ sources, lm, nodeName, h = 1.0, closeR = 4.5, bigR =
   // まぶたのすきま（目が見えるように）と鼻の穴を切る
   const cutters = [];
   for (const sx of [1, -1]) {
-    const e = lm.eyeOpen;
+    const e = lm.eyeCut || lm.eyeOpen;
     cutters.push({ c: [e.c[0] * sx, e.c[1], e.c[2]], axes: e.axes.map((a) => [a[0] * sx, a[1], a[2]]), r: e.r });
     const n = lm.nostril;
     cutters.push({ c: [n.c[0] * sx, n.c[1], n.c[2]], axes: n.axes.map((a) => [a[0] * sx, a[1], a[2]]), r: n.r });
@@ -266,7 +266,7 @@ export function tabbyColor(p, n, bone, lm) {
     fur = 0.28 + 0.3 * sm(30, 10, a) * sm(10, 22, c);
     // 鼻（鼻鏡）：毛のないピンク
     const nt = lm.noseTip; const dn = Math.hypot(x - nt[0], p[1] - nt[1], p[2] - nt[2]);
-    if (dn < 6.5 && a > 84) { col = [0.9, 0.56, 0.55]; fur = 0; }
+    if (dn < 9 && a > 85) { col = [0.9, 0.56, 0.55]; fur = 0; }
     // まぶたのふち：黒っぽい
     if (de < 11.8) { col = [0.3, 0.18, 0.14]; fur = 0; }
     // 唇のふち
