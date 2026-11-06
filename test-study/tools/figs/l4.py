@@ -256,7 +256,7 @@ def conv_radius():
 def euler():
     f = Fig(400, 300)
     cx, cy, r = 180, 160, 110
-    f.arrow(40, cy, 330, cy); f.arrow(cx, 290, cx, 20)
+    f.arrow(40, cy, 330, cy); f.arrow(cx, 278, cx, 20)
     f.text(330, cy + 22, '実部', 'end', 13, SUB); f.text(cx + 8, 30, '虚部', 'start', 13, SUB)
     f.add(f'<circle cx="{cx}" cy="{cy}" r="{r}" fill="none" stroke="{SUB}" stroke-width="2"/>')
     t = math.radians(50)
@@ -270,8 +270,7 @@ def euler():
     f.add(f'<rect x="{px + 5:.0f}" y="{(py + cy) / 2 - 10:.0f}" width="42" height="20" fill="#fff"/>'); f.text(px + 8, (py + cy) / 2 + 5, 'sin x', 'start', 14, RED)
     f.path(f'M{cx + 30},{cy} A30,30 0 0,0 {cx + 30 * math.cos(t):.1f},{cy - 30 * math.sin(t):.1f}', color=INK, w=1.8)
     f.text(cx + 36, cy - 12, 'x', 'start', 14)
-    f.text(cx - 50, cy - 78, '1', 'middle', 13, SUB)
-    f.text(20, 290, '半径1の円の上を、角度 x の所にある点', 'start', 13, SUB)
+    f.text(20, 296, '半径1の円の上を、角度 x の所にある点', 'start', 13, SUB)
     f.save('l4-euler')
 
 

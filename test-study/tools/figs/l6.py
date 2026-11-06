@@ -41,18 +41,18 @@ def wave(f, x0, x1, yc, amp, color, inv=False, w=2.5, cycles=2):
 # ① 3つの端子（slide 1）
 def terminals():
     f = Fig(400, 230)
-    x, y = 120, 115
+    x, y = 140, 115
     t = f.mos(x, y, 'n')
     f.line(t['G'], (x - 60, y), w=2)
     f.line(t['D'], (x + 20, 40)); f.line(t['S'], (x + 20, 190))
     f.text(x - 64, y + 5, 'ゲート G', 'end', 14)
     f.text(x + 30, 46, 'ドレイン D', 'start', 14)
     f.text(x + 30, 194, 'ソース S', 'start', 14)
-    f.text(300, 60, '3つの端子に', 'middle', 13, SUB)
-    f.text(300, 80, '役わりを1つずつ', 'middle', 13, SUB)
+    f.text(310, 60, '3つの端子に', 'middle', 13, SUB)
+    f.text(310, 80, '役わりを1つずつ', 'middle', 13, SUB)
     for k, (s, c) in enumerate([('入力', GRN), ('出力', RED), ('共通（接地）', ACC)]):
-        box(f, 245, 98 + k * 38, 110, 30, c)
-        f.text(300, 119 + k * 38, s, 'middle', 14, c)
+        box(f, 255, 98 + k * 38, 110, 30, c)
+        f.text(310, 119 + k * 38, s, 'middle', 14, c)
     f.save('l6-terminals')
 
 
@@ -115,19 +115,19 @@ def steps():
         box(f, x, y, w, h, c)
         n = len(lines)
         for k, (s, cc) in enumerate(lines):
-            f.text(x + w / 2, y + h / 2 + 5 + (k - (n - 1) / 2) * 18, s, 'middle', 13 if k else 13, cc)
+            f.text(x + w / 2, y + h / 2 + 5 + (k - (n - 1) / 2) * 20, s, 'middle', 13 if k else 13, cc)
     b(8, 92, 78, 56, [('STEP0', ACC), ('一般式', INK)], ACC)
     b(118, 18, 196, 56, [('STEP1 入力だけ残す', ACC), ('→ 変換係数 G_{m}', INK)])
     b(118, 150, 100, 74, [('STEP3', ACC), ('出力だけ残す', INK), ('→ 素子の抵抗', INK)])
     b(228, 150, 92, 74, [('STEP4', ACC), ('負荷と並列', INK), ('→ R_{out}', INK)])
-    b(340, 84, 114, 72, [('STEP5', RED), ('A_{v}=±G_{m}R_{out}', RED), ('符号は同相/逆相', SUB)], RED)
+    b(336, 74, 118, 92, [('STEP5', RED), ('A_{v}=±G_{m}R_{out}', RED), ('符号は', SUB), ('同相/逆相で', SUB)], RED)
     f.arrow(86, 108, 118, 52)
     f.arrow(86, 132, 118, 180)
     f.text(64, 196, 'STEP2', 'middle', 12, SUB)
     f.text(64, 212, '戻る', 'middle', 12, SUB)
     f.arrow(218, 187, 228, 187)
-    f.arrow(314, 52, 360, 84)
-    f.arrow(320, 187, 380, 156)
+    f.arrow(314, 52, 360, 74)
+    f.arrow(320, 187, 370, 166)
     f.save('l6-steps')
 
 
@@ -234,10 +234,10 @@ def faucet():
 
 # ⑩ 利得と電流（slide 16）
 def gain_id():
-    f = Fig(420, 280)
-    x0, y0 = 50, 235
-    axes(f, x0, y0, 400, 25, 'I_{D}', '')
-    sx, sy = 330, 190
+    f = Fig(460, 280)
+    x0, y0 = 40, 235
+    axes(f, x0, y0, 310, 25, 'I_{D}', '')
+    sx, sy = 260, 190
     def curve(fn, c):
         pts = []
         for k in range(101):
@@ -248,10 +248,10 @@ def gain_id():
     curve(lambda i: math.sqrt(i), GRN)
     curve(lambda i: 0.15 / i, SUB)
     curve(lambda i: 0.387 / math.sqrt(i), RED)
-    f.text(390, y0 - 1.0 * sy - 8, 'g_{m}（√I_{D} で増える）', 'end', 13, GRN)
-    f.text(390, y0 - 0.15 * sy - 8, 'r_{0}（1/I_{D} で減る）', 'end', 13, SUB)
-    f.text(390, y0 - 0.387 * sy - 10, '利得 |A_{v}|（1/√I_{D}）', 'end', 13, RED)
-    f.text(120, 268, '電流を増やすと、利得は下がる', 'start', 13, INK)
+    f.text(306, y0 - 1.0 * sy + 5, 'g_{m}（√I_{D} で増える）', 'start', 13, GRN)
+    f.text(306, y0 - 0.15 * sy + 5, 'r_{0}（1/I_{D} で減る）', 'start', 13, SUB)
+    f.text(306, y0 - 0.387 * sy + 5, '利得 |A_{v}|（1/√I_{D}）', 'start', 13, RED)
+    f.text(60, 268, '電流を増やすと、利得は下がる', 'start', 13, INK)
     f.save('l6-gain-id')
 
 
@@ -260,13 +260,13 @@ def sf_rout():
     f = Fig(460, 270)
     x = 80
     f.vdd(x + 20, 34)
-    t = f.mos(x, 100, 'n', None, '0')
+    t = f.mos(x, 100, 'n', None, 'v_{g}=0')
     f.line((x + 20, 34), t['D'])
     f.line(t['S'], (x + 64, t['S'][1])); f.dot(*t['S']); f.dot(x + 64, t['S'][1], 4)
     f.arrow(x + 110, t['S'][1], x + 70, t['S'][1], color=ACC)
     f.text(x + 90, t['S'][1] - 10, '見る', 'middle', 12, ACC)
     f.resistor_v(x + 20, t['S'][1], 222, 'R_{L}'); f.ground(x + 20, 222)
-    f.text(14, 20, '小信号でゲート・V_{DD} は 0', 'start', 12, SUB)
+    f.text(14, 262, '小信号でゲート・V_{DD} は 0', 'start', 12, SUB)
     # 右：同じもの
     f.text(224, 140, '=', 'middle', 20)
     yt, yb = 70, 200
@@ -288,19 +288,19 @@ def level_shift():
     x0, y0 = 60, 220
     axes(f, x0, y0, 400, 20, '時間', '電圧')
     f.text(x0 + 4, 16, '', 'start')
-    wave(f, x0 + 10, 380, 80, 25, GRN, cycles=1.5)
-    wave(f, x0 + 10, 380, 165, 25, RED, cycles=1.5)
-    f.text(390, 76, 'V_{in}', 'end', 14, GRN)
-    f.text(390, 196, 'V_{out}', 'end', 14, RED)
+    wave(f, x0 + 10, 380, 64, 25, GRN, cycles=1.5)
+    wave(f, x0 + 10, 380, 182, 25, RED, cycles=1.5)
+    f.text(390, 60, 'V_{in}', 'end', 14, GRN)
+    f.text(396, 160, 'V_{out}', 'end', 14, RED)
     for xx in (130, 260):
         # 同じ時刻の差
         t = (xx - (x0 + 10)) / (380 - x0 - 10)
         v = math.sin(2 * math.pi * 1.5 * t)
-        ya, yb = 80 - 25 * v, 165 - 25 * v
+        ya, yb = 64 - 25 * v, 182 - 25 * v
         f.arrow(xx, ya + 4, xx, yb - 4, color=ACC)
         f.arrow(xx, yb - 4, xx, ya + 4, color=ACC)
-    f.text(140, 128, '差はいつも一定', 'start', 13, ACC)
-    f.text(140, 146, 'V_{T}+√(2I/β)', 'start', 13, ACC)
+    f.text(150, 118, '差はいつも一定', 'start', 13, ACC)
+    f.text(150, 138, 'V_{T}+√(2I/β)', 'start', 13, ACC)
     f.save('l6-level-shift')
 
 
@@ -341,8 +341,8 @@ def cis():
     f.line((xc, 60), (xc, 200), w=3)
     f.isrc(xc, 200, 268, None)
     f.ground(xc, 268)
-    f.text(xc + 22, 240, '電流源', 'start', 12)
-    f.text(xc + 22, 256, '(SFの負荷)', 'start', 12, SUB)
+    f.text(xc - 22, 240, '電流源', 'end', 12)
+    f.text(xc - 22, 256, '(SFの負荷)', 'end', 12, SUB)
     f.arrow(xc, 70, xc, 36, color=GRN, w=2.5)
     f.text(xc, 24, 'AMP へ', 'middle', 13, GRN)
     f.text(xc + 8, 120, '列線', 'start', 13)
@@ -431,7 +431,7 @@ def lens():
 def cascode_cmp():
     f = Fig(460, 340)
     # 左：従来
-    x = 70
+    x = 100
     f.text(x + 20, 22, '従来', 'middle', 14)
     f.vdd(x + 20, 50, '')
     m4 = f.mos(x, 98, 'p', 'M_{4}', '固定')

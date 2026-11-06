@@ -89,11 +89,11 @@ def tangent(f, x0, y0, sx, k, vt, v, half, color=RED, w=2):
 
 def gm_tangent():
     f = Fig(420, 290)
-    x0, y0, sx, k, vt = 50, 250, 66, 34, 1.0
+    x0, y0, sx, k, vt = 50, 250, 66, 30, 1.0
     axes(f, x0, y0, 400, 30, 'V_{GS}', 'I_{D}')
-    sat_curve(f, x0, y0, sx, k, vt, 3.4)
+    sat_curve(f, x0, y0, sx, k, vt, 3.3)
     f.line((x0 + vt * sx, y0), (x0 + vt * sx, y0 + 6)); f.text(x0 + vt * sx, y0 + 22, 'V_{T}', 'middle', 13)
-    v = 2.6
+    v = 2.5
     xv, yv, s = tangent(f, x0, y0, sx, k, vt, v, 0.85)
     f.dot(xv, yv, 5, RED)
     # 小さな三角形
@@ -102,7 +102,7 @@ def gm_tangent():
     f.line((xv + dx, yv), (xv + dx, yv - s * dx), color=INK, w=1.8, dash='4 3')
     f.text(xv + dx / 2, yv + 20, 'ΔV_{GS}', 'middle', 13)
     f.text(xv + dx + 8, yv - s * dx / 2 + 5, 'ΔI_{D}', 'start', 13)
-    f.text(80, 60, '接線の傾き ＝ ΔI_{D}÷ΔV_{GS} ＝ g_{m}', 'start', 14, RED)
+    f.text(70, 50, '接線の傾き ＝ ΔI_{D}÷ΔV_{GS} ＝ g_{m}', 'start', 14, RED)
     f.save('l2-gm-tangent')
 
 
@@ -128,16 +128,16 @@ def gm_lin():
 
 def gm_sat():
     f = Fig(420, 290)
-    x0, y0, sx, k, vt = 50, 250, 66, 34, 1.0
+    x0, y0, sx, k, vt = 50, 250, 66, 30, 1.0
     axes(f, x0, y0, 400, 30, 'V_{GS}', 'I_{D}')
-    sat_curve(f, x0, y0, sx, k, vt, 3.4)
+    sat_curve(f, x0, y0, sx, k, vt, 3.3)
     f.line((x0 + vt * sx, y0), (x0 + vt * sx, y0 + 6)); f.text(x0 + vt * sx, y0 + 22, 'V_{T}', 'middle', 13)
     xa, ya, _ = tangent(f, x0, y0, sx, k, vt, 1.6, 0.55, GRN, 2.2)
     f.dot(xa, ya, 5, GRN)
-    f.text(xa + 34, ya + 10, 'ゆるい＝g_{m} 小', 'start', 13, GRN)
-    xb, yb, _ = tangent(f, x0, y0, sx, k, vt, 3.0, 0.35, RED, 2.2)
+    f.text(xa - 8, ya - 18, 'ゆるい＝g_{m} 小', 'end', 13, GRN)
+    xb, yb, _ = tangent(f, x0, y0, sx, k, vt, 2.8, 0.4, RED, 2.2)
     f.dot(xb, yb, 5, RED)
-    f.text(xb - 30, yb - 8, '急＝g_{m} 大', 'end', 13, RED)
+    f.text(xb - 34, yb - 4, '急＝g_{m} 大', 'end', 13, RED)
     f.text(70, 54, '飽和：V_{GS} が大きいほど急', 'start', 14, INK)
     f.text(70, 76, '→ g_{m}＝β(V_{GS}−V_{T})', 'start', 14, RED)
     f.save('l2-gm-sat')
@@ -220,11 +220,11 @@ def gain_slope():
     h = 32
     f.line((round(xv - h, 1), round(yv - s * h, 1)), (round(xv + h, 1), round(yv + s * h, 1)), color=RED, w=2.2)
     f.dot(xv, yv, 5, RED)
-    dx = 22
+    dx = 26
     f.line((xv, yv), (xv + dx, yv), color=INK, w=1.8, dash='4 3')
     f.line((xv + dx, yv), (xv + dx, yv + s * dx), color=INK, w=1.8, dash='4 3')
-    f.text(xv + dx / 2, yv - 8, 'ΔV_{in}', 'middle', 12)
-    f.text(xv + dx + 6, yv + s * dx / 2 + 5, 'ΔV_{out}（大）', 'start', 12)
+    f.text(xv + dx + 6, yv - 4, 'ΔV_{in}', 'start', 12)
+    f.text(xv + dx + 6, yv + s * dx / 2 + 14, 'ΔV_{out}（大）', 'start', 12)
     # 線形での傾き
     v2 = 2.3
     f.dot(x0 + v2 * sx, y0 - vout(v2) * sy, 5, GRN)
@@ -327,8 +327,8 @@ def bucket():
     f.add(f'<rect x="146" y="64" width="10" height="{wl - 64}" fill="{WATER}" stroke="{WATERL}" stroke-width="1.5"/>')
     f.text(170, 90, 'i ＝ 流れ込む勢い', 'start', 13, GRN)
     # 水位の上がる速さ
-    f.arrow(235, wl - 2, 235, wl - 38, color=GRN, w=2.5)
-    f.text(243, wl - 22, '水位の上がる速さ', 'start', 12, GRN)
+    f.arrow(225, wl - 2, 225, wl - 30, color=GRN, w=2.5)
+    f.text(208, wl - 38, '水位の上がる速さ', 'middle', 12, GRN)
     # 水位 v
     f.line((bx + bw + 14, by + bh), (bx + bw + 14, wl), color=RED, w=2)
     f.line((bx + bw + 8, wl), (bx + bw + 20, wl), color=RED, w=2)
@@ -402,7 +402,7 @@ def jturn():
     f.line((cx, cy - 120), (cx, cy + 120), color=SUB, w=1.2)
     cols = [INK, ACC, RED, GRN]
     ends = [(cx + L, cy), (cx, cy - L), (cx - L, cy), (cx, cy + L)]
-    labs = [('1', 14, -8, 'start'), ('j', 8, -6, 'start'), ('−1', -14, -8, 'end'), ('−j', 8, 14, 'start')]
+    labs = [('1', 14, -8, 'start'), ('j', 8, -6, 'start'), ('−1', -14, -8, 'end'), ('−j', 12, 2, 'start')]
     for (ex, ey), c, (s, dx, dy, an) in zip(ends, cols, labs):
         f.arrow(cx, cy, ex, ey, color=c, w=3)
         f.text(ex + dx, ey + dy, s, an, 16, c)
@@ -444,7 +444,7 @@ def euler():
 # ===== フェーザ：回る矢印と、その影（実部）＝ cos =====
 def phasor():
     f = Fig(440, 320)
-    cx, cy, R = 120, 95, 62
+    cx, cy, R = 120, 105, 62
     f.arrow(cx - 85, cy, cx + 90, cy, color=SUB, w=1.6)
     f.line((cx, cy + 80), (cx, cy - 85), color=SUB, w=1.2)
     f.text(cx + 92, cy + 5, '実部', 'start', 12, SUB)
@@ -454,12 +454,12 @@ def phasor():
     px, py = cx + R * math.cos(a), cy - R * math.sin(a)
     f.arrow(cx, cy, round(px, 1), round(py, 1), color=ACC, w=3.2)
     arc(f, cx, cy, R + 12, 60, 115, color=ACC, w=2, arrow=True)
-    f.text(cx - 20, cy - R - 26, '回る矢印', 'end', 13, ACC)
+    f.text(cx - 40, cy - R + 4, '回る', 'end', 13, ACC)
     # 影
     f.line((px, py), (px, cy), color=RED, w=1.8, dash='4 4')
     f.dot(px, cy, 5, RED)
     # 下へ時間
-    ty0, P = 185, 70
+    ty0, P = 195, 66
     f.line((px, cy), (px, ty0), color=RED, w=1.4, dash='2 4')
     pts = []
     for k in range(91):
@@ -526,7 +526,7 @@ def phasor_ci():
     arc(f, cx, cy, 40, 0, 25, color=INK, w=1.6)
     f.text(cx + 46, cy - 6, 'φ', 'start', 14)
     arc(f, cx, cy, 62, 27, 113, color=GRN, w=2, arrow=True)
-    f.text(cx + 52, cy - 70, 'π/2 進む', 'start', 14, GRN)
+    f.text(cx - 42, cy - 56, 'π/2 進む', 'end', 14, GRN)
     t2(f, vx - 20, vy - 14, 'V ＝ V_{0}e^{jφ}', 'middle', 15, ACC)
     t2(f, ix - 8, iy - 10, 'I ＝ jωC V', 'end', 15, RED)
     f.text(ix - 8, iy + 10, '（長さ ωC 倍）', 'end', 12, RED)
@@ -539,21 +539,21 @@ def theory_map():
     box(f, 130, 14, 200, 46, stroke=SUB, fill='#f6f7fb')
     f.text(230, 36, '複素数', 'middle', 14)
     f.text(230, 53, '（オイラーの公式）', 'middle', 12, SUB)
-    box(f, 14, 112, 170, 64, stroke=ACC, fill='#f1f1fe')
-    f.text(99, 136, '交流理論 jω', 'middle', 15, ACC)
-    f.text(99, 156, '1つの周波数の波', 'middle', 12, ACC)
-    f.text(99, 170, 'だけ', 'middle', 12, ACC)
-    box(f, 276, 112, 170, 64, stroke=RED, fill='#fff3f3')
-    f.text(361, 136, 'フーリエ変換 ω', 'middle', 15, RED)
-    f.text(361, 156, 'どんな波も', 'middle', 12, RED)
-    f.text(361, 170, '周波数の足し算で', 'middle', 12, RED)
+    box(f, 14, 108, 170, 74, stroke=ACC, fill='#f1f1fe')
+    f.text(99, 132, '交流理論 jω', 'middle', 15, ACC)
+    f.text(99, 154, '1つの周波数の波', 'middle', 12, ACC)
+    f.text(99, 171, 'だけ', 'middle', 12, ACC)
+    box(f, 276, 108, 170, 74, stroke=RED, fill='#fff3f3')
+    f.text(361, 132, 'フーリエ変換 ω', 'middle', 15, RED)
+    f.text(361, 154, 'どんな波も', 'middle', 12, RED)
+    f.text(361, 171, '周波数の足し算で', 'middle', 12, RED)
     box(f, 276, 236, 170, 58, stroke=GRN, fill='#effaf6')
     f.text(361, 260, 'ラプラス変換', 'middle', 15, GRN)
     f.text(361, 282, 's ＝ γ ＋ jω', 'middle', 14, GRN)
     f.arrow(190, 60, 120, 110, color=SUB)
     f.arrow(270, 60, 340, 110, color=SUB)
-    f.arrow(361, 176, 361, 234, color=SUB)
-    f.text(371, 210, 'jω を s に広げる', 'start', 12, SUB)
+    f.arrow(361, 182, 361, 234, color=SUB)
+    f.text(351, 213, 'jω を s に広げる', 'end', 12, SUB)
     # 橋渡し
     f.arrow(200, 144, 268, 144, color=INK, w=2)
     f.arrow(260, 144, 192, 144, color=INK, w=2)
