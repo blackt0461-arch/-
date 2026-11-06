@@ -5,7 +5,7 @@ import * as L from './lyrics.js';
 import * as R from './recorder.js';
 import * as A from './analyze.js';
 
-export const APP_VERSION = '2.0.0';
+export const APP_VERSION = '2.0.1';
 const NEED_SERVER = 3; // この版の受け口（server/Code.gs）の番号
 
 // ---------- 小さな道具 ----------
