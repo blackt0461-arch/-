@@ -1684,7 +1684,7 @@ function photoMode() {
 
 // =========================== 更新のお知らせ ===========================
 // このプログラムの版（version.json と同じにする。公開のたびに上げる）
-const APP_VERSION = '1.12.2';
+const APP_VERSION = '1.12.3';
 ERR.setVersion(APP_VERSION);
 // 新しい版が出たら、みんな同じタイミングでそろうように強制で再起動する。
 // 開いた時・画面に戻った時・1分ごとに version.json を見る
@@ -1833,7 +1833,7 @@ function showPuzzleHub() {
   const R = S.PUZZLE_REWARD.gauge;
   const el = sheet(`
     <div class="sh-head"><span class="sh-ic">${icon('grid')}</span><div><h3>どのパズルにする？</h3><p>★を選んでスタート。★が高いほど、ゲージが多くたまります</p></div><button class="sh-x close" aria-label="とじる">${icon('x')}</button></div>
-    ${freePuzzle() ? '' : `<div class="pz-tix ${S.puzzleTickets() ? '' : 'empty'}">${icon('grid')}<span>パズルをあと <b>${S.puzzleTickets()}回</b> できます</span><small>勉強を${S.STUDY_PER_PUZZLE}問するごとに1回ふえます（あと${S.studyToNextPuzzle()}問）</small></div>`}
+    ${freePuzzle() ? '' : `<div class="pz-tix ${S.puzzleTickets() ? '' : 'empty'}">${icon('grid')}<span>パズルをあと <b>${S.puzzleTickets()}回</b> できます</span><small>あと${S.studyToNextPuzzle()}問 正解すると1回ふえます（1日の中で、ふえるたびに必要な数が多くなります）</small></div>`}
     <div class="pz-hub">${PUZZLES.map(z => { const ps = S.puzzleState(z.id), open = S.puzzleOpen(z.id); return `
       <div class="pz-pick">
         <div class="pz-pick-top"><span class="s-ic">${icon(z.icon)}</span>
@@ -1851,7 +1851,7 @@ function showPuzzleHub() {
 }
 function playPuzzle(id, star) {
   if (!freePuzzle()) {
-    if (!S.usePuzzleTicket()) { toast(`パズルは、勉強を${S.STUDY_PER_PUZZLE}問するごとに1回できます（あと${S.studyToNextPuzzle()}問）`, 3200); return showHome(); }
+    if (!S.usePuzzleTicket()) { toast(`あと${S.studyToNextPuzzle()}問 正解すると、パズルが1回できます`, 3200); return showHome(); }
     S.save();
   }
   const z = puzzleById(id), ps = S.puzzleState(id);
@@ -2967,7 +2967,7 @@ async function restoreUser(name) {
 // 管理者：その人のモード（勉強メイン・パズルメイン）を切りかえる。本人のアプリが次に開いた時に切りかわる
 function changeMode(name, now) {
   const cf = sheet(`
-    <div class="sh-head"><span class="sh-ic">${icon('shield')}</span><div><h3>「${esc(name)}」のサイド</h3><p>スタディサイドは、勉強を${S.STUDY_PER_PUZZLE}問するごとにパズルが1回。パズルサイドは、勉強とパズルを自由に行き来。その人が次にアプリを開いた時に切りかわります。部屋・家具・記録はそのまま</p></div></div>
+    <div class="sh-head"><span class="sh-ic">${icon('shield')}</span><div><h3>「${esc(name)}」のサイド</h3><p>スタディサイドは、正解${S.STUDY_PER_PUZZLE}問でパズルが1回（その日にふえるたびに、必要な数が${S.STUDY_PER_PUZZLE}問ずつ多くなる）。パズルサイドは、勉強とパズルを自由に行き来。その人が次にアプリを開いた時に切りかわります。部屋・家具・記録はそのまま</p></div></div>
     <div class="mode-pick">
       <button data-m="study" class="${now === 'study' ? 'on' : ''}"><span class="mp-ic">${icon('pencil')}</span><b>スタディサイド</b></button>
       <button data-m="puzzle" class="${now === 'puzzle' ? 'on' : ''}"><span class="mp-ic">${icon('grid')}</span><b>パズルサイド</b></button>
@@ -3437,7 +3437,7 @@ function awardResult(st, ss, p, perfect, ok, isReview, secs) {
       xp = S.addAnswer(st, p.unit, perfect ? 'perfect' : ok ? 'ok' : 'wrong');
       S.logDay({ sid: subjectId, unit: p.unit, ok });
       evToast(EV.addPoints(ok ? EV.POINTS.right : EV.POINTS.wrong));
-      if (S.countStudyForPuzzle()) setTimeout(() => toast('パズルが1回できるようになりました', 2400), 1200);
+      if (S.countStudyForPuzzle(ok)) setTimeout(() => toast('パズルが1回できるようになりました', 2400), 1200);
       const firstPlay = S.markPlayedToday();
       // 50問ごと・連続7日ごと・克服でたまにレアチケット
       const earned = G.ticketsEarned(tBefore, { solved: S.profile().solved, streak: S.currentStreak(), mastered: S.stats(st, probs()).mastered });

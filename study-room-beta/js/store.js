@@ -312,19 +312,24 @@ export function addAnswer(sub, unit, kind) {
 }
 export function profile() { return state.profile || (state.profile = blankProfile()); }
 // サイド（1.11.0）：はじめに選んだ目的。'puzzle'＝パズルサイド（勉強とパズルを自由に行き来）、'study'＝スタディサイド（勉強をすると、パズルが遊べる）
-export const STUDY_PER_PUZZLE = 5; // スタディサイドは、問題を5問解くごとにパズル1回
+export const STUDY_PER_PUZZLE = 5; // スタディサイドは、はじめは正解5問でパズル1回
+// 1.12.3：数えるのは正解だけ。その日にパズルが1回ふえるごとに、次に必要な正解の数が5問ずつふえる（5→10→15…、朝6時にもどる）
 // サイドは管理者だけが変えられる（「勉強｜パズル」の切りかえ＝mode では変わらない）。
-// サイドがまだ記録されていない前からの人は、はじめに見た時のモードをサイドとして決める（それ以降はモードについていかない）
-export function sideOf() { const p = profile(); if (!p.side && p.mode) { p.side = p.mode; } return p.side || 'study'; }
+// サイドがまだ記録されていない人は、スタディサイドにする（1.12.3。前は、その時のモードをサイドにしていたので、パズルに切りかえておくとパズルサイドになれた）
+export function sideOf() { const p = profile(); if (!p.side) p.side = 'study'; return p.side; }
 export const puzzleTickets = () => profile().puzzleTickets || 0;
-export const studyToNextPuzzle = () => STUDY_PER_PUZZLE - (profile().studyCount || 0);
-// 1問解いたら呼ぶ。パズルが1回ふえたら 1 を返す
-export function countStudyForPuzzle() {
-  const p = profile();
-  if (sideOf() !== 'study') return 0;
+function ticketDay() { const p = profile(), k = dayKey(); if (p.ticketDay !== k) { p.ticketDay = k; p.ticketsToday = 0; } return p; }
+// 次のパズル1回に必要な正解の数（その日に、もう何回ふえたかで決まる）
+export const studyNeed = () => STUDY_PER_PUZZLE * ((ticketDay().ticketsToday || 0) + 1);
+export const studyToNextPuzzle = () => Math.max(1, studyNeed() - (profile().studyCount || 0));
+// 1問答えたら呼ぶ（ok = 正解）。パズルが1回ふえたら 1 を返す
+export function countStudyForPuzzle(ok = true) {
+  if (!ok || sideOf() !== 'study') return 0;
+  const p = ticketDay(), need = studyNeed();
   p.studyCount = (p.studyCount || 0) + 1;
-  if (p.studyCount < STUDY_PER_PUZZLE) return 0;
-  p.studyCount -= STUDY_PER_PUZZLE;
+  if (p.studyCount < need) return 0;
+  p.studyCount = 0;
+  p.ticketsToday = (p.ticketsToday || 0) + 1;
   p.puzzleTickets = (p.puzzleTickets || 0) + 1;
   return 1;
 }

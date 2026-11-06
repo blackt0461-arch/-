@@ -126,8 +126,10 @@ function serve() {
   // ---- 2c. スタディサイド：勉強をするとパズルが遊べる ----
   console.log('2c. スタディサイドのパズル');
   await page.evaluate(() => window.__app.showHome()); await page.waitForTimeout(400);
-  const tix = await page.evaluate(() => ({ t: window.__app.S.puzzleTickets(), side: window.__app.S.sideOf(), solved: window.__app.S.profile().solved }));
-  check(tix.side === 'study' && tix.t === Math.floor(tix.solved / 5), `5問ごとにパズルが1回ふえる（${tix.solved}問 → ${tix.t}回）`);
+  const tix = await page.evaluate(() => ({ t: window.__app.S.puzzleTickets(), side: window.__app.S.sideOf(), solved: window.__app.S.profile().solved, correct: window.__app.S.profile().correct }));
+  let expT = 0; for (let c = tix.correct, need = 5; c >= need; c -= need, need += 5) expT++;
+  check(tix.side === 'study' && tix.t === expT, `正解5問・10問…ごとにパズルが1回ふえる（${tix.solved}問中 正解${tix.correct}問 → ${tix.t}回）`);
+  if (!tix.t) { await page.evaluate(() => { window.__app.S.profile().puzzleTickets = 1; }); tix.t = 1; }
   await page.click('.mode-toggle [data-mode=puzzle]'); await page.waitForTimeout(300);
   await page.evaluate(() => document.querySelector('.solve-ring')?.click()); await page.waitForSelector('.pz-hub');
   check(await page.locator('.pz-tix').count() === 1, `パズルえらびに「あと${tix.t}回できます」が出る`);
