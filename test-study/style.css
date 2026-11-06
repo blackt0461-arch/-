@@ -404,9 +404,3 @@ textarea.input { min-height: 160px; resize: vertical; }
 .gpop .gd p { margin: 8px 0; font-size: 16px; line-height: 1.75; }
 .gpop .tex { margin-top: 8px; padding: 10px; border-radius: 12px; background: var(--card2); overflow-x: auto; }
 
-/* 読み上げのボタン */
-.vbar { display: flex; gap: 8px; margin: 10px 0 2px; }
-.vbar button { display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 99px; font-size: 13px; font-weight: 700; color: var(--sub); background: var(--card); border: 1px solid var(--line); }
-.vbar button svg { width: 15px; height: 15px; }
-.vbar button.on { background: var(--acc); color: #fff; border-color: var(--acc); }
-.vbar [data-vplay] { flex: 1; justify-content: center; }
