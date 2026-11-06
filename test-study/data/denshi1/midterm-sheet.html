@@ -1,0 +1,84 @@
+<h1>電子回路I 中間まとめ（第1〜6回）</h1>
+<p style="margin:0">記号：大文字＝直流（バイアス）、小文字＝小信号。$X/\!/Y=(1/X+1/Y)^{-1}$。$g_m^*=g_m+g_{mb}$。</p>
+
+<h2>① MOSFET の I–V 特性（第1回）</h2>
+<table>
+<tr><th>線形</th><td>$V_{DS}\lt V_{GS}-V_T$：$I_D=\beta\left[(V_{GS}-V_T)-\frac{V_{DS}}{2}\right]V_{DS}$（$V_{DS}$ について上に凸の2次関数、頂点 $V_{DS}=V_{GS}-V_T$）</td></tr>
+<tr><th>飽和</th><td>$V_{DS}\ge V_{GS}-V_T$：$I_D=\frac{\beta}{2}(V_{GS}-V_T)^2(1+\lambda V_{DS})$（第1回は $\lambda$ を $\gamma$ と表記）</td></tr>
+<tr><th>β・飽和電圧</th><td>$\beta=\frac{W}{L}\mu_nC_{ox}$（サイズとプロセス）／$V_{DSAT}=V_{GS}-V_T=V_P=\Delta_{OV}$</td></tr>
+<tr><th>$I_D$–$V_{GS}$</th><td>線形（$V_{DS}$ 小）＝$V_T$ 付近から直線（傾き $\beta V_{DS}$）／飽和＝$V_T$ から放物線</td></tr>
+</table>
+<ul>
+<li><b>ピンチオフ</b>：ドレイン端の反転電荷 $Q_D=C_{ox}(V_{GS}-V_T-V_{DS})$ が $V_{DS}=V_{GS}-V_T$ で 0。以後チャネルはほぼ変わらず <b>電流一定</b>。L が短いと実効チャネル長が縮み右上がり（<b>チャネル長変調</b>）。</li>
+<li><b>基板バイアス効果</b>：基板がソースより低い → 空乏層のイオン化アクセプタ（負電荷）↑ → 反転層の電子↓ → 高いゲート電圧が必要 → <b>$V_T$ 上昇</b>（$I_D$–$V_{GS}$ が右へ）。<b>$V_T$ はソース電位 $V_S$ の関数</b>。<br>
+$V_{TH}=V_{TH0}+\gamma\left(\sqrt{2\phi_F+V_{SB}}-\sqrt{2\phi_F}\right)$（$\gamma=0.3\sim0.4$）</li>
+<li>導出（参考）：平均電荷 $\bar Q=C_{ox}[(V_{GS}-V_T)-V_{DS}/2]$、電流＝$W\bar Q\times\mu_nE$、$E=V_{DS}/L$。</li>
+</ul>
+
+<h2>② $g_m$・増幅の原理・交流理論（第2回）</h2>
+<ul>
+<li>$g_m=\partial I_D/\partial V_{GS}$：線形 $\beta V_{DS}$／飽和 $\beta(V_{GS}-V_T)=\sqrt{2\beta I_D}$</li>
+<li><b>抵抗負荷</b>：$V_{out}=V_{DD}-R_LI_D$。負荷線 $(0,V_{DD}/R_L)$–$(V_{DD},0)$。伝達特性：$V_{in}\lt V_T$ 遮断（$V_{out}=V_{DD}$）→ 飽和で急降下（高利得）→ $V_{out}\lt V_{in}-V_T$ で線形（利得小）。小信号利得＝傾き $dV_{out}/dV_{in}$、<b>逆相</b>。$R_L$ 大ほど急。</li>
+<li><b>交流理論の前提</b>：単一周波数 $\omega$ の余弦波 → 振幅と位相だけ → フェーザ（複素数）。<b>恩恵：$d/dt\to j\omega$（微分が掛け算）</b>。</li>
+<li>$q=Cv$、$i=C\,dv/dt$。$v=V_0\cos(\omega t+\varphi)$ → $i=\omega CV_0\cos(\omega t+\varphi+\frac{\pi}{2})$（<b>$\omega C$ 倍・$\pi/2$ 進む</b>）。</li>
+<li>$V=V_0e^{j\varphi}$、$I=j\omega CV$、$Z_C=\frac{1}{j\omega C}$。戻すとき：$e^{j\omega t}$ を掛けて実部。</li>
+<li>$j$ を掛ける＝$\pi/2$ 進む（4回で一周、$j$ で割ると遅れる）。$e^{j\theta}=\cos\theta+j\sin\theta$、$j=e^{j\pi/2}$。</li>
+</ul>
+
+<h2>③ OPアンプ・負帰還（第3回）</h2>
+<ul>
+<li>1本線の増幅器記号は <b>GND が省略</b>。$v_{out}=Av_{in}$。</li>
+<li><b>負帰還</b>：$A(x_{in}-\beta x_{out})=x_{out}$ → $A_{closed}=\frac{A}{1+A\beta}\approx\frac{1}{\beta}$（$A\beta\gg1$、帰還回路だけで決まる）。$\beta$：帰還率（$\le1$）、$A\beta$：帰還量。<br>
+<b>効用：①利得の安定化 ②帯域の拡大 ③入出力インピーダンス調整</b>。プラスで戻すと正帰還。</li>
+<li>OPアンプ＝<b>差動増幅器</b>：$v_{out}=A_d(v_{in}^+-v_{in}^-)$。<b>理想</b>：①入力抵抗∞ ②増幅率∞ ③仮想接地（仮想ショート）。</li>
+<li><b>反転増幅</b>：$v_{out}=-A_dv_i$、$\frac{v_{in}-v_i}{R_1}=\frac{v_i-v_{out}}{R_2}$ → $v_i=\frac{R_2v_{in}+R_1v_{out}}{R_1+R_2}$ → $A_d\to\infty$ で $v_{out}=-\frac{R_2}{R_1}v_{in}$、代入で $v_i=0$（<b>仮想接地</b>）。帰還率 $\beta=\frac{R_1}{R_1+R_2}$。</li>
+</ul>
+
+<h2>④ 道具としての数学（第4回）</h2>
+<ul>
+<li><b>小信号の線形近似</b>：$I_D+i_d=\frac{\beta}{2}(V_{GS}+v_{gs}-V_T)^2$ → $i_d=\beta(V_{GS}-V_T)v_{gs}+\frac{\beta}{2}v_{gs}^2\approx g_mv_{gs}$（2次の項を無視）。</li>
+</ul>
+<table>
+<tr><th></th><th>$e^x$</th><th>$\sin x$</th><th>$\cos x$</th><th>$\frac{1}{1-x}$</th><th>$(1+x)^\alpha$</th><th>$\log(1+x)$</th></tr>
+<tr><th>1次</th><td>$1+x$</td><td>$x$</td><td>$1$</td><td>$1+x$</td><td>$1+\alpha x$</td><td>$x$</td></tr>
+<tr><th>2次</th><td>$1+x+\frac{x^2}{2}$</td><td>$x$</td><td>$1-\frac{x^2}{2}$</td><td>$1+x+x^2$</td><td>$+\frac{\alpha(\alpha-1)}{2}x^2$</td><td>$x-\frac{x^2}{2}$</td></tr>
+</table>
+<ul>
+<li>前提：<b>$x\ll1$</b>。1次近似 $f(x)\cong f(a)+f'(a)(x-a)$（接線）。テイラー $f(x)=f(a)+\sum\frac{f^{(k)}(a)}{k!}(x-a)^k$、マクローリン＝$a=0$。収束半径 $|x|\lt r$。</li>
+<li>オイラーの証明：$e^{ix}$ を展開 → 実部 $1-\frac{x^2}{2!}+\cdots=\cos x$、虚部 $x-\frac{x^3}{3!}+\cdots=\sin x$。</li>
+<li>内積 $(a,b)=a^Tb$、$=0$ で直交。正規直交系 $(u_i,u_j)=\delta_{ij}$ → 基底。シュワルツ $|(a,b)|\le|a||b|$。</li>
+<li>関数の内積 $\int_0^Tfg\,dx$。$\int_0^{2\pi}\cos mx\cos nx\,dx=\pi\delta_{mn}$（積和公式 $\frac12\{\cos(m+n)x+\cos(m-n)x\}$）→ <b>三角関数は直交する関数の基底</b>。</li>
+<li>フーリエ級数 $f=\frac{a_0}{2}+\sum(a_n\cos n\omega t+b_n\sin n\omega t)$、$a_n=\frac{2}{T}\int_0^Tf\cos n\omega t\,dt$（係数＝内積）。複素：$c_n=\frac1T\int f e^{-jn\omega t}dt$。$T\to\infty$ でフーリエ変換 $F(\omega)=\int f e^{-j\omega t}dt$。</li>
+<li><b>ラプラス</b>：$\int|f|dt\lt \infty$ でないとフーリエ不可 → $e^{-\gamma t}$ を掛けて収束 → $F(s)=\int_0^\infty fe^{-st}dt$、$s=\gamma+j\omega$。</li>
+</ul>
+
+<h2>⑤ 小信号等価回路（第5回）</h2>
+<ul>
+<li>$V_T$ 以下は弱反転（電流は指数関数）。<b>アナログ増幅は飽和領域</b>（$g_m$ 大・$r_0$ 大 → $g_mr_0$ 大。線形に入ると増幅率が極端に低下）。</li>
+<li>バイアス電流が大きいほど $g_m$ 大。<b>直流成分には情報がない</b> → 信号成分 $i_d$ だけ扱う。</li>
+<li><b>等価回路</b>：ゲートは開放。D–S 間に 電流源 $g_mv_{gs}$ ‖ $r_0$ ‖ 電流源 $-g_{mb}v_s$<br>
+$i_d=g_mv_{gs}+\frac{v_d-v_s}{r_0}-g_{mb}v_s$</li>
+<li>$g_m\approx\sqrt{2\beta I_D}$（スライドの $\sqrt{\beta I_D}$ は誤記）／$g_{mb}=g_m\eta$（$\eta=\partial V_T/\partial V_S=0.1\sim0.2$、ソース↑→$V_T$↑→電流↓）／$r_0=[dI_D/dV_{DS}]^{-1}\approx\frac{1}{\lambda I_D}$</li>
+<li><b>$g_m$, $r_0$ はバイアス電流 $I_D$ の関数</b>（動作中心を決めると $I_D$ が決まる）。小信号の抵抗＝<b>微分抵抗</b>：電流が多くても傾きが寝ていれば抵抗は高い。</li>
+<li><b>定電流負荷</b>：入力↑→電流が $g_mv_{in}$ 増えようとする→電流源で固定→$V_{DS}$ が下がる。特性が寝ているので大きな電圧変化。<b>真性利得 $v_{out}/v_{in}=-g_mr_0$</b>（MOS 1個の最大）。</li>
+<li><b>一般解</b> $A_V=G_mR_{out}$（$G_m$：回路の変換係数、$g_m$：素子）。MOS は電圧→電流の変換役。</li>
+<li><b>一般式</b>：$i_d=g_mv_g-\left(g_m^*+\frac{1}{r_0}\right)v_s+\frac{1}{r_0}v_d$</li>
+</ul>
+
+<h2>⑥ 接地増幅回路（第6回）</h2>
+<p style="margin:2px 0"><b>STEP</b>：0 一般式／1 入力端子だけ残し他は0 → $G_m$／3 出力端子だけ残す → 素子の抵抗／4 回路から $R_{out}$／5 $A_v=\pm G_mR_{out}$（符号＝「入力↑で出力↑か↓か」）。小信号では <b>$V_{DD}$＝GND</b>、固定電位も0。</p>
+<table>
+<tr><th>回路</th><th>入→出</th><th>$G_m$</th><th>$R_{out}$</th><th>利得</th><th>特徴</th></tr>
+<tr><td>ソース接地</td><td>G→D</td><td>$g_m$</td><td>$r_0/\!/R_L$</td><td>$-g_m(r_0/\!/R_L)$</td><td>逆相・高利得</td></tr>
+<tr><td>ドレイン接地（SF）</td><td>G→S</td><td>$g_m$</td><td>$r_0/\!/R_L/\!/\frac{1}{g_m^*}$</td><td>$\approx\frac{g_m}{g_m^*}=\frac{1}{1+\eta}\approx1\sim0.8$</td><td>同相・低出力Z・レベルシフト</td></tr>
+<tr><td>ゲート接地</td><td>S→D</td><td>$g_m^*+\frac{1}{r_0}$</td><td>$r_0/\!/R_L$</td><td>$(g_m^*+\frac1{r_0})(r_0/\!/R_L)$</td><td>同相・低入力Z・電流−電圧</td></tr>
+</table>
+<ul>
+<li><b>逆相（ソース接地）</b>：入力↑→電流↑→負荷の降下↑→出力↓。<b>SF 同相</b>：入力↑→電流↑→$R_L$ の電圧↑→出力↑。<b>ゲート接地 同相</b>：ソース↑→$V_{GS}$↓→電流↓→出力↑。</li>
+<li><b>PMOS 負荷</b>（ゲート固定＝定電流源）：$A_v=-g_{m1}(r_{01}/\!/r_{02})=-\frac{\sqrt{2\beta_1}}{(\lambda_1+\lambda_2)\sqrt{I_D}}$ → <b>電流↑で利得↓</b>（$g_m\propto\sqrt{I_D}$、$r_0\propto1/I_D$）。</li>
+<li><b>SF レベルシフト</b>：$V_{out}=V_{in}-V_T-\sqrt{2I/\beta}$（$V_T$ の基板効果に注意）。CMOS イメージセンサ画素の SF＝バッファ（列線の電流源が負荷）。</li>
+<li><b>利得を上げる</b>：ソース接地は 30dB 程度（講師の定義 $10\log_{10}$ で1000倍）で OPアンプには不足。$g_m$↑は面積（W/L）と電流が増えて不利 → <b>$R_{out}$ を MOS で大きく見せる</b>。</li>
+<li><b>抵抗変換（ゲート固定 MOS）</b>：ドレイン側から $(g_m^*r_0+1)R_S$（拡大）、ソース側から $\frac{R_L}{g_m^*r_0}+\frac{1}{g_m^*}$（縮小）。</li>
+<li><b>カスコード</b>（cascaded triode）：$R_S$ だと電流が稼げない → 入力 MOS の上にゲート固定 MOS を積む。<br>
+$A_V=-g_{m1}\left[(g_{m2}^*r_{o2}+1)r_{o1}/\!/(g_{m3}^*r_{o3}+1)r_{o4}\right]$（従来 $-g_{m1}[r_{o1}/\!/r_{o4}]$ の約 $g_mr_o$ 倍）</li>
+</ul>
