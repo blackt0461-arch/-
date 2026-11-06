@@ -165,12 +165,18 @@ export function buildSkin({ sources, lm, nodeName, h = 1.0, closeR = 4.5, bigR =
 
 // ---- 骨と一緒に動くための重み ----
 // sources の頂点（重みつき）から近いものを集め、皮ふの上でならす
-export function skinWeightsFromSources(mesh, sources, cell = 3) {
-  const grid = new Map();
+export function skinWeightsFromSources(mesh, sources, cell = 3, grp = null) {
+  // grp があるときは、体の部分（胴・左右の前足・後ろ足）ごとに分けて探し、
+  // 頂点ごとの「どの部分にどれだけ属するか」（grp.VG、K 個ずつ）で混ぜる
+  const K = grp ? grp.K : 1;
+  const grids = Array.from({ length: K }, () => new Map());
   const key = (x, y, z) => `${Math.floor(x / cell)},${Math.floor(y / cell)},${Math.floor(z / cell)}`;
   for (const s of sources) {
     const P = s.positions;
     for (let v = 0; v < P.length / 3; v += s.stride || 1) {
+      let g = 0;
+      if (grp) { const [js, ws] = s.weightsOf(v); let b = 0; for (let k = 1; k < js.length; k++) if (ws[k] > ws[b]) b = k; g = grp.ofJoint(js[b]); }
+      const grid = grids[g];
       const k = key(P[v * 3], P[v * 3 + 1], P[v * 3 + 2]);
       let a = grid.get(k); if (!a) grid.set(k, (a = []));
       a.push([P[v * 3], P[v * 3 + 1], P[v * 3 + 2], s, v]);
@@ -181,20 +187,27 @@ export function skinWeightsFromSources(mesh, sources, cell = 3) {
   for (let v = 0; v < n; v++) {
     const x = mesh.positions[v * 3], y = mesh.positions[v * 3 + 1], z = mesh.positions[v * 3 + 2];
     const cx = Math.floor(x / cell), cy = Math.floor(y / cell), cz = Math.floor(z / cell);
-    let found = [];
-    for (let r = 1; r <= 8 && found.length < 6; r++) {
-      found = [];
-      for (let a = -r; a <= r; a++) for (let b = -r; b <= r; b++) for (let c = -r; c <= r; c++) {
-        const arr = grid.get(`${cx + a},${cy + b},${cz + c}`); if (!arr) continue;
-        for (const e of arr) found.push(e);
-      }
-    }
-    found.sort((p, q) => ((p[0] - x) ** 2 + (p[1] - y) ** 2 + (p[2] - z) ** 2) - ((q[0] - x) ** 2 + (q[1] - y) ** 2 + (q[2] - z) ** 2));
     const m = new Map();
-    for (const e of found.slice(0, 6)) {
-      const dd = Math.hypot(e[0] - x, e[1] - y, e[2] - z) + 0.5, wgt = 1 / dd;
-      const [js, ws] = e[3].weightsOf(e[4]);
-      for (let k = 0; k < js.length; k++) m.set(js[k], (m.get(js[k]) || 0) + ws[k] * wgt);
+    for (let g = 0; g < K; g++) {
+      const gw = grp ? grp.VG[v * K + g] : 1;
+      if (gw < 0.01) continue;
+      const grid = grids[g];
+      let found = [];
+      for (let r = 1; r <= (grp ? 40 : 20) && found.length < 6; r++) {
+        found = [];
+        for (let a = -r; a <= r; a++) for (let b = -r; b <= r; b++) for (let c = -r; c <= r; c++) {
+          const arr = grid.get(`${cx + a},${cy + b},${cz + c}`); if (!arr) continue;
+          for (const e of arr) found.push(e);
+        }
+      }
+      found.sort((p, q) => ((p[0] - x) ** 2 + (p[1] - y) ** 2 + (p[2] - z) ** 2) - ((q[0] - x) ** 2 + (q[1] - y) ** 2 + (q[2] - z) ** 2));
+      const mg = new Map(); let tot = 0;
+      for (const e of found.slice(0, 6)) {
+        const dd = Math.hypot(e[0] - x, e[1] - y, e[2] - z) + 0.5, wgt = 1 / dd;
+        const [js, ws] = e[3].weightsOf(e[4]);
+        for (let k = 0; k < js.length; k++) { mg.set(js[k], (mg.get(js[k]) || 0) + ws[k] * wgt); tot += ws[k] * wgt; }
+      }
+      for (const [j, w] of mg) m.set(j, (m.get(j) || 0) + gw * w / (tot || 1));
     }
     W[v] = m;
   }

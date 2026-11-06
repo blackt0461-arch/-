@@ -6,7 +6,9 @@ export function buildSoft(api, lm) {
   const [u, v, w] = F.skullAxes;
   const E = (a, b, c, r, axes = F.skullAxes) => ellipsoid(Q(a, b, c), r, axes);
   const vt = (id, a = 0, d = 0, s = 0) => { const q = V[id]; return add(q.c, add(mul(q.t, a), add(mul(q.u, d), [s, 0, 0]))); };
-  const organ = (d) => api.bone({ region: 'organ', mat: 'organ', ...d });
+  // 古い骨格の座標で書いた内臓は、合わせた体の場所へ移す（lm.place / lm.remap）
+  const RM = lm.remap || ((p) => p), PL = lm.place || ((sh) => sh);
+  const organ = (d) => api.bone({ region: 'organ', mat: 'organ', ...d, ...(d.abs ? { joint: RM(d.joint), shape: PL(d.shape, d.joint) } : {}) });
 
   // ===================== 内臓（形と位置だけ） =====================
   organ({ id: 'Brain', ja: '脳', la: 'Encephalon', parent: 'Skull', joint: Q(0, 0, 0), color: [0.86, 0.74, 0.72],
@@ -14,18 +16,18 @@ export function buildSoft(api, lm) {
   {
     // 肺：背側の大きな葉と、腹側・頭側の葉
     const lung = smoothUnion(4, ellipsoid([12, 221, 238], [10.5, 17, 46]), ellipsoid([15, 193, 272], [12, 20, 24]), ellipsoid([10, 212, 290], [8, 14, 14]));
-    organ({ id: 'Lung', pair: true, ja: '肺', la: 'Pulmo', parent: 'T6', joint: [12, 215, 255], color: [0.9, 0.62, 0.64], shape: smoothSubtract(3, lung, ellipsoid([2, 182, 268], [15, 18, 20])) });
+    organ({ abs: true, id: 'Lung', pair: true, ja: '肺', la: 'Pulmo', parent: 'T6', joint: [12, 215, 255], color: [0.9, 0.62, 0.64], shape: smoothSubtract(3, lung, ellipsoid([2, 182, 268], [15, 18, 20])) });
   }
   {
     const ax = norm([0.25, -0.6, -0.75]); const ay = norm(cross(ax, [1, 0, 0])); const az = norm(cross(ax, ay));
-    organ({ id: 'Heart', ja: '心臓', la: 'Cor', parent: 'T5', joint: [2, 182, 268], color: [0.6, 0.13, 0.13],
+    organ({ abs: true, id: 'Heart', ja: '心臓', la: 'Cor', parent: 'T5', joint: [2, 182, 268], color: [0.6, 0.13, 0.13],
       shape: smoothUnion(2, ellipsoid([2, 182, 268], [19, 13, 13], [ax, ay, az]), cone([0, 196, 274], [-1, 214, 262], 4, 3.2)) }); // 大動脈弓のつけね
   }
-  organ({ id: 'Liver', ja: '肝臓', la: 'Hepar', parent: 'T11', joint: [0, 182, 234], color: [0.42, 0.13, 0.1],
+  organ({ abs: true, id: 'Liver', ja: '肝臓', la: 'Hepar', parent: 'T11', joint: [0, 182, 234], color: [0.42, 0.13, 0.1],
     shape: smoothSubtract(4, smoothUnion(3, ellipsoid([0, 180, 236], [29, 25, 12]), ellipsoid([-12, 195, 230], [12, 15, 10]), ellipsoid([12, 170, 238], [14, 12, 9])), sphere([0, 196, 285], 38)) });
-  organ({ id: 'Stomach', ja: '胃', la: 'Ventriculus', parent: 'T12', joint: [12, 198, 214], color: [0.86, 0.6, 0.56],
+  organ({ abs: true, id: 'Stomach', ja: '胃', la: 'Ventriculus', parent: 'T12', joint: [12, 198, 214], color: [0.86, 0.6, 0.56],
     shape: smoothUnion(3, ellipsoid([13, 199, 214], [12, 14, 15]), cone([10, 196, 205], [-6, 190, 196], 7, 4)) });
-  organ({ id: 'Spleen', ja: '脾臓', la: 'Lien', parent: 'T13', joint: [27, 192, 196], color: [0.5, 0.12, 0.2], shape: ellipsoid([27, 190, 196], [4, 15, 14]) });
+  organ({ abs: true, id: 'Spleen', ja: '脾臓', la: 'Lien', parent: 'T13', joint: [27, 192, 196], color: [0.5, 0.12, 0.2], shape: ellipsoid([27, 190, 196], [4, 15, 14]) });
   {
     // 小腸：くねくねした腸のかたまり
     const balls = [];
@@ -35,20 +37,20 @@ export function buildSoft(api, lm) {
       const t = rnd() * Math.PI * 2, r = Math.sqrt(rnd()), h = rnd() * 2 - 1;
       balls.push(sphere([Math.cos(t) * r * 18, 178 + Math.sin(t) * r * 20, 140 + h * 36], 6.5 + rnd() * 2.5));
     }
-    organ({ id: 'Intestine', ja: '小腸', la: 'Intestinum tenue', parent: 'L3', joint: [0, 178, 140], color: [0.9, 0.68, 0.6], shape: smoothUnion(2.5, ...balls), h: 0.6 });
+    organ({ abs: true, id: 'Intestine', ja: '小腸', la: 'Intestinum tenue', parent: 'L3', joint: [0, 178, 140], color: [0.9, 0.68, 0.6], shape: smoothUnion(2.5, ...balls), h: 0.6 });
   }
-  organ({ id: 'Colon', ja: '大腸（結腸・直腸）', la: 'Intestinum crassum', parent: 'L6', joint: [6, 205, 100], color: [0.78, 0.56, 0.46],
+  organ({ abs: true, id: 'Colon', ja: '大腸（結腸・直腸）', la: 'Intestinum crassum', parent: 'L6', joint: [6, 205, 100], color: [0.78, 0.56, 0.46],
     shape: smoothUnion(2, ...spline([[-8, 190, 112], [6, 205, 100], [9, 218, 78], [4, 228, 50], [0, 229, 22], [0, 226, 0], [0, 222, -14]], 3).slice(0, -1).map((p, i, a) => cone(p, a[i + 1] || [0, 222, -14], 5, 5))) });
-  organ({ id: 'Kidney', pair: true, ja: '腎臓', la: 'Ren', parent: 'L2', joint: [14, 236, 166], color: [0.46, 0.13, 0.13],
+  organ({ abs: true, id: 'Kidney', pair: true, ja: '腎臓', la: 'Ren', parent: 'L2', joint: [14, 236, 166], color: [0.46, 0.13, 0.13],
     shape: smoothSubtract(2, ellipsoid([14, 236, 166], [7, 9.5, 12.5]), sphere([7, 236, 166], 4)) });
-  organ({ id: 'Bladder', ja: '膀胱', la: 'Vesica urinaria', parent: 'S', joint: [0, 193, 42], color: [0.93, 0.84, 0.62], shape: ellipsoid([0, 193, 42], [9.5, 9.5, 14]) });
+  organ({ abs: true, id: 'Bladder', ja: '膀胱', la: 'Vesica urinaria', parent: 'S', joint: [0, 193, 42], color: [0.93, 0.84, 0.62], shape: ellipsoid([0, 193, 42], [9.5, 9.5, 14]) });
 
   // 首から胸を通る管（気管・食道）：首の動きにあわせて曲がるよう、筋肉と同じ作り方にする
   lm.softTubes = [
     { id: 'Trachea', ja: '気管（と喉頭）', la: 'Trachea et larynx', color: [0.86, 0.84, 0.8],
-      pts: [Q(-1, -24, 0), vt('C3', 0, -9, 0), vt('C5', 0, -10, 0), vt('C7', 0, -12, 0), [0, 207, 290], [0, 205, 268]], r: [6, 3.6, 3.6, 3.6, 3.4, 3.2] },
+      pts: [Q(-1, -24, 0), vt('C3', 0, -9, 0), vt('C5', 0, -10, 0), vt('C7', 0, -12, 0), RM([0, 207, 290]), RM([0, 205, 268])], r: [6, 3.6, 3.6, 3.6, 3.4, 3.2] },
     { id: 'Esophagus', ja: '食道', la: 'Oesophagus', color: [0.82, 0.58, 0.55],
-      pts: [Q(-6, -19, 0), vt('C3', 0, -6, 1.5), vt('C6', 0, -7, 2), vt('T2', 0, -9, 2), vt('T6', 0, -12, 2), [6, 210, 232], [10, 202, 222]], r: [3, 2.6, 2.6, 2.6, 2.6, 2.8, 3.2] },
+      pts: [Q(-6, -19, 0), vt('C3', 0, -6, 1.5), vt('C6', 0, -7, 2), vt('T2', 0, -9, 2), vt('T6', 0, -12, 2), RM([6, 210, 232]), RM([10, 202, 222])], r: [3, 2.6, 2.6, 2.6, 2.6, 2.8, 3.2] },
   ];
 
   // ===================== 目 =====================
@@ -147,8 +149,8 @@ export function buildSoft(api, lm) {
   fill.push(cone(Q(2, -7, 0), vt('C4', 0, -2, 0), 11.5, 16));
   fill.push(cone(vt('C4', 0, -2, 0), vt('T1', 0, -16, 0), 19, 24));
   // おなか（内臓と脂肪のふくらみ）
-  fill.push(ellipsoid([0, 185, 135], [31, 34, 72]));
-  fill.push(ellipsoid([0, 200, 230], [33, 38, 55]));
+  fill.push(PL(ellipsoid([0, 185, 135], [31, 34, 72]), [0, 185, 135]));
+  fill.push(PL(ellipsoid([0, 200, 230], [33, 38, 55]), [0, 200, 230]));
   // 肉球
   const pads = [];
   const fore = lm.fore.mcp, hind = lm.hind.mtp;

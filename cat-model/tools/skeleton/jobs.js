@@ -17,7 +17,7 @@ export const BUILDERS = { spine: buildSpine, thorax: buildThorax, skull: buildSk
 export function prepare(opts) {
   const defs = [];
   const api = { bone(def) { defs.push(def); } };
-  const lm = computeLandmarks();
+  const lm = computeLandmarks(opts.fit || null);
   for (const [name, fn] of Object.entries(BUILDERS)) {
     if (opts.only && !opts.only.includes(name)) continue;
     fn(api, lm);

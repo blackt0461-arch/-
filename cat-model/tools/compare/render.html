@@ -70,6 +70,11 @@ const LAYER = (u) => {
 };
 const FLAT = { bone: 0xf2ead8, muscle: 0xc8453a, organ: 0x9a4a7a, skin: 0xe0a060 };
 
+// 重ねて映すもう1つのモデル（半透明）
+if (P.get('extra')) new GLTFLoader().load('../../models/' + P.get('extra'), (g2) => {
+  g2.scene.traverse((o) => { if (o.isMesh) { o.frustumCulled = false; o.material = o.material.clone(); o.material.transparent = true; o.material.opacity = +(P.get('extraOpacity') || 0.35); o.material.depthWrite = false; } });
+  scene.add(g2.scene); window.__extra = true;
+});
 new GLTFLoader().load('../../models/' + (P.get('model') || 'cat-anatomy.glb'), (g) => {
   scene.add(g.scene);
   g.scene.traverse((o) => {
@@ -83,8 +88,8 @@ new GLTFLoader().load('../../models/' + (P.get('model') || 'cat-anatomy.glb'), (
     if (!on) { o.visible = false; return; }
     if (mode === 'flat') o.material = new THREE.MeshBasicMaterial({ color: FLAT[L] });
   });
-  renderer.render(scene, cam);
-  window.__ready = true;
+  const done = () => { if (P.get('extra') && !window.__extra) return setTimeout(done, 200); renderer.render(scene, cam); window.__ready = true; };
+  done();
 });
 </script>
 </body>

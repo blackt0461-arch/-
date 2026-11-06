@@ -48,6 +48,11 @@ export function writeGLB(nodes, materials, sceneExtras = {}, skin = null) {
         accessors.push({ bufferView: cv, componentType: 5121, normalized: true, count, type: 'VEC4' });
         attributes.COLOR_0 = accessors.length - 1;
       }
+      if (m.uvs) {
+        const uv = pushView(m.uvs, 34962);
+        accessors.push({ bufferView: uv, componentType: 5126, count, type: 'VEC2' });
+        attributes.TEXCOORD_0 = accessors.length - 1;
+      }
       if (m.joints) {
         const jv = pushView(m.joints, 34962);
         accessors.push({ bufferView: jv, componentType: 5123, count, type: 'VEC4' });
@@ -76,6 +81,14 @@ export function writeGLB(nodes, materials, sceneExtras = {}, skin = null) {
     accessors.push({ bufferView: iv, componentType: 5126, count: skin.joints.length, type: 'MAT4' });
     skins = [{ name: 'skeleton', joints: skin.joints, inverseBindMatrices: accessors.length - 1, ...(skin.skeleton != null ? { skeleton: skin.skeleton } : {}) }];
   }
+  // 模様の画像（テクスチャ）
+  const images = [], textures = [];
+  const addTex = (t) => {
+    const bv = pushView(t.bytes, null);
+    images.push({ bufferView: bv, mimeType: t.mime });
+    textures.push({ source: images.length - 1, sampler: 0 });
+    return textures.length - 1;
+  };
   const json = {
     asset: { version: '2.0', generator: 'cat-model skeleton builder' },
     extensionsUsed: ['KHR_mesh_quantization'],
@@ -85,13 +98,23 @@ export function writeGLB(nodes, materials, sceneExtras = {}, skin = null) {
     nodes: gltfNodes,
     meshes,
     ...(skins ? { skins } : {}),
-    materials: materials.map((m) => ({
-      name: m.name,
-      pbrMetallicRoughness: { baseColorFactor: m.color, metallicFactor: m.metallic ?? 0, roughnessFactor: m.roughness ?? 0.7 },
-      ...(m.color[3] < 1 ? { alphaMode: 'BLEND' } : {}),
-      ...(m.extras ? { extras: m.extras } : {}),
-      doubleSided: false,
-    })),
+    materials: materials.map((m) => {
+      const tx = (t) => (t ? { index: addTex(t) } : undefined);
+      const out = {
+        name: m.name,
+        pbrMetallicRoughness: { baseColorFactor: m.color, metallicFactor: m.metallic ?? 0, roughnessFactor: m.roughness ?? 0.7 },
+        ...(m.color[3] < 1 ? { alphaMode: 'BLEND' } : {}),
+        ...(m.extras ? { extras: m.extras } : {}),
+        doubleSided: !!m.doubleSided,
+      };
+      if (m.textures) {
+        if (m.textures.base) out.pbrMetallicRoughness.baseColorTexture = tx(m.textures.base);
+        if (m.textures.mr) out.pbrMetallicRoughness.metallicRoughnessTexture = tx(m.textures.mr);
+        if (m.textures.normal) out.normalTexture = tx(m.textures.normal);
+      }
+      return out;
+    }),
+    ...(images.length ? { images, textures, samplers: [{ magFilter: 9729, minFilter: 9987, wrapS: 10497, wrapT: 10497 }] } : {}),
     accessors,
     bufferViews,
     buffers: [{ byteLength }],

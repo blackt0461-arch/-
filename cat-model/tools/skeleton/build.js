@@ -1,6 +1,6 @@
 // 猫の全身（骨格＋筋肉）を作って models/cat-anatomy.glb に書き出す。
 // 使い方: node cat-model/tools/skeleton/build.js [--only=spine,skull,...] [--out=ファイル名] [--fast] [--muscles=0] [--mus=Biceps,Triceps] [--threads=4]
-import { writeFileSync, mkdirSync } from 'node:fs';
+import { writeFileSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Worker } from 'node:worker_threads';
@@ -10,6 +10,7 @@ import { mirrorX } from './mesher.js';
 import { writeGLB } from './glb.js';
 import { prepare, taubin } from './jobs.js';
 import { buildSkin, skinWeightsFromSources, tabbyColor } from './skin.js';
+import { readSimpleGLB } from './readglb.js';
 import { MeshoptSimplifier } from 'meshoptimizer';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -19,6 +20,7 @@ const opts = {
   fast: !!args.fast,
   err: Number(args.err || 0.06), // 形のずれの許容（mm）
   mus: args.mus ? String(args.mus).split(',') : null,
+  fit: args.fit ? String(args.fit) : null,           // 別の猫の体に合わせる（data/fit_<名前>.json）
 };
 opts.withMuscles = !opts.only && args.muscles !== '0';
 const outPath = resolve(here, '../../models', args.out || 'cat-anatomy.glb');
@@ -57,7 +59,7 @@ if (!opts.only) {
     sternum_front: F.sternebrae ? F.sternebrae[0].a : null, iliac_crest: F.ilium ? F.ilium.L(F.Li + 4, 2, 0) : null, ischial_tuber: F.I || null,
   };
   for (const k in marks) if (marks[k]) marks[k] = r1(marks[k]); else delete marks[k];
-  writeFileSync(resolve(here, '../../models/landmarks.json'), JSON.stringify(marks, null, 1));
+  writeFileSync(resolve(here, '../../models/' + (opts.fit ? `landmarks_${opts.fit}.json` : 'landmarks.json')), JSON.stringify(marks, null, 1));
 }
 
 // 同じ名前が2つないか確かめる
@@ -107,6 +109,7 @@ const nodes = items.map((it) => {
     mesh = { positions: p, normals: m.normals, indices: m.indices, ...(m.colors ? { colors: m.colors } : {}) };
     tris += m.indices.length / 3;
   }
+  if (args.bengal && it.baseId === 'Ear') mesh = undefined; // ベンガルの皮ふに耳があるので、こちらの耳は形を出さない
   const j = jointOf(it);
   const parent = it.parentId ? byId.get(it.parentId) : -1;
   const pj = parent >= 0 ? jointOf(items[parent]) : [0, 0, 0];
@@ -179,6 +182,29 @@ if (mdefs.length) {
       const J = nd.mesh.joints, Wt = nd.mesh.weights;
       sources.push({ positions: P, indices: nd.mesh.indices, weightsOf: (v) => [[J[v * 4], J[v * 4 + 1], J[v * 4 + 2], J[v * 4 + 3]], [Wt[v * 4], Wt[v * 4 + 1], Wt[v * 4 + 2], Wt[v * 4 + 3]]], stride: 1 });
     }
+    if (args.bengal) {
+      // ベンガル猫の皮ふ（模様つき）を、そのまま骨と筋肉にくっつける
+      const g = readSimpleGLB(resolve(here, '../..', String(args.bengal)));
+      const P = new Float32Array(g.positions.length); for (let q = 0; q < P.length; q++) P[q] = g.positions[q] * 1000;
+      // 元のベンガルの重みから、頂点が「胴・左前足・右前足・左後ろ足・右後ろ足」のどれに属するか（tools/fit/groups）
+      const gpath = resolve(here, '../..', String(args.bengal).replace(/_rest\.glb$/, '_groups.f32'));
+      const VG = new Float32Array(readFileSync(gpath).buffer.slice(0));
+      const ofJoint = (j) => {
+        const it = items[j]; if (!it) return 0;
+        const side = it.side === 'R' ? 1 : 0;
+        if (it.region === 'forelimb') return 1 + side;
+        if (it.region === 'hindlimb' && it.baseId !== 'OsCoxae') return 3 + side;
+        return 0;
+      };
+      const sw = skinWeightsFromSources({ positions: P, indices: g.indices }, sources, 3, { K: 5, VG, ofJoint });
+      MATERIALS.push({ key: 'bengal', name: 'ベンガルの皮ふ', color: [1, 1, 1, 1], roughness: 1, textures: g.textures, doubleSided: true });
+      nodes.push({ name: 'Skin', parent: -1, translation: [0, 0, 0], material: MATERIALS.length - 1,
+        mesh: { positions: g.positions, normals: g.normals, indices: g.indices, uvs: g.uvs, joints: sw.joints, weights: sw.weights },
+        extras: { ja: '皮ふ（ベンガル猫）', la: 'Cutis', region: 'skin', kind: 'skin', textured: true, credit: 'Bengal Cat by osmanarici2004_1 (Sketchfab, CC BY 4.0)' } });
+      counts.skin = (counts.skin || 0) + 1;
+      tris += g.indices.length / 3;
+      console.log(`ベンガルの皮ふ 三角形 ${(g.indices.length / 3).toLocaleString()} 枚・${((Date.now() - ts) / 1000).toFixed(1)} 秒`);
+    } else {
     let sm = buildSkin({ sources, lm, h: Number(args.skinh || 1.0) });
     taubin(sm, 4);
     await MeshoptSimplifier.ready;
@@ -206,6 +232,7 @@ if (mdefs.length) {
     counts.skin = (counts.skin || 0) + 1;
     tris += sm.indices.length / 3;
     console.log(`皮ふ 三角形 ${(sm.indices.length / 3).toLocaleString()} 枚・${((Date.now() - ts) / 1000).toFixed(1)} 秒`);
+    }
   }
   // 骨格を「骨組み（スキン）」として登録する。休んだ姿勢では回転がないので、逆行列は平行移動だけ
   const ibm = new Float32Array(items.length * 16);

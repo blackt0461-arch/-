@@ -4,8 +4,8 @@ import { add, sub, mul, norm, cross, cone, ellipsoid, sphere, plate, tube, torus
 import { buildCranium, buildJaw } from './skull_core.js';
 
 export function buildSkull(api, lm) {
-  const O = lm.occiput.p;                          // 後頭顆のあいだ（頭の回転の中心）
-  const u = norm([0, -0.12, 0.99]);                // 鼻先の向き
+  const O = lm.fit ? lm.fit.skull.O : lm.occiput.p; // 後頭顆のあいだ（頭の回転の中心）
+  const u = norm(lm.fit ? lm.fit.skull.u : [0, -0.12, 0.99]); // 鼻先の向き
   const v = norm(cross(u, [1, 0, 0]));            // 頭のてっぺんの向き
   const w = [1, 0, 0];                             // 左
   const AX = [u, v, w];
