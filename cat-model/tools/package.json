@@ -1,0 +1,11 @@
+{
+  "name": "cat-model-tools",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build:skeleton": "node skeleton/build.js"
+  },
+  "dependencies": {
+    "meshoptimizer": "^0.22.0"
+  }
+}
