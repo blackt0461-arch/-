@@ -1,0 +1,23 @@
+<!doctype html><html><head><meta charset="utf-8"><title>猫モデルの見比べ</title>
+<style>html,body{margin:0;background:#e9e6df;overflow:hidden}</style>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"}}</script>
+</head><body><script type="module">
+// ?f=ファイル.glb&yaw=度&pitch=度 … 大きさをそろえて映す（開発用）
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+const P=new URLSearchParams(location.search);
+const r=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true}); r.setSize(innerWidth,innerHeight); r.outputColorSpace=THREE.SRGBColorSpace; r.toneMapping=THREE.ACESFilmicToneMapping; document.body.appendChild(r.domElement);
+const s=new THREE.Scene(); s.background=new THREE.Color(0xe9e6df);
+s.add(new THREE.HemisphereLight(0xffffff,0x888070,1.8)); const k=new THREE.DirectionalLight(0xffffff,2.2); k.position.set(1,2,1.5); s.add(k);
+const c=new THREE.PerspectiveCamera(30,innerWidth/innerHeight,0.001,1000);
+new GLTFLoader().load(P.get('f'),(g)=>{
+  const o=g.scene; s.add(o); o.updateMatrixWorld(true);
+  const b=new THREE.Box3().setFromObject(o), ctr=b.getCenter(new THREE.Vector3()), sz=b.getSize(new THREE.Vector3());
+  const R=sz.length()/2, yaw=THREE.MathUtils.degToRad(+(P.get('yaw')||35)), pit=THREE.MathUtils.degToRad(+(P.get('pitch')||15));
+  const d=R/Math.sin(THREE.MathUtils.degToRad(15))*0.95;
+  c.position.set(ctr.x+d*Math.sin(yaw)*Math.cos(pit),ctr.y+d*Math.sin(pit),ctr.z+d*Math.cos(yaw)*Math.cos(pit)); c.lookAt(ctr); c.near=d/100; c.far=d*10; c.updateProjectionMatrix();
+  let tris=0; o.traverse(m=>{if(m.isMesh&&m.geometry.index)tris+=m.geometry.index.count/3; else if(m.isMesh) tris+=m.geometry.attributes.position.count/3;});
+  window.__info={tris:Math.round(tris),size:[sz.x,sz.y,sz.z].map(v=>+v.toFixed(3)),anims:g.animations.length};
+  r.render(s,c); window.__ready=true;
+},undefined,(e)=>{window.__err=String(e);window.__ready=true;});
+</script></body></html>
