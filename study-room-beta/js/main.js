@@ -2438,7 +2438,7 @@ async function showAdmin() {
       <div class="ac-mode">${(() => { const sd = s.side || s.mode; return `<span class="mode-tag ${sd || 'none'}">${icon(sd === 'puzzle' ? 'grid' : sd === 'study' ? 'pencil' : 'info')}${sd === 'puzzle' ? 'パズルサイド' : sd === 'study' ? 'スタディサイド' : 'まだ選んでいない'}</span>${s.puzzle ? `<small>パズル ${s.puzzle}回</small>` : ''}<button class="btn ghost sm ac-mode-btn" data-u="${esc(a.username)}" data-m="${sd || ''}">${icon('refresh')}サイドを変える</button>`; })()}</div>
       <div class="ac-stats"><span>${icon('pencil')}${s.solved || 0}問</span><span>${icon('check')}${s.solved ? Math.round((s.correct || 0) / s.solved * 100) : 0}%</span><span>${icon('flame')}${s.streak || 0}日（合計${s.days || 0}日）</span></div>
       <div class="ac-units">${UNITS.map(un => `<span>${un} ${units[un]?.solved || 0}問</span>`).join('')}</div>
-      <div class="ac-foot"><small>登録 ${day(a.created_at)} ・ 最後 ${day(a.last_login)}</small><span class="ac-btns"><button class="btn ghost sm visit" data-u="${esc(a.username)}">${icon('eye')}部屋</button><button class="btn ghost sm ac-comp" data-u="${esc(a.username)}" data-lv="${S.rankInfo(s.xp || 0).rank}">${icon('gift')}補填</button>${Object.keys(packCode).length ? `<button class="btn ghost sm ac-give" data-u="${esc(a.username)}">${icon('gift')}問題集</button>` : ''}${a.username !== u.name ? `<button class="btn ghost sm ac-del" data-u="${esc(a.username)}" aria-label="${esc(a.username)}のアカウントを消す">${icon('trash')}消す</button>` : ''}</span></div>
+      <div class="ac-foot"><small>登録 ${day(a.created_at)} ・ 最後 ${day(a.last_login)}</small><span class="ac-btns"><button class="btn ghost sm visit" data-u="${esc(a.username)}">${icon('eye')}部屋</button><button class="btn ghost sm ac-comp" data-u="${esc(a.username)}" data-lv="${S.rankInfo(s.xp || 0).rank}">${icon('gift')}補填</button><button class="btn ghost sm ac-restore" data-u="${esc(a.username)}">${icon('refresh')}戻す</button>${Object.keys(packCode).length ? `<button class="btn ghost sm ac-give" data-u="${esc(a.username)}">${icon('gift')}問題集</button>` : ''}${a.username !== u.name ? `<button class="btn ghost sm ac-del" data-u="${esc(a.username)}" aria-label="${esc(a.username)}のアカウントを消す">${icon('trash')}消す</button>` : ''}</span></div>
     </div>`;
   }).join('');
   el.querySelectorAll('.visit').forEach(b => b.onclick = () => visitFriend(b.dataset.u, showAdmin));
@@ -2446,6 +2446,7 @@ async function showAdmin() {
   el.querySelectorAll('.ac-give').forEach(b => b.onclick = () => givePack(b.dataset.u));
   el.querySelectorAll('.ac-mode-btn').forEach(b => b.onclick = () => changeMode(b.dataset.u, b.dataset.m));
   el.querySelectorAll('.ac-comp').forEach(b => b.onclick = () => compensate(b.dataset.u, +b.dataset.lv || 1));
+  el.querySelectorAll('.ac-restore').forEach(b => b.onclick = () => restoreUser(b.dataset.u));
   el.querySelectorAll('.pf-open').forEach(b => b.onclick = () => openUserProfile(b.dataset.u, showAdmin));
 }
 // 管理者：1人だけに補填を送る（データが消えた時など）。その人のプレゼントBOXに届き、本人が受け取る
@@ -2490,6 +2491,35 @@ function compensate(name, lvNow) {
       } catch (ex) { toast(String(ex.message || ex), 3600); go.disabled = false; }
     };
   };
+}
+// 管理者：記録をサーバーのバックアップ（1時間ごと・14日分）から元に戻す（1.12.0）
+async function restoreUser(name) {
+  const cf = sheet(`
+    <div class="sh-head"><span class="sh-ic">${icon('refresh')}</span><div><h3>「${esc(name)}」の記録を元に戻す</h3><p>戻したい時の記録をえらびます。いまの記録もバックアップに残るので、まちがえても戻せます</p></div><button class="sh-x close" aria-label="やめる">${icon('x')}</button></div>
+    <div class="rs-list"><p class="empty">読み込み中…</p></div>`, 'news-sheet rs-sheet');
+  cf.querySelector('.close').onclick = () => cf.remove();
+  let list = [];
+  try { list = await rpc('sr_admin_backups', { p_token: Auth.currentUser()?.token, p_username: name }); }
+  catch (ex) { cf.querySelector('.rs-list').innerHTML = `<p class="empty">${esc(ex.message)}</p>`; return; }
+  const box = cf.querySelector('.rs-list');
+  if (!list.length) { box.innerHTML = '<p class="empty">まだバックアップがありません（記録が書きかわると、1時間に1つずつ残ります）</p>'; return; }
+  const when = (t) => new Date(t).toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', weekday: 'short', hour: '2-digit', minute: '2-digit' });
+  box.innerHTML = list.map(b => `<button class="rs-one" data-id="${b.id}"><b>${when(b.created_at)}</b><span>Lv${S.rankInfo(b.xp || 0).rank}・${b.solved || 0}問・パズル${b.puzzle || 0}回</span></button>`).join('');
+  box.querySelectorAll('.rs-one').forEach(btn => btn.onclick = () => {
+    const b = list.find(x => String(x.id) === btn.dataset.id);
+    cf.innerHTML = `<div class="grab"></div><div class="sh-head"><span class="sh-ic">${icon('refresh')}</span><div><h3>この時の記録に戻しますか？</h3><p>${when(b.created_at)} ・ Lv${S.rankInfo(b.xp || 0).rank}・${b.solved || 0}問・パズル${b.puzzle || 0}回</p></div></div>
+      <p class="note">戻した後に「${esc(name)}」がアプリを開くと、この記録になります（開いたままの時も、少しすると切りかわります）</p>
+      <div class="row2"><button class="btn ghost back2">もどる</button><button class="btn gold go">${icon('refresh')}戻す</button></div>`;
+    cf.querySelector('.back2').onclick = () => { cf.remove(); restoreUser(name); };
+    cf.querySelector('.go').onclick = async () => {
+      const go = cf.querySelector('.go'); go.disabled = true;
+      try {
+        await rpc('sr_admin_restore', { p_token: Auth.currentUser()?.token, p_username: name, p_backup: b.id });
+        toast(`「${name}」の記録を元に戻しました`, 3200); cf.remove();
+        if (name === Auth.currentUser()?.name) await Sync.pull(); else showAdmin();
+      } catch (ex) { toast(String(ex.message || ex), 3600); go.disabled = false; }
+    };
+  });
 }
 // 管理者：その人のモード（勉強メイン・パズルメイン）を切りかえる。本人のアプリが次に開いた時に切りかわる
 function changeMode(name, now) {

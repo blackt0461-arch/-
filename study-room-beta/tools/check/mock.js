@@ -10,7 +10,14 @@ module.exports = async function mock(ctx, db = { users: {} }, opts = {}) {
     const un = (body.p_token || '').slice(2);
     if (name === 'sr_load' && opts.loadDelay) await new Promise(r => setTimeout(r, opts.loadDelay));
     if (name === 'sr_load') return db.users[un] ? ok({ username: un, data: db.users[un].data }) : ng('bad_token');
-    if (name === 'sr_save') { if (db.users[un]) db.users[un].data = body.p_data; return ok({ updated_at: new Date().toISOString() }); }
+    if (name === 'sr_save') {
+      const u = db.users[un];
+      if (u && (u.data?.restoredAt || 0) > (body.p_data?.restoredAt || 0)) return ng('restored');
+      if (u) { if (u.data?.version) ((db.backups ||= {})[un] ||= []).unshift({ id: (db.bid = (db.bid || 0) + 1), created_at: new Date().toISOString(), data: u.data }); u.data = body.p_data; }
+      return ok({ updated_at: new Date().toISOString() });
+    }
+    if (name === 'sr_admin_backups') return ok(((db.backups || {})[body.p_username] || []).map(b => ({ id: b.id, created_at: b.created_at, xp: b.data.profile?.xp || 0, solved: b.data.profile?.solved || 0, puzzle: b.data.profile?.puzzleClears || 0 })));
+    if (name === 'sr_admin_restore') { const u = db.users[body.p_username], b = ((db.backups || {})[body.p_username] || []).find(x => x.id === body.p_backup); if (!u || !b) return ng('not_found'); const t = Date.now(); db.backups[body.p_username].unshift({ id: (db.bid += 1), created_at: new Date().toISOString(), data: u.data }); u.data = { ...b.data, restoredAt: t, savedAt: t }; return ok({ restored_at: t }); }
     if (name === 'sr_friend_list') return ok([]);
     if (name === 'sr_admin_grant_code') { if (!db.users[body.p_username]) return ng('not_found'); (db.users[body.p_username].codes ||= []).push(body.p_code); return ok({ ok: true }); }
     if (name === 'sr_my_codes') return ok(db.users[un]?.codes || []);
