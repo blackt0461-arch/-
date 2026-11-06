@@ -3,7 +3,7 @@
 import * as store from './store.js';
 import * as cloud from './cloud.js';
 
-const APP_VERSION = '1.3.0';
+const APP_VERSION = '1.4.0';
 const $app = document.getElementById('app');
 let COURSES = [];
 const testCache = {};
@@ -182,6 +182,16 @@ function streak() {
 }
 
 const TYPE_NAME = { choice: '選択', fill: '穴うめ', calc: '計算', card: 'カード', written: '記述・説明' };
+// 問題の上に出す「この問題でやること」
+const HOWTO = {
+  card: '答えを頭の中で思い浮かべてから「答えを見る」→ 覚えていたかを自分で選ぶ',
+  choice: '正しいものを1つ選ぶ',
+  fill: '（　）に入る言葉を入れる',
+  calc: '計算して、答えの数字を入れる（紙で計算してOK）',
+  written: '説明を書く（スマホで打つか、紙に書いて写真）→ お手本と見くらべる',
+};
+const howto = (q, asCard) => `<div class="howto">${icon('quiz')}${esc(q.howto || HOWTO[asCard ? 'card' : q.type] || '')}</div>`;
+const figHTML = (c, q) => q.fig ? `<figure class="fig"><img src="data/${c.id}/${q.fig}" alt="図" loading="lazy"></figure>` : '';
 
 // ---------- ホーム ----------
 async function home() {
@@ -386,7 +396,7 @@ function startQuiz(c, t, d, pool, mode, opt = {}) {
     w.innerHTML = `
       <div class="qtop"><span class="p">${i + 1}<small> / ${list.length}</small></span><span class="lec">${esc(q.lecture || '')}</span></div>
       ${steps(list.length, i, results)}
-      <div class="card qcard">${starBtn(q)}<span class="qtype">${asCard ? 'カード' : TYPE_NAME[q.type] || ''}</span><div class="qtext">${esc(q.q)}</div><div data-body></div></div>
+      <div class="card qcard">${starBtn(q)}<span class="qtype">${asCard ? 'カード' : TYPE_NAME[q.type] || ''}</span>${howto(q, asCard)}<div class="qtext">${esc(q.q)}</div>${q.figAfter ? '' : figHTML(c, q)}<div data-body></div></div>
       <div data-after></div>`;
     bindStars(w);
     const body = w.querySelector('[data-body]');
@@ -399,7 +409,7 @@ function startQuiz(c, t, d, pool, mode, opt = {}) {
       const label = { ok: '正解！', mid: 'おしい', ng: 'まちがい' }[res];
       const ic = { ok: 'check', mid: 'tri', ng: 'x' }[res];
       const html = o.quiet ? '' : `<div class="verdict ${res}">${icon(ic)}${label}</div>${o.extra || ''}${explainHTML(q)}`;
-      after.insertAdjacentHTML('beforeend', html);
+      after.insertAdjacentHTML('beforeend', html + (q.figAfter ? `<div class="card">${figHTML(c, q)}</div>` : ''));
       math(after);
       const dk = dock(`<button class="btn" data-next>${i + 1 < list.length ? '次へ' : '結果を見る'}${icon('next')}</button>`);
       dk.querySelector('[data-next]').onclick = next;
@@ -584,7 +594,7 @@ function mockExam(c, t, d, pool) {
     const w = screen('模擬テスト', { back: () => { if (confirm('模擬テストをやめますか？（記録は残りません）')) quit(); } });
     w.innerHTML = `<div class="qtop"><span class="p">${i + 1}<small> / ${list.length}</small></span><span class="timer" data-timer>${fmt(left())}</span></div>
       ${steps(list.length, i, [])}
-      <div class="card qcard"><span class="qtype">${TYPE_NAME[q.type]}</span><div class="qtext">${esc(q.q)}</div><div data-body></div></div>`;
+      <div class="card qcard"><span class="qtype">${TYPE_NAME[q.type]}</span>${howto(q)}<div class="qtext">${esc(q.q)}</div>${q.figAfter ? '' : figHTML(c, q)}<div data-body></div></div>`;
     const body = w.querySelector('[data-body]');
     if (q.type === 'choice') {
       const idx = shuffle(q.choices.map((_, k) => k));
@@ -658,7 +668,7 @@ function qlist(c, t, d) {
     items.innerHTML = hits.slice(0, 200).map((q) => {
       const seen = store.seen(q.key), r = store.recall(q.key);
       return `<details class="card qitem"><summary>${starBtn(q)}<span class="qq">${esc(q.q)}</span><span class="rp ${seen ? (r >= 0.9 ? 'good' : 'bad') : ''}">${seen ? pct(r) + '%' : 'まだ'}</span></summary>
-        <div class="body explain"><span class="label">${esc(q.lecture || '')}・${TYPE_NAME[q.type]}</span><span class="label">答え</span>${esc(answerText(q))}${q.type === 'written' && q.points ? `<span class="label">ポイント</span>${q.points.map((p) => '・' + esc(p)).join('\n')}` : ''}${q.explain ? `<span class="label">解説</span>${esc(q.explain)}` : ''}</div></details>`;
+        <div class="body explain">${figHTML(c, q)}<span class="label">${esc(q.lecture || '')}・${TYPE_NAME[q.type]}</span><span class="label">答え</span>${esc(answerText(q))}${q.type === 'written' && q.points ? `<span class="label">ポイント</span>${q.points.map((p) => '・' + esc(p)).join('\n')}` : ''}${q.explain ? `<span class="label">解説</span>${esc(q.explain)}` : ''}</div></details>`;
     }).join('') || '<div class="empty">見つかりませんでした</div>';
     bindStars(items);
     math(items);
