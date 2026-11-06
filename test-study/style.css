@@ -118,5 +118,6 @@ textarea.input { min-height: 150px; resize: vertical; }
   body { background: #fff; }
   .bar, .noprint { display: none !important; }
   .wrap { max-width: none; padding: 0; }
-  .sheet { padding: 0; font-size: 10.5pt; }
+  .sheet { padding: 0; font-size: 9.8pt; line-height: 1.45; }
+  @page { size: A4; margin: 8mm; }
 }

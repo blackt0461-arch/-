@@ -1,5 +1,5 @@
 {
   "courses": [
-    { "id": "denshi1", "name": "電子回路I", "tests": [ { "id": "midterm", "name": "中間テスト" } ] }
+    { "id": "denshi1", "name": "電子回路I", "tests": [ { "id": "midterm", "name": "中間テスト", "date": "2026-11-11" } ] }
   ]
 }
