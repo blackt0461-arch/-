@@ -141,3 +141,4 @@ textarea.input { min-height: 150px; resize: vertical; }
 .how { margin-top: 8px; font-size: 13px; color: var(--sub); }
 .how summary { cursor: pointer; color: var(--acc); }
 .how p { margin: 6px 0; }
+.cloud-line { text-align: center; color: var(--sub); font-size: 12px; margin: 18px 0 6px; }
