@@ -90,7 +90,7 @@ const serve = () => new Promise(res => { const srv = http.createServer((req, rsp
   console.log('5. エラーの自動記録');
   await page.evaluate(() => { setTimeout(() => { throw new Error('テスト用のエラー'); }, 0); });
   await page.waitForTimeout(800);
-  check((db.errors || []).some(e => e.p_msg.includes('テスト用のエラー') && e.p_version === '1.12.0'), 'エラーがサーバーに記録される（版つき）');
+  check((db.errors || []).some(e => e.p_msg.includes('テスト用のエラー') && e.p_version === JSON.parse(fs.readFileSync(path.join(ROOT, 'version.json'))).version), 'エラーがサーバーに記録される（版つき）');
   errors.splice(errors.findIndex(e => /テスト用のエラー/.test(e)), 1);
 
   console.log('6. 模様がえ中は、下のメニューや部屋の名前をかくす');
