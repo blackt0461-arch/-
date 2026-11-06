@@ -95,7 +95,9 @@ export function buildSkin({ sources, lm, nodeName, h = 1.0, closeR = 4.5, bigR =
   const rcAt = (q) => {
     const j = ((q / nx) | 0) % ny, k = (q / (nx * ny)) | 0;
     const y = lo[1] + j * h, z = lo[2] + k * h;
-    return (closeR + (bigR - closeR) * sm(80, 128, y) * sm(-28, -6, z) * sm(385, 352, z)) / h; // 頭（z>385）は細かく包む
+    const body = closeR + (bigR - closeR) * sm(80, 128, y) * sm(-28, -6, z);
+    const head = closeR + 2.8 * sm(452, 432, z);                  // 頭はなめらかに包む（鼻づらの先は細かく）
+    return (body + (head - body) * sm(352, 385, z)) / h;
   };
   const out = new Uint8Array(N);
   const queue = new Int32Array(N);
@@ -265,12 +267,18 @@ export function tabbyColor(p, n, bone, lm) {
     // ほおの後ろはふさふさ
     fur = 0.28 + 0.3 * sm(30, 10, a) * sm(10, 22, c);
     // 鼻（鼻鏡）：毛のないピンク
-    const nt = lm.noseTip; const dn = Math.hypot(x - nt[0], p[1] - nt[1], p[2] - nt[2]);
-    if (dn < 6.5 && a > 84) { col = [0.86, 0.55, 0.55]; fur = 0; }
-    // まぶたのふち：黒っぽい
-    if (de < 11.8) { col = [0.3, 0.18, 0.14]; fur = 0; }
-    // 唇のふち
-    if (a > 58 && a < 86 && b < -4.5 && b > -9 && c > 3 && Math.abs(b - (-6.5 + (a - 70) * 0.02)) < 0.9) { col = [0.45, 0.25, 0.22]; fur = 0.05; }
+    // 鼻（鼻鏡）：毛のない逆三角形（上の辺 約10mm、高さ 約8mm）
+    if (a > 83.5 && b > 0.5 && b < 9.8 && c < Math.max(0.8, (b - 0.5) * 0.62)) { col = [0.84, 0.52, 0.52]; fur = 0; }
+    // まぶたのふち：黒っぽい細いふち
+    const ea = lm.eyeAxes;
+    if (ea) {
+      const d = [x - ea.C[0], p[1] - ea.C[1], p[2] - ea.C[2]];
+      const hx = (d[0] * ea.hv[0] + d[1] * ea.hv[1] + d[2] * ea.hv[2]) / 8.6, vy = (d[0] * ea.vv[0] + d[1] * ea.vv[1] + d[2] * ea.vv[2]) / 7.4;
+      const fwd = d[0] * ea.g[0] + d[1] * ea.g[1] + d[2] * ea.g[2];
+      const rr = Math.hypot(hx, vy);
+      if (fwd > 0 && rr < 1.18) { col = [0.22, 0.14, 0.1]; fur = 0; }
+      else if (fwd > 0 && rr < 1.45) { col = mix(col, LIGHT, 0.7); fur *= 0.5; }   // 目のまわりの明るい毛
+    }
   } else if (isTail) {
     // しっぽ：輪の縞、先は濃い
     const m = /^Cd(\d+)/.exec(bone); const i = m ? +m[1] : 2;

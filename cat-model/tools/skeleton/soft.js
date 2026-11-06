@@ -53,16 +53,16 @@ export function buildSoft(api, lm) {
 
   // ===================== 目 =====================
   // 眼球：直径 約20.7mm（Aust Vet J の測定）、両目の中心の間 約33.6mm（Tollin & Koka 2009）。眼窩の中、前と少し外を向く
-  const EYE_C = Q(49.5, 20.0, 16.8), EYE_R = 10.3;
+  const EYE_C = Q(51.0, 20.0, 16.8), EYE_R = 10.3;
   {
     const C = EYE_C;
     const g = norm(add(mul(u, 0.93), mul(w, 0.37)));                         // 目の向き（前と少し外）
     const hv = norm(cross(v, g)), vv = norm(cross(g, hv));
     const R = EYE_R;
     lm.eyeOpen = { c: add(C, mul(g, R + 1.2)), axes: [g, hv, vv], r: [3.0, 8.6, 7.4] };     // まぶたのすきま（横 約17mm・縦 約12mm）
-    lm.eyeCut = { c: add(C, mul(g, R + 5.5)), axes: [g, hv, vv], r: [6.5, 8.6, 7.4] };      // 皮ふを切る範囲
+    lm.eyeCut = { c: add(C, mul(g, R + 2.0)), axes: [g, hv, vv], r: [14, 8.6, 7.4] };       // 皮ふを切る範囲（角膜の面でほぼこの大きさ）
     lm.eyeAxes = { C, g, hv, vv, R };
-    lm.nostril = { c: Q(89.2, 4.8, 2.4), axes: [u, v, w], r: [2.2, 1.4, 1.2] };            // 鼻の穴
+    lm.nostril = { c: Q(88.4, 4.6, 2.6), axes: [u, v, w], r: [1.8, 1.1, 0.9] };            // 鼻の穴
     api.bone({ id: 'Eye', pair: true, ja: '眼球', la: 'Bulbus oculi', region: 'organ', mat: 'eye', parent: 'Skull', joint: C, h: 0.13, noSimplify: true,
       shape: smoothUnion(1.5, sphere(C, R), sphere(add(C, mul(g, 4.0)), 7.6)), // 角膜のふくらみ
       colorFn: (p) => {
@@ -137,9 +137,9 @@ export function buildSoft(api, lm) {
     fill.push(E(4, -14, s * 12, [6, 5, 5]));              // 下顎腺（だ液腺）
     // まぶた：目のまわりをかこむ
     const e = lm.eyeAxes, ss = (q) => [q[0] * s, q[1], q[2]];
-    fill.push(ellipsoid(ss(add(e.C, mul(e.g, e.R - 3))), [7, 12, 10.5], [ss(e.g), ss(e.hv), ss(e.vv)]));
+    fill.push(ellipsoid(ss(add(e.C, mul(e.g, e.R - 5.5))), [5.5, 11.4, 10.2], [ss(e.g), ss(e.hv), ss(e.vv)]));
   }
-  fill.push(E(85.5, 6.0, 0, [3.4, 4.2, 5.0]));            // 鼻（鼻鏡）
+  fill.push(ellipsoid(Q(85.2, 6.0, 0), [3.0, 4.0, 4.4], [norm(add(u, mul(v, -0.35))), norm(add(v, mul(u, 0.35))), w])); // 鼻（鼻鏡）：前と少し下を向く
   fill.push(cone(Q(76, 11, 0), Q(85, 8.5, 0), 4.5, 4.0)); // 鼻の軟骨（鼻すじの先）
   fill.push(E(79, -12.5, 0, [5, 4, 6]));                  // あご（オトガイ）
   fill.push(E(5, 20, 0, [12, 8, 16]));                    // 後頭部の筋肉のふくらみ
