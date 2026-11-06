@@ -16,7 +16,7 @@ const serve = () => new Promise(res => { const srv = http.createServer((req, rsp
   async function device(opts = {}) {
     const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } }); await mock(ctx, db, opts);
     const page = await ctx.newPage(); page.on('dialog', d => d.accept());
-    await page.addInitScript(() => { localStorage.setItem('studyroom.download', 'later'); localStorage.setItem('studyroom.quality', 'low'); });
+    await page.addInitScript(() => { localStorage.setItem('studyroom.download', 'later'); localStorage.setItem('studyroom.notour', '1'); localStorage.setItem('studyroom.quality', 'low'); });
     return { ctx, page };
   }
   async function login(page, signup) {
@@ -57,6 +57,39 @@ const serve = () => new Promise(res => { const srv = http.createServer((req, rsp
   const bxp = await B2.page.evaluate(() => window.__app?.S?.profile()?.xp).catch(() => null);
   check(bxp === 900, `端末B も、端末A の記録に追いつく（端末B の経験値 ${bxp}）`);
   await B2.ctx.close();
+
+  console.log('4. 管理者が「元に戻す」（端末B は開いたまま）');
+  const D = await device();
+  await login(D.page, false);
+  const dxp0 = await D.page.evaluate(() => window.__app.S.profile().xp);
+  check(dxp0 === 900, `端末B を開く（経験値 ${dxp0}）`);
+  const old = (db.backups?.syncU || []).find(b => b.data.profile?.xp === 30);
+  check(!!old, 'サーバーに 経験値30 の時のバックアップがある');
+  const AD = await device();
+  await AD.page.goto(base); await AD.page.waitForSelector('.title-screen'); await AD.page.click('.title-screen');
+  await AD.page.waitForSelector('button[type=submit]');
+  if (!/登録/.test(await AD.page.locator('button[type=submit]').textContent())) await AD.page.click('.swap');
+  await AD.page.fill('input[name=name]', 'admin'); await AD.page.fill('input[name=pw]', 'test1234'); await AD.page.click('button[type=submit]');
+  await AD.page.waitForSelector('.mode-sheet [data-m=study]', { timeout: 60000 }); await AD.page.click('.mode-sheet [data-m=study]');
+  await AD.page.waitForTimeout(2000); await AD.page.evaluate(() => { document.querySelector('.lb-screen .ok')?.click(); });
+  await AD.page.waitForTimeout(600); await AD.page.evaluate(() => { document.querySelector('.style-sheet .stylecard')?.click(); document.querySelector('.style-sheet .ok')?.click(); });
+  await AD.page.evaluate(() => document.querySelector('[data-t=menu]')?.click()); await AD.page.waitForTimeout(400);
+  await AD.page.click('.menu-list [data-m=admin]'); await AD.page.waitForSelector('.ac-restore[data-u=syncU]');
+  await AD.page.screenshot({ path: path.join(ROOT, 'tools/check/out/admin-card.png') }).catch(() => {}); await AD.page.click('.ac-restore[data-u=syncU]'); await AD.page.waitForSelector('.rs-one');
+  const rows = await AD.page.locator('.rs-one').allTextContents();
+  check(rows.some(r => /Lv\d+・3問/.test(r)), `バックアップの一覧が出る（${rows.length}件：${rows.map(r => r.replace(/\s+/g, ' ')).join(' / ')}）`);
+  await AD.page.click(`.rs-one[data-id="${old.id}"]`); await AD.page.waitForSelector('.rs-sheet .go');
+  await AD.page.screenshot({ path: path.join(ROOT, 'tools/check/out/restore.png') }).catch(() => {});
+  await AD.page.click('.rs-sheet .go'); await AD.page.waitForTimeout(800);
+  check(serverXp() === 30 && db.users.syncU.data.restoredAt > 0, `サーバーの記録が戻る（経験値 ${serverXp()}）`);
+  check((db.backups.syncU[0]?.data.profile?.xp) === 900, '戻す前の記録もバックアップに残る');
+  // 開いたままの端末B が保存しても、戻した記録を上書きしない
+  await D.page.evaluate(async () => { window.__app.S.profile().xp += 5; window.__app.S.save(); const Sy = await import('/js/sync.js'); await Sy.push(); }).catch(() => {});
+  await D.page.waitForTimeout(6000); await D.page.waitForFunction(() => window.__app?.S?.profile, null, { timeout: 30000 }).catch(() => {});
+  check(serverXp() === 30, `開いたままの端末が上書きしない（ネットの経験値 ${serverXp()}）`);
+  const dxp = await D.page.evaluate(() => window.__app?.S?.profile()?.xp).catch(() => null);
+  check(dxp === 30, `端末B も戻した記録になる（端末B の経験値 ${dxp}）`);
+  await D.ctx.close(); await AD.ctx.close();
   await browser.close(); srv.close();
   console.log(fails.length ? `\nだめな所：${fails.length} 件` : '\nぜんぶ OK');
   process.exit(fails.length ? 1 : 0);

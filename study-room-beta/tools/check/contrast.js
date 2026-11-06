@@ -165,7 +165,7 @@ function ratio(a, b) { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); re
   const page = await ctx.newPage();
   const errors = [];
   page.on('pageerror', e => errors.push(e.message));
-  await page.addInitScript(() => { localStorage.setItem('studyroom.download', 'later'); localStorage.setItem('studyroom.quality', 'low'); window.__ccFreeze = true; });
+  await page.addInitScript(() => { localStorage.setItem('studyroom.download', 'later'); localStorage.setItem('studyroom.notour', '1'); localStorage.setItem('studyroom.quality', 'low'); window.__ccFreeze = true; });
   await page.goto(base);
   await page.waitForSelector('.title-screen'); await page.click('.title-screen');
   await page.click('.swap'); await page.fill('input[name=name]', 'admin'); await page.fill('input[name=pw]', 'test1234'); await page.click('button[type=submit]');

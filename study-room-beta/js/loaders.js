@@ -3,6 +3,13 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { ASSETS } from './assets.js';
 
+// 画質「かるい」のときは、色の絵（map）だけ読みこむ。でこぼこ（normal）・つや（rough / arm）の絵は、
+// とても小さい無地の絵に置きかえる（ダウンロードがおよそ半分になる。1.12.0）
+let lite = true;
+try { lite = (localStorage.getItem('studyroom.quality') || 'low') === 'low'; } catch (e) { /* なし */ }
+export const isLite = () => lite;
+const FLAT_NOR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGNoaPgPAAODAgAApfuJAAAAAElFTkSuQmCC';
+const FLAT_ARM = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4f5MBAASzAdliaxxwAAAAAElFTkSuQmCC';
 const texLoader = new THREE.TextureLoader();
 const gltfLoader = new GLTFLoader();
 const texCache = new Map();
@@ -13,6 +20,10 @@ export function loadTex(url, srgb) {
   if (!texCache.has(k)) {
     texCache.set(k, new Promise((res) => {
       texLoader.load(url, t => {
+        // 画質「かるい」では、壁・床などの質感の絵を 512 にちぢめる（メモリがおよそ 1/4。1.12.0）
+        if (lite && /polyhaven/.test(url) && t.image && t.image.width > 512) {
+          try { const k = 512 / Math.max(t.image.width, t.image.height), c = document.createElement('canvas'); c.width = Math.round(t.image.width * k); c.height = Math.round(t.image.height * k); c.getContext('2d').drawImage(t.image, 0, 0, c.width, c.height); t.image = c; t.needsUpdate = true; } catch (e) { /* そのまま */ }
+        }
         t.wrapS = t.wrapT = THREE.RepeatWrapping;
         t.anisotropy = 8;
         if (srgb) t.colorSpace = THREE.SRGBColorSpace;
@@ -30,9 +41,10 @@ export async function texturedMaterial(texId, opts = {}) {
   if (!t) return mat;
   const [map, normal, rough] = await Promise.all([
     t.map ? loadTex(t.map, true) : null,
-    t.normal ? loadTex(t.normal, false) : null,
-    t.rough ? loadTex(t.rough, false) : null,
+    t.normal && !lite ? loadTex(t.normal, false) : null,
+    t.rough && !lite ? loadTex(t.rough, false) : null,
   ]);
+  if (lite && t.rough) mat.roughness = 0.85;
   mat.map = map; mat.normalMap = normal; mat.roughnessMap = rough;
   mat.userData.rep = opts.rep || 1;
   mat.needsUpdate = true;
@@ -49,6 +61,8 @@ export function loadModel(id) {
       const base = a.url.slice(0, a.url.lastIndexOf('/') + 1);
       mgr.setURLModifier(u => {
         const rel = u.startsWith(base) ? u.slice(base.length) : u;
+        if (lite && /_nor_gl_/.test(rel)) return FLAT_NOR;
+        if (lite && /_(arm|rough)_/.test(rel)) return FLAT_ARM;
         return (a.inc && a.inc[rel]) || u;
       });
       new GLTFLoader(mgr).load(a.url, g => res(g.scene), undefined, () => res(null));

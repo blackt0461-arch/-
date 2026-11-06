@@ -8,7 +8,7 @@ import { icon, GENRE_ICON, SUBJECT_ICON } from './icons.js';
 import { ticketSVG, TICKET_NAME } from './tickets.js';
 import * as G from './gacha.js';
 import { thumbHTML, hydrateThumbs } from './thumbs.js';
-import { loadModel } from './loaders.js';
+import { loadModel, isLite } from './loaders.js';
 import { validProblems, SYMBOLS } from './problems.js';
 import { SUBJECT_PROBLEMS } from './subjects/index.js';
 import { playPullFX } from './pullfx.js';
@@ -17,9 +17,13 @@ import * as S from './store.js';
 import * as Auth from './auth.js';
 import * as DL from './download.js';
 import * as Sync from './sync.js';
+import * as R from './report.js';
+import * as EV from './events.js';
+import * as ERR from './errlog.js';
 import { rpc } from './cloud.js';
 import { PUZZLES, puzzleById, levelInfo, mountPuzzle, livesOf } from './puzzles.js';
 import { openPuzzleHelp } from './puzzlehelp.js';
+import { runTour } from './tour.js';
 import * as BGM from './bgm.js';
 import { AVATARS, AVATAR_COLORS, GACHA_AVATARS, NIGHT_COLORS, avatarHTML, avatarItemId, pullRewards } from './avatars.js';
 import { studyParams, puzzleParams, radarSVG, TITLES, titleById, earnedTitles } from './profile.js';
@@ -84,11 +88,12 @@ const loadAllBanks = () => Promise.all(SUBJECTS.filter(x => x.bank).map(x => loa
 // えらんだ範囲（ジャンル・単元）の問題だけ
 function scoped(sid = subjectId) {
   const sc = S.subject(sid).scope, all = probs(sid);
+  if (sc?.wrong) { const w = S.wrongList(S.subject(sid), all); return w.length ? w : all; }
   if (!sc || (!sc.genre && !sc.unit)) return all;
   const list = all.filter(p => (!sc.genre || p.genre === sc.genre) && (!sc.unit || p.unit === sc.unit));
   return list.length ? list : all;
 }
-const scopeLabel = (sc) => !sc || (!sc.genre && !sc.unit) ? 'すべて' : [sc.genre, sc.unit].filter(Boolean).join(' ・ ');
+const scopeLabel = (sc) => sc?.wrong ? 'まちがえた問題' : !sc || (!sc.genre && !sc.unit) ? 'すべて' : [sc.genre, sc.unit].filter(Boolean).join(' ・ ');
 
 // ---- テスト勉強用の問題集（設定でコードを入れると、教科えらびに科目が増える） ----
 // 中身は js/packs.js に暗号で入っていて、コードがないと開けない。入れたコードは記録（profile.codes）に残す
@@ -217,11 +222,13 @@ function showLogin(mode = usedHereBefore() ? 'login' : 'signup') {
           <button class="btn primary big" type="submit">${mode === 'login' ? 'ログイン' : '登録してはじめる'}</button>
         </form>
         <button class="link swap">${mode === 'login' ? 'はじめての人は、こちらで登録' : 'もう登録している人は、ログイン'}</button>
+        ${mode === 'login' ? '<button class="link forgot">パスワードを忘れた</button>' : `<p class="note agree">登録すると、<a href="legal/terms.html" target="_blank" rel="noopener">利用規約</a>と<a href="legal/privacy.html" target="_blank" rel="noopener">プライバシーポリシー</a>に同意したことになります。</p>`}
         <p class="note">記録はネット上に保存されます。どのスマホ・パソコンからでも、同じユーザー名とパスワードで続きから遊べます。</p>
       </div>
     </div>`);
   app.append(el);
   el.querySelector('.swap').onclick = () => showLogin(mode === 'login' ? 'signup' : 'login');
+  el.querySelector('.forgot')?.addEventListener('click', showPasswordReset);
   el.querySelector('form').onsubmit = async (e) => {
     e.preventDefault();
     const f = e.target;
@@ -241,6 +248,29 @@ function showLogin(mode = usedHereBefore() ? 'login' : 'signup') {
       startAs(Auth.currentUser());
       if (welcome) setTimeout(() => toast('新規登録記念のプレゼントが、プレゼントBOXに届いています', 3600), 1500);
     } catch (ex) { err.textContent = ex.message; vibrate(80); btn.disabled = false; }
+  };
+}
+
+// パスワードを忘れた：ユーザー名＋復元コードで新しいパスワードにする（1.12.0）
+function showPasswordReset() {
+  const el = sheet(`
+    <div class="sh-head"><span class="sh-ic">${icon('lock')}</span><div><h3>パスワードを忘れた</h3><p>設定で作った「復元コード」で、新しいパスワードにできます</p></div><button class="sh-x close" aria-label="とじる">${icon('x')}</button></div>
+    <form class="pr-form">
+      <label>ユーザー名<input name="u" autocomplete="username" required maxlength="16"></label>
+      <label>復元コード<input name="c" placeholder="XXXX-XXXX-XXXX" autocomplete="off" autocapitalize="characters" spellcheck="false" required></label>
+      <label>新しいパスワード<input name="p" type="password" autocomplete="new-password" required minlength="4"></label>
+      <p class="err"></p>
+      <button class="btn primary big" type="submit">新しいパスワードにする</button>
+    </form>
+    <p class="note">復元コードを作っていない時は、新しく登録したアカウントの「要望・バグ報告」から、管理者に知らせてください。</p>`, 'news-sheet pr-sheet');
+  el.querySelector('.close').onclick = () => el.remove();
+  el.querySelector('form').onsubmit = async (e) => {
+    e.preventDefault();
+    const f = e.target, err = f.querySelector('.err'), btn = f.querySelector('button'); btn.disabled = true; err.textContent = '';
+    try {
+      const r = await rpc('sr_password_reset', { p_username: f.u.value.trim(), p_code: f.c.value, p_new: f.p.value });
+      el.remove(); toast(`「${r.username}」のパスワードを変えました。新しいパスワードでログインしてください（復元コードは使ったので、ログインしたら作りなおしてください）`, 5200);
+    } catch (ex) { err.textContent = ex.code === 'bad_code' ? 'ユーザー名か復元コードがちがいます' : ex.code === 'too_many' ? '何度もまちがえたので、1時間ほど待ってからためしてください' : ex.message; btn.disabled = false; vibrate(60); }
   };
 }
 
@@ -580,7 +610,10 @@ function showGacha(banner = null) {
     const b = cur();
     const sh = sheet(`<div class="sh-head"><span class="sh-ic">${icon('star')}</span><div><h3>提供割合</h3><p>${esc(b.limited ? b.name : 'スタンダード')}</p></div></div>
       <div class="rates-body"><p>★5：5%（${b.limited ? 'うち半分は限定シリーズ' : 'いつでも出る家具のみ'}）<br>★4：25%<br>★3：70%</p>
-      <p>10回引くと★4以上が必ず1つ入ります。</p><p>★4・★5がかぶったら、それぞれのかけら1個になります。★3がかぶったら、もう1つ持てます。</p></div>
+      <p>10回引くと★4以上が必ず1つ入ります。</p><p>★4・★5がかぶったら、それぞれのかけら1個になります。★3がかぶったら、もう1つ持てます。</p>
+      <p>引いた回数のごほうび（アイコン）は、決まった回数で必ずもらえます。ガチャからランダムには出ません。</p></div>
+      <h4 class="odds-h">家具ごとの出る確率（1回あたり）</h4>
+      <div class="odds">${[5, 4, 3].map(r => { const list = G.oddsFor(b.id).filter(o => o.rarity === r); return `<div class="odds-g"><b>★${r}</b><small>合計 ${(list.reduce((n, o) => n + o.p, 0) * 100).toFixed(1)}%・${list.length}種</small></div>${list.map(o => `<div class="odds-r"><span>${esc(o.item.name)}${o.limited ? '<i>限定</i>' : ''}</span><b>${(o.p * 100).toFixed(o.p * 100 < 0.1 ? 3 : 2)}%</b></div>`).join('')}`; }).join('')}</div>
       <button class="link close">とじる</button>`, 'rates-sheet');
     sh.querySelector('.close').onclick = () => sh.remove();
   };
@@ -750,6 +783,7 @@ let houseEntered = false; // 部屋を一度でも出したか（ネットの記
 async function enterHouse() {
   if (BETA && !isAdmin()) return showBetaOnly();
   houseEntered = true;
+  loadBlocks();
   setTimeout(loadAllBanks, 2500); // 問題バンクは、部屋が出てから裏で読みこむ
   const packsReady = loadSavedPacks();
   const added = ensureRooms();
@@ -757,6 +791,12 @@ async function enterHouse() {
     room3d = new Room3D(canvas);
     setInterval(() => room3d.refreshMood(), 60e3);
   }
+  room3d.onContextLost = () => {
+    ERR.report('WebGL context lost', '', 'contextlost');
+    try { S.save(); Sync.push(true); } catch (e) { /* なし */ }
+    toast('画面を読みこみなおします（記録は保存しました）', 2000);
+    setTimeout(() => location.reload(), 1200);
+  };
   room3d.onDoor = goThroughDoor;
   room3d.onSelect = onSelectItem;
   room3d.onPlacedChange = () => S.save();
@@ -782,7 +822,10 @@ function remainCapacity(room = curRoom()) {
 }
 
 let notesChecked = false;
+// 何かの操作の途中（模様がえ・家具をえらぶ など）は、下のメニュー・部屋の名前・横のボタンをかくして、部屋を広く見せる（1.12.0）
+function setFocus(on) { document.body.classList.toggle('focus', !!on); }
 function showHome() {
+  setFocus(false);
   BGM.duck(false);
   try { checkNewTitles(); } catch (e) { console.warn('titles', e); }
   // ログイン情報がない（ログアウトされた）のに部屋を出そうとしたら、ログイン画面へ（こわれた画面にしない）
@@ -823,18 +866,53 @@ function showHome() {
       </header>
       <div class="side-tools">
         <button class="round photo" aria-label="写真をとる">${icon('camera')}</button>
+        ${EV.activeEvent() ? `<button class="round evbtn" aria-label="${esc(EV.activeEvent().name)}">${icon('snow')}${EV.readyCount(EV.activeEvent()) ? `<i class="gb-n">${EV.readyCount(EV.activeEvent())}</i>` : ''}</button>` : ''}
         <button class="round giftbox" aria-label="プレゼントBOX">${icon('gift')}${S.gifts().length ? `<i class="gb-n">${S.gifts().length > 99 ? '99+' : S.gifts().length}</i>` : ''}</button>
       </div>
     </div>`);
   el.querySelector('.photo').onclick = photoMode;
   el.querySelector('.giftbox')?.addEventListener('click', () => showGiftBox());
   refreshGifts();
+  el.querySelector('.evbtn')?.addEventListener('click', () => showEvent());
   el.querySelector('.rankchip').onclick = showRankRoad;
   el.querySelector('.room-name').onclick = () => showRoomPicker({ hs, r, here, locked, home });
   app.append(el, tabbar('room'));
   scrollRoomsNav(el);
   if (!notesChecked) { notesChecked = true; checkUpdateNotes(); }
   if (hs.villaNew) celebrateVilla();
+  maybeTour();
+}
+// はじめての人の案内（1.12.0）：登録してまだ1問も解いていない人に、部屋の画面のボタンを順に説明する。1回だけ
+let tourWait = null, tourOn = false;
+function maybeTour(tries = 0) {
+  clearTimeout(tourWait);
+  const pf = S.profile();
+  try { if (localStorage.getItem('studyroom.notour')) return; } catch (e) { /* なし */ } // 自動の確かめ（テスト）では出さない
+  if (tourOn || pf.tour || (pf.solved || 0) > 0 || (pf.puzzleClears || 0) > 0 || (pf.xp || 0) > 60) return;
+  tourWait = setTimeout(() => {
+    const busy = !app.querySelector('.home') || visiting || !pf.mode || !curRoom()?.style || document.querySelector('.sheet, .lb-screen, .mode-sheet, .overlay, .title-screen');
+    if (busy) { if (tries < 40) maybeTour(tries + 1); return; }
+    startTour();
+  }, tries ? 1500 : 900);
+}
+async function startTour(again = false) {
+  if (tourOn) return;
+  tourOn = true;
+  const pz = isPuzzle();
+  const steps = [
+    { title: 'ROOMIN へようこそ', text: pz ? 'パズルを解いて、自分の部屋を育てるアプリです。おもなボタンを紹介します' : '問題を解いて、自分の部屋を育てるアプリです。おもなボタンを紹介します' },
+    { sel: '.solve-ring', title: pz ? 'パズルで遊ぶ' : '問題を解く', text: pz ? 'ここから4種類のパズルを遊べます。クリアするとまわりのゲージがたまります' : 'ここから問題を解きます。教科と単元をえらんで、1問ずつ進みます。正解するとまわりのゲージがたまります' },
+    { sel: '.tabbar [data-t=buy]', title: '家具を買う', text: 'ゲージが満タンになると、ここから家具を買って部屋に置けます' },
+    { sel: '.tabbar [data-t=gacha]', title: 'ガチャ', text: 'チケットでガチャが引けます。レアな家具や着せ替えが出ます' },
+    { sel: '.home .giftbox', title: 'プレゼントBOX', text: 'ログインボーナスやごほうびはここに届きます。忘れずに受け取りましょう' },
+    { sel: '.tabbar [data-t=menu]', title: 'メニュー', text: '記録・勉強レポート・設定はここから。この案内は、設定からもう一度見られます' },
+    { title: pz ? 'さっそく遊んでみよう' : 'さっそく1問解いてみよう', text: pz ? 'まずは★1のパズルから。わからない時はパズル画面の「i」で遊び方を見られます' : 'まずは好きな教科から1問。まちがえても、あとで解き直せます' },
+  ];
+  const how = await runTour(steps, { finish: again ? 'とじる' : pz ? '遊んでみる' : '解いてみる' });
+  tourOn = false;
+  const pf = S.profile();
+  if (!pf.tour) { pf.tour = 1; S.save(); }
+  if (how === 'done' && !again) app.querySelector('.solve-ring')?.click();
 }
 // 部屋のボタンが多いので、今の部屋が見える所まで横に送る
 // 左上の部屋名から開く「部屋えらび」
@@ -1056,7 +1134,7 @@ function buyFlow() {
         ${icon('chevronRight')}</button>`;
     }).join('')}</div>
     <button class="link close">あとで</button>`, 'buy-sheet');
-  app.querySelector('.tabbar')?.classList.add('hide');
+  setFocus(true); app.querySelector('.tabbar')?.classList.add('hide');
   el.querySelector('.close').onclick = () => { el.remove(); showHome(); };
   el.querySelectorAll('.genre-row').forEach(b => b.onclick = () => chooseCandidate(b.dataset.g));
 }
@@ -1079,7 +1157,7 @@ function chooseCandidate(genreId) {
       </button>`).join('')}</div>
     <p class="pv-tip">選ぶと、部屋のどこに置かれるかが見られます</p>
     <button class="btn gold big ok" disabled>${icon('check')}これを買う</button>`, 'cand-sheet');
-  app.querySelector('.tabbar')?.classList.add('hide');
+  setFocus(true); app.querySelector('.tabbar')?.classList.add('hide');
   el.querySelector('.sh-back').onclick = () => { room3d?.clearPreview(); buyFlow(); };
   // 「部屋を見る」：下の画面を小さくたたんで、置いた様子（ラグなど床の物も）を見られるように（1.11.0）
   const fold = (on) => { el.classList.toggle('folded', on); el.querySelector('.sh-fold span').textContent = on ? 'もどす' : '部屋を見る'; el.querySelector('.sh-fold').setAttribute('aria-label', on ? '選ぶ画面にもどす' : 'たたんで部屋を見る'); };
@@ -1255,17 +1333,21 @@ function showEdit() {
   app.querySelector('.dock')?.remove();
   app.querySelector('.side-tools')?.remove();
   app.querySelector('.hint')?.remove();
+  app.querySelector('.mode-toggle')?.remove(); // 模様がえ中は「勉強｜パズル」を出さない（完了ボタンと重なるため）
   app.querySelector('.tabbar .on')?.classList.remove('on');
   app.querySelector('.tabbar [data-t=edit]')?.classList.add('on');
   room3d.setEditMode(true);
+  setFocus(true);
+  let hintN = 0; try { hintN = +(localStorage.getItem('studyroom.ebHint') || 0); localStorage.setItem('studyroom.ebHint', String(hintN + 1)); } catch (e) { /* なし */ }
   const bar = h(`
     <div class="editbar">
       <div class="eb-top"><b>${icon('sofa')}模様がえ</b><span class="cap">置いている <b>${curRoom().placed.length}</b> / ${S.capacity()}</span></div>
-      <p class="eb-hint">家具をタップして選ぶ → そのまま指でなぞって動かす</p>
+      ${hintN < 3 ? '<p class="eb-hint">家具をタップして選ぶ → なぞって動かす。細かい位置は矢印で。小さい物や天井の物は「一覧」から</p>' : ''}
       <div class="eb-view seg"><button data-v="eye" class="on">${icon('eye')}ふつう</button><button data-v="top">${icon('grid')}上から</button></div>
       <div class="eb-btns">
+        <button class="btn ghost plist">${icon('menu')}一覧</button>
         <button class="btn ghost inv">${icon('box')}持ち物</button>
-        <button class="btn ghost surf">${icon('brush')}壁・床・ドア・窓</button>
+        <button class="btn ghost surf">${icon('brush')}壁・床など</button>
         <button class="btn primary done">${icon('check')}完了</button>
       </div>
     </div>`);
@@ -1274,9 +1356,23 @@ function showEdit() {
     room3d.setTopView(b.dataset.v === 'top');
   });
   bar.querySelector('.inv').onclick = showInventory;
+  bar.querySelector('.plist').onclick = showPlacedList;
   bar.querySelector('.surf').onclick = showSurfaces;
   bar.querySelector('.done').onclick = () => { room3d.setEditMode(false); S.save(); showHome(); };
   app.querySelector('.home').append(bar);
+}
+// 模様がえ：置いている家具の一覧からえらぶ（小さい物・天井の物・棚の中の物も、えらびやすく。1.12.0）
+function showPlacedList() {
+  const r = curRoom();
+  const groups = [['floor', '床', 'sofa'], ['on', 'テーブル・棚の上', 'box'], ['wall', '壁', 'image'], ['ceiling', '天井', 'light'], ['rug', 'ラグ', 'grid']];
+  const kindOf = (p, it) => p.on != null ? 'on' : it.place === 'wall' ? 'wall' : it.place === 'ceiling' ? 'ceiling' : it.place === 'rug' ? 'rug' : 'floor';
+  const rows = r.placed.map(p => ({ p, it: itemById(p.item) })).filter(x => x.it);
+  const el = sheet(`
+    <div class="sh-head"><span class="sh-ic">${icon('menu')}</span><div><h3>置いている家具</h3><p>えらぶと、その家具のほうを向いて選んだ状態になります</p></div><button class="sh-x close" aria-label="とじる">${icon('x')}</button></div>
+    <div class="pl-list">${groups.map(([k, n]) => { const list = rows.filter(x => kindOf(x.p, x.it) === k); return list.length ? `<h4>${n}<small>${list.length}</small></h4><div class="invgrid">${list.map(x => `<button class="inv-item pl-item ${room3d.selected === x.p.uid ? 'on' : ''}" data-u="${x.p.uid}"><span class="thumb">${thumbHTML(x.it)}</span><b>${esc(x.it.name)}</b></button>`).join('')}</div>` : ''; }).join('') || '<p class="empty">まだ何も置いていません</p>'}</div>`, 'inv-sheet pl-sheet');
+  hydrateThumbs(el);
+  el.querySelector('.close').onclick = () => el.remove();
+  el.querySelectorAll('.pl-item').forEach(b => b.onclick = () => { el.remove(); const u = r.placed.find(x => String(x.uid) === b.dataset.u)?.uid; room3d.select(u); room3d.focusSelected(); vibrate(10); });
 }
 function refreshEditCount() {
   const c = app.querySelector('.editbar .cap b');
@@ -1284,6 +1380,7 @@ function refreshEditCount() {
 }
 function onSelectItem(uid) {
   app.querySelector('.float-bar')?.remove();
+  app.querySelector('.nudge')?.remove();
   if (!uid || !room3d.editMode) return;
   const p = curRoom().placed.find(x => x.uid === uid);
   const it = p && itemById(p.item);
@@ -1314,6 +1411,23 @@ function onSelectItem(uid) {
   };
   fb.querySelector('.x').onclick = () => room3d.select(null);
   app.querySelector('.home')?.append(fb);
+  // 矢印で少しずつ動かす（押しつづけると動きつづける）。壁の物は上下、ほかは奥・手前（1.12.0）
+  const wall = it.place === 'wall';
+  const pad = h(`<div class="nudge" aria-label="少しずつ動かす">
+    <button data-d="0,1" aria-label="${wall ? '上へ' : '奥へ'}">${icon('chevronRight')}</button>
+    <button data-d="-1,0" aria-label="左へ">${icon('chevronRight')}</button>
+    <span class="ng-c">${icon('move')}</span>
+    <button data-d="1,0" aria-label="右へ">${icon('chevronRight')}</button>
+    <button data-d="0,-1" aria-label="${wall ? '下へ' : '手前へ'}">${icon('chevronRight')}</button></div>`);
+  let rep = null, moved = false;
+  const stop = () => { clearTimeout(rep); rep = null; if (moved) { S.save(); moved = false; } };
+  pad.querySelectorAll('button').forEach(b => {
+    const [dx, dy] = b.dataset.d.split(',').map(Number);
+    const step = (n) => { if (room3d.nudgeSelected(dx, dy)) moved = true; else if (n === 0) { toast('そこには動かせません', 1200); vibrate(30); } rep = setTimeout(() => step(n + 1), n === 0 ? 380 : 70); };
+    b.addEventListener('pointerdown', (e) => { e.preventDefault(); stop(); step(0); });
+    for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) b.addEventListener(ev, stop);
+  });
+  app.querySelector('.home')?.append(pad);
 }
 // 入れかえ：同じ種類の家具と、場所と向きはそのままで取りかえる
 function showSwap(uid) {
@@ -1455,7 +1569,8 @@ function photoMode() {
 
 // =========================== 更新のお知らせ ===========================
 // このプログラムの版（version.json と同じにする。公開のたびに上げる）
-const APP_VERSION = '1.11.2';
+const APP_VERSION = '1.12.0';
+ERR.setVersion(APP_VERSION);
 // 新しい版が出たら、みんな同じタイミングでそろうように強制で再起動する。
 // 開いた時・画面に戻った時・1分ごとに version.json を見る
 async function latestVersion() {
@@ -1673,6 +1788,7 @@ function puzzleResult(id, star, won, r, secs) {
     hs.gauge += pts;
     S.addPoints(pts); // ランキングのポイント
     xp = S.addPuzzleClear(id, star, r.mistakes || 0);
+    evToast(EV.addPoints(star));
     const first = S.markPlayedToday();
     if (first) setTimeout(() => toast(`連続 ${S.currentStreak()}日目！`), 600);
     S.save(); Sync.push?.();
@@ -1719,7 +1835,7 @@ async function chooseSubject() {
       const st = ready ? S.subject(s0.id) : null;
       const resume = st && st.session && st.session.idx < st.session.set.length;
       const stats = st ? S.stats(st, probs(s0.id)) : null;
-      const meta = !ready ? (s0.bank && !bankDone[s0.id] ? '読みこみ中' : '準備中') : resume ? '続きから' : stats.due ? `復習 ${stats.due}問` : `${probs(s0.id).length}問`;
+      const meta = !ready ? (s0.bank && !bankDone[s0.id] ? '読みこみ中' : '準備中') : resume ? '続きから' : stats.due ? `復習 ${stats.due}問` : S.wrongList(st, probs(s0.id)).length ? `まちがい ${S.wrongList(st, probs(s0.id)).length}問` : `${probs(s0.id).length}問`;
       return `<button class="subj ${ready ? '' : 'soon'}" data-s="${s0.id}" ${ready ? '' : 'disabled'}>
         <span class="s-ic">${icon(SUBJECT_ICON[s0.id] || 'book')}</span><b>${esc(s0.name)}</b><small>${meta}</small></button>`;
     }).join('');
@@ -1739,8 +1855,9 @@ function chooseScope(el, genre = null) {
   };
   const genres = [...new Set(all.map(p => p.genre).filter(Boolean))];
   const units = (g) => [...new Set(all.filter(p => (g ? p.genre === g : !p.genre || genres.length === 0)).map(p => p.unit).filter(Boolean))];
-  // ジャンルも単元も1つしかない教科は、そのまま始める
-  if (!genre && genres.length <= 1 && units(genres[0] || null).length <= 1) return go(null);
+  const wrongs = S.wrongList(st, all);
+  // ジャンルも単元も1つしかない教科は、そのまま始める（まちがえた問題がある時は、えらべるように出す）
+  if (!genre && !wrongs.length && genres.length <= 1 && units(genres[0] || null).length <= 1) return go(null);
   if (!genre && genres.length === 1) genre = genres[0];
   const done = (list) => { const n = list.filter(p => st.srs[p.id]?.seen).length; return `${n} / ${list.length}`; };
   const bar = (list) => `<span class="sc-bar"><i style="width:${list.length ? list.filter(p => st.srs[p.id]?.seen).length / list.length * 100 : 0}%"></i></span>`;
@@ -1758,11 +1875,13 @@ function chooseScope(el, genre = null) {
   el.innerHTML = `<div class="grab"></div>
     <div class="sh-head"><button class="icon sc-back" aria-label="もどる">${icon('back')}</button><div><h3>${esc(genre || subj.name)}</h3><p>${genre ? `${esc(subj.name)}・単元をえらぶ` : 'ジャンルをえらぶ'}</p></div><button class="sh-x close" aria-label="とじる">${icon('x')}</button></div>
     ${resume ? `<button class="btn primary big sc-resume">${icon('refresh')}続きから<small>（${esc(scopeLabel(st.scope))}）</small></button>` : ''}
+    ${!genre && wrongs.length ? `<button class="sc-wrong"><span class="sc-wic">${icon('refresh')}</span><span class="sc-t"><b>まちがえた問題を解き直す</b><small>3回続けて正解すると、リストから外れます</small></span><span class="sc-wn">${wrongs.length}問</span>${icon('chevronRight')}</button>` : ''}
     <div class="sc-list">${body}</div>`;
   el.querySelector('.close').onclick = () => { el.remove(); showHome(); };
   el.querySelector('.sc-back').onclick = () => { if (genre && genres.length > 1) chooseScope(el); else { el.remove(); chooseSubject(); } };
   el.querySelector('.sc-resume')?.addEventListener('click', () => { el.remove(); startSet(); });
   el.querySelector('[data-all]')?.addEventListener('click', () => go(null));
+  el.querySelector('.sc-wrong')?.addEventListener('click', () => go({ wrong: true }));
   el.querySelectorAll('[data-g]').forEach(b => b.onclick = () => chooseScope(el, b.dataset.g));
   el.querySelector('[data-gall]')?.addEventListener('click', () => go(genre ? { genre } : null));
   el.querySelectorAll('[data-u]').forEach(b => b.onclick = () => go({ genre: genre || null, unit: b.dataset.u }));
@@ -1793,6 +1912,7 @@ function showMenu() {
     </button>
     <nav class="menu-list">
       <button data-m="skins">${icon('palette')}<span>着せ替え<small>画面の見た目を変える（ガチャで集める）</small></span>${icon('chevronRight')}</button>
+      <button data-m="report">${icon('calendar')}<span>勉強レポート<small>週・月ごとのまとめ。画像で保存できる</small></span>${icon('chevronRight')}</button>
       <button data-m="records">${icon('chart')}<span>記録<small>分野ごとの成績・連続日数</small></span>${icon('chevronRight')}</button>
       <button data-m="feedback">${icon('chat')}<span>要望・バグ報告<small>管理者に送る</small></span>${icon('chevronRight')}</button>
       <button data-m="news">${icon('bell')}<span>お知らせ<small>アップデートや運営からのお知らせ</small></span>${newsBadge ? `<i class="badge">${newsBadge}</i>` : ''}${icon('chevronRight')}</button>
@@ -1801,7 +1921,7 @@ function showMenu() {
       ${isAdmin() ? `<button data-m="admin">${icon('shield')}<span>管理者<small>みんなの記録と部屋</small></span>${icon('chevronRight')}</button>` : ''}
     </nav>`);
   el.querySelector('.pc-tap').onclick = () => showProfile();
-  el.querySelectorAll('.menu-list button').forEach(b => b.onclick = () => ({ skins: () => showSkins(), records: showRecords, feedback: () => showFeedback(), bag: () => showBag(), news: showNews, ranking: showRanking, friends: showFriends, settings: showSettings, admin: showAdmin, beta: () => { location.href = BETA ? '../study-room/' : '../study-room-beta/'; } })[b.dataset.m]());
+  el.querySelectorAll('.menu-list button').forEach(b => b.onclick = () => ({ skins: () => showSkins(), records: showRecords, report: () => showReport(), feedback: () => showFeedback(), bag: () => showBag(), news: showNews, ranking: showRanking, friends: showFriends, settings: showSettings, admin: showAdmin, beta: () => { location.href = BETA ? '../study-room/' : '../study-room-beta/'; } })[b.dataset.m]());
   paintSync();
 }
 
@@ -1865,9 +1985,14 @@ function showProfile(view = null, back = null) {
     ${puzzleMain ? puzzleSec + studySec : studySec + puzzleSec}
     <section class="pf-sec"><h3 class="sec">${icon('trophy')}称号<small>${earned.size} / ${list.length}</small></h3>
       <div class="pf-titles">${list.map(t => `<button class="pf-t ${earned.has(t.id) ? 'got' : ''} ${pf.title === t.id ? 'on' : ''}" data-t="${t.id}" ${earned.has(t.id) && mine ? '' : 'disabled'}><b>${earned.has(t.id) ? esc(t.name) : '？？？'}</b><small>${esc(t.how)}</small></button>`).join('')}</div>
-      ${mine ? '<p class="pf-note">手に入れた称号を押すと、名前の下に出せます（フレンドにも見えます）</p>' : ''}</section>`);
+      ${mine ? '<p class="pf-note">手に入れた称号を押すと、名前の下に出せます（フレンドにも見えます）</p>' : ''}</section>
+    ${!mine ? `<div class="pf-safety"><button class="link pf-report">${icon('info')}通報する</button><button class="link pf-block">${icon('shield')}${blockedNames.has(name) ? 'ブロック中' : 'ブロックする'}</button></div>` : ''}`);
   el.querySelector('.back').onclick = back || showMenu;
-  if (!mine) return;
+  if (!mine) {
+    el.querySelector('.pf-report').onclick = () => reportUser(name);
+    el.querySelector('.pf-block').onclick = () => blockUser(name, () => showProfile(view, back));
+    return;
+  }
   el.querySelector('.pf-avbtn').onclick = () => pickAvatar(() => showProfile());
   el.querySelector('.pf-tbtn').onclick = () => el.querySelector('.pf-titles').scrollIntoView({ behavior: 'smooth', block: 'center' });
   el.querySelectorAll('.pf-t.got').forEach(b => b.onclick = () => {
@@ -1875,6 +2000,34 @@ function showProfile(view = null, back = null) {
     toast(pf.title ? `称号を「${titleById(id).name}」にしました` : '称号を外しました', 1800);
     showProfile();
   });
+}
+// 通報：運営（管理者の「要望・バグを見る」）に届く（1.12.0）
+function reportUser(name) {
+  const R = ['名前がよくない', 'プロフィール・部屋がよくない', 'いやがらせ', 'その他'];
+  const el = sheet(`
+    <div class="sh-head"><span class="sh-ic danger">${icon('info')}</span><div><h3>「${esc(name)}」を通報する</h3><p>運営が内容を確かめます。通報したことは相手には伝わりません</p></div><button class="sh-x close" aria-label="やめる">${icon('x')}</button></div>
+    <div class="rp-reasons">${R.map((x, i) => `<label><input type="radio" name="r" value="${i}" ${i === 0 ? 'checked' : ''}>${x}</label>`).join('')}</div>
+    <textarea class="rp-detail" maxlength="400" placeholder="くわしく（なくてもOK）"></textarea>
+    <button class="btn danger big rp-send">${icon('info')}通報する</button>`, 'news-sheet report-sheet');
+  el.querySelector('.close').onclick = () => el.remove();
+  el.querySelector('.rp-send').onclick = async () => {
+    const b = el.querySelector('.rp-send'); b.disabled = true;
+    const r = R[+el.querySelector('input[name=r]:checked').value], d = el.querySelector('.rp-detail').value.trim();
+    try { await rpc('sr_feedback_send', { p_token: Auth.currentUser()?.token, p_kind: 'report', p_body: `【通報】${name}／${r}${d ? '\n' + d : ''}` }); el.remove(); toast('通報しました。ありがとうございます', 2600); }
+    catch (ex) { toast(ex.message, 3000); b.disabled = false; }
+  };
+}
+// ブロック：その人とのフレンドが外れ、申請もできなくなる。ランキングにも出なくなる
+function blockUser(name, after) {
+  if (blockedNames.has(name)) return showBlocks();
+  const cf = sheet(`
+    <div class="sh-head"><span class="sh-ic">${icon('shield')}</span><div><h3>「${esc(name)}」をブロックしますか？</h3><p>フレンドから外れ、おたがいにフレンド申請ができなくなります。ランキングにも出なくなります。設定からいつでも解除できます</p></div></div>
+    <div class="row2"><button class="btn ghost back2">やめる</button><button class="btn danger go">${icon('shield')}ブロックする</button></div>`, 'news-sheet');
+  cf.querySelector('.back2').onclick = () => cf.remove();
+  cf.querySelector('.go').onclick = async () => {
+    try { await rpc('sr_block', { p_token: Auth.currentUser()?.token, p_username: name }); blockedNames.add(name); cf.remove(); toast(`「${name}」をブロックしました`); after && after(); }
+    catch (ex) { toast(ex.message, 3000); }
+  };
 }
 // ほかの人のプロフィールを開く（ランキング・フレンド・管理者画面から）
 async function openUserProfile(username, back) {
@@ -1950,6 +2103,88 @@ function showRankRoad() {
     const road = el.querySelector('.rr-road'), nx = el.querySelector('.rr-row.next') || el.querySelector('.rr-row.got');
     if (road && nx) road.scrollTop = nx.offsetTop - road.clientHeight * 0.55;
   }, 30);
+}
+// 期間限定イベント（1.12.0）
+function evToast(r) {
+  if (!r) return;
+  if (r.ready > 0) setTimeout(() => toast(`${r.ev.name}：ごほうびが受け取れます！`, 2600), 1500);
+}
+function evRewardArt(r) {
+  if (r.kind === 'item') { const it = itemById(r.item); return it ? `<span class="thumb">${thumbHTML(it)}</span>` : icon('gift'); }
+  if (r.kind.startsWith('ticket')) return `<span class="gb-ic ev-tk">${ticketSVG(r.kind, 'mini')}</span>`;
+  return `<span class="gb-ic">${icon('gift')}</span>`;
+}
+const evRewardName = (r) => r.kind === 'item' ? (itemById(r.item)?.name || '家具') : `${GIFT_LABEL[r.kind] || 'プレゼント'} ×${r.amount || 1}`;
+function showEvent() {
+  const ev = EV.activeEvent();
+  if (!ev) return toast('いまはイベントの期間ではありません');
+  const st = EV.stateOf(ev), next = ev.rewards.find(r => st.pts < r.at), last = ev.rewards.at(-1).at;
+  const el = sheet(`
+    <div class="sh-head ev-head"><span class="sh-ic ev-ic">${icon('snow')}</span><div><h3>${esc(ev.name)}${EV.previewing() === ev.id ? '<small class="ev-pv">ためし中</small>' : ''}</h3><p>${md(ev.start)}〜${md(ev.end)} ・ のこり ${EV.daysLeft(ev)}日</p></div><button class="sh-x close" aria-label="とじる">${icon('x')}</button></div>
+    <p class="ev-desc">${esc(ev.desc)}</p>
+    <div class="ev-meter"><div class="ev-num"><b>${st.pts}</b><span>${esc(ev.unit)}</span></div>
+      <div class="ev-bar"><i style="width:${Math.min(100, st.pts / last * 100)}%"></i>${ev.rewards.map(r => `<span class="ev-tick ${st.pts >= r.at ? 'on' : ''}" style="left:${r.at / last * 100}%"></span>`).join('')}</div>
+      <small>${next ? `次のごほうびまで あと ${next.at - st.pts}${esc(ev.unit)}` : 'ぜんぶのごほうびを集めました！'}・問題は正解${EV.POINTS.right}・まちがい${EV.POINTS.wrong}、パズルは★の数</small></div>
+    <div class="ev-list">${ev.rewards.map((r, i) => { const got = st.claimed.includes(i), can = st.pts >= r.at && !got; return `
+      <div class="ev-row ${got ? 'got' : can ? 'can' : ''}"><span class="ev-at">${r.at}</span>${evRewardArt(r)}<span class="ev-nm"><b>${esc(evRewardName(r))}</b>${r.kind === 'item' ? '<small>イベント限定</small>' : ''}</span>
+        ${got ? `<span class="ev-st">${icon('check')}受け取りずみ</span>` : can ? `<button class="btn gold sm ev-claim" data-i="${i}">受け取る</button>` : `<span class="ev-st">あと${r.at - st.pts}</span>`}</div>`; }).join('')}</div>
+    <p class="note">受け取ったごほうびはプレゼントBOXに届きます。イベントの家具はガチャからは出ません</p>`, 'ev-sheet');
+  hydrateThumbs(el);
+  el.querySelector('.close').onclick = () => { el.remove(); showHome(); };
+  el.querySelectorAll('.ev-claim').forEach(b => b.onclick = () => {
+    if (EV.claim(ev, +b.dataset.i)) { vibrate([20, 30, 20]); toast('プレゼントBOXに届きました'); showEvent(); }
+  });
+}
+const md = (k) => `${+k.slice(5, 7)}/${+k.slice(8, 10)}`;
+// 勉強レポート（1.12.0）：週・月ごとのまとめ。画像で保存できる
+function showReport(kind = 'week', offset = 0) {
+  const log = S.dayLog(), p = R.period(kind, offset), pv = R.period(kind, offset - 1);
+  const cur = R.summarize(log, p), prev = R.summarize(log, pv);
+  const names = Object.fromEntries(SUBJECTS.map(x => [x.id, x.name]));
+  const diff = (a, b, u = '') => { const d = a - b; return !b && !a ? '' : `<small class="${d > 0 ? 'up' : d < 0 ? 'down' : ''}">${d > 0 ? '+' : ''}${d}${u}</small>`; };
+  const max = Math.max(5, ...cur.days.map(d => d.n));
+  const today = S.dayKey(), bw = 100 / cur.days.length;
+  const bars = `<svg class="rp-bars" viewBox="0 0 100 46" preserveAspectRatio="none" aria-label="毎日の解いた数">${cur.days.map((d, i) => { const hh = d.n / max * 38; return `<rect x="${(i * bw + bw * .18).toFixed(2)}" y="2" width="${(bw * .64).toFixed(2)}" height="38" rx="1" class="bg"/>${hh ? `<rect x="${(i * bw + bw * .18).toFixed(2)}" y="${(40 - hh).toFixed(2)}" width="${(bw * .64).toFixed(2)}" height="${hh.toFixed(2)}" rx="1" class="${d.key === today ? 'now' : 'v'}"/>` : ''}`; }).join('')}</svg>
+    <div class="rp-days">${cur.days.map((d, i) => `<span>${kind === 'week' ? '月火水木金土日'[i] : (i % 5 === 0 || i === cur.days.length - 1) ? +d.key.slice(8) : ''}</span>`).join('')}</div>`;
+  const subjRows = Object.entries(cur.bySid).sort((a, b) => b[1][0] - a[1][0]).map(([sid, [n, c]]) => `<div class="rp-row"><span class="ic2">${icon(SUBJECT_ICON[sid] || 'book')}</span><b>${esc(names[sid] || sid)}</b><span class="rp-bar"><i style="width:${n / Math.max(1, cur.n) * 100}%"></i></span><span class="rp-n">${n}問<small>${Math.round(c / n * 100)}%</small></span></div>`).join('');
+  const unitRows = (list, weak) => list.length ? list.map((u, i) => `<div class="rp-row rp-unit"><span class="rp-rank ${weak ? 'weak' : 'strong'}">${i + 1}</span><span class="rp-ut"><b>${esc(u.unit)}</b><small>${esc(names[u.sid] || '')}・${u.n}問・正解率 ${Math.round(u.rate * 100)}%</small></span>${weak ? `<button class="btn ghost sm rp-go" data-s="${u.sid}" data-u="${esc(u.unit)}">${icon('pencil')}解く</button>` : ''}</div>`).join('') : `<p class="empty sm">3問以上解いた単元が出ます</p>`;
+  const el = screenWithTabs('report', `<button class="icon back">${icon('back')}</button><h2>勉強レポート</h2><span></span>`, 'menu', `
+    <div class="rp-tabs" role="tablist"><button data-k="week" class="${kind === 'week' ? 'on' : ''}">週</button><button data-k="month" class="${kind === 'month' ? 'on' : ''}">月</button></div>
+    <div class="rp-nav"><button class="icon rp-prev" aria-label="前へ">${icon('back')}</button><div><b>${p.name}</b><small>${p.label}</small></div><button class="icon rp-next" aria-label="次へ" ${offset >= 0 ? 'disabled' : ''}>${icon('chevronRight')}</button></div>
+    <p class="rp-comment">${icon('sparkle')}${esc(R.comment(cur, prev, p))}</p>
+    <div class="stats4">
+      <div>${icon('pencil')}<b>${cur.n}</b><span>解いた数</span>${diff(cur.n, prev.n)}</div>
+      <div>${icon('check')}<b>${Math.round(cur.rate * 100)}%</b><span>正解率</span></div>
+      <div>${icon('flame')}<b>${cur.studyDays}</b><span>勉強した日</span>${diff(cur.studyDays, prev.studyDays)}</div>
+      <div>${icon('grid')}<b>${cur.pz}</b><span>パズル</span>${diff(cur.pz, prev.pz)}</div>
+    </div>
+    <section class="rp-card"><h3>毎日の解いた数</h3>${bars}</section>
+    <section class="rp-card"><h3>教科ごと</h3>${subjRows || '<p class="empty sm">この期間はまだ解いていません</p>'}</section>
+    <section class="rp-card"><h3 class="weak">のびしろの単元<small>正解率が低い順</small></h3>${unitRows(cur.weak, true)}</section>
+    <section class="rp-card"><h3 class="strong">得意な単元<small>正解率が高い順</small></h3>${unitRows(cur.strong, false)}</section>
+    <button class="btn gold big rp-save">${icon('download')}画像で保存</button>
+    <p class="note">保存した画像は、写真やファイル（Google ドライブなど）に入れられます。記録は 1.12.0 から集まり始めます</p>`);
+  el.querySelector('.back').onclick = showMenu;
+  el.querySelectorAll('.rp-tabs button').forEach(b => b.onclick = () => showReport(b.dataset.k, 0));
+  el.querySelector('.rp-prev').onclick = () => showReport(kind, offset - 1);
+  el.querySelector('.rp-next').onclick = () => showReport(kind, Math.min(0, offset + 1));
+  el.querySelectorAll('.rp-go').forEach(b => b.onclick = async () => {
+    subjectId = b.dataset.s; await loadBank(subjectId);
+    const st = S.subject(subjectId), q = probs(subjectId).find(x => x.unit === b.dataset.u);
+    st.scope = { genre: q?.genre || null, unit: b.dataset.u }; st.session = null; S.save();
+    startSet();
+  });
+  el.querySelector('.rp-save').onclick = async () => {
+    const btn = el.querySelector('.rp-save'); btn.disabled = true;
+    try {
+      const cv = R.drawImage({ user: user.name, p, cur, prev, names });
+      const blob = await new Promise(r => cv.toBlob(r, 'image/png'));
+      const file = new File([blob], `roomin-report-${p.start}.png`, { type: 'image/png' });
+      if (navigator.canShare?.({ files: [file] })) { await navigator.share({ files: [file], title: 'ROOMIN 勉強レポート' }).catch(() => {}); }
+      else { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = file.name; document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); toast('画像を保存しました'); }
+    } catch (e) { toast('画像を作れませんでした'); }
+    btn.disabled = false;
+  };
 }
 function showRecords(subj = subjectId) {
   const rk = rankNow(), pf = S.profile();
@@ -2034,7 +2269,7 @@ async function showFeedbackInbox() {
     const day = (t) => new Date(t).toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
     el.querySelector('.fblist').innerHTML = list.length ? list.map(f => `
       <article class="news-card fb-card ${f.done ? 'done' : 'unread'}">
-        <div class="nc-top"><i class="fb-kind ${f.kind}">${f.kind === 'bug' ? 'バグ' : '要望'}</i><b>${esc(f.username || '（消えたユーザー）')}</b><small>${day(f.created_at)}</small></div>
+        <div class="nc-top"><i class="fb-kind ${f.kind}">${({ bug: 'バグ', request: '要望', problem: '問題のまちがい', report: '通報' })[f.kind] || f.kind}</i><b>${esc(f.username || '（消えたユーザー）')}</b><small>${day(f.created_at)}</small></div>
         <p>${esc(f.body).replace(/\n/g, '<br>')}</p>
         <button class="btn ghost sm done-btn" data-id="${f.id}" data-done="${f.done ? 0 : 1}">${f.done ? '未対応にもどす' : `${icon('check')}対応ずみにする`}</button>
       </article>`).join('') : '<p class="empty">まだ届いていません。</p>';
@@ -2168,6 +2403,7 @@ async function showRanking() {
   el.querySelector('.rk-me').innerHTML = `<div class="rk-mecard"><span class="rk-pos">${r.me ? r.me.pos + '<small>位</small>' : '—'}</span>
     ${avatarHTML(pf, 'avatar rk-av')}<div><b>あなた<span class="rk-pt">${S.weekPoints()}<small>pt</small></span></b><small>${r.total || 0}人中 ・ 問題 ${wkd.solved || 0}問・パズル ${wkd.puzzle || 0}回</small></div></div>`;
   const medal = (p) => p <= 3 ? `<span class="medal m${p}">${p}</span>` : `<span class="rk-n">${p}</span>`;
+  r.top = (r.top || []).filter(x => !blockedNames.has(x.username)); // ブロックした人は出さない
   el.querySelector('.rk-list').innerHTML = (r.top || []).length ? r.top.map(x => `
     <button class="rk-row ${x.me ? 'me' : ''}" data-u="${esc(x.username)}">${medal(x.pos)}${avatarHTML(x, 'avatar rk-av')}<b>${esc(x.username)}${x.title && titleById(x.title) ? `<small class="rk-title">${esc(titleById(x.title).name)}</small>` : ''}</b><span><span class="rk-pts">${x.points}<small>pt</small></span><small>${[x.solved ? `問題 ${x.solved}` : '', x.puzzle ? `パズル ${x.puzzle}` : ''].filter(Boolean).join('・') || '—'}</small></span></button>`).join('')
     : `<p class="empty">今週はまだだれもポイントをかせいでいません。いちばん乗りしよう！</p>`;
@@ -2421,11 +2657,13 @@ async function leaveVisit(goBack) {
 // =========================== 管理者 ===========================
 async function showAdmin() {
   if (!isAdmin()) return showMenu();
-  const el = screenWithTabs('admin', `<button class="icon back">${icon('back')}</button><h2>管理者</h2><span></span>`, 'menu', `<div class="row2 admin-btns"><button class="btn primary compose">${icon('bell')}お知らせを書く</button><button class="btn ghost inbox">${icon('chat')}要望・バグを見る</button></div><button class="btn ghost big sendgift">${icon('gift')}みんなにプレゼントを送る</button><div class="alist"><p class="empty">読み込み中…</p></div>`);
+  const el = screenWithTabs('admin', `<button class="icon back">${icon('back')}</button><h2>管理者</h2><span></span>`, 'menu', `<div class="row2 admin-btns"><button class="btn primary compose">${icon('bell')}お知らせを書く</button><button class="btn ghost inbox">${icon('chat')}要望・バグを見る</button></div><button class="btn ghost big sendgift">${icon('gift')}みんなにプレゼントを送る</button><button class="btn ghost big errlog">${icon('info')}エラーの記録を見る</button><button class="btn ghost big evpreview">${icon('snow')}${EV.previewing() ? 'イベントのためしをやめる' : `イベントをためす（${esc(EV.EVENTS.at(-1).name)}）`}</button><div class="alist"><p class="empty">読み込み中…</p></div>`);
   el.querySelector('.back').onclick = showMenu;
   el.querySelector('.compose').onclick = () => composeNews(showNews);
   el.querySelector('.inbox').onclick = showFeedbackInbox;
   el.querySelector('.sendgift').onclick = () => composeGift();
+  el.querySelector('.errlog').onclick = showErrors;
+  el.querySelector('.evpreview').onclick = () => { EV.setPreview(EV.previewing() ? null : EV.EVENTS.at(-1).id); toast(EV.previewing() ? 'この端末だけ、イベントを期間の前でもためせます' : 'イベントのためしをやめました'); showAdmin(); };
   const u = Auth.currentUser();
   let list = [];
   try { list = await rpc('sr_admin_users', { p_token: u?.token }); } catch (e) { el.querySelector('.alist').innerHTML = `<p class="empty">${esc(e.message)}</p>`; return; }
@@ -2438,7 +2676,7 @@ async function showAdmin() {
       <div class="ac-mode">${(() => { const sd = s.side || s.mode; return `<span class="mode-tag ${sd || 'none'}">${icon(sd === 'puzzle' ? 'grid' : sd === 'study' ? 'pencil' : 'info')}${sd === 'puzzle' ? 'パズルサイド' : sd === 'study' ? 'スタディサイド' : 'まだ選んでいない'}</span>${s.puzzle ? `<small>パズル ${s.puzzle}回</small>` : ''}<button class="btn ghost sm ac-mode-btn" data-u="${esc(a.username)}" data-m="${sd || ''}">${icon('refresh')}サイドを変える</button>`; })()}</div>
       <div class="ac-stats"><span>${icon('pencil')}${s.solved || 0}問</span><span>${icon('check')}${s.solved ? Math.round((s.correct || 0) / s.solved * 100) : 0}%</span><span>${icon('flame')}${s.streak || 0}日（合計${s.days || 0}日）</span></div>
       <div class="ac-units">${UNITS.map(un => `<span>${un} ${units[un]?.solved || 0}問</span>`).join('')}</div>
-      <div class="ac-foot"><small>登録 ${day(a.created_at)} ・ 最後 ${day(a.last_login)}</small><span class="ac-btns"><button class="btn ghost sm visit" data-u="${esc(a.username)}">${icon('eye')}部屋</button><button class="btn ghost sm ac-comp" data-u="${esc(a.username)}" data-lv="${S.rankInfo(s.xp || 0).rank}">${icon('gift')}補填</button>${Object.keys(packCode).length ? `<button class="btn ghost sm ac-give" data-u="${esc(a.username)}">${icon('gift')}問題集</button>` : ''}${a.username !== u.name ? `<button class="btn ghost sm ac-del" data-u="${esc(a.username)}" aria-label="${esc(a.username)}のアカウントを消す">${icon('trash')}消す</button>` : ''}</span></div>
+      <div class="ac-foot"><small>登録 ${day(a.created_at)} ・ 最後 ${day(a.last_login)}</small><span class="ac-btns"><button class="btn ghost sm visit" data-u="${esc(a.username)}">${icon('eye')}部屋</button><button class="btn ghost sm ac-comp" data-u="${esc(a.username)}" data-lv="${S.rankInfo(s.xp || 0).rank}">${icon('gift')}補填</button><button class="btn ghost sm ac-restore" data-u="${esc(a.username)}">${icon('refresh')}戻す</button>${Object.keys(packCode).length ? `<button class="btn ghost sm ac-give" data-u="${esc(a.username)}">${icon('gift')}問題集</button>` : ''}${a.username !== u.name ? `<button class="btn ghost sm ac-del" data-u="${esc(a.username)}" aria-label="${esc(a.username)}のアカウントを消す">${icon('trash')}消す</button>` : ''}</span></div>
     </div>`;
   }).join('');
   el.querySelectorAll('.visit').forEach(b => b.onclick = () => visitFriend(b.dataset.u, showAdmin));
@@ -2446,6 +2684,7 @@ async function showAdmin() {
   el.querySelectorAll('.ac-give').forEach(b => b.onclick = () => givePack(b.dataset.u));
   el.querySelectorAll('.ac-mode-btn').forEach(b => b.onclick = () => changeMode(b.dataset.u, b.dataset.m));
   el.querySelectorAll('.ac-comp').forEach(b => b.onclick = () => compensate(b.dataset.u, +b.dataset.lv || 1));
+  el.querySelectorAll('.ac-restore').forEach(b => b.onclick = () => restoreUser(b.dataset.u));
   el.querySelectorAll('.pf-open').forEach(b => b.onclick = () => openUserProfile(b.dataset.u, showAdmin));
 }
 // 管理者：1人だけに補填を送る（データが消えた時など）。その人のプレゼントBOXに届き、本人が受け取る
@@ -2490,6 +2729,46 @@ function compensate(name, lvNow) {
       } catch (ex) { toast(String(ex.message || ex), 3600); go.disabled = false; }
     };
   };
+}
+// 管理者：アプリで起きたエラー（この7日。同じエラーはまとめて数える）（1.12.0）
+async function showErrors() {
+  const el = sheet(`
+    <div class="sh-head"><span class="sh-ic">${icon('info')}</span><div><h3>エラーの記録（7日）</h3><p>みんなのアプリで自動で記録されたエラーです。Claude に見せると直しやすくなります</p></div><button class="sh-x close" aria-label="とじる">${icon('x')}</button></div>
+    <div class="er-list"><p class="empty">読み込み中…</p></div>`, 'news-sheet er-sheet');
+  el.querySelector('.close').onclick = () => el.remove();
+  let list = [];
+  try { list = await rpc('sr_admin_errors', { p_token: Auth.currentUser()?.token }); } catch (ex) { el.querySelector('.er-list').innerHTML = `<p class="empty">${esc(ex.message)}</p>`; return; }
+  const day = (t) => new Date(t).toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  el.querySelector('.er-list').innerHTML = list.length ? list.map(e => `<details class="er-row"><summary><b>${esc(e.msg)}</b><small>${e.n}回・${e.users}人・最後 ${day(e.last)}・${esc(e.version || '')}・${esc(e.place || '')}</small></summary><pre>${esc(e.stack || '')}\n${esc(e.ua || '')}</pre></details>`).join('') : '<p class="empty">この7日、エラーはありません</p>';
+}
+// 管理者：記録をサーバーのバックアップ（1時間ごと・14日分）から元に戻す（1.12.0）
+async function restoreUser(name) {
+  const cf = sheet(`
+    <div class="sh-head"><span class="sh-ic">${icon('refresh')}</span><div><h3>「${esc(name)}」の記録を元に戻す</h3><p>戻したい時の記録をえらびます。いまの記録もバックアップに残るので、まちがえても戻せます</p></div><button class="sh-x close" aria-label="やめる">${icon('x')}</button></div>
+    <div class="rs-list"><p class="empty">読み込み中…</p></div>`, 'news-sheet rs-sheet');
+  cf.querySelector('.close').onclick = () => cf.remove();
+  let list = [];
+  try { list = await rpc('sr_admin_backups', { p_token: Auth.currentUser()?.token, p_username: name }); }
+  catch (ex) { cf.querySelector('.rs-list').innerHTML = `<p class="empty">${esc(ex.message)}</p>`; return; }
+  const box = cf.querySelector('.rs-list');
+  if (!list.length) { box.innerHTML = '<p class="empty">まだバックアップがありません（記録が書きかわると、1時間に1つずつ残ります）</p>'; return; }
+  const when = (t) => new Date(t).toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', weekday: 'short', hour: '2-digit', minute: '2-digit' });
+  box.innerHTML = list.map(b => `<button class="rs-one" data-id="${b.id}"><b>${when(b.created_at)}</b><span>Lv${S.rankInfo(b.xp || 0).rank}・${b.solved || 0}問・パズル${b.puzzle || 0}回</span></button>`).join('');
+  box.querySelectorAll('.rs-one').forEach(btn => btn.onclick = () => {
+    const b = list.find(x => String(x.id) === btn.dataset.id);
+    cf.innerHTML = `<div class="grab"></div><div class="sh-head"><span class="sh-ic">${icon('refresh')}</span><div><h3>この時の記録に戻しますか？</h3><p>${when(b.created_at)} ・ Lv${S.rankInfo(b.xp || 0).rank}・${b.solved || 0}問・パズル${b.puzzle || 0}回</p></div></div>
+      <p class="note">戻した後に「${esc(name)}」がアプリを開くと、この記録になります（開いたままの時も、少しすると切りかわります）</p>
+      <div class="row2"><button class="btn ghost back2">もどる</button><button class="btn gold go">${icon('refresh')}戻す</button></div>`;
+    cf.querySelector('.back2').onclick = () => { cf.remove(); restoreUser(name); };
+    cf.querySelector('.go').onclick = async () => {
+      const go = cf.querySelector('.go'); go.disabled = true;
+      try {
+        await rpc('sr_admin_restore', { p_token: Auth.currentUser()?.token, p_username: name, p_backup: b.id });
+        toast(`「${name}」の記録を元に戻しました`, 3200); cf.remove();
+        if (name === Auth.currentUser()?.name) await Sync.pull(); else showAdmin();
+      } catch (ex) { toast(String(ex.message || ex), 3600); go.disabled = false; }
+    };
+  });
 }
 // 管理者：その人のモード（勉強メイン・パズルメイン）を切りかえる。本人のアプリが次に開いた時に切りかわる
 function changeMode(name, now) {
@@ -2572,6 +2851,57 @@ function confirmDeleteUser(name) {
 }
 
 // =========================== 設定 ===========================
+// 復元コード：パスワードを忘れた時に、これで新しいパスワードにできる（1.12.0）
+function showRecovery() {
+  const el = sheet(`
+    <div class="sh-head"><span class="sh-ic">${icon('lock')}</span><div><h3>パスワードの復元コード</h3><p>パスワードを忘れた時、ログイン画面の「パスワードを忘れた」で、このコードを入れると新しいパスワードにできます</p></div><button class="sh-x close" aria-label="とじる">${icon('x')}</button></div>
+    <div class="rc-box"><p class="note">コードは作った時に一度だけ出ます。スクリーンショットかメモで、なくさない所にとっておいてください。作りなおすと、前のコードは使えなくなります。</p></div>
+    <button class="btn gold big rc-make">${icon('lock')}復元コードを作る</button>`, 'news-sheet rc-sheet');
+  el.querySelector('.close').onclick = () => el.remove();
+  el.querySelector('.rc-make').onclick = async () => {
+    const b = el.querySelector('.rc-make'); b.disabled = true;
+    try {
+      const r = await rpc('sr_recovery_make', { p_token: Auth.currentUser()?.token });
+      el.querySelector('.rc-box').innerHTML = `<div class="rc-code">${esc(r.code)}</div><p class="note">ユーザー名「${esc(user.name)}」の復元コードです。この画面を閉じると、もう見られません。</p><button class="btn ghost rc-copy">${icon('check')}コピーする</button>`;
+      el.querySelector('.rc-copy').onclick = async () => { try { await navigator.clipboard.writeText(`ROOMIN ${user.name} 復元コード ${r.code}`); toast('コピーしました'); } catch (e) { toast('コピーできませんでした。スクリーンショットでとっておいてください'); } };
+      b.remove();
+    } catch (ex) { toast(ex.message, 3000); b.disabled = false; }
+  };
+}
+// ブロックしている人の一覧（解除できる）
+async function showBlocks() {
+  const el = sheet(`
+    <div class="sh-head"><span class="sh-ic">${icon('shield')}</span><div><h3>ブロックしている人</h3><p>ブロックした人は、フレンド申請ができず、ランキングにも出ません</p></div><button class="sh-x close" aria-label="とじる">${icon('x')}</button></div>
+    <div class="bl-list"><p class="empty">読み込み中…</p></div>`, 'news-sheet');
+  el.querySelector('.close').onclick = () => el.remove();
+  let list = [];
+  try { list = await rpc('sr_block_list', { p_token: Auth.currentUser()?.token }); blockedNames = new Set(list); } catch (ex) { el.querySelector('.bl-list').innerHTML = `<p class="empty">${esc(ex.message)}</p>`; return; }
+  el.querySelector('.bl-list').innerHTML = list.length ? list.map(n => `<div class="bl-row"><b>${esc(n)}</b><button class="btn ghost sm unb" data-u="${esc(n)}">解除</button></div>`).join('') : '<p class="empty">ブロックしている人はいません</p>';
+  el.querySelectorAll('.unb').forEach(b => b.onclick = async () => { b.disabled = true; try { await rpc('sr_unblock', { p_token: Auth.currentUser()?.token, p_username: b.dataset.u }); blockedNames.delete(b.dataset.u); toast(`「${b.dataset.u}」のブロックを解除しました`); el.remove(); showBlocks(); } catch (ex) { toast(ex.message); b.disabled = false; } });
+}
+let blockedNames = new Set();
+async function loadBlocks() { try { blockedNames = new Set(await rpc('sr_block_list', { p_token: Auth.currentUser()?.token })); } catch (e) { /* なし */ } }
+// 自分でアカウントを消す（パスワードを入れて確かめる）
+function confirmDeleteMe() {
+  const cf = sheet(`
+    <div class="sh-head"><span class="sh-ic danger">${icon('trash')}</span><div><h3>アカウントを消しますか？</h3><p>記録・部屋・家具・アイテム・フレンドのつながりがすべて消え、元に戻せません</p></div></div>
+    <label class="del-lbl">確かめのため、パスワードを入れてください<input class="del-in" type="password" autocomplete="current-password"></label>
+    <p class="err"></p>
+    <div class="row2"><button class="btn ghost back2">やめる</button><button class="btn danger go" disabled>${icon('trash')}消す</button></div>`, 'news-sheet del-sheet');
+  const inp = cf.querySelector('.del-in'), go = cf.querySelector('.go');
+  inp.oninput = () => { go.disabled = inp.value.length < 4; };
+  cf.querySelector('.back2').onclick = () => cf.remove();
+  go.onclick = async () => {
+    go.disabled = true;
+    try {
+      await rpc('sr_delete_me', { p_token: Auth.currentUser()?.token, p_password: inp.value });
+      try { for (const k of Object.keys(localStorage)) if (k.startsWith('studyroom.v1.user.') || k.startsWith('studyroom.backup.')) localStorage.removeItem(k); } catch (e) { /* なし */ }
+      Auth.forget(); cf.remove(); showLogin('signup');
+      toast('アカウントを消しました。ご利用ありがとうございました', 4000);
+    } catch (ex) { cf.querySelector('.err').textContent = ex.code === 'bad_login' ? 'パスワードがちがいます' : ex.message; go.disabled = false; }
+  };
+}
+
 function showSettings() {
   let q = 'low';
   try { q = localStorage.getItem('studyroom.quality') || 'low'; } catch (e) { /* なし */ }
@@ -2607,9 +2937,19 @@ function showSettings() {
           <input class="lvin" type="number" min="1" max="99" value="${rankNow().rank}"><button class="btn ghost sm lvset">この Lv にする</button></div>
         <small>経験値はその Lv のはじめの値になります。新しい部屋や置ける数もすぐ変わります</small></div>
     </section>` : ''}
+    <section class="group acct">
+      <button class="row-item tap recov"><span class="lbl">${icon('lock')}パスワードの復元コード</span><span class="val rc-st">…</span>${icon('chevronRight')}</button>
+      <button class="row-item tap blocks"><span class="lbl">${icon('shield')}ブロックしている人</span>${icon('chevronRight')}</button>
+      <a class="row-item tap" href="legal/terms.html" target="_blank" rel="noopener"><span class="lbl">${icon('book')}利用規約</span>${icon('chevronRight')}</a>
+      <a class="row-item tap" href="legal/privacy.html" target="_blank" rel="noopener"><span class="lbl">${icon('book')}プライバシーポリシー</span>${icon('chevronRight')}</a>
+    </section>
+    <section class="group">
+      <button class="row-item tap tour-again"><span class="lbl">${icon('info')}使い方の案内をもう一度見る</span>${icon('chevronRight')}</button>
+    </section>
     <section class="group">
       <button class="row-item tap logout"><span class="lbl danger">${icon('logout')}ログアウト</span></button>
     </section>
+    ${!isAdmin() ? `<section class="group"><button class="row-item tap del-me"><span class="lbl danger">${icon('trash')}アカウントを消す</span></button></section>` : ''}
     ${isAdmin() ? `<section class="group">
       <button class="row-item tap reset-all"><span class="lbl danger">${icon('trash')}最初からやり直す（管理者）</span></button>
     </section>` : ''}
@@ -2623,6 +2963,7 @@ function showSettings() {
   vol.oninput = () => { BGM.setVolume(vol.value / 100); vol.nextElementSibling.textContent = vol.value; };
   el.querySelector('#bgm-track').onchange = (e) => BGM.setTrack(e.target.value);
   el.querySelectorAll('.seg button[data-q]').forEach(b => b.onclick = () => {
+    if ((b.dataset.q === 'low') !== isLite()) toast('家具や壁の質感は、次にアプリを開いた時から変わります', 2600);
     try { localStorage.setItem('studyroom.quality', b.dataset.q); } catch (e) { /* なし */ }
     room3d?.setQuality(b.dataset.q);
     el.querySelectorAll('.seg button[data-q]').forEach(x => x.classList.toggle('on', x === b));
@@ -2647,6 +2988,11 @@ function showSettings() {
     showSettings();
   };
   el.querySelector('.logout').onclick = async () => { await Sync.push(); Auth.logOut(); showLogin(); };
+  el.querySelector('.recov').onclick = showRecovery;
+  el.querySelector('.blocks').onclick = showBlocks;
+  el.querySelector('.del-me')?.addEventListener('click', confirmDeleteMe);
+  rpc('sr_recovery_status', { p_token: Auth.currentUser()?.token }).then(r => { const v = el.querySelector('.rc-st'); if (v) { v.textContent = r.has ? '作ってある' : 'まだ作っていない'; v.classList.toggle('warn', !r.has); } }).catch(() => { const v = el.querySelector('.rc-st'); if (v) v.textContent = ''; });
+  el.querySelector('.tour-again').onclick = () => { showHome(); setTimeout(() => startTour(true), 500); };
   // 管理者だけ：記録をすべて消して最初から（ログインはそのまま）
   el.querySelector('.reset-all')?.addEventListener('click', async () => {
     if (!isAdmin()) return;
@@ -2677,8 +3023,14 @@ async function startSet() {
   BGM.duck(true); // 解いている間は BGM を小さく
   await loadBank(subjectId); // 問題バンクの問題が入ったセットの続きでも、問題が見つかるように
   const st = sub();
+  if (st.scope?.wrong && !(st.session && st.session.idx < st.session.set.length) && !S.wrongList(st, probs(subjectId)).length) {
+    st.scope = null; S.save(); toast('まちがえた問題を、ぜんぶ克服しました！', 3000);
+    BGM.duck(false); return showHome();
+  }
   if (!(st.session && st.session.idx < st.session.set.length)) {
-    st.session = { set: S.buildSet(st, scoped()), idx: 0, results: [], gained: 0, xp: 0, rankUp: false, startedAt: Date.now(), bonus: S.solvedToday() < S.BONUS_PER_DAY };
+    const set = S.buildSet(st, scoped());
+    if (st.scope?.wrong) set.forEach(x => { x.review = true; }); // 正解するたびに克服に近づく
+    st.session = { set, idx: 0, results: [], gained: 0, xp: 0, rankUp: false, startedAt: Date.now(), bonus: S.solvedToday() < S.BONUS_PER_DAY };
     S.save();
   }
   room3d.setActive(false);
@@ -2876,6 +3228,8 @@ function awardResult(st, ss, p, perfect, ok, isReview, secs) {
       ({ mastered } = S.recordResult(st, p.id, perfect, isReview));
       if (mastered) HS().pendingSpecials++;
       xp = S.addAnswer(st, p.unit, perfect ? 'perfect' : ok ? 'ok' : 'wrong');
+      S.logDay({ sid: subjectId, unit: p.unit, ok });
+      evToast(EV.addPoints(ok ? EV.POINTS.right : EV.POINTS.wrong));
       if (S.countStudyForPuzzle()) setTimeout(() => toast('パズルが1回できるようになりました', 2400), 1200);
       const firstPlay = S.markPlayedToday();
       // 50問ごと・連続7日ごと・克服でたまにレアチケット
@@ -2928,9 +3282,9 @@ function runChoice(p, isReview) {
     const ok = +b.dataset.i === p.answer;
     stepEl.querySelectorAll('.fcard').forEach(x => { x.disabled = true; if (+x.dataset.i === p.answer) x.classList.add('right'); });
     if (!ok) b.classList.add('wrong');
-    setTimeout(() => result(ok), ok ? 400 : 700);
+    setTimeout(() => result(ok, +b.dataset.i), ok ? 400 : 700);
   });
-  function result(ok) {
+  function result(ok, picked) {
     const secs = (Date.now() - t0) / 1000;
     const { pts, xp, mastered } = awardResult(st, ss, p, ok, ok, isReview, secs);
     vibrate(ok ? [20, 30, 20] : [60, 40, 60]);
@@ -2943,13 +3297,34 @@ function runChoice(p, isReview) {
         ${mastered ? `<div class="master">${icon('trophy')}克服しました！ 特別な家具がもらえます</div>` : ''}
         <div class="formula">${fm(p.choices[p.answer])}<small>正解</small></div>
         ${fx ? explainHTML(p.explain) : `<p class="reason">${esc(p.explain || '')}</p>`}
+        <button class="link pr-report">${icon('info')}この問題のまちがいを報告</button>
+        ${!ok && p.why?.[picked] ? `<div class="why-wrong"><b>${icon('info')}えらんだ「${fm(p.choices[picked])}」がちがう理由</b><p>${fm(p.why[picked])}</p></div>` : ''}
+        ${p.detail ? `<details class="detail-ex"${ok ? '' : ' open'}><summary>${icon('book')}くわしい解説</summary>${explainHTML(p.detail)}</details>` : ''}
         ${ss.rewards && (ss.rewards.ticket || ss.rewards.ticket4 || ss.rewards.ticket5) ? `<div class="ru-tickets">${['ticket', 'ticket4', 'ticket5'].filter(k => ss.rewards[k]).map(k => `<span>${ticketSVG(k, 'mini')}<b>×${ss.rewards[k]}</b></span>`).join('')}<small class="ru-box">${icon('gift')}プレゼントBOXに届きました</small></div>` : ''}
         ${HS().gauge >= S.gaugeMax(HS()) ? `<div class="gold-t">${icon('gift')}ゲージ満タン！ 家具が買えます</div>` : ''}
         <div class="row2 after"><button class="btn ghost home">${icon('home')}部屋にもどる</button><button class="btn primary more">${icon('pencil')}もう1問</button></div>
       </div>`;
     stepEl.querySelector('.home').onclick = () => endOne(true);
     stepEl.querySelector('.more').onclick = () => endOne(false);
+    stepEl.querySelector('.pr-report').onclick = () => reportProblem(p);
   }
+}
+// 問題のまちがいを報告（1.12.0）：管理者の「要望・バグを見る」に、問題の番号といっしょに届く
+function reportProblem(p) {
+  const R = ['答えがちがう', '解説がおかしい', '問題文・選択肢がおかしい', 'その他'];
+  const el = sheet(`
+    <div class="sh-head"><span class="sh-ic">${icon('info')}</span><div><h3>問題のまちがいを報告</h3><p>運営が確かめて直します。ありがとうございます</p></div><button class="sh-x close" aria-label="やめる">${icon('x')}</button></div>
+    <div class="rp-reasons">${R.map((x, i) => `<label><input type="radio" name="r" value="${i}" ${i === 0 ? 'checked' : ''}>${x}</label>`).join('')}</div>
+    <textarea class="rp-detail" maxlength="400" placeholder="どこがおかしいか（なくてもOK）"></textarea>
+    <button class="btn primary big rp-send">${icon('check')}送る</button>`, 'news-sheet report-sheet');
+  el.querySelector('.close').onclick = () => el.remove();
+  el.querySelector('.rp-send').onclick = async () => {
+    const b = el.querySelector('.rp-send'); b.disabled = true;
+    const r = R[+el.querySelector('input[name=r]:checked').value], d = el.querySelector('.rp-detail').value.trim();
+    const body = `【問題】${r}\n${p.id}（${SUBJECTS.find(x => x.id === subjectId)?.name || subjectId}／${p.genre || ''}／${p.unit || ''}）\n${String(p.text).slice(0, 300)}${d ? '\n―\n' + d : ''}`;
+    try { await rpc('sr_feedback_send', { p_token: Auth.currentUser()?.token, p_kind: 'problem', p_body: body }); el.remove(); toast('報告しました。ありがとうございます', 2400); }
+    catch (ex) { toast(ex.message, 3000); b.disabled = false; }
+  };
 }
 
 // 1問おわったあと：部屋へ戻るか、もう1問
@@ -3083,6 +3458,7 @@ function titleSettings(host) {
     <button class="btn primary big close">とじる</button></div>`);
   host.append(sh);
   sh.querySelectorAll('.q3 button').forEach(b => b.onclick = () => {
+    if ((b.dataset.q === 'low') !== isLite()) toast('家具や壁の質感は、次にアプリを開いた時から変わります', 2600);
     try { localStorage.setItem('studyroom.quality', b.dataset.q); } catch (e) { /* なし */ }
     room3d?.setQuality(b.dataset.q);
     sh.querySelectorAll('.q3 button').forEach(x => x.classList.toggle('on', x === b));
@@ -3103,4 +3479,4 @@ if ('serviceWorker' in navigator && location.protocol === 'https:') {
   navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(r => r.update()).catch(() => {});
 }
 // テスト用
-window.__app = { putIntoRoom, get room3d() { return room3d; }, S, sub, HS, switchRoom, ensureRooms, goHome, showHome, curRoom, visitFriend, leaveVisit, showLoginBonus, showGiftBox, showArrange, arrange: (sel, style) => { arrSel = sel; return runArrange(style); } };
+window.__app = { showEdit, putIntoRoom, get room3d() { return room3d; }, S, sub, HS, switchRoom, ensureRooms, goHome, showHome, curRoom, visitFriend, leaveVisit, showLoginBonus, showGiftBox, showArrange, arrange: (sel, style) => { arrSel = sel; return runArrange(style); } };
