@@ -2,8 +2,9 @@
 // 問題は data/ の JSON（Claude がレジュメから作る）。記録は端末（localStorage・IndexedDB）とドライブ（cloud.js）。
 import * as store from './store.js';
 import * as cloud from './cloud.js';
+import * as voice from './speech.js';
 
-const APP_VERSION = '1.8.0';
+const APP_VERSION = '1.9.0';
 const $app = document.getElementById('app');
 let COURSES = [];
 const testCache = {};
@@ -161,6 +162,7 @@ function ring(v, { big = false, label = '', color } = {}) {
 
 // 画面の入れ物。hero：グラデーションの見出し、tab：下のタブ、dock：下に固定するボタン
 function screen(title, { back, hero, tab, side } = {}) {
+  voice.stop();
   $app.innerHTML = `
     ${hero ? '' : `<div class="bar">${back ? `<button class="back" data-back aria-label="もどる">${icon('back')}</button>` : ''}<h1>${esc(title)}</h1>${side ? `<span class="side">${side}</span>` : ''}</div>`}
     ${hero ? `${back ? `<div class="bar clear"><button class="back" data-back aria-label="もどる">${icon('back')}</button><h1></h1></div>` : ''}<div class="hero ${back ? 'sub' : ''}"><div class="in">${hero}</div></div>` : ''}
@@ -1086,11 +1088,31 @@ async function playLesson(c, t, d, L, start = 0, opt = {}) {
   const key = lkey(c, t, L);
   let i = Math.max(0, Math.min(start, slides.length - 1));
   const answered = {};
+  // 読み上げ：on＝再生中。スライドがかわると、そのスライドを読む。自動でめくる（cfg.auto）ときは読み終わったら次へ
+  let on = false;
+  const sayOf = (s) => s.say || voice.toSpeech([s.title, s.body, (s.items || []).join('。'), s.tex ? '$' + s.tex + '$' : '', s.q, (s.choices || []).map((x, k) => KEYS[k] + '、' + x).join('。')].filter(Boolean).join('。'));
+  const explainOf = (s, k) => s.sayExplain || voice.toSpeech(`${k === s.answer ? '正解です。' : 'ざんねん。'}${s.explain || ''}`);
+  const afterRead = () => {
+    if (!on) return;
+    const s = slides[i];
+    if (s.type === 'quiz' && answered[i] === undefined) return; // クイズは答えるまで待つ
+    if (voice.cfg.auto && i + 1 < slides.length) setTimeout(() => { if (on) { i++; show(); } }, 700);
+    else if (i + 1 >= slides.length) { on = false; paintVoice(); }
+  };
+  const readNow = () => { if (on) voice.speak(sayOf(slides[i]), afterRead); };
+  const paintVoice = () => {
+    const bar = document.querySelector('[data-voice]'); if (!bar) return;
+    bar.querySelector('[data-vplay]').innerHTML = on ? `${icon('x')}止める` : `${icon('play')}読み上げ`;
+    bar.querySelector('[data-vplay]').classList.toggle('on', on);
+    bar.querySelector('[data-vrate]').textContent = `速さ ${voice.cfg.rate}×`;
+    bar.querySelector('[data-vauto]').classList.toggle('on', !!voice.cfg.auto);
+  };
   const show = () => {
     store.setLesson(key, i, i === slides.length - 1);
     const s = slides[i];
     const w = screen(L.title, { back: () => lessonList(c, t, d) });
     w.innerHTML = `<div class="qtop"><span class="p">${i + 1}<small> / ${slides.length}</small></span><span class="lec">${esc(L.lecture || '')}</span></div>
+      ${voice.supported() ? `<div class="vbar" data-voice><button data-vplay></button><button data-vrate></button><button data-vauto>自動でめくる</button></div>` : ''}
       <div class="meter"><i style="width:${((i + 1) / slides.length) * 100}%"></i></div>
       <div class="card slide" data-slide>${slideHTML(c, s)}</div>
       ${i === slides.length - 1 ? lessonEnd(c, t, d, L) : ''}`;
@@ -1104,7 +1126,7 @@ async function playLesson(c, t, d, L, start = 0, opt = {}) {
         math(res);
       };
       if (answered[i] !== undefined) mark(answered[i]);
-      w.querySelectorAll('[data-qk]').forEach((b) => (b.onclick = () => { answered[i] = +b.dataset.qk; mark(answered[i]); buzz(answered[i] === s.answer ? 15 : [30, 40, 30]); }));
+      w.querySelectorAll('[data-qk]').forEach((b) => (b.onclick = () => { answered[i] = +b.dataset.qk; mark(answered[i]); buzz(answered[i] === s.answer ? 15 : [30, 40, 30]); if (on) voice.speak(explainOf(s, answered[i]), afterRead); }));
     }
     if (i === slides.length - 1) bindLessonEnd(w, c, t, d, L);
     const dk = dock(`<div style="display:flex;gap:10px">${i ? `<button class="btn sub" data-prev style="flex:1">${icon('back')}</button>` : ''}<button class="btn" data-next style="flex:3">${i + 1 < slides.length ? '次へ' : '授業の一覧へ'}${icon('next')}</button></div>`);
@@ -1120,6 +1142,17 @@ async function playLesson(c, t, d, L, start = 0, opt = {}) {
       if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
       if (dx < 0 && i + 1 < slides.length) { i++; show(); } else if (dx > 0 && i > 0) { i--; show(); }
     });
+    // 読み上げのボタン
+    const vb = w.querySelector('[data-voice]');
+    if (vb) {
+      paintVoice();
+      vb.querySelector('[data-vplay]').onclick = () => { on = !on; paintVoice(); if (on) readNow(); else voice.stop(); };
+      vb.querySelector('[data-vrate]').onclick = () => {
+        const R = [1, 1.25, 1.5, 0.8]; voice.cfg.rate = R[(R.indexOf(voice.cfg.rate) + 1) % R.length]; voice.saveCfg(); paintVoice(); if (on) readNow();
+      };
+      vb.querySelector('[data-vauto]').onclick = () => { voice.cfg.auto = !voice.cfg.auto; voice.saveCfg(); paintVoice(); };
+    }
+    readNow();
   };
   show();
 }
