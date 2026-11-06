@@ -15,14 +15,21 @@ function explainsFor(p) {
   if (!fs.existsSync(f)) return new Map();
   try { return new Map(JSON.parse(fs.readFileSync(f, 'utf8')).filter(e => e && e.detail && !/^要確認/.test(e.detail)).map(e => [e.text, e])); } catch (e) { console.log('解説が読めない：' + f); return new Map(); }
 }
-let withDetail = 0;
+// 大問を分けたもの（roomin-questions/split/…/<単元>.json）があれば、steps を足す。1.14.0（SPLIT_INSTRUCTIONS.md）
+const SPL = path.join(ROOT, 'roomin-questions', 'split');
+function splitsFor(p) {
+  const f = path.join(SPL, path.relative(SRC, p));
+  if (!fs.existsSync(f)) return new Map();
+  try { return new Map(JSON.parse(fs.readFileSync(f, 'utf8')).filter(e => e && Array.isArray(e.steps) && e.steps.length >= 2 && !e.note).map(e => [e.text, e])); } catch (e) { console.log('分けた問題が読めない：' + f); return new Map(); }
+}
+let withDetail = 0, withSteps = 0;
 const bySid = {};
 (function walk(d) {
   for (const f of fs.readdirSync(d).sort()) {
     const p = path.join(d, f);
     if (fs.statSync(p).isDirectory()) { walk(p); continue; }
     if (!f.endsWith('.json')) continue;
-    const ex = explainsFor(p);
+    const ex = explainsFor(p), sp = splitsFor(p);
     for (const q of JSON.parse(fs.readFileSync(p, 'utf8'))) {
       const sid = SID[q.subject] || q.subject;
       const ids = new Set((bySid[sid] ||= []).map(x => x.id));
@@ -30,6 +37,8 @@ const bySid = {};
       for (let k = 2; ids.has(id); k++) id = `${sid}-b${hash(`${q.genre}|${q.unit}|${q.text}|${k}`)}`;
       const e = ex.get(q.text), item = { id, genre: q.genre, unit: q.unit, grade: q.grade, level: q.level, text: q.text, choices: q.choices, answer: q.answer, explain: q.explain };
       if (e) { item.detail = e.detail; if (Array.isArray(e.why) && e.why.length === 4) item.why = e.why; withDetail++; }
+      const sx = sp.get(q.text);
+      if (sx) { item.steps = sx.steps.map(s => ({ ask: s.ask, choices: s.choices, answer: s.answer, hint: s.hint || '' })); withSteps++; }
       bySid[sid].push(item);
     }
   }
@@ -41,5 +50,5 @@ for (const [sid, list] of Object.entries(bySid)) {
   total += list.length;
   console.log(`${sid}: ${list.length}問`);
 }
-console.log(`くわしい解説つき ${withDetail}問`);
+console.log(`くわしい解説つき ${withDetail}問・段階に分けた問題 ${withSteps}問`);
 console.log(`合計 ${total}問 → ${path.relative(ROOT, OUT)}`);
