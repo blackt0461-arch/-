@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>比較用の描画（開発用）</title>
+<style>html,body{margin:0;background:transparent;overflow:hidden}</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<script type="module">
+// 写真と重ねるための描画。まっすぐ（正投影）に、決まった縮尺で映す。
+// URL: ?model=cat-anatomy.glb&view=left|right|front|back|top|bottom&w=1600&h=1000
+//      &s=ピクセル/mm &mx,my,mz=写真の基準点に合わせるモデルの点(mm) &px,py=その点の写真上のピクセル &rot=写真の回転(度)
+//      &layers=bone,muscle,organ,skin,fur &mode=shade|flat
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+const P = new URLSearchParams(location.search);
+const W = +(P.get('w') || 1600), H = +(P.get('h') || 1000);
+const s = +(P.get('s') || 2);                               // ピクセル/mm
+const M = ['mx', 'my', 'mz'].map((k) => +(P.get(k) || 0) / 1000);
+const px = +(P.get('px') || W / 2), py = +(P.get('py') || H / 2);
+const rot = THREE.MathUtils.degToRad(+(P.get('rot') || 0));
+const view = P.get('view') || 'left';
+const layers = (P.get('layers') || 'skin').split(',');
+const mode = P.get('mode') || 'shade';
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(1); renderer.setSize(W, H); renderer.setClearColor(0x000000, 0);
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 1.6));
+const key = new THREE.DirectionalLight(0xffffff, 1.6); key.position.set(0.5, 1, 0.7); scene.add(key);
+
+// 見る向き：カメラの前方向と上方向。left = 猫の左側から見る（頭が画面の右）
+const DIRS = {
+  left: { f: [-1, 0, 0], up: [0, 1, 0] }, right: { f: [1, 0, 0], up: [0, 1, 0] },
+  front: { f: [0, 0, -1], up: [0, 1, 0] }, back: { f: [0, 0, 1], up: [0, 1, 0] },
+  top: { f: [0, -1, 0], up: [0, 0, 1] }, bottom: { f: [0, 1, 0], up: [0, 0, 1] },
+};
+const d = DIRS[view];
+const cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.001, 10);
+const fwd = new THREE.Vector3(...d.f), up = new THREE.Vector3(...d.up);
+cam.up.copy(up);
+// 基準点 M が画面の (px,py) に来るように、カメラの中心をずらす
+const wm = W / s / 1000, hm = H / s / 1000;                 // 画面の幅・高さ（m）
+const right = new THREE.Vector3().crossVectors(fwd, up).normalize();
+// 画面の回転（写真が少し傾いているとき）
+const r2 = right.clone().multiplyScalar(Math.cos(rot)).add(up.clone().multiplyScalar(Math.sin(rot)));
+const u2 = up.clone().multiplyScalar(Math.cos(rot)).sub(right.clone().multiplyScalar(Math.sin(rot)));
+cam.up.copy(u2);
+const dx = (W / 2 - px) / s / 1000, dy = (py - H / 2) / s / 1000;
+const center = new THREE.Vector3(...M).add(r2.clone().multiplyScalar(dx)).add(u2.clone().multiplyScalar(dy));
+cam.position.copy(center).addScaledVector(fwd, -2);
+cam.lookAt(center);
+cam.left = -wm / 2; cam.right = wm / 2; cam.top = hm / 2; cam.bottom = -hm / 2; cam.near = 0.01; cam.far = 5;
+cam.updateProjectionMatrix();
+
+const LAYER = (u) => {
+  if (u.region === 'muscle') return 'muscle';
+  if (u.region === 'organ' && u.kind !== 'eye') return 'organ';
+  if (['skin', 'whisker', 'eye'].includes(u.kind)) return 'skin';
+  return 'bone';
+};
+const FLAT = { bone: 0xf2ead8, muscle: 0xc8453a, organ: 0x9a4a7a, skin: 0xe0a060 };
+
+new GLTFLoader().load('../../models/' + (P.get('model') || 'cat-anatomy.glb'), (g) => {
+  scene.add(g.scene);
+  g.scene.traverse((o) => {
+    if (!o.isMesh) return;
+    o.frustumCulled = false;
+    const n = o.userData.ja ? o : o.parent;
+    const u = n && n.userData || {};
+    const L = LAYER(u);
+    const on = layers.includes(L) && !(u.kind === 'whisker' && !layers.includes('whisker'));
+    if (!on) { o.visible = false; return; }
+    if (mode === 'flat') o.material = new THREE.MeshBasicMaterial({ color: FLAT[L] });
+  });
+  renderer.render(scene, cam);
+  window.__ready = true;
+});
+</script>
+</body>
+</html>

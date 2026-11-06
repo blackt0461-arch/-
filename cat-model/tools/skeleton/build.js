@@ -41,6 +41,25 @@ const matIndex = Object.fromEntries(MATERIALS.map((m, i) => [m.key, i]));
 const t0 = Date.now();
 const { defs, mdefs, lm } = prepare(opts);
 
+// ---- 写真と比べるための目印（mm、左側）を書き出す ----
+if (!opts.only) {
+  const F = lm.F, V = lm.vert, Q = F.Q, r1 = (p) => p.map((v) => Math.round(v * 10) / 10);
+  const e = lm.eyeOpen;
+  const marks = {
+    nose_tip: lm.noseTip, eye_center: lm.eyeFront,
+    eye_medial: e ? e.c.map((q, k) => q - e.axes[1][k] * e.r[1]) : null, eye_lateral: e ? e.c.map((q, k) => q + e.axes[1][k] * e.r[1]) : null,
+    skull_occiput: Q(0, 0, 0), skull_vertex: Q(22, 31, 0), mouth_corner: Q(62, -7.5, 14.5), chin: Q(80, -15, 0),
+    ear_base_front: Q(26, 27, 13), ear_base_back: Q(13, 27, 17),
+    withers: [0, V.T3.c[1] + 18, V.T3.c[2]], tail_base: V.Cd1.cr, tail_tip: V.Cd21.ca,
+    shoulder: lm.fore.shoulder, elbow: lm.fore.elbow, carpus: lm.fore.carpus, fore_mcp: lm.fore.mcp,
+    hip: lm.hind.hip, stifle: lm.hind.stifle, hock: lm.hind.hock, hind_mtp: lm.hind.mtp,
+    calcaneus_tip: F.pes ? F.pes.L(-17.4, -12, 2.5) : null, olecranon: F.fa ? F.fa.L(-14.5, -7.5, 0.3) : null,
+    sternum_front: F.sternebrae ? F.sternebrae[0].a : null, iliac_crest: F.ilium ? F.ilium.L(F.Li + 4, 2, 0) : null, ischial_tuber: F.I || null,
+  };
+  for (const k in marks) if (marks[k]) marks[k] = r1(marks[k]); else delete marks[k];
+  writeFileSync(resolve(here, '../../models/landmarks.json'), JSON.stringify(marks, null, 1));
+}
+
 // 同じ名前が2つないか確かめる
 {
   const seen = new Set();
