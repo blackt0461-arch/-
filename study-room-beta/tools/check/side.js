@@ -51,7 +51,27 @@ const serve = () => new Promise(res => { const srv = http.createServer((req, rsp
   const gp = await N.page.evaluate(async () => { const S = await import('/js/store.js'); return { jp15: S.gaugePoints(true, false, 15, 'jp'), math60: S.gaugePoints(true, false, 60, 'math'), jpIdle: S.gaugePoints(true, false, 600, 'jp'), mathIdle: S.gaugePoints(true, false, 600, 'math'), wrong: S.gaugePoints(false, false, 60, 'math'), quick: S.gaugePoints(true, false, 2, 'jp') }; });
   check(gp.jp15 === 23 && gp.math60 === 90, `ゲージはかかった時間に比例（国語15秒 ${gp.jp15}・数学60秒 ${gp.math60}）`);
   check(gp.jpIdle < gp.mathIdle && gp.jpIdle === Math.round(45 * 1.5), `放っておいても上限まで（国語 ${gp.jpIdle}・数学 ${gp.mathIdle}）`);
-  check(gp.wrong === 0 && gp.quick === 12, `まちがいは0、すぐ答えても少しはたまる（${gp.wrong}・${gp.quick}）`);
+  check(gp.wrong === Math.round(60 * 1.5 * 0.3) && gp.quick === 12, `まちがいは考えた時間の3割、すぐ答えても少しはたまる（${gp.wrong}・${gp.quick}）`);
+  const mk = await N.page.evaluate(async () => {
+    const S = await import('/js/store.js'), st = window.__app.S;
+    S.logDay({}); const d = S.dayKey(), log = S.dayLog();
+    const keep = JSON.stringify(log);
+    for (const k of Object.keys(log)) delete log[k];
+    // 7日で国語40問（正解率9割）・数学10問（正解率4割）。英語は0問
+    log[d] = { n: 50, c: 40, pz: 0, u: { 'jp|古文単語': [40, 36], 'math|二次関数': [10, 4] }, t: { jp: 25 * 60 } };
+    const m = S.subjectMults(['jp', 'math', 'english']);
+    const decayJp = S.todayUse('jp', '古文単語'), f = S.gaugeFactor({ sid: 'jp', unit: '古文単語', sids: ['jp', 'math', 'english'] });
+    const fm = S.gaugeFactor({ sid: 'math', unit: '二次関数', sids: ['jp', 'math', 'english'] });
+    const sub = { srs: { q1: { lastOk: d } } }, fr = S.gaugeFactor({ sid: 'math', unit: '二次関数', sub, id: 'q1', sids: ['math'] });
+    for (const k of Object.keys(log)) delete log[k];
+    Object.assign(log, JSON.parse(keep));
+    const few = S.subjectMults(['jp', 'english']);
+    return { m, f, fm, fr, decayJp, few };
+  });
+  check(mk.m.english.mult === 1.3 && mk.m.math.mult === 1.2 && mk.m.jp.mult === 0.9, `倍率：やっていない英語1.3・苦手な数学1.2・やりすぎの国語0.9（${mk.m.english.mult}・${mk.m.math.mult}・${mk.m.jp.mult}）`);
+  check(Math.abs(mk.f.f - 0.9 * 0.7 * 0.4) < 1e-9 && mk.f.decayed, `国語25分・古文単語40問 → 0.9×0.7×0.4（${mk.f.f.toFixed(3)}）`);
+  check(mk.fm.f === 1.2 && !mk.fm.decayed, `数学は減らずに1.2倍（${mk.fm.f}）`);
+  check(Math.abs(mk.fr.f - 1.2 * 0.3) < 1e-9 && mk.fr.repeat, `今日もう正解した問題は3割（${mk.fr.f.toFixed(2)}）`);
   check(tk.wrong === 0, `まちがいは数えない（${tk.wrong}回）`);
   check(tk.first === 1 && tk.need2 === 10, `正解5問で1回、次は10問（${tk.first}回・あと${tk.need2}問）`);
   check(tk.nine === 1 && tk.second === 2 && tk.need3 === 15, `正解10問で2回目、その次は15問（${tk.second}回・あと${tk.need3}問）`);
