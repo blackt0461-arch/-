@@ -3,7 +3,7 @@
 import * as store from './store.js';
 import * as cloud from './cloud.js';
 
-const APP_VERSION = '1.2.1';
+const APP_VERSION = '1.2.2';
 const $app = document.getElementById('app');
 let COURSES = [];
 const testCache = {};
@@ -146,12 +146,10 @@ async function home() {
       <div class="meta">${next ? `<span class="badge ${next.d <= 7 ? 'soon' : ''}">${esc(next.t.name)}まで あと${next.d}日</span>` : ''}${(c.tests || []).length ? '' : 'まだ問題がありません'}</div></div><span class="arrow">›</span></button>`;
   }
   if (!COURSES.length) html += '<div class="empty">まだ授業がありません</div>';
-  const cc = cloud.config();
-  html += `<h2>ドライブ連携</h2><button class="item" data-cloud><div class="t"><div class="name">${cloud.connected() ? '☁️ つながっています' : 'ドライブにつなぐ'}</div>
-    <div class="meta">${cloud.connected() ? (cc.error ? '⚠️ ' + esc(cc.error) : cc.last ? '最後に保存：' + new Date(cc.last).toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '') : '記録と記述の答えをグーグルドライブに残します'}</div></div><span class="arrow">›</span></button>`;
   html += `<h2>使い方</h2><div class="card muted">問題は Claude がドライブのレジュメから作ります。ふやしたいときは Claude に「〇〇の期末の問題を作って」と頼んでください。</div>`;
+  const cc = cloud.config();
+  html += `<div class="cloud-line">${cc.error ? '⚠️ ドライブに保存できませんでした（電波のよい所で開くと、また保存します）' : cc.last ? '☁️ ドライブに保存：' + new Date(cc.last).toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '☁️ ドライブに保存します'}</div>`;
   w.innerHTML = html;
-  w.querySelector('[data-cloud]').onclick = cloudScreen;
   w.querySelectorAll('[data-today]').forEach((b) => (b.onclick = () => {
     const x = todays[+b.dataset.today];
     const p = plan(x.c, x.t, x.d);
@@ -479,29 +477,6 @@ async function answers(c, t, d) {
   math(w);
 }
 
-// ---------- ドライブ連携の設定 ----------
-function cloudScreen() {
-  const w = screen('ドライブ連携', '', { back: home });
-  const cc = cloud.config();
-  if (cloud.connected()) {
-    w.innerHTML = `<div class="card">☁️ グーグルドライブの「テスト勉強」フォルダにつながっています。<div class="muted">${cc.last ? '最後に保存：' + new Date(cc.last).toLocaleString('ja-JP') : ''}${cc.error ? '<br>⚠️ ' + esc(cc.error) : ''}</div></div>
-      <button class="btn" data-now>いま保存する</button>
-      <div class="card muted">勉強の記録は「記録（さわらないでください）.json」、記述の答えと写真は「記述の答え」フォルダに入ります。ほかのスマホやパソコンでこのアプリを開いても、記録が引きつがれます。</div>
-      <button class="btn sub" data-off>この端末のつながりを切る</button>`;
-    w.querySelector('[data-now]').onclick = async (e) => { e.target.disabled = true; e.target.textContent = '保存しています…'; await cloud.sync(); cloudScreen(); };
-    w.querySelector('[data-off]').onclick = () => { if (confirm('この端末のつながりを切りますか？（ドライブの記録は消えません）')) { cloud.disconnect(); cloudScreen(); } };
-    return;
-  }
-  w.innerHTML = `<div class="card muted">いまはドライブにつながっていません。つなぐと、勉強の記録と記述の答えがグーグルドライブの「テスト勉強」フォルダに入ります。</div>
-    <button class="btn" data-go>ドライブにつなぐ</button><div class="muted" data-msg></div>`;
-  w.querySelector('[data-go]').onclick = async (e) => {
-    const msg = w.querySelector('[data-msg]');
-    e.target.disabled = true; msg.textContent = 'つないでいます…';
-    try { await cloud.connect(); cloudScreen(); }
-    catch (err) { msg.textContent = '⚠️ ' + err.message; e.target.disabled = false; }
-  };
-}
-
 // ---------- はじめ ----------
 (async () => {
   try {
@@ -509,7 +484,7 @@ function cloudScreen() {
     COURSES = d.courses || [];
     home();
     // ドライブの記録をとりこむ。最初の画面のままなら、とりこんだ内容で表示しなおす
-    cloud.onSynced((changed) => { if (changed && $app.querySelector('h1')?.textContent === 'テスト勉強') home(); });
+    cloud.onSynced(() => { if ($app.querySelector('h1')?.textContent === 'テスト勉強') home(); });
     cloud.sync();
   } catch (e) {
     $app.innerHTML = '<div class="loading">読みこめませんでした。電波のよい所でもう一度開いてください。</div>';

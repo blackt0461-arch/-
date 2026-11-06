@@ -10,8 +10,8 @@ const BUILTIN = {
 };
 const CKEY = 'ts_cloud_v1';
 let CFG = (() => { try { return JSON.parse(localStorage.getItem(CKEY)) || {}; } catch (e) { return {}; } })();
-// 「つながりを切る」を押していなければ、いつもつなぐ
-if (!CFG.off && !CFG.url) CFG = { ...CFG, ...BUILTIN };
+// いつもつなぐ（切るボタンはない）
+CFG = { ...CFG, ...BUILTIN }; delete CFG.off;
 function saveCfg() { try { localStorage.setItem(CKEY, JSON.stringify(CFG)); } catch (e) { /* */ } }
 
 const MESSAGES = {
@@ -54,7 +54,6 @@ export async function connect(url = BUILTIN.url, key = BUILTIN.key) {
   CFG = { ...cfg }; saveCfg();
   await sync();
 }
-export function disconnect() { CFG = { off: true }; saveCfg(); }
 
 // ---- あわせる ----
 let running = null, again = false;
