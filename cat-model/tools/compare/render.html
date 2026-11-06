@@ -29,6 +29,7 @@ const rot = THREE.MathUtils.degToRad(+(P.get('rot') || 0));
 const view = P.get('view') || 'left';
 const layers = (P.get('layers') || 'skin').split(',');
 const mode = P.get('mode') || 'shade';
+const ids = P.get('ids') ? P.get('ids').split(',') : null;   // この名前の部品だけ映す（前方一致）
 
 const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
 renderer.setPixelRatio(1); renderer.setSize(W, H); renderer.setClearColor(0x000000, 0);
@@ -77,7 +78,8 @@ new GLTFLoader().load('../../models/' + (P.get('model') || 'cat-anatomy.glb'), (
     const n = o.userData.ja ? o : o.parent;
     const u = n && n.userData || {};
     const L = LAYER(u);
-    const on = layers.includes(L) && !(u.kind === 'whisker' && !layers.includes('whisker'));
+    let on = layers.includes(L) && !(u.kind === 'whisker' && !layers.includes('whisker'));
+    if (ids) on = !!n && ids.some((k) => n.name === k || n.name.startsWith(k + '_'));
     if (!on) { o.visible = false; return; }
     if (mode === 'flat') o.material = new THREE.MeshBasicMaterial({ color: FLAT[L] });
   });
