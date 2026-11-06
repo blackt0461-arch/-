@@ -41,6 +41,17 @@ export function fix(key) {
   REC[key] = n; save(); changed();
 }
 export const get = (key) => REC[key] || null;
+export const seen = (key) => !!(REC[key] && REC[key].n);
+// ⭐あとで見る。ドライブの受け口を変えずに同期できるよう、記録の中に「★/問題」という別の項目として持つ
+const STAR = '★/';
+export const starred = (key) => !!(REC[STAR + key] && REC[STAR + key].on);
+export function toggleStar(key) { REC[STAR + key] = { on: !starred(key), t: Date.now() }; save(); return starred(key); }
+// 日ごとに解いた数（全テストの合計）
+export function dayTotals() {
+  const out = {};
+  for (const [day, tests] of Object.entries(PLAN.days || {})) out[day] = Object.values(tests).reduce((a, b) => a + b, 0);
+  return out;
+}
 export const isWrong = (key) => !!(REC[key] && REC[key].wrong);
 export const recall = (key, at) => mem.recall(REC[key], at);
 export const isDue = (key, at) => mem.isDue(REC[key], at);
@@ -49,7 +60,7 @@ export function summary(qs) {
   let mastered = 0, wrong = 0, unseen = 0;
   for (const q of qs) {
     const r = REC[q.key];
-    if (!r) unseen++;
+    if (!r || !r.n) unseen++;
     else if (r.wrong) wrong++;
     else if (!mem.isDue(r)) mastered++;
   }

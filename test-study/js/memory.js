@@ -13,7 +13,7 @@ export const GOAL = 0.9;
 
 // 古い記録（S がない）も読めるようにする
 function base(r) {
-  if (!r) return null;
+  if (!r || !r.n) return null; // まだ解いていない（⭐だけつけた問題など）
   if (r.S) return r;
   return { ...r, S: r.last === 'ok' ? 1 : 0.3, lt: r.t || Date.now() };
 }
@@ -52,4 +52,4 @@ export function dueAt(r) {
   const m = base(r);
   return m ? m.lt + m.S * DAY : 0;
 }
-export const isDue = (r, at = Date.now()) => !r || recall(r, at) < GOAL;
+export const isDue = (r, at = Date.now()) => !base(r) || recall(r, at) < GOAL;
