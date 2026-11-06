@@ -197,7 +197,11 @@
    "answer": 1,
    "tol": 0.01,
    "unit": "mA",
-   "explain": "$I_D=\\frac{\\beta}{2}(V_{GS}-V_T)^2=1\\times1^2=1$ mA"
+   "explain": "$I_D=\\frac{\\beta}{2}(V_{GS}-V_T)^2=1\\times1^2=1$ mA",
+   "hints": [
+    "飽和領域の式は $I_D=\\frac{\\beta}{2}(V_{GS}-V_T)^2$",
+    "$V_{GS}-V_T=1$ V を入れると $\\frac{2}{2}\\times1^2$"
+   ]
   },
   {
    "id": "d018",
@@ -207,7 +211,11 @@
    "answer": 1.3,
    "tol": 0.01,
    "unit": "V",
-   "explain": "$V_{DSAT}=V_{GS}-V_T=1.3$ V"
+   "explain": "$V_{DSAT}=V_{GS}-V_T=1.3$ V",
+   "hints": [
+    "飽和電圧は線形と飽和の境目。$V_{DSAT}=V_{GS}-V_T$",
+    "$1.8-0.5$ を計算する"
+   ]
   },
   {
    "id": "d019",
@@ -298,7 +306,11 @@
    "tol": 0.01,
    "unit": "mA/V",
    "explain": "$g_m=\\beta(V_{GS}-V_T)=4\\times0.5=2$ mA/V",
-   "fig": "fig/id-vgs.svg"
+   "fig": "fig/id-vgs.svg",
+   "hints": [
+    "飽和領域の $g_m$ は $I_D$ を $V_{GS}$ で微分したもの：$g_m=\\beta(V_{GS}-V_T)$",
+    "$4\\times0.5$ を計算する（単位は mA/V）"
+   ]
   },
   {
    "id": "d026",
@@ -614,7 +626,11 @@
    "tol": 0.01,
    "unit": "V",
    "explain": "$v_{out}=-\\frac{R_2}{R_1}v_{in}=-10\\times0.2=-2$ V",
-   "fig": "fig/inv-amp.svg"
+   "fig": "fig/inv-amp.svg",
+   "hints": [
+    "反転増幅の利得は $-\\frac{R_2}{R_1}$",
+    "$-\\frac{10}{1}\\times0.2$ を計算する"
+   ]
   },
   {
    "id": "d053",
@@ -831,7 +847,11 @@
    "answer": 3.14159,
    "tol": 0.002,
    "explain": "$m=n$ なので $\\pi$",
-   "answerText": "π（≈3.14）"
+   "answerText": "π（≈3.14）",
+   "hints": [
+    "$\\cos mx\\cos nx=\\frac12\\{\\cos(m+n)x+\\cos(m-n)x\\}$ で次数を下げる",
+    "$m=n$ のとき $\\frac12\\int_0^{2\\pi}(\\cos2mx+1)dx$。$\\cos$ の積分は1周期で0なので、残るのは $\\frac12\\times2\\pi$"
+   ]
   },
   {
    "id": "d075",
@@ -840,7 +860,11 @@
    "q": "$\\int_0^{2\\pi}\\cos 2x\\cos 5x\\,dx$ の値は？",
    "answer": 0,
    "tol": 0.01,
-   "explain": "$m\\ne n$ なので 0（異なる周波数の三角関数は直交）"
+   "explain": "$m\\ne n$ なので 0（異なる周波数の三角関数は直交）",
+   "hints": [
+    "$\\cos mx\\cos nx=\\frac12\\{\\cos(m+n)x+\\cos(m-n)x\\}$ で次数を下げる",
+    "$m\\ne n$ のとき、どちらの $\\cos$ も $0\\sim2\\pi$ で積分すると0になる"
+   ]
   },
   {
    "id": "d076",
@@ -1025,7 +1049,11 @@
    "answer": 2,
    "tol": 0.01,
    "unit": "mA/V",
-   "explain": "$\\sqrt{2\\times2\\times1}=2$ mA/V"
+   "explain": "$\\sqrt{2\\times2\\times1}=2$ mA/V",
+   "hints": [
+    "$g_m=\\sqrt{2\\beta I_D}$ に数字を入れる",
+    "$\\sqrt{2\\times2\\times1}=\\sqrt4$"
+   ]
   },
   {
    "id": "d091",
@@ -1073,7 +1101,11 @@
    "answer": 200,
    "tol": 0.01,
    "unit": "kΩ",
-   "explain": "$1/(0.05\\times0.1\\,\\mathrm{mA})=200\\,\\mathrm{k\\Omega}$"
+   "explain": "$1/(0.05\\times0.1\\,\\mathrm{mA})=200\\,\\mathrm{k\\Omega}$",
+   "hints": [
+    "$r_0\\approx\\frac{1}{\\lambda I_D}$。単位をそろえる：$0.1\\,\\mathrm{mA}=10^{-4}$ A",
+    "$\\frac{1}{0.05\\times10^{-4}}\\,\\Omega$ を kΩ に直す"
+   ]
   },
   {
    "id": "d096",
@@ -1338,7 +1370,11 @@
    "answer": 50,
    "tol": 0.01,
    "unit": "kΩ",
-   "explain": "同じ大きさの並列は半分"
+   "explain": "同じ大きさの並列は半分",
+   "hints": [
+    "並列の合成：$r_0/\\!/R_L=\\left(\\frac{1}{r_0}+\\frac{1}{R_L}\\right)^{-1}$",
+    "同じ大きさの抵抗2本の並列は、1本の半分"
+   ]
   },
   {
    "id": "d117",
@@ -1363,7 +1399,11 @@
    "answer": -20,
    "tol": 0.01,
    "explain": "$-g_m(r_0/\\!/R_L)=-2\\,\\mathrm{mA/V}\\times10\\,\\mathrm{k\\Omega}=-20$",
-   "fig": "fig/cs-res.svg"
+   "fig": "fig/cs-res.svg",
+   "hints": [
+    "ソース接地の利得は $-g_m(r_0/\\!/R_L)$",
+    "mA/V × kΩ ＝ 倍（単位が消える）。$-2\\times10$"
+   ]
   },
   {
    "id": "d119",

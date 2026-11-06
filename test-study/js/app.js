@@ -3,7 +3,7 @@
 import * as store from './store.js';
 import * as cloud from './cloud.js';
 
-const APP_VERSION = '1.5.0';
+const APP_VERSION = '1.6.0';
 const $app = document.getElementById('app');
 let COURSES = [];
 const testCache = {};
@@ -244,6 +244,7 @@ const figHTML = (c, q) => q.fig ? `<figure class="fig"><img src="data/${c.id}/${
 
 // ---------- ホーム ----------
 async function home() {
+  if (window.__reloadOnHome) { location.reload(); return; }
   const todayN = store.dayTotals()[dateKey(new Date())] || 0;
   const st = streak();
   const hour = new Date().getHours();
@@ -272,6 +273,11 @@ async function home() {
       <button class="btn ${fin ? 'sub' : ''}" data-today="${k}">${icon(fin ? 'redo' : 'play')}${fin ? 'もっとやる（10問）' : p.dl === 0 ? '見直しをはじめる' : p.done ? '続きをやる' : '今日の分をはじめる'}</button>
     </div>`;
   });
+  const ng = newGrades();
+  if (ng.length) {
+    const g0 = ng[0];
+    html += `<button class="row notice" data-grades="${esc(g0.q)}"><span class="av c1">${icon('spark')}</span><div class="t"><div class="name">Claude の採点が届きました</div><div class="meta">${ng.length}件・タップして見る</div></div><span class="arrow">${icon('next')}</span></button>`;
+  }
   html += '<h2>授業</h2>';
   for (const c of COURSES) {
     const next = (c.tests || []).map((t) => ({ t, d: daysLeft(testDate(c, t)) })).filter((x) => x.d !== null && x.d >= 0).sort((a, b) => a.d - b.d)[0];
@@ -290,6 +296,12 @@ async function home() {
     else startQuiz(x.c, x.t, x.d, x.d.questions, { id: 'more', name: 'もっとやる', back: home }, { limit: 10 });
   }));
   w.querySelectorAll('[data-c]').forEach((b) => (b.onclick = () => course(COURSES.find((c) => c.id === b.dataset.c))));
+  const gb = w.querySelector('[data-grades]');
+  if (gb) gb.onclick = async () => {
+    const [cid, tid] = gb.dataset.grades.split('/');
+    const c = COURSES.find((x) => x.id === cid); const t = c && (c.tests || []).find((x) => x.id === tid);
+    if (c && t) answers(c, t, await loadTest(c, t));
+  };
 }
 
 // ---------- 授業：テストの一覧 ----------
@@ -452,10 +464,10 @@ function startQuiz(c, t, d, pool, mode, opt = {}) {
     const after = w.querySelector('[data-after]');
     // res: ok / mid / ng。opt.extra：判定の下に足すもの。opt.quiet：判定と解説を出さない（自分で出したとき）
     const done = (res, o = {}) => {
-      store.record(q.key, res);
-      results.push({ q, res });
+      store.record(q.key, res, { h: o.h, solved: o.solved });
+      results.push({ q, res, h: o.h });
       buzz(res === 'ok' ? 15 : [30, 40, 30]);
-      const label = { ok: '正解！', mid: 'おしい', ng: 'まちがい' }[res];
+      const label = o.label || { ok: '正解！', mid: 'おしい', ng: 'まちがい' }[res];
       const ic = { ok: 'check', mid: 'tri', ng: 'x' }[res];
       const html = o.quiet ? '' : `<div class="verdict ${res}">${icon(ic)}${label}</div>${o.extra || ''}${explainHTML(q)}`;
       after.insertAdjacentHTML('beforeend', html + (q.figAfter ? `<div class="card">${figHTML(c, q)}</div>` : ''));
@@ -575,20 +587,45 @@ function parseNum(s) {
   try { const v = Function('"use strict";return (' + s + ')')(); return typeof v === 'number' ? v : NaN; } catch (e) { return NaN; }
 }
 const calcOk = (q, v) => Math.abs(v - q.answer) <= Math.max(Math.abs(q.answer) * (q.tol ?? 0.01), 1e-9);
+// ヒントの扱い：自分の力で思い出せなかった分だけ「覚えた」とは数えない
+//   ヒントなしで正解 → 正解 ／ ヒント1つで正解 → おしい ／ ヒント2つ以上で正解 → まちがい（表示は「ヒントで解けた」）
+function hintResult(ok, h) {
+  if (!ok) return { res: 'ng' };
+  if (!h) return { res: 'ok' };
+  if (h === 1) return { res: 'mid', label: 'ヒント1つで正解（おしい扱い）' };
+  return { res: 'ng', label: `ヒント${h}つで解けた（もう一度出ます）` };
+}
 function calcBody(q, body, after, done) {
+  const hints = q.hints || [];
+  let h = 0;
   body.innerHTML = `<input class="input num" data-in inputmode="decimal" placeholder="答え（数字）" autocomplete="off">
     ${q.unit ? `<div class="unit">単位：${esc(q.unit)}</div>` : ''}
-    <button class="btn" data-go>答える</button><button class="btn ghost" data-skip>わからない・解き方を見る</button>`;
+    <div data-hints></div>
+    <button class="btn" data-go>答える</button>
+    ${hints.length ? `<button class="btn sub" data-hint>${icon('spark')}ヒントを見る（1/${hints.length}）</button><div class="muted small" data-hnote style="text-align:center;margin-top:6px">ヒントを見て正解すると「おしい」扱いになります</div>` : ''}
+    <button class="btn ghost" data-skip>わからない・解き方を見る</button>`;
   const inp = body.querySelector('[data-in]');
-  const lock = () => { body.querySelectorAll('button').forEach((b) => (b.hidden = true)); inp.disabled = true; };
+  const lock = () => { body.querySelectorAll('button').forEach((b) => (b.hidden = true)); inp.disabled = true; const hn = body.querySelector('[data-hnote]'); if (hn) hn.hidden = true; };
   const go = () => {
     const v = parseNum(inp.value);
     if (Number.isNaN(v)) { alert('数字で入れてください（例：0.5、1/2、2*10^3）'); return; }
-    lock(); done(calcOk(q, v) ? 'ok' : 'ng');
+    lock();
+    const okv = calcOk(q, v);
+    const r = hintResult(okv, h);
+    done(r.res, { h, label: r.label, solved: okv && h > 0 });
+  };
+  const hb = body.querySelector('[data-hint]');
+  if (hb) hb.onclick = () => {
+    const box = body.querySelector('[data-hints]');
+    box.insertAdjacentHTML('beforeend', `<div class="hint"><b>ヒント${h + 1}</b>${esc(hints[h])}</div>`);
+    math(box);
+    h++;
+    if (h >= hints.length) hb.hidden = true; else hb.innerHTML = `${icon('spark')}ヒントを見る（${h + 1}/${hints.length}）`;
+    buzz(8);
   };
   body.querySelector('[data-go]').onclick = go;
   inp.onkeydown = (e) => { if (e.key === 'Enter') go(); };
-  body.querySelector('[data-skip]').onclick = () => { lock(); done('ng'); };
+  body.querySelector('[data-skip]').onclick = () => { lock(); done('ng', { h }); };
 }
 
 function writtenBody(q, body, after, done, c, t) {
@@ -760,7 +797,8 @@ async function stats() {
   const weak = all.filter((q) => { const r = store.get(q.key); return r && r.n >= 2 && r.ok < r.n; })
     .sort((a, b) => { const ra = store.get(a.key), rb = store.get(b.key); return ra.ok / ra.n - rb.ok / rb.n || rb.n - ra.n; }).slice(0, 10);
   w.innerHTML = `
-    <div class="stats" style="position:relative;z-index:2">
+    <button class="row notice" data-report style="position:relative;z-index:2;margin-top:0"><span class="av c4">${icon('chart')}</span><div class="t"><div class="name">ふりかえりレポート</div><div class="meta">今までの勉強をまとめて見る</div></div><span class="arrow">${icon('next')}</span></button>
+    <div class="stats">
       <div class="stat"><b>${n ? pct(ok / n) : 0}<span style="font-size:.5em">%</span></b><span>正解率</span></div>
       <div class="stat"><b>${remember}</b><span>覚えている問題</span></div>
       <div class="stat"><b>${days[dateKey(new Date())] || 0}</b><span>今日の問題</span></div>
@@ -776,11 +814,103 @@ async function stats() {
       <button class="btn sub" data-weak>${icon('redo')}苦手な問題をまとめて解く</button>` : '<div class="card flat muted small">2回以上まちがえた問題がここに出ます</div>'}
     <div class="cloud-line">v${APP_VERSION}</div>`;
   math(w); bindStars(w);
+  w.querySelector('[data-report]').onclick = report;
   const wb = w.querySelector('[data-weak]');
   if (wb) wb.onclick = () => {
     const { c, t, d } = tests.find((x) => x.d.questions.includes(weak[0]));
     startQuiz(c, t, d, weak.filter((q) => d.questions.includes(q)), { id: 'weak', name: '苦手な問題', back: stats, keepOrder: true }, { limit: 0 });
   };
+}
+
+// ---------- ふりかえりレポート（今までの全部） ----------
+function bars(rows, { max = 1, fmt = (v) => pct(v) + '%' } = {}) {
+  return rows.map((r) => `<div class="lrow"><span class="lname">${esc(r.name)}</span><div class="meter ${r.v >= 0.85 ? 'ok' : ''}"><i style="width:${Math.min(100, (r.v / max) * 100)}%"></i></div><span class="lpct">${fmt(r.v)}</span></div>
+    ${r.note ? `<div class="muted small" style="margin:-2px 0 4px 4.6em">${esc(r.note)}</div>` : ''}`).join('');
+}
+async function report() {
+  const w = screen('ふりかえりレポート', { back: stats });
+  w.innerHTML = '<div class="loading">まとめています…</div>';
+  const tests = await allTests();
+  const qmap = {};
+  tests.forEach(({ c, t, d }) => d.questions.forEach((q) => (qmap[q.key] = { q, c, t })));
+  const ev = store.events().filter((e) => qmap[e.q]);
+  if (!ev.length) { w.innerHTML = '<div class="empty">まだ記録がありません。問題を解くと、ここにまとめが出ます。</div>'; return; }
+  const okOf = (list) => list.length ? list.filter((e) => e.r === 'ok').length / list.length : 0;
+  const days = store.dayTotals();
+  const dayList = Object.keys(days).filter((d) => days[d] > 0).sort();
+  // いちばん長く続いた日数
+  let best = 0, run = 0, prev = null;
+  for (const d of dayList) { const cur = new Date(d + 'T00:00:00'); run = prev && (cur - prev) / 86400000 === 1 ? run + 1 : 1; best = Math.max(best, run); prev = cur; }
+  const first = new Date(ev[0].at), span = Math.max(1, Math.round((Date.now() - first.setHours(0, 0, 0, 0)) / 86400000) + 1);
+  const totalAns = Object.values(days).reduce((a, b) => a + b, 0);
+  // 正解率の移り変わり（週ごと。記録が2週間より短いときは日ごと）
+  const byDay = span <= 14;
+  const bucketOf = (at) => { const d = new Date(at); if (byDay) return `${d.getMonth() + 1}/${d.getDate()}`; const m = new Date(d); m.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return `${m.getMonth() + 1}/${m.getDate()}週`; };
+  const buckets = [];
+  for (const e of ev) { const b = bucketOf(e.at); let x = buckets.find((y) => y.name === b); if (!x) { x = { name: b, list: [] }; buckets.push(x); } x.list.push(e); }
+  // 回ごと・形式ごと・時間帯ごと
+  const group = (keyFn) => { const m = {}; for (const e of ev) { const k = keyFn(e); if (k) (m[k] = m[k] || []).push(e); } return m; };
+  const byLec = group((e) => qmap[e.q].q.lecture ? `${qmap[e.q].c.name.slice(0, 4)} ${qmap[e.q].q.lecture}` : null);
+  const lecRows = Object.entries(byLec).map(([name, list]) => {
+    const qs = [...new Set(list.map((e) => e.q))];
+    return { name, v: okOf(list), n: list.length, mem: qs.reduce((a, k) => a + store.recall(k), 0) / qs.length };
+  });
+  const byType = group((e) => TYPE_NAME[qmap[e.q].q.type]);
+  const HOURS = [['深夜', 0, 5], ['朝', 5, 11], ['昼', 11, 17], ['夕方', 17, 20], ['夜', 20, 24]];
+  const byHour = group((e) => { const h = new Date(e.at).getHours(); return HOURS.find(([, a, b]) => h >= a && h < b)[0]; });
+  // まちがえたあと、覚えられた問題
+  const wrongOnce = [...new Set(ev.filter((e) => e.r !== 'ok').map((e) => e.q))];
+  const recovered = wrongOnce.filter((k) => { const r = store.get(k); return r && r.last === 'ok' && !store.isDue(k); });
+  const stillWeak = wrongOnce.filter((k) => !recovered.includes(k));
+  // ヒント
+  const hinted = ev.filter((e) => e.h);
+  // Claude の採点
+  const gs = store.grades().filter((g) => qmap[g.q]);
+  const avgScore = gs.length ? Math.round(gs.reduce((a, g) => a + (g.score || 0), 0) / gs.length) : null;
+  const rank = { ng: 0, mid: 1, ok: 2 };
+  const lenient = gs.filter((g) => g.self && rank[g.self] > rank[g.grade]).length;
+  // アドバイス
+  const tips = [];
+  const lecSorted = lecRows.filter((r) => r.n >= 3).sort((a, b) => a.v - b.v);
+  if (lecSorted.length >= 2) tips.push(`いちばん苦手なのは「${lecSorted[0].name}」（正解率 ${pct(lecSorted[0].v)}%）。この回の問題を「範囲」でしぼって、まとめて解き直すと効果的です。`);
+  const typeSorted = Object.entries(byType).filter(([, l]) => l.length >= 3).map(([k, l]) => [k, okOf(l)]).sort((a, b) => a[1] - b[1]);
+  if (typeSorted.length >= 2 && typeSorted[0][1] < 0.7) tips.push(`形式では「${typeSorted[0][0]}」の正解率が低め（${pct(typeSorted[0][1])}%）。答えを見る前に、自分の言葉で一度言ってみましょう。`);
+  const hourSorted = Object.entries(byHour).filter(([, l]) => l.length >= 5).map(([k, l]) => [k, okOf(l)]).sort((a, b) => b[1] - a[1]);
+  if (hourSorted.length >= 2) tips.push(`「${hourSorted[0][0]}」に解いたときの正解率がいちばん高いです（${pct(hourSorted[0][1])}%）。むずかしい問題はこの時間に。`);
+  if (dayList.length / span < 0.6 && span >= 4) tips.push(`勉強した日は ${span}日中 ${dayList.length}日。記憶は「少しずつ毎日」のほうが残ります。1日10問でも続けましょう。`);
+  if (lenient >= 2) tips.push(`記述の自己採点が、Claude の採点より甘めになりがちです（${lenient}件）。お手本の「ポイント」が全部入っているかで判断してみてください。`);
+  if (hinted.length >= 3 && okOf(hinted) < 0.5) tips.push('ヒントを使っても正解できない計算問題があります。まず解説を見て、翌日にヒントなしで解き直しましょう。');
+  if (stillWeak.length) tips.push(`まちがえたまま、まだ覚えきれていない問題が ${stillWeak.length}問あります。「まちがい復習」でくり返しましょう。`);
+  if (!tips.length) tips.push('いい調子です。この調子で「今日の勉強」を続けましょう。');
+  // 正解率の移り変わり（棒グラフ）
+  const chart = (() => {
+    const W = 320, H = 120, n = buckets.length, bw = Math.min(28, (W - 20) / n - 4);
+    return `<svg viewBox="0 0 ${W} ${H + 24}" class="trend">${[0.5, 1].map((y) => `<line x1="0" x2="${W}" y1="${H - y * H}" y2="${H - y * H}" stroke="var(--line)"/>`).join('')}
+      ${buckets.map((b, i) => { const v = okOf(b.list), x = 10 + i * ((W - 20) / n) + ((W - 20) / n - bw) / 2; return `<rect x="${x}" y="${H - v * H}" width="${bw}" height="${v * H}" rx="4" fill="url(#tg)"/><text x="${x + bw / 2}" y="${H + 16}" text-anchor="middle" font-size="9" fill="var(--sub)">${esc(b.name)}</text><text x="${x + bw / 2}" y="${H - v * H - 4}" text-anchor="middle" font-size="9" fill="var(--fg)">${pct(v)}</text>`; }).join('')}
+      <defs><linearGradient id="tg" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#5b5cf0"/><stop offset="1" stop-color="#a78bfa"/></linearGradient></defs></svg>`;
+  })();
+  w.innerHTML = `
+    <div class="muted small" style="margin:14px 4px 0">${first.getMonth() + 1}/${first.getDate()} 〜 今日（${span}日間）のまとめ</div>
+    <div class="stats" style="margin-top:10px">
+      <div class="stat"><b>${dayList.length}</b><span>勉強した日</span></div>
+      <div class="stat"><b>${totalAns}</b><span>解いた問題</span></div>
+      <div class="stat"><b>${pct(okOf(ev))}<span style="font-size:.5em">%</span></b><span>正解率</span></div>
+      <div class="stat"><b>${best}</b><span>最長の連続日数</span></div>
+      <div class="stat"><b>${dayList.length ? Math.round(totalAns / dayList.length) : 0}</b><span>1日の平均</span></div>
+      <div class="stat"><b>${recovered.length}</b><span>まちがいから覚えた</span></div>
+    </div>
+    <h2>次にやるとよいこと</h2><div class="card">${tips.map((t) => `<div class="tip">${icon('spark')}<span>${esc(t)}</span></div>`).join('')}</div>
+    <h2>正解率の移り変わり（${byDay ? '日ごと' : '週ごと'}）</h2><div class="card">${chart}</div>
+    <h2>回ごと（正解率・いま覚えている度）</h2><div class="card">${bars(lecRows.map((r) => ({ name: r.name.split(' ')[1] || r.name, v: r.v, note: `${r.n}回解いた・いま覚えている度 ${pct(r.mem)}%` })))}</div>
+    <h2>形式ごとの正解率</h2><div class="card">${bars(Object.entries(byType).map(([k, l]) => ({ name: k.slice(0, 4), v: okOf(l), note: `${l.length}回` })))}</div>
+    <h2>時間帯ごと</h2><div class="card">${bars(HOURS.map(([k]) => ({ name: k, v: okOf(byHour[k] || []), note: `${(byHour[k] || []).length}回解いた` })))}</div>
+    <h2>ヒントと採点</h2><div class="card">
+      <div class="kv"><span>ヒントを使った計算問題</span><b>${hinted.length}回（そのうち正解 ${hinted.filter((e) => e.s).length}回）</b></div>
+      <div class="kv"><span>Claude が採点した記述</span><b>${gs.length}件${avgScore !== null ? `・平均 ${avgScore}点` : ''}</b></div>
+      <div class="kv"><span>自己採点が Claude より甘かった</span><b>${lenient}件</b></div></div>
+    ${stillWeak.length ? `<h2>まだ覚えきれていない問題（まちがえたことがある）</h2><div class="rlist">${stillWeak.slice(0, 8).map((k) => resultRow(qmap[k].q, 'ng')).join('')}</div>` : ''}
+    <div class="cloud-line">v${APP_VERSION}</div>`;
+  math(w); bindStars(w);
 }
 
 // ---------- まとめシート ----------
@@ -798,16 +928,39 @@ async function sheet(c, t, d) {
 }
 
 // ---------- 書いた記述の答え ----------
+const SELF = { ok: 'できた', mid: 'おしい', ng: 'できなかった' };
+const GRADE = { ok: '合格', mid: 'あと少し', ng: 'もう一度' };
+function gradeHTML(g) {
+  return `<div class="graded ${g.grade || ''}"><div class="gtop">${icon('spark')}<b>Claude の採点</b><span class="gscore num">${g.score ?? '-'}<small>点</small></span><span class="badge">${GRADE[g.grade] || ''}</span></div>
+    ${g.comment ? `<div class="gtext">${esc(g.comment)}</div>` : ''}
+    ${g.missing?.length ? `<span class="label">足りなかったポイント</span><ul class="gmiss">${g.missing.map((m) => `<li>${esc(m)}</li>`).join('')}</ul>` : ''}
+    ${g.better ? `<span class="label">こう書くとよい</span><div class="gtext">${esc(g.better)}</div>` : ''}</div>`;
+}
+// まだ見ていない採点の数（最初の画面のお知らせ用）
+const SEEN_KEY = 'ts_grades_seen';
+const seenAt = () => { try { return +localStorage.getItem(SEEN_KEY) || 0; } catch (e) { return 0; } };
+const newGrades = () => store.grades().filter((g) => (g.t || 0) > seenAt());
+
 async function answers(c, t, d) {
   const w = screen(`書いた答え`, { back: () => testMenu(c, t) });
-  const keys = new Set(d.questions.map((q) => q.key));
-  const list = (await store.listAnswers()).filter((a) => keys.has(a.key)).reverse();
+  const byKey = Object.fromEntries(d.questions.map((q) => [q.key, q]));
+  const local = (await store.listAnswers()).filter((a) => byKey[a.key]);
+  const localUids = new Set(local.map((a) => a.uid));
+  // ほかの端末で書いた答えも、採点があれば出す
+  const others = store.grades().filter((g) => byKey[g.q] && !localUids.has(g.uid)).map((g) => ({ uid: g.uid, key: g.q, q: byKey[g.q].q, text: g.yours || '', self: g.self, t: g.at || g.t, other: true }));
+  const list = [...local, ...others].sort((x, y) => (y.t || 0) - (x.t || 0));
+  try { localStorage.setItem(SEEN_KEY, String(Date.now())); } catch (e) { /* */ }
   if (!list.length) { w.innerHTML = '<div class="empty">まだ記述の答えはありません</div>'; return; }
-  w.innerHTML = `<div class="card flat muted small">ここに保存した答えは、ドライブの「記述の答え」フォルダにも入ります。Claude に「記述の答えを採点して」と頼めます。</div>` +
-    list.map((a) => `<div class="card"><div class="muted small">${new Date(a.t).toLocaleString('ja-JP')}・自己採点 ${{ ok: 'できた', mid: 'おしい', ng: 'できなかった' }[a.self] || ''}</div>
+  const waiting = list.filter((a) => !store.grade(a.uid)).length;
+  w.innerHTML = `<div class="card flat muted small">${waiting ? `まだ採点していない答えが <b>${waiting}件</b> あります。Claude に「記述の答えを採点して」と言うと、ドライブの答え（写真も）を読んで採点し、ここに結果が出ます。` : 'すべて採点ずみです。'}</div>` +
+    list.map((a) => {
+      const g = store.grade(a.uid);
+      return `<div class="card"><div class="muted small">${new Date(a.t).toLocaleString('ja-JP')}${a.self ? '・自己採点 ' + (SELF[a.self] || '') : ''}${a.other ? '・ほかの端末' : ''}</div>
       <div class="qtext" style="font-size:15px">${esc(a.q)}</div>
       ${a.text ? `<div class="explain" style="margin-top:6px">${esc(a.text)}</div>` : ''}
-      ${a.photo ? `<img class="photo-prev" src="${URL.createObjectURL(a.photo)}" alt="答えの写真">` : ''}</div>`).join('');
+      ${a.photo ? `<img class="photo-prev" src="${URL.createObjectURL(a.photo)}" alt="答えの写真">` : ''}
+      ${g ? gradeHTML(g) : '<div class="muted small" style="margin-top:8px">⏳ 採点まち</div>'}</div>`;
+    }).join('');
   math(w);
 }
 
@@ -823,6 +976,15 @@ async function answers(c, t, d) {
     cloud.sync();
     // 数式の道具は、画面が出たあとで先に読んでおく
     setTimeout(loadKatex, 300);
+    // アプリをスマホにとっておく。新しい版に入れかわったら、ホームにいるときに開きなおす
+    if ('serviceWorker' in navigator) {
+      const hadController = !!navigator.serviceWorker.controller;
+      navigator.serviceWorker.register('sw.js').catch(() => {});
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (!hadController) return; // はじめて入ったときは開きなおさない
+        if (onHome()) location.reload(); else window.__reloadOnHome = true;
+      });
+    }
   } catch (e) {
     $app.innerHTML = '<div class="loading">読みこめませんでした。電波のよい所でもう一度開いてください。</div>';
   }
