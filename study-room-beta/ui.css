@@ -997,7 +997,7 @@ button.pf-open { border: 0; background: none; padding: 0; display: inline-flex; 
 .pz-tix.empty { border-color: var(--sk-card-line, var(--card-line)); }
 
 /* 家具を買う：たたんで部屋を見る（1.11.0） */
-.sh-fold { margin-left: auto; flex: none; display: inline-flex; align-items: center; gap: 4px; padding: 7px 11px; border-radius: 999px; border: 1px solid var(--sk-card-line, rgba(255,255,255,.14)); background: var(--sk-icon-bg, rgba(255,255,255,.06)); color: var(--sk-text, #f2efe9); font: 700 12px var(--sk-font, sans-serif); }
+.sh-fold { margin-left: auto; flex: none; display: inline-flex; align-items: center; gap: 4px; padding: 7px 11px; border-radius: 999px; border: 1px solid var(--sk-card-line, rgba(255,255,255,.14)); background: var(--sk-icon-bg, rgba(255,255,255,.06)); color: var(--sk-text, #f2efe9); white-space: nowrap; font: 700 12px var(--sk-font, sans-serif); }
 .sh-fold .ic { width: 15px; height: 15px; }
 .cand-sheet.folded .candgrid, .cand-sheet.folded .pv-tip, .cand-sheet.folded .sh-head p { display: none; }
 .cand-sheet.folded { padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px)); }

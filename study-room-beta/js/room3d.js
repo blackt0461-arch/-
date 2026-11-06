@@ -387,14 +387,19 @@ export class Room3D {
     }
     if (this.exterior?.update) this.exterior.update(t);
     // 何も動いていない時は、描きかえを1秒に30回に減らす（スマホが熱くならない・電池が長もち）
+    let appearing = false;
     const busy = this.dragging || this.targetLook || this.walk || this.itemDrag || this.preview ||
       Math.abs(this.vyaw) + Math.abs(this.vpitch) > 1e-5 ||
       (this.marker && this.marker.userData.life > 0) || this.rain?.visible ||
-      this.items.children.some(o => o.userData.appear !== undefined && o.userData.appear < 1);
+      (appearing = this.items.children.some(o => o.userData.appear !== undefined && o.userData.appear < 1));
     this._idleAcc = (this._idleAcc || 0) + dt;
     if (!busy && this._idleAcc < 1 / 30 - 0.002) return;
     const frameDt = this._idleAcc; this._idleAcc = 0;
-    this.renderer.shadowMap.needsUpdate = true;
+    // 影は、家具が動いた・増えた時だけ描きなおす（向きを変えるだけなら同じ影でよい。1.12.0 で軽く）。念のため1秒ごとにも
+    const sk = `${this.items.children.length}|${this.shell?.uuid}|${this.lightsOff ? 1 : 0}`;
+    if (this.itemDrag || this.preview || appearing || sk !== this._shadowKey || t - (this._shadowAt || 0) > 1) {
+      this.renderer.shadowMap.needsUpdate = true; this._shadowKey = sk; this._shadowAt = t;
+    }
     if (this.composer && this.effectsOn !== false) {
       this.grade.uniforms.uTime.value = t;
       this.composer.render(frameDt);

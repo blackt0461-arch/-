@@ -3,6 +3,13 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { ASSETS } from './assets.js';
 
+// 画質「かるい」のときは、色の絵（map）だけ読みこむ。でこぼこ（normal）・つや（rough / arm）の絵は、
+// とても小さい無地の絵に置きかえる（ダウンロードがおよそ半分になる。1.12.0）
+let lite = true;
+try { lite = (localStorage.getItem('studyroom.quality') || 'low') === 'low'; } catch (e) { /* なし */ }
+export const isLite = () => lite;
+const FLAT_NOR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGNoaPgPAAODAgAApfuJAAAAAElFTkSuQmCC';
+const FLAT_ARM = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4f5MBAASzAdliaxxwAAAAAElFTkSuQmCC';
 const texLoader = new THREE.TextureLoader();
 const gltfLoader = new GLTFLoader();
 const texCache = new Map();
@@ -30,9 +37,10 @@ export async function texturedMaterial(texId, opts = {}) {
   if (!t) return mat;
   const [map, normal, rough] = await Promise.all([
     t.map ? loadTex(t.map, true) : null,
-    t.normal ? loadTex(t.normal, false) : null,
-    t.rough ? loadTex(t.rough, false) : null,
+    t.normal && !lite ? loadTex(t.normal, false) : null,
+    t.rough && !lite ? loadTex(t.rough, false) : null,
   ]);
+  if (lite && t.rough) mat.roughness = 0.85;
   mat.map = map; mat.normalMap = normal; mat.roughnessMap = rough;
   mat.userData.rep = opts.rep || 1;
   mat.needsUpdate = true;
@@ -49,6 +57,8 @@ export function loadModel(id) {
       const base = a.url.slice(0, a.url.lastIndexOf('/') + 1);
       mgr.setURLModifier(u => {
         const rel = u.startsWith(base) ? u.slice(base.length) : u;
+        if (lite && /_nor_gl_/.test(rel)) return FLAT_NOR;
+        if (lite && /_(arm|rough)_/.test(rel)) return FLAT_ARM;
         return (a.inc && a.inc[rel]) || u;
       });
       new GLTFLoader(mgr).load(a.url, g => res(g.scene), undefined, () => res(null));

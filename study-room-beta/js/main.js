@@ -8,7 +8,7 @@ import { icon, GENRE_ICON, SUBJECT_ICON } from './icons.js';
 import { ticketSVG, TICKET_NAME } from './tickets.js';
 import * as G from './gacha.js';
 import { thumbHTML, hydrateThumbs } from './thumbs.js';
-import { loadModel } from './loaders.js';
+import { loadModel, isLite } from './loaders.js';
 import { validProblems, SYMBOLS } from './problems.js';
 import { SUBJECT_PROBLEMS } from './subjects/index.js';
 import { playPullFX } from './pullfx.js';
@@ -2746,6 +2746,7 @@ function showSettings() {
   vol.oninput = () => { BGM.setVolume(vol.value / 100); vol.nextElementSibling.textContent = vol.value; };
   el.querySelector('#bgm-track').onchange = (e) => BGM.setTrack(e.target.value);
   el.querySelectorAll('.seg button[data-q]').forEach(b => b.onclick = () => {
+    if ((b.dataset.q === 'low') !== isLite()) toast('家具や壁の質感は、次にアプリを開いた時から変わります', 2600);
     try { localStorage.setItem('studyroom.quality', b.dataset.q); } catch (e) { /* なし */ }
     room3d?.setQuality(b.dataset.q);
     el.querySelectorAll('.seg button[data-q]').forEach(x => x.classList.toggle('on', x === b));
@@ -3216,6 +3217,7 @@ function titleSettings(host) {
     <button class="btn primary big close">とじる</button></div>`);
   host.append(sh);
   sh.querySelectorAll('.q3 button').forEach(b => b.onclick = () => {
+    if ((b.dataset.q === 'low') !== isLite()) toast('家具や壁の質感は、次にアプリを開いた時から変わります', 2600);
     try { localStorage.setItem('studyroom.quality', b.dataset.q); } catch (e) { /* なし */ }
     room3d?.setQuality(b.dataset.q);
     sh.querySelectorAll('.q3 button').forEach(x => x.classList.toggle('on', x === b));
