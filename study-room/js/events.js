@@ -3,21 +3,11 @@
 // 新しいイベントを足すときは、EVENTS に1つ足すだけ（期間は朝6時区切りの日付で、start〜end の両日をふくむ）。
 import * as S from './store.js';
 
-export const EVENTS = [
-  {
-    id: 'winter2026', name: 'ウィンターフェス', unit: '雪の結晶',
-    desc: '問題やパズルで雪の結晶を集めよう。集めた数で、冬だけの家具がもらえます',
-    start: '2026-12-01', end: '2026-12-25',
-    rewards: [
-      { at: 10, kind: 'ticket', amount: 2 },
-      { at: 30, kind: 'item', item: 'ev-gift-pile' },
-      { at: 60, kind: 'ticket4', amount: 1 },
-      { at: 100, kind: 'item', item: 'ev-snowman' },
-      { at: 150, kind: 'ticket', amount: 5 },
-      { at: 200, kind: 'item', item: 'ev-xmas-tree' },
-    ],
-  },
-];
+// いまは開催中のイベントなし（ウィンターフェスは、いったん取りやめ。1.12.1）。
+// 足すときは、下の形で1つ入れる：
+// { id: 'winter2026', name: 'ウィンターフェス', unit: '雪の結晶', desc: '…', start: '2026-12-01', end: '2026-12-25',
+//   rewards: [{ at: 10, kind: 'ticket', amount: 2 }, { at: 30, kind: 'item', item: 'ev-gift-pile' }, …] }
+export const EVENTS = [];
 // ポイント：問題は正解2・まちがい1、パズルはえらんだ★の数
 export const POINTS = { right: 2, wrong: 1 };
 

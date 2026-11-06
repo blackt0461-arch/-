@@ -389,7 +389,7 @@ function tabbar(active) {
 }
 // 新しいデザインの下のメニュー：いつも同じ5つ（部屋・家具・解く・ガチャ・みんな）。メニューは右上の自分のアイコンから
 function tabbarNext(active, { resume, due, pct, buy }) {
-  const dot = (k) => (k === 'social' && friendBadge) || (k === 'gacha' && ticketCount());
+  const dot = (k) => (k === 'menu' && newsBadge) || (k === 'social' && friendBadge) || (k === 'gacha' && ticketCount());
   const slot = ([k, ic, n]) => `<button data-t="${k}" class="sl ${k === active ? 'on' : ''}" aria-label="${n}">${icon(ic)}<span class="sl-t">${n}</span>${dot(k) ? '<i class="dot"></i>' : ''}</button>`;
   const ring = isPuzzle()
     ? `<button data-t="play" class="solve-ring ${buy ? 'full' : ''}" style="--p:${pct}" aria-label="パズル"><span class="sr-in">${icon('grid')}<b>パズル</b></span>${!S.playedToday() ? '<i class="dot"></i>' : ''}</button>`
@@ -949,17 +949,18 @@ function showHome() {
           <span class="lv">Lv<b>${rk.rank}</b></span>
           <span class="xpbar"><i style="width:${Math.round(rk.into / rk.need * 100)}%"></i></span>
         </button>
-        ${UINEXT ? `<button class="round nx-me" aria-label="メニュー（プロフィール・記録・設定）">${avatarHTML(S.profile(), 'avatar')}${newsBadge ? '<i class="gb-n dot-only"></i>' : ''}</button>` : ''}
+        ${UINEXT ? `<button class="round nx-me" aria-label="プロフィール">${avatarHTML(S.profile(), 'avatar')}</button>` : ''}
       </header>
       ${UINEXT && canBuyNow() ? `<button class="nx-buy">${icon('gift')}<span>家具が買える</span><b>${buyCount() > 1 ? '×' + buyCount() : ''}</b></button>` : ''}
       <div class="side-tools">
-        ${UINEXT ? '' : `<button class="round photo" aria-label="写真をとる">${icon('camera')}</button>`}
+        ${UINEXT ? `<button class="round nx-menubtn" aria-label="メニュー" aria-expanded="false">${icon('menu')}${newsBadge ? '<i class="gb-n dot-only"></i>' : ''}</button>` : `<button class="round photo" aria-label="写真をとる">${icon('camera')}</button>`}
         ${EV.activeEvent() ? `<button class="round evbtn" aria-label="${esc(EV.activeEvent().name)}">${icon('snow')}${EV.readyCount(EV.activeEvent()) ? `<i class="gb-n">${EV.readyCount(EV.activeEvent())}</i>` : ''}</button>` : ''}
         <button class="round giftbox" aria-label="プレゼントBOX">${icon('gift')}${S.gifts().length ? `<i class="gb-n">${S.gifts().length > 99 ? '99+' : S.gifts().length}</i>` : ''}</button>
       </div>
     </div>`);
   el.querySelector('.photo')?.addEventListener('click', photoMode);
-  el.querySelector('.nx-me')?.addEventListener('click', showMenu);
+  el.querySelector('.nx-me')?.addEventListener('click', () => showProfile(null, showHome));
+  el.querySelector('.nx-menubtn')?.addEventListener('click', () => toggleNxMenu());
   el.querySelector('.nx-buy')?.addEventListener('click', buyFlow);
   el.querySelector('.giftbox')?.addEventListener('click', () => showGiftBox());
   refreshGifts();
@@ -1683,7 +1684,7 @@ function photoMode() {
 
 // =========================== 更新のお知らせ ===========================
 // このプログラムの版（version.json と同じにする。公開のたびに上げる）
-const APP_VERSION = '1.12.0';
+const APP_VERSION = '1.12.2';
 ERR.setVersion(APP_VERSION);
 // 新しい版が出たら、みんな同じタイミングでそろうように強制で再起動する。
 // 開いた時・画面に戻った時・1分ごとに version.json を見る
@@ -2033,7 +2034,35 @@ function screenWithTabs(cls, title, active, body) {
   hydrateThumbs(el);
   return el;
 }
-function showMenu() {
+// 新しいデザイン：メニューは右上の丸ボタン。押すと、その下に項目が縦にのびる（1.12.1）
+const NX_MENU = () => [
+  ['skins', 'palette', '着せ替え', () => showSkins()],
+  ['report', 'calendar', '勉強レポート', () => showReport()],
+  ['records', 'chart', '記録', () => showRecords()],
+  ['news', 'bell', 'お知らせ', () => showNews(), newsBadge],
+  ['feedback', 'chat', '要望・バグ報告', () => showFeedback()],
+  ['photo', 'camera', '部屋の写真', () => photoMode()],
+  ['settings', 'gear', '設定', () => showSettings()],
+  ...(isAdmin() ? [['beta', BETA ? 'home' : 'flask', BETA ? 'いつもの版へ' : 'テスト版', () => { location.href = BETA ? '../study-room/' : '../study-room-beta/'; }], ['admin', 'shield', '管理者', () => showAdmin()]] : []),
+];
+function toggleNxMenu(open) {
+  const btn = app.querySelector('.nx-menubtn'); if (!btn) return;
+  const cur = app.querySelector('.nx-menu');
+  if (open === undefined) open = !cur;
+  if (!open) { if (cur) { cur.classList.add('out'); setTimeout(() => cur.remove(), 160); } btn.classList.remove('on'); btn.setAttribute('aria-expanded', 'false'); btn.innerHTML = icon('menu') + (newsBadge ? '<i class="gb-n dot-only"></i>' : ''); return; }
+  if (cur) return;
+  btn.classList.add('on'); btn.setAttribute('aria-expanded', 'true'); btn.innerHTML = icon('x');
+  const items = NX_MENU();
+  const m = h(`<nav class="nx-menu" aria-label="メニュー">${items.map(([k, ic, n, , badge], i) => `<button data-k="${k}" style="--i:${i}"><span class="nm-t">${n}</span><span class="nm-ic">${icon(ic)}${badge ? `<i class="gb-n">${badge}</i>` : ''}</span></button>`).join('')}</nav>`);
+  btn.closest('.side-tools').append(m);
+  m.querySelectorAll('button').forEach(b => b.onclick = () => { const it = items.find(x => x[0] === b.dataset.k); toggleNxMenu(false); it && it[3](); });
+  setTimeout(() => {
+    const away = (e) => { if (!m.isConnected) return document.removeEventListener('pointerdown', away, true); if (!m.contains(e.target) && !e.target.closest('.nx-menubtn')) { toggleNxMenu(false); document.removeEventListener('pointerdown', away, true); } };
+    document.addEventListener('pointerdown', away, true);
+  }, 0);
+}
+function showMenu(full = false) {
+  if (UINEXT && full !== true) { showHome(); setTimeout(() => toggleNxMenu(true), 60); return; }
   const rk = rankNow();
   const pf0 = S.profile(), myTitle = titleById(pf0.title);
   const el = screenWithTabs('menu', `<h2>メニュー</h2><span class="sync"></span>`, 'menu', `
@@ -2804,7 +2833,8 @@ async function showVisit() {
   if (v.sample) el.querySelector('.rn-ic').innerHTML = icon('star');
   el.querySelector('.back').onclick = () => leaveVisit(true);
   el.querySelector('.photo')?.addEventListener('click', photoMode);
-  el.querySelector('.nx-me')?.addEventListener('click', showMenu);
+  el.querySelector('.nx-me')?.addEventListener('click', () => showProfile(null, showHome));
+  el.querySelector('.nx-menubtn')?.addEventListener('click', () => toggleNxMenu());
   el.querySelector('.nx-buy')?.addEventListener('click', buyFlow);
   el.querySelectorAll('.rooms button').forEach(b => b.onclick = () => { v.current = +b.dataset.i; showVisit(); });
   app.append(el);
@@ -2821,13 +2851,13 @@ async function leaveVisit(goBack) {
 // =========================== 管理者 ===========================
 async function showAdmin() {
   if (!isAdmin()) return showMenu();
-  const el = screenWithTabs('admin', `<button class="icon back">${icon('back')}</button><h2>管理者</h2><span></span>`, 'menu', `<div class="row2 admin-btns"><button class="btn primary compose">${icon('bell')}お知らせを書く</button><button class="btn ghost inbox">${icon('chat')}要望・バグを見る</button></div><button class="btn ghost big sendgift">${icon('gift')}みんなにプレゼントを送る</button><button class="btn ghost big errlog">${icon('info')}エラーの記録を見る</button><button class="btn ghost big evpreview">${icon('snow')}${EV.previewing() ? 'イベントのためしをやめる' : `イベントをためす（${esc(EV.EVENTS.at(-1).name)}）`}</button><div class="alist"><p class="empty">読み込み中…</p></div>`);
+  const el = screenWithTabs('admin', `<button class="icon back">${icon('back')}</button><h2>管理者</h2><span></span>`, 'menu', `<div class="row2 admin-btns"><button class="btn primary compose">${icon('bell')}お知らせを書く</button><button class="btn ghost inbox">${icon('chat')}要望・バグを見る</button></div><button class="btn ghost big sendgift">${icon('gift')}みんなにプレゼントを送る</button><button class="btn ghost big errlog">${icon('info')}エラーの記録を見る</button>${EV.EVENTS.length ? `<button class="btn ghost big evpreview">${icon('snow')}${EV.previewing() ? 'イベントのためしをやめる' : `イベントをためす（${esc(EV.EVENTS.at(-1).name)}）`}</button>` : ''}<div class="alist"><p class="empty">読み込み中…</p></div>`);
   el.querySelector('.back').onclick = showMenu;
   el.querySelector('.compose').onclick = () => composeNews(showNews);
   el.querySelector('.inbox').onclick = showFeedbackInbox;
   el.querySelector('.sendgift').onclick = () => composeGift();
   el.querySelector('.errlog').onclick = showErrors;
-  el.querySelector('.evpreview').onclick = () => { EV.setPreview(EV.previewing() ? null : EV.EVENTS.at(-1).id); toast(EV.previewing() ? 'この端末だけ、イベントを期間の前でもためせます' : 'イベントのためしをやめました'); showAdmin(); };
+  if (el.querySelector('.evpreview')) el.querySelector('.evpreview').onclick = () => { EV.setPreview(EV.previewing() ? null : EV.EVENTS.at(-1).id); toast(EV.previewing() ? 'この端末だけ、イベントを期間の前でもためせます' : 'イベントのためしをやめました'); showAdmin(); };
   const u = Auth.currentUser();
   let list = [];
   try { list = await rpc('sr_admin_users', { p_token: u?.token }); } catch (e) { el.querySelector('.alist').innerHTML = `<p class="empty">${esc(e.message)}</p>`; return; }
