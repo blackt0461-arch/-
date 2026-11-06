@@ -266,7 +266,7 @@ export function tabbyColor(p, n, bone, lm) {
     fur = 0.28 + 0.3 * sm(30, 10, a) * sm(10, 22, c);
     // 鼻（鼻鏡）：毛のないピンク
     const nt = lm.noseTip; const dn = Math.hypot(x - nt[0], p[1] - nt[1], p[2] - nt[2]);
-    if (dn < 9 && a > 85) { col = [0.9, 0.56, 0.55]; fur = 0; }
+    if (dn < 6.5 && a > 84) { col = [0.86, 0.55, 0.55]; fur = 0; }
     // まぶたのふち：黒っぽい
     if (de < 11.8) { col = [0.3, 0.18, 0.14]; fur = 0; }
     // 唇のふち

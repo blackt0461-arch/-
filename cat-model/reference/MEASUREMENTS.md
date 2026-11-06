@@ -19,7 +19,15 @@ URL: https://pmc.ncbi.nlm.nih.gov/articles/PMC2736725
 | 耳介の高さ（外側、耳の付け根〜先端） | **48.4 mm** | "Outside pinnae height 1-2 increased from 14.6 to 48.4 mm" |
 | 耳介の高さ（内側） | **42.1 mm** | "Inside pinnae height 1-3 increased from 9.8 to 42.1 mm" |
 
-まだ見つけられていない：まぶたの開き（瞼裂）の幅、鼻の幅（鼻鏡）、口の幅。
+### まぶたの開き（瞼裂の長さ＝目頭〜目じり）
+- 出典G：Oksa-Minaļto J, Maggs DJ, Akimova J, Ilgaža A, Sebbag L. "Ocular surface physiology and aqueous tear secretion in cats of diverse cephalic conformations." Veterinary Ophthalmology 2023;26(S1):109–118. doi:10.1111/vop.13051
+  URL: https://cris.huji.ac.il/en/publications/ocular-surface-physiology-and-aqueous-tear-secretion-in-cats-of-d/
+  - 健康な成猫 53 頭（ブリティッシュSH・バーミーズ・デボンレックス・スコティッシュフォールド・スフィンクス）で **瞼裂長 2.0 ± 0.2 cm**（"PFL (2.0 ± 0.2 cm)"）
+- 出典H：『Feline Ophthalmology. The Manual』(Servet) のプレビュー https://issuu.com/editorialservet/docs/feline_ophthalmology_the_manual/12
+  - 「成猫の瞼裂は約 **28 mm**、短頭種はやや長め」（検索結果の要約から。原文は未確認）
+- → 2 つの出典で 20 mm と 28 mm と差がある。測り方（皮膚のふちか、毛の生え際か）の違いの可能性。写真（photos/head/front_face_asian_cat_plainbg.jpg など）で両目の間隔 33.6 mm を基準に実測して決めるのがよい。
+
+まだ見つけられていない：鼻の幅（鼻鏡）、口の幅、ひげの長さ。
 
 ## 2. 目（眼球）
 

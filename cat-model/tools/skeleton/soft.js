@@ -52,43 +52,55 @@ export function buildSoft(api, lm) {
   ];
 
   // ===================== 目 =====================
+  // 眼球：直径 約20.7mm（Aust Vet J の測定）、両目の中心の間 約33.6mm（Tollin & Koka 2009）。眼窩の中、前と少し外を向く
+  const EYE_C = Q(49.5, 20.0, 16.8), EYE_R = 10.3;
   {
-    const C = Q(53.5, 15, 16.2);
-    const g = norm(add(mul(u, 0.82), mul(w, 0.57)));                         // 目の向き（前と少し外）
+    const C = EYE_C;
+    const g = norm(add(mul(u, 0.93), mul(w, 0.37)));                         // 目の向き（前と少し外）
     const hv = norm(cross(v, g)), vv = norm(cross(g, hv));
-    const R = 10.0;
-    lm.eyeOpen = { c: add(C, mul(g, R + 3.2)), axes: [g, hv, vv], r: [5.0, 6.8, 3.9] };
-    lm.eyeCut = { c: add(C, mul(g, R + 7.0)), axes: [g, hv, vv], r: [9.5, 8.4, 6.0] };       // 皮ふを切る範囲（筋肉の厚みのぶん深く）     // まぶたのすきま（アーモンド形）
-    lm.nostril = { c: Q(91.5, 10.8, 2.6), axes: [u, v, w], r: [2.6, 1.5, 1.3] };            // 鼻の穴
+    const R = EYE_R;
+    lm.eyeOpen = { c: add(C, mul(g, R + 1.2)), axes: [g, hv, vv], r: [3.0, 8.6, 7.4] };     // まぶたのすきま（横 約17mm・縦 約12mm）
+    lm.eyeCut = { c: add(C, mul(g, R + 5.5)), axes: [g, hv, vv], r: [6.5, 8.6, 7.4] };      // 皮ふを切る範囲
+    lm.eyeAxes = { C, g, hv, vv, R };
+    lm.nostril = { c: Q(89.2, 4.8, 2.4), axes: [u, v, w], r: [2.2, 1.4, 1.2] };            // 鼻の穴
     api.bone({ id: 'Eye', pair: true, ja: '眼球', la: 'Bulbus oculi', region: 'organ', mat: 'eye', parent: 'Skull', joint: C, h: 0.13, noSimplify: true,
-      shape: smoothUnion(1.5, sphere(C, R), sphere(add(C, mul(g, 4.2)), 7.2)), // 角膜のふくらみ
+      shape: smoothUnion(1.5, sphere(C, R), sphere(add(C, mul(g, 4.0)), 7.6)), // 角膜のふくらみ
       colorFn: (p) => {
         const d = norm(sub(p, C));
         const c = d[0] * g[0] + d[1] * g[1] + d[2] * g[2];
-        if (c < 0.62) return [0.5, 0.4, 0.3];                                  // 白目（猫ではほとんど見えない。ふちは茶色）
+        if (c < 0.6) return [0.5, 0.4, 0.3];
         const x = d[0] * hv[0] + d[1] * hv[1] + d[2] * hv[2], y = d[0] * vv[0] + d[1] * vv[1] + d[2] * vv[2];
-        const rr = Math.hypot(x, y) / Math.sqrt(1 - 0.62 * 0.62);
-        if (Math.abs(x) < 0.07 * Math.sqrt(Math.max(0, 1 - (y / 0.75) ** 2)) && Math.abs(y) < 0.72) return [0.03, 0.02, 0.02]; // 縦長のひとみ
-        const ring = 0.55 + 0.45 * rr;                                        // 金色の虹彩、外側ほど緑がかる
-        return [0.86 * ring + 0.1, 0.62 * ring + 0.12 * rr, 0.16 + 0.12 * rr];
+        const rr = Math.hypot(x, y) / Math.sqrt(1 - 0.6 * 0.6);
+        if (Math.abs(x) < 0.08 * Math.sqrt(Math.max(0, 1 - (y / 0.8) ** 2)) && Math.abs(y) < 0.78) return [0.03, 0.02, 0.02]; // 縦長のひとみ
+        const ring = 0.55 + 0.45 * rr;
+        return [0.62 * ring + 0.15, 0.68 * ring + 0.1 * rr, 0.28 + 0.1 * rr];               // 黄緑の虹彩
       } });
+    // 眼窩の脂肪（目の後ろのクッション）・第三眼瞼（瞬膜）
+    organ({ id: 'OrbitalFat', pair: true, ja: '眼窩の脂肪', la: 'Corpus adiposum orbitae', parent: 'Skull', joint: C, color: [0.95, 0.85, 0.55], h: 0.3,
+      shape: smoothSubtract(1.0, ellipsoid(add(C, mul(g, -6)), [7, 9, 8.5], [g, hv, vv]), sphere(C, R + 0.3)) });
+    organ({ id: 'ThirdEyelid', pair: true, ja: '第三眼瞼（瞬膜）', la: 'Plica semilunaris conjunctivae', parent: 'Skull', joint: C, color: [0.82, 0.6, 0.58], h: 0.15,
+      shape: smoothSubtract(0.5, intersect(sphere(C, R + 0.9), ellipsoid(add(add(C, mul(g, R)), mul(hv, -7.5)), [3, 3.2, 6.5], [g, hv, vv])), sphere(C, R + 0.2)) });
   }
 
   // ===================== 耳（耳介） =====================
+  // 耳の高さ（外側）約48mm・半分の高さでの幅 約25mm（Tollin & Koka 2009）。側頭筋の上の外寄りにつく
   {
-    const B = Q(19, 27.5, 14.5);
-    const up = norm(add(mul(v, 0.92), mul(w, 0.4)));
-    const f = norm(add(mul(u, 0.8), mul(w, 0.5)));
+    const B = Q(21, 29.5, 21.5);
+    const up = norm(add(mul(v, 0.8), mul(w, 0.6)));                  // 外へ約37°かたむく（正面写真）
+    const f = norm(add(mul(u, 0.72), mul(w, 0.7)));                  // 耳の穴は前と外を向く
     const ew = norm(cross(up, f));
-    const C = add(B, add(mul(f, 40), mul(up, 13)));
-    const RR = Math.hypot(40, 13);
-    const shell = { f: (x, y, z) => Math.abs(Math.hypot(x - C[0], y - C[1], z - C[2]) - RR) - 1.0, lo: C.map((q) => q - RR - 2), hi: C.map((q) => q + RR + 2) };
-    const tri = plate(add(B, mul(f, -10)), ew, up, [[-15, -3], [15, -3], [2, 36], [-1, 36]], 60, 2.5);
+    const C = add(B, add(mul(f, 40), mul(up, 14)));
+    const RR = Math.hypot(40, 14);
+    const shell = { f: (x, y, z) => Math.abs(Math.hypot(x - C[0], y - C[1], z - C[2]) - RR) - 1.1, lo: C.map((q) => q - RR - 2), hi: C.map((q) => q + RR + 2) };
+    const tri = plate(add(B, mul(f, -10)), ew, up, [[-20, -4], [20, -4], [3, 46], [-2, 46]], 60, 3);
+    lm.earBase = B;
     api.bone({ id: 'Ear', pair: true, ja: '耳（耳介）', la: 'Auricula', region: 'skin', mat: 'skin', parent: 'Skull', joint: B, h: 0.3,
-      shape: smoothUnion(1, intersect(shell, tri), ellipsoid(B, [11, 4, 6], [ew, up, f])),
+      // 耳のつけねより下には出ないようにする
+      shape: intersect(smoothUnion(1.5, intersect(shell, tri), ellipsoid(B, [12, 5, 7], [ew, up, f])),
+        { f: (x, y, z) => -((x - B[0]) * up[0] + (y - B[1]) * up[1] + (z - B[2]) * up[2]) - 2.5, lo: B.map((q) => q - 60), hi: B.map((q) => q + 60) }),
       furFn: (p, n) => {
         const inner = (n[0] * (C[0] - p[0]) + n[1] * (C[1] - p[1]) + n[2] * (C[2] - p[2])) > 0;
-        return inner ? { color: [0.93, 0.7, 0.66], fur: 0.12 } : { color: [0.84, 0.5, 0.22], fur: 0.2 };
+        return inner ? { color: [0.93, 0.7, 0.66], fur: 0.12 } : { color: [0.55, 0.45, 0.35], fur: 0.2 };
       } });
   }
 
@@ -96,35 +108,43 @@ export function buildSoft(api, lm) {
   {
     const whiskers = [];
     for (let row = 0; row < 4; row++) for (let k = 0; k < 3; k++) {
-      const base = Q(79 + k * 3, 1.5 + row * 2.2, 12.2 - k * 0.6);
+      const base = Q(72 + k * 3.2, -0.5 + row * 2.0, 13.0 - k * 1.1);
       const dir = norm(add(add(mul(w, 0.72), mul(u, 0.35 - k * 0.15)), mul(v, -0.25 + row * 0.12)));
       const L = 48 + (3 - row) * 5 - k * 6;
       whiskers.push({ base, dir, L, r: 0.22 });
     }
     // まゆの上のひげ・ほおのひげ
-    for (let k = 0; k < 3; k++) whiskers.push({ base: Q(57 + k * 2, 26, 12 + k), dir: norm(add(add(mul(v, 0.55), mul(w, 0.6)), mul(u, 0.3))), L: 28 - k * 4, r: 0.15 });
-    whiskers.push({ base: Q(40, 6, 25), dir: norm(add(add(mul(w, 0.8), mul(v, 0.1)), mul(u, -0.4))), L: 25, r: 0.15 });
+    for (let k = 0; k < 3; k++) whiskers.push({ base: Q(53 + k * 2, 30, 11 + k), dir: norm(add(add(mul(v, 0.55), mul(w, 0.6)), mul(u, 0.3))), L: 28 - k * 4, r: 0.15 });
+    whiskers.push({ base: Q(38, 8, 27), dir: norm(add(add(mul(w, 0.8), mul(v, 0.1)), mul(u, -0.4))), L: 25, r: 0.15 });
     const meshes = whiskers.map(({ base, dir, L, r }) => {
       const side = norm(cross(dir, v)), droop = mul(v, -1);
       const pts = []; for (let i = 0; i <= 10; i++) { const t = i / 10; pts.push(add(add(base, mul(dir, L * t)), mul(add(droop, mul(u, -0.3)), L * 0.12 * t * t))); }
       return tubeMesh(pts, (t) => r * (1 - t * 0.92));
     });
-    api.bone({ id: 'Whiskers', pair: true, ja: 'ひげ（洞毛）', la: 'Pili tactiles', region: 'skin', mat: 'whisker', parent: 'Skull', joint: Q(80, 3, 12), mesh: mergeMeshes(meshes) });
+    api.bone({ id: 'Whiskers', pair: true, ja: 'ひげ（洞毛）', la: 'Pili tactiles', region: 'skin', mat: 'whisker', parent: 'Skull', joint: Q(76, 1.5, 12), mesh: mergeMeshes(meshes) });
   }
 
   // ===================== 皮ふの下の詰め物（皮ふの形を作るためだけに使う） =====================
   const fill = [];
+  // 顔のやわらかい部分（脂肪・唇・ひげのふくらみ・鼻）。頭骨と筋肉の上にのる
   for (const s of [1, -1]) {
-    fill.push(E(80, 3, s * 10.5, [8.5, 7.5, 7.5]));       // ひげのふくらみ
-    fill.push(E(67, -7, s * 13.5, [14, 8, 8]));           // 唇・ほお
-    fill.push(E(32, 4, s * 23, [15, 11, 9]));             // 頬骨のまわり（ほお）
-    fill.push(E(22, 18, s * 15, [14, 10, 7]));            // こめかみ（側頭筋のふくらみ）
+    fill.push(E(76, 1.5, s * 9.0, [8.0, 6.5, 6.0]));      // ひげのふくらみ（洞毛の毛包と脂肪）
+    fill.push(E(66, -5.0, s * 12.0, [12, 4.5, 5.0]));     // 上唇
+    fill.push(E(73, -11.0, s * 5.5, [8, 3.5, 4.0]));      // 下唇
+    fill.push(E(53, -3.0, s * 16.5, [9, 6, 5]));          // ほおの脂肪（頬脂肪体）
+    fill.push(E(47, 30.5, s * 11, [8, 3, 6]));            // まゆの上の脂肪
+    fill.push(E(14, -3, s * 20, [6, 8, 4]));              // 耳下腺（だ液腺）
+    fill.push(E(4, -14, s * 12, [6, 5, 5]));              // 下顎腺（だ液腺）
+    // まぶた：目のまわりをかこむ
+    const e = lm.eyeAxes, ss = (q) => [q[0] * s, q[1], q[2]];
+    fill.push(ellipsoid(ss(add(e.C, mul(e.g, e.R - 3))), [7, 12, 10.5], [ss(e.g), ss(e.hv), ss(e.vv)]));
   }
-  fill.push(E(89, 12, 0, [3.6, 4.4, 7]));                 // 鼻（鼻鏡）
-  fill.push(E(80, -12.5, 0, [7, 4.5, 6.5]));              // あご
+  fill.push(E(85.5, 6.0, 0, [3.4, 4.2, 5.0]));            // 鼻（鼻鏡）
+  fill.push(cone(Q(76, 11, 0), Q(85, 8.5, 0), 4.5, 4.0)); // 鼻の軟骨（鼻すじの先）
+  fill.push(E(79, -12.5, 0, [5, 4, 6]));                  // あご（オトガイ）
   fill.push(E(5, 20, 0, [12, 8, 16]));                    // 後頭部の筋肉のふくらみ
   // 首：のどと首の筋肉をまとめた太さ
-  fill.push(cone(Q(4, -4, 0), vt('C4', 0, -2, 0), 16, 19));
+  fill.push(cone(Q(2, -7, 0), vt('C4', 0, -2, 0), 11.5, 16));
   fill.push(cone(vt('C4', 0, -2, 0), vt('T1', 0, -16, 0), 19, 24));
   // おなか（内臓と脂肪のふくらみ）
   fill.push(ellipsoid([0, 185, 135], [31, 34, 72]));
@@ -143,8 +163,8 @@ export function buildSoft(api, lm) {
   for (const p of pads) fill.push(ellipsoid(p.c, p.r));
   lm.softFill = fill;
   lm.pads = pads;
-  lm.noseTip = Q(89, 12, 0);
-  lm.eyeFront = Q(53.5, 15, 16.2);
+  lm.noseTip = Q(89.0, 6.5, 0);
+  lm.eyeFront = EYE_C;
 }
 
 // 曲線に沿った細い管のメッシュ（ひげ用）

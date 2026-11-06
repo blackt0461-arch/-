@@ -408,3 +408,171 @@
 - 保存サイズ: 1280x960 px
 - 内容: 【3 目・鼻・ひげの細部】短毛キジトラの横顔大写し（右向き）。目の形、鼻先（鼻鏡）、ひげの生え際（ウィスカーパッド）がわかる。耳は切れている。1280px。
 
+## photos/head/front_face_asian_cat_plainbg.jpg
+- 出典ページ: https://commons.wikimedia.org/wiki/File:Asian_cat_face_close-up.jpg
+- 元ファイル: https://upload.wikimedia.org/wikipedia/commons/d/d4/Asian_cat_face_close-up.jpg
+- 作者: Matt Buck from London, United Kingdom
+- ライセンス: CC BY-SA 2.0
+- 保存サイズ: 1280x1280 px
+- 内容: 【1b 正面・最有力】成猫（短毛、ポイント柄）の顔。真正面・目の高さ水平・左右対称に近い。耳全体が入り、背景は無地に近い。少し近距離でわずかに鼻が大きく写る。1280px。
+
+## photos/head/front_face_white_tabby_flash.jpg
+- 出典ページ: https://commons.wikimedia.org/wiki/File:CatFace.jpg
+- 元ファイル: https://upload.wikimedia.org/wikipedia/commons/d/dc/CatFace.jpg
+- 作者: Taken by Fanghong
+- ライセンス: CC BY 2.5
+- 保存サイズ: 960x720 px
+- 内容: 【1b 正面】成猫の白キジ（短毛）。真正面・目は水平。耳全体が入る。フラッシュ撮影で瞳孔が開き目が光っている。近距離撮影でパースやや強め。960px。
+
+## photos/head/top_head_looking_up_EgyptianMau.jpg
+- 出典ページ: https://commons.wikimedia.org/wiki/File:Egyptian_Mau_-_Full_Face.jpg
+- 元ファイル: https://upload.wikimedia.org/wikipedia/commons/6/65/Egyptian_Mau_-_Full_Face.jpg
+- 作者: Malcolm Gin
+- ライセンス: CC BY-SA 3.0
+- 保存サイズ: 1280x960 px
+- 内容: 【1d 頭の上から】エジプシャンマウ（短毛）を真上から撮影、猫が見上げている。頭頂・耳の付け根の配置・額の形がわかるが、顔は上向きで短縮されている（純粋な背側図ではない）。1280px。
+
+## photos/head/top_side_head_sleeping_tabby.jpg
+- 出典ページ: https://commons.wikimedia.org/wiki/File:Tabby_face_markings.JPG
+- 元ファイル: https://upload.wikimedia.org/wikipedia/commons/a/ad/Tabby_face_markings.JPG
+- 作者: Agne27 at English Wikipedi
+- ライセンス: Public domain
+- 保存サイズ: 500x500 px
+- 内容: 【1d 頭の上〜斜め横】眠っている短毛キジトラの頭を斜め上から。頭頂と耳の後ろ側の形がわかる。500px。
+
+## skull/WilderGage1882_p180_fig56_skull_dorsal_x1.5.jpg
+- 出典ページ: https://commons.wikimedia.org/wiki/File:Anatomical_technology_as_applied_to_the_domestic_cat_(Page_180)_BHL21763885.jpg
+- 元ファイル: https://upload.wikimedia.org/wikipedia/commons/5/5b/Anatomical_technology_as_applied_to_the_domestic_cat_%28Page_180%29_BHL21763885.jpg
+- 作者: Wilder, Burt Green
+- ライセンス: Public domain
+- 保存サイズ: 1920x2899 px
+- 内容: 【3 頭骨・背側 図】Wilder & Gage 1882, Fig.56 頭骨の背側図（骨名入り、キャプションに ×1.5 の倍率表示）。正射影の線画。右半分は一部骨を除いた図。
+
+## skull/WilderGage1882_p182_fig57_skull_ventral.jpg
+- 出典ページ: https://commons.wikimedia.org/wiki/File:Anatomical_technology_as_applied_to_the_domestic_cat_(Page_182)_BHL21763887.jpg
+- 元ファイル: https://upload.wikimedia.org/wikipedia/commons/3/33/Anatomical_technology_as_applied_to_the_domestic_cat_%28Page_182%29_BHL21763887.jpg
+- 作者: Wilder, Burt Green
+- ライセンス: Public domain
+- 保存サイズ: 1920x2899 px
+- 内容: 【3 頭骨・腹側 図】同書 Fig.57 頭骨の腹側（Straus-Durckheim の図を改変）。骨名入り。×1.5。
+
+## skull/WilderGage1882_p186_fig59_skull_sagittal_section.jpg
+- 出典ページ: https://commons.wikimedia.org/wiki/File:Anatomical_technology_as_applied_to_the_domestic_cat_(Page_186)_BHL21763891.jpg
+- 元ファイル: https://upload.wikimedia.org/wikipedia/commons/f/f2/Anatomical_technology_as_applied_to_the_domestic_cat_%28Page_186%29_BHL21763891.jpg
+- 作者: Wilder, Burt Green
+- ライセンス: Public domain
+- 保存サイズ: 1920x2899 px
+- 内容: 【3 頭骨・正中断面 図】同書 Fig.59 頭骨の縦断面（右半分、内側から）。脳の入る空間・鼻腔の形がわかる。
+
+## skull/WilderGage1882_p188_fig61_mandible_lateral.jpg
+- 出典ページ: https://commons.wikimedia.org/wiki/File:Anatomical_technology_as_applied_to_the_domestic_cat_(Page_188)_BHL21763893.jpg
+- 元ファイル: https://upload.wikimedia.org/wikipedia/commons/0/02/Anatomical_technology_as_applied_to_the_domestic_cat_%28Page_188%29_BHL21763893.jpg
+- 作者: Wilder, Burt Green
+- ライセンス: Public domain
+- 保存サイズ: 1920x2899 px
+- 内容: 【3 下あご・側面 図】同書 Fig.61 左下顎骨の外側面（小さい図）＋Fig.60 篩板。下あごの輪郭（筋突起・関節突起・角突起）の参考。
+
+## skull/WilderGage1882_p189_fig62_mandible_dorsal.jpg
+- 出典ページ: https://commons.wikimedia.org/wiki/File:Anatomical_technology_as_applied_to_the_domestic_cat_(Page_189)_BHL21763894.jpg
+- 元ファイル: https://upload.wikimedia.org/wikipedia/commons/9/94/Anatomical_technology_as_applied_to_the_domestic_cat_%28Page_189%29_BHL21763894.jpg
+- 作者: Wilder, Burt Green
+- ライセンス: Public domain
+- 保存サイズ: 1920x2899 px
+- 内容: 【3 下あご・上から 図】同書 Fig.62 下顎骨を上から見た図（V字形、左右の枝の開き角がわかる）。×1.5。
+
+## skull/mandible_lateral_photo_oblique_CC0.jpg
+- 出典ページ: https://commons.wikimedia.org/wiki/File:Feral_Cat_Lower_Jaw_(Catalina_Island)_(2).jpg
+- 元ファイル: https://upload.wikimedia.org/wikipedia/commons/8/82/Feral_Cat_Lower_Jaw_%28Catalina_Island%29_%282%29.jpg
+- 作者: Kiloueka
+- ライセンス: CC0
+- 保存サイズ: 1920x1280 px
+- 内容: 【3 下あご・側面 写真】野良猫の下顎（左右つながったまま）を斜め横から。地面の上、正射影ではない。形の確認用。
+
+## Mivart『The Cat: An Introduction to the Study of Backboned Animals, Especially Mammals』(1881) のページ画像（下記 Mivart1881_* 共通）
+- 出典ページ: https://archive.org/details/catintroduction00miva
+- 作者: St. George Mivart（1827–1900）, John Murray, London, 1881
+- ライセンス: パブリックドメイン（作者没後100年以上・1881年出版）
+- 元ファイル: https://archive.org/download/catintroduction00miva/page/<ページ番号>.jpg （約2655x4256）
+
+### photos/head/Mivart1881_fig01_muzzle_whiskers_front.jpg
+- 元ファイル: https://archive.org/download/catintroduction00miva/page/14.jpg （本のp.14）
+- 内容: Fig.1 猫の口元（マズル）を正面から：ひげ（洞毛）の並び、鼻鏡（鼻の毛のない部分）とその周り。ウィスカーパッドの配置の参考。
+
+### skull/Mivart1881_fig28_skull_dorsal.jpg
+- 元ファイル: https://archive.org/download/catintroduction00miva/page/56.jpg （本のp.56）
+- 内容: Fig.28 頭骨・背側（真上）。線画、記号つき。
+
+### skull/Mivart1881_fig29_skull_ventral.jpg
+- 元ファイル: https://archive.org/download/catintroduction00miva/page/58.jpg （本のp.58）
+- 内容: Fig.29 頭骨・腹側（下から）。線画。
+
+### skull/Mivart1881_fig30_skull_frontal.jpg
+- 元ファイル: https://archive.org/download/catintroduction00miva/page/59.jpg （本のp.59）
+- 内容: Fig.30 頭骨・正面（下あごを外した状態）。線画、正射影に近い。
+
+### skull/Mivart1881_fig46_skull_mandible_hyoid_lateral.jpg
+- 元ファイル: https://archive.org/download/catintroduction00miva/page/80.jpg （本のp.80）
+- 内容: Fig.46 頭骨・下あご・舌骨の側面（下あごは外して下に並べてある）。下あご側面の形がよくわかる線画。
+
+### skull/Mivart1881_fig47_skull_rear.jpg
+- 元ファイル: https://archive.org/download/catintroduction00miva/page/81.jpg （本のp.81）
+- 内容: Fig.47 頭骨・後ろ（下あご付き）。
+
+### muscles/Mivart1881_fig77_forequarter_head_neck_muscles_right.jpg
+- 元ファイル: https://archive.org/download/catintroduction00miva/page/136.jpg （本のp.136）
+- 内容: Fig.77 前半身（頭・首・肩）の右側面の筋。頭部の咬筋・側頭筋まわりも描かれる。Reighard & Jennings 以外の頭頸部の筋の図。
+
+## photos/head/detail_nasal_planum_front.jpg
+- 出典ページ: https://commons.wikimedia.org/wiki/File:Cat_rhinarium.JPG
+- 元ファイル: https://upload.wikimedia.org/wikipedia/commons/7/76/Cat_rhinarium.JPG
+- 作者: tooony
+- ライセンス: CC BY-SA 3.0
+- 保存サイズ: 1280x960 px
+- 内容: 【3 鼻鏡】キジトラの鼻先を正面から大写し。鼻鏡（毛のない鼻の皮膚）の形・鼻孔・人中（上唇の縦溝）・ひげの付け根。近距離で広角気味。1280px。
+
+## photos/head/detail_third_eyelid_visible.jpg
+- 出典ページ: https://commons.wikimedia.org/wiki/File:Third_eyelid.jpg
+- 元ファイル: https://upload.wikimedia.org/wikipedia/commons/f/fc/Third_eyelid.jpg
+- 作者: Anja
+- ライセンス: CC BY-SA 4.0
+- 保存サイズ: 1280x1707 px
+- 内容: 【3 瞬膜】三毛猫で瞬膜（第三眼瞼）が目頭側から出ている状態。正面寄り。1280px。
+
+## muscles/Mivart1881_eye_orbit_muscles_nerves_lateral.jpg
+- 出典ページ: https://commons.wikimedia.org/wiki/File:The_cat_-_an_introduction_to_the_study_of_backboned_animals,_especially_mammals_(1881)_(20593338421).jpg
+- 元ファイル: https://upload.wikimedia.org/wikipedia/commons/d/db/The_cat_-_an_introduction_to_the_study_of_backboned_animals%2C_especially_mammals_%281881%29_%2820593338421%29.jpg
+- 作者: Internet Archive Book Images
+- ライセンス: No restrictions（Internet Archive Book Images の Flickr 版。1881年出版でパブリックドメイン）
+- 保存サイズ: 1280x1080 px
+- 内容: 【3 目の筋・眼窩 図】Mivart 1881 の図：頬骨弓などを外した頭部の側面で、眼球と外眼筋（上直筋など）、眼窩内の神経、下あご・舌の位置関係を示す。眼球の大きさ・位置合わせの参考。
+
+## Reighard & Jennings 1901 追加分（目・耳）— 出典・ライセンスは上の RJ1901 と同じ（https://archive.org/details/anatomyofcat00reig 、パブリックドメイン）
+
+### muscles/head/RJ1901_fig165_third_eyelid_cartilage.jpg
+- 元ファイル: https://archive.org/download/anatomyofcat00reig/page/410.jpg （本のp.410）
+- 内容: Fig.165 瞬膜（第三眼瞼）の内側面：支える軟骨とハーダー腺（小さい図）。本文に瞼・涙器の説明あり。
+
+### muscles/head/RJ1901_fig166_eyeball_muscles_lateral.jpg
+- 元ファイル: https://archive.org/download/anatomyofcat00reig/page/411.jpg （本のp.411）
+- 内容: Fig.166 眼球の筋（外眼筋）・側面。直筋4本・斜筋・眼球後引筋。
+
+### muscles/head/RJ1901_fig167_eye_section.jpg
+- 元ファイル: https://archive.org/download/anatomyofcat00reig/page/413.jpg （本のp.413）
+- 内容: Fig.167 眼球の断面図（角膜・水晶体・網膜・タペタムなど）。眼球の形の比率の参考。
+
+### muscles/head/RJ1901_fig168_ear_cartilage.jpg
+- 元ファイル: https://archive.org/download/anatomyofcat00reig/page/417.jpg （本のp.417）
+- 内容: Fig.168 外耳（耳介）の軟骨・頭側から見た図。耳介の形・耳珠などの名称つき。
+
+### muscles/head/RJ1901_fig169_ear_cartilage_muscles.jpg
+- 元ファイル: https://archive.org/download/anatomyofcat00reig/page/419.jpg （本のp.419）
+- 内容: Fig.169 耳介軟骨とそれに付く耳の筋。
+
+## muscles/head/WilderGage1882_head_lateral_superficial_dissection.jpg
+- 出典ページ: https://commons.wikimedia.org/wiki/File:Anatomical_technology_as_applied_to_the_domestic_cat;_an_introduction_to_human,_veterinary,_and_comparative_anatomy_(1882)_(14578582820).jpg
+- 元ファイル: https://upload.wikimedia.org/wikipedia/commons/f/fa/Anatomical_technology_as_applied_to_the_domestic_cat%3B_an_introduction_to_human%2C_veterinary%2C_and_comparative_anatomy_%281882%29_%2814578582820%29.jpg
+- 作者: Internet Archive Book Images
+- ライセンス: No restrictions（Internet Archive Book Images の Flickr 版。1882年出版でパブリックドメイン）
+- 保存サイズ: 1280x1155 px
+- 内容: 【4 頭部の筋・側面 図】Wilder & Gage 1882：頭の左側面で皮膚を外した図。耳下腺・咬筋・側頭筋・顔面神経の枝・耳の筋・ひげ（触毛）と耳介の外形が同時に描かれている。外見と中身を重ねる参考に最適。1280px。
+
