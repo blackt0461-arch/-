@@ -666,6 +666,7 @@ def rl_curves():
     f.save('rl-curves')
 
 
-for fn in [water, sine, tangent, series_parallel, unitc, loadline, curload, rl_curves, mos_on, body_x, amp_gnd, opamp, id_vds, id_vgs, body, cs_res, transfer, nfb, inv_amp, ss_model, cs_cur, cs_pmos, sf, cg, rconv, cascode, jrot, fourier, pinch]:
-    fn()
-print('ok', len(os.listdir(OUT)))
+if __name__ == '__main__':
+    for fn in [water, sine, tangent, series_parallel, unitc, loadline, curload, rl_curves, mos_on, body_x, amp_gnd, opamp, id_vds, id_vgs, body, cs_res, transfer, nfb, inv_amp, ss_model, cs_cur, cs_pmos, sf, cg, rconv, cascode, jrot, fourier, pinch]:
+        fn()
+    print('ok', len(os.listdir(OUT)))

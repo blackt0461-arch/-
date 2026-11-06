@@ -5,7 +5,7 @@ import * as L from './lyrics.js';
 import * as R from './recorder.js';
 import * as A from './analyze.js';
 
-export const APP_VERSION = '2.0.0';
+export const APP_VERSION = '2.0.2';
 const NEED_SERVER = 3; // この版の受け口（server/Code.gs）の番号
 
 // ---------- 小さな道具 ----------
@@ -2089,7 +2089,6 @@ function renderSettings() {
         <div class="set-row"><span class="muted">色を足す</span><button class="btn small" data-add="colors">＋ 追加</button></div></div>
       <p class="sec-lbl">消した曲</p>
       <div class="card"><div class="set-row"><span>最近消した曲（30日）<br><span class="muted" style="font-size:.78rem">${Array.from(S.songs.values()).filter(x => x.data.deleted_at).length}曲</span></span><button class="btn sub small" data-go="#/trash">見る</button></div></div>
-      ${S.token !== LOCAL_TOKEN && S.isOwner && S.serverVersion < NEED_SERVER ? `<div class="hint">Googleの画面に貼ったコードが古い版です。下のボタンでコードをコピーして貼りかえ、「デプロイ」→「デプロイを管理」→ えんぴつ →「新バージョン」→「デプロイ」をしてください。<br><button class="btn small" id="code-copy" style="margin-top:8px">コードをコピー</button></div>` : ''}
       ${S.isOwner ? `<p class="sec-lbl">メンバー（管理している人だけに見えます）</p><div class="card" id="members"><div class="set-row"><span class="muted">読みこんでいます…</span></div></div>` : ''}
       <p class="sec-lbl">グーグルドライブへのバックアップ</p>
       <div class="card">${backupRows()}</div>
@@ -2112,7 +2111,6 @@ function renderSettings() {
   $$('[data-add]', app).forEach(b => b.onclick = () => editListItem(b.dataset.add, -1));
   $('#logout').onclick = () => logout(false);
   $('#bk-restore')?.addEventListener('click', restoreFromFile);
-  $('#code-copy')?.addEventListener('click', openFirstSetup);
   if (S.isOwner) loadMembers();
 }
 
@@ -2149,33 +2147,6 @@ function backupRows() {
     <div class="set-row"><span>${b.at ? `最後のバックアップ：${fmtDate(b.at)}${b.info?.songs != null ? `<br><span class="muted" style="font-size:.8rem">曲 ${b.info.songs}・録音 ${b.info.recordings}　1日1つ、30日分残します</span>` : ''}` : '<span class="muted">バックアップは、変えてから10分以内に作られます</span>'}</span></div>
     ${b.info?.folder ? `<div class="set-row"><span>ドライブのフォルダ</span><a class="btn sub small" href="${esc(b.info.folder)}" target="_blank" rel="noopener">開く</a></div>` : ''}
     <div class="set-row"><span class="muted" style="font-size:.85rem">「日ごと」フォルダのファイルから戻す</span><button class="btn sub small" id="bk-restore">戻す</button></div>`;
-}
-
-// はじめての準備：Googleの画面に受け口のコードを貼ってもらう
-async function openFirstSetup() {
-  let code = '';
-  try { code = await (await fetch('server/Code.gs?v=' + APP_VERSION)).text(); }
-  catch (e) { toast('コードを読みこめませんでした。電波のよい所でもう一度ためしてください'); return; }
-  openSheet(`<h3>はじめての準備（1回だけ）</h3>
-    <p>あなたのグーグルドライブに、LYRIC BOOK の置き場所を作ります。<b>パソコンかiPadでやるのがおすすめです。</b></p>
-    <ol class="steps">
-      <li>下の「コードをコピー」を押す</li>
-      <li>「Googleの画面を開く」を押す（使いたいGoogleアカウントで）</li>
-      <li>最初から書いてある文字を全部消して、コピーしたコードを貼る → 保存のマーク（フロッピー）を押す</li>
-      <li>上の「実行する関数」で <b>setup</b> を選んで「実行」<br>「承認が必要です」→ 権限を確認 → 自分のアカウント →「詳細」→「（安全ではないページ）に移動」→「許可」<br><span class="muted">自分で作ったものなので大丈夫です</span></li>
-      <li>右上の「デプロイ」→「新しいデプロイ」→ 歯車のマークで「ウェブアプリ」を選ぶ<br>「次のユーザーとして実行」は<b>自分</b>、「アクセスできるユーザー」は<b>全員</b> →「デプロイ」</li>
-      <li>出てきた「ウェブアプリ」のURL（https://script.google.com/macros/s/…/exec）をコピーして、アプリを作っている人に送る</li>
-    </ol>
-    <textarea class="textarea code" id="fs-code" readonly>${esc(code)}</textarea>
-    <div class="acts"><a class="btn sub" href="https://script.google.com/home/projects/create" target="_blank" rel="noopener">Googleの画面を開く</a><button class="btn" data-s="copy">コードをコピー</button></div>
-    <button class="btn sub" data-s="no">とじる</button>`, {
-    copy: (_, sh) => {
-      const ta = $('#fs-code', sh);
-      const done = () => toast('コピーしました。Googleの画面に貼りつけてください');
-      navigator.clipboard?.writeText(code).then(done, () => { ta.focus(); ta.select(); document.execCommand('copy') ? done() : toast('コードを長押しして「すべてを選択」→「コピー」してください'); });
-    },
-    no: () => closeSheet(),
-  });
 }
 
 // バックアップのファイルから戻す。今のデータは消さない。
