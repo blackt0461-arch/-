@@ -210,8 +210,9 @@ const HS = () => S.house();
 const isAdmin = () => Auth.isAdmin();
 // テスト版（study-room-beta/ に置いた物）。管理者だけが入れる。ためして許可が出たら study-room/ に写して本番にする
 const BETA = /-beta\//.test(location.pathname);
-// 新しいデザイン（試作）。設定でオンにした端末だけ。UI改善案（docs/roomin-ui-review.html）を本物のアプリで試す（1.12.0）
-const UINEXT = (() => { try { return localStorage.getItem('studyroom.uinext') === '1'; } catch (e) { return false; } })();
+// 新しいデザイン（1.12.0 から標準）。UI改善案（docs/roomin-ui-review.html）。
+// 管理者は設定で前のデザインにもどして見くらべられる（studyroom.uinext = '0'）。自動の確かめ（テスト）も '0' で前のデザインを確かめる
+const UINEXT = (() => { try { return localStorage.getItem('studyroom.uinext') !== '0'; } catch (e) { return true; } })();
 if (UINEXT) document.body.classList.add('uinext');
 if (BETA) document.documentElement.classList.add('is-beta');
 function showBetaOnly() {
@@ -244,8 +245,8 @@ function sheet(html, cls = '') {
 // 画面ごとの「やめる」「とじる」の文字ボタンは、右上の × と同じ働きにして、下の文字ボタンはかくす
 function nxCloseRule(el) {
   if (!el.isConnected) return;
-  const head = el.querySelector('.sh-head');
-  let x = el.querySelector('.sh-x');
+  const head = el.querySelector('.sh-head, .hs-top');
+  let x = el.querySelector('.sh-x, .hs-close');
   const closer = el.querySelector('.link.close, button.close:not(.sh-x), .back2.link');
   if (!x && head && closer) {
     x = h(`<button class="sh-x nx-x" aria-label="とじる">${icon('x')}</button>`);
@@ -393,12 +394,16 @@ function tabbarNext(active, { resume, due, pct, buy }) {
   const ring = isPuzzle()
     ? `<button data-t="play" class="solve-ring ${buy ? 'full' : ''}" style="--p:${pct}" aria-label="パズル"><span class="sr-in">${icon('grid')}<b>パズル</b></span>${!S.playedToday() ? '<i class="dot"></i>' : ''}</button>`
     : `<button data-t="play" class="solve-ring ${buy ? 'full' : ''}" style="--p:${pct}" aria-label="解く"><span class="sr-in">${icon(resume ? 'refresh' : 'pencil')}<b>${resume ? '続きから' : '解く'}</b></span>${resume || due || !S.playedToday() ? '<i class="dot"></i>' : ''}</button>`;
+  // 「解く」は右下の端（スマホを片手で持った時に、親指がいちばん届く場所）。「勉強｜パズル」の切りかえはその上に見える形で
   const el = h(`<nav class="tabbar hotbar nx-bar ${active === 'room' ? 'on-room' : ''}">
-    <div class="slots">${[['room', 'home', '部屋'], ['furn', 'sofa', '家具']].map(slot).join('')}</div>
-    <div class="solve-wrap">${ring}</div>
-    <div class="slots">${[['gacha', 'star', 'ガチャ'], ['social', 'users', 'みんな']].map(slot).join('')}</div>
+    <div class="slots">${[['room', 'home', '部屋'], ['furn', 'sofa', '家具'], ['gacha', 'star', 'ガチャ'], ['social', 'users', 'みんな']].map(slot).join('')}</div>
+    <div class="solve-wrap">
+      ${active === 'room' ? `<div class="mode-toggle" role="group" aria-label="勉強とパズルの切りかえ"><button data-mode="study" class="${isPuzzle() ? '' : 'on'}">${icon('pencil')}勉強</button><button data-mode="puzzle" class="${isPuzzle() ? 'on' : ''}">${icon('grid')}パズル${!freePuzzle() ? `<i class="mt-n">${S.puzzleTickets()}</i>` : ''}</button></div>` : ''}
+      ${ring}
+    </div>
   </nav>`);
   el.querySelectorAll('[data-t]').forEach(b => b.onclick = () => goTab(b.dataset.t));
+  el.querySelectorAll('.mode-toggle [data-mode]').forEach(b => b.onclick = () => { if (b.classList.contains('on')) return; setMode(b.dataset.mode); vibrate(12); });
   return el;
 }
 function goTab(t) {
@@ -2040,8 +2045,7 @@ function showMenu() {
       ${icon('chevronRight')}
     </button>
     ${UINEXT ? `<div class="nx-menu-quick">
-      <div class="mode-toggle nx-mode" role="group" aria-label="勉強とパズルの切りかえ"><button data-mode="study" class="${isPuzzle() ? '' : 'on'}">${icon('pencil')}勉強</button><button data-mode="puzzle" class="${isPuzzle() ? 'on' : ''}">${icon('grid')}パズル${!freePuzzle() ? `<i class="mt-n">${S.puzzleTickets()}</i>` : ''}</button></div>
-      <button class="nx-photo">${icon('camera')}写真をとる</button></div>` : ''}
+      <button class="nx-photo">${icon('camera')}部屋の写真をとる</button></div>` : ''}
     <nav class="menu-list">
       <button data-m="skins">${icon('palette')}<span>着せ替え<small>画面の見た目を変える（ガチャで集める）</small></span>${icon('chevronRight')}</button>
       <button data-m="report">${icon('calendar')}<span>勉強レポート<small>週・月ごとのまとめ。画像で保存できる</small></span>${icon('chevronRight')}</button>
@@ -3103,7 +3107,7 @@ function showSettings() {
       <a class="row-item tap" href="legal/terms.html" target="_blank" rel="noopener"><span class="lbl">${icon('book')}利用規約</span>${icon('chevronRight')}</a>
       <a class="row-item tap" href="legal/privacy.html" target="_blank" rel="noopener"><span class="lbl">${icon('book')}プライバシーポリシー</span>${icon('chevronRight')}</a>
     </section>
-    ${isAdmin() ? `<section class="group g-uinext"><button class="row-item tap uinext-tg"><span class="lbl">${icon('palette')}新しいデザイン（試作）</span><span class="val">${UINEXT ? 'オン' : 'オフ'}</span>${icon('chevronRight')}</button></section>` : ''}
+    ${isAdmin() ? `<section class="group g-uinext"><button class="row-item tap uinext-tg"><span class="lbl">${icon('palette')}新しいデザイン</span><span class="val">${UINEXT ? 'オン' : 'オフ'}</span>${icon('chevronRight')}</button></section>` : ''}
     <section class="group g-tour">
       <button class="row-item tap tour-again"><span class="lbl">${icon('info')}使い方の案内をもう一度見る</span>${icon('chevronRight')}</button>
     </section>
@@ -3160,7 +3164,7 @@ function showSettings() {
     put('学習', ['.codes', '.g-tour']);
     if (isAdmin()) put('管理者', ['.admin-only', '.g-uinext']);
   }
-  el.querySelector('.uinext-tg')?.addEventListener('click', () => { try { localStorage.setItem('studyroom.uinext', UINEXT ? '0' : '1'); } catch (e) { /* なし */ } toast(UINEXT ? 'いまのデザインにもどします' : '新しいデザイン（試作）にします', 1200); setTimeout(() => location.reload(), 900); });
+  el.querySelector('.uinext-tg')?.addEventListener('click', () => { try { localStorage.setItem('studyroom.uinext', UINEXT ? '0' : '1'); } catch (e) { /* なし */ } toast(UINEXT ? '前のデザインにもどします（この端末だけ）' : '新しいデザインにします', 1200); setTimeout(() => location.reload(), 900); });
   el.querySelector('.blocks').onclick = showBlocks;
   el.querySelector('.del-me')?.addEventListener('click', confirmDeleteMe);
   rpc('sr_recovery_status', { p_token: Auth.currentUser()?.token }).then(r => { const v = el.querySelector('.rc-st'); if (v) { v.textContent = r.has ? '作ってある' : (UINEXT ? 'まだ' : 'まだ作っていない'); v.classList.toggle('warn', !r.has); } }).catch(() => { const v = el.querySelector('.rc-st'); if (v) v.textContent = ''; });
@@ -3468,7 +3472,7 @@ function runChoice(p, isReview) {
       el.querySelector('.problem')?.classList.add('nx-small');
       stepEl.innerHTML = `
       <div class="res nx-res ${ok ? 'ok' : 'ng'}">
-        <div class="nx-verdict">${icon(ok ? 'check' : 'x')}<b>${ok ? '正解！' : 'ちがいます'}</b></div>
+        <div class="nx-verdict">${icon(ok ? 'check' : 'x')}<b>${ok ? '正解！' : 'ざんねん、まちがい'}</b>${ok ? '' : '<small>正解と理由をたしかめよう</small>'}</div>
         <div class="nx-answer"><small>正解</small><b>${fm(p.choices[p.answer])}</b></div>
         ${!ok && p.why?.[picked] ? `<div class="why-wrong"><b>${icon('info')}えらんだ「${fm(p.choices[picked])}」は</b><p>${fm(p.why[picked])}</p></div>` : ''}
         ${p.explain ? (fx ? explainHTML(p.explain) : `<p class="reason">${esc(p.explain)}</p>`) : ''}

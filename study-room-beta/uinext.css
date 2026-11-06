@@ -6,9 +6,9 @@
 
 /* ---- 下のメニュー：いつも同じ5つ（部屋・家具・解く・ガチャ・みんな） ---- */
 .uinext { --tab-h: 96px; --sk-slot: 52px; }
-.uinext .tabbar.nx-bar { justify-content: center; gap: 14px; padding-left: max(16px, env(safe-area-inset-left)); padding-right: max(16px, env(safe-area-inset-right)); }
+.uinext .tabbar.nx-bar { justify-content: space-between; gap: 10px; padding-left: max(16px, env(safe-area-inset-left)); padding-right: max(16px, env(safe-area-inset-right)); }
 .uinext .nx-bar .slots { gap: 8px; }
-.uinext .nx-bar .sl { width: 56px; height: 54px; border-radius: 14px; gap: 3px; }
+.uinext .nx-bar .sl { width: 54px; height: 54px; border-radius: 14px; gap: 3px; }
 .uinext .nx-bar .sl .ic, .uinext .nx-bar .sl svg { width: 21px; height: 21px; }
 .uinext .nx-bar .sl-t { font-size: 11px; font-weight: 700; letter-spacing: .04em; }
 .uinext .nx-bar .solve-ring { width: 76px; height: 76px; }
@@ -160,3 +160,11 @@
 .uinext .nx-welcome .later { justify-self: center; font-size: 13.5px; }
 .uinext .nx-welcome .go { flex-direction: row; min-height: 54px; font-size: 16px; }
 .uinext .nx-welcome .go svg { width: 20px; height: 20px; }
+
+/* 「ざんねん、まちがい」の下に、やさしい一言 */
+.uinext .nx-verdict { flex-wrap: wrap; }
+.uinext .nx-verdict small { flex-basis: 100%; text-align: center; font-size: 13px; font-weight: 500; letter-spacing: 0; color: var(--sk-muted); margin-top: -2px; }
+/* 写真ボタンは横いっぱい */
+.uinext .nx-menu-quick .nx-photo { flex: 1; justify-content: center; padding: 12px 14px; }
+/* 下のメニュー：4つ＋右端の「解く」。せまい画面では少し小さく */
+@media (max-width: 370px) { .uinext .nx-bar .sl { width: 48px; } .uinext .nx-bar .slots { gap: 5px; } }

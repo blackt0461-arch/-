@@ -190,6 +190,15 @@ add(4, GACHA_AVATARS.filter(a => a.r === 4 && a.series === 'band').map(avRow), {
 add(5, GACHA_AVATARS.filter(a => a.r === 5 && a.series === 'band').map(avRow), { series: 'band' });
 add(4, GACHA_AVATARS.filter(a => a.r === 4 && !a.series).map(avRow));
 add(5, GACHA_AVATARS.filter(a => a.r === 5 && !a.series).map(avRow));
+// ───────── 期間限定イベントのごほうび（ガチャからは出ない。1.12.0） ─────────
+add(5, [
+  ['ev-xmas-tree', 'きらめくクリスマスツリー', 'decor', 'nmr', { gacha: 'xmasTree' }, 2.0, { light: '#ffcf8a', series: 'event' }],
+], {});
+add(4, [
+  ['ev-snowman', 'マフラーの雪だるま', 'decor', 'nmr', { gacha: 'snowman' }, 1.2, { series: 'event' }],
+  ['ev-gift-pile', 'プレゼントの山', 'decor', 'nmr', { gacha: 'giftPile' }, 0.7, { series: 'event' }],
+], {});
+for (const it of GACHA_ITEMS) if (it.series === 'event') it.reward = true;
 for (const it of GACHA_ITEMS) if (it.place === 'avatar') it.reward = true; // 引いた回数のごほうび。ガチャからランダムには出ない
 
 export const GACHA_BY_ID = Object.fromEntries(GACHA_ITEMS.map((it) => [it.id, it]));
@@ -241,6 +250,17 @@ function poolFor(rarity, banner, rng) {
     if (lim.length && rng() < BANNER_LIMITED_SHARE) return lim;
   }
   return POOL[rarity];
+}
+// 1回引いた時の、家具ごとの出る確率（提供割合の表示用。1.12.0）。合計 1
+export function oddsFor(banner = 'standard') {
+  const out = [];
+  for (const r of [5, 4, 3]) {
+    const lim = r >= 4 && banner && banner !== 'standard' ? bySeries(banner).filter((it) => it.rarity === r) : [];
+    const share = lim.length ? BANNER_LIMITED_SHARE : 0;
+    for (const it of lim) out.push({ item: it, rarity: r, p: RATES[r] * share / lim.length, limited: true });
+    for (const it of POOL[r]) out.push({ item: it, rarity: r, p: RATES[r] * (1 - share) / POOL[r].length });
+  }
+  return out;
 }
 function pick(rarity, owned, rng, banner) {
   const pool = poolFor(rarity, banner, rng);

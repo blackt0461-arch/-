@@ -1,0 +1,170 @@
+/* =====================================================================
+   新しいデザイン（試作・1.12.0）。body.uinext の時だけ効く。
+   いまのデザインの部品（着せ替えの色 --sk-*、すりガラス、金の輪、丸ゴシック）をそのまま使い、
+   並べ方・大きさ・きまりだけを整える。くわしくは docs/roomin-ui-review.html
+   ===================================================================== */
+
+/* ---- 下のメニュー：いつも同じ5つ（部屋・家具・解く・ガチャ・みんな） ---- */
+.uinext { --tab-h: 96px; --sk-slot: 52px; }
+.uinext .tabbar.nx-bar { justify-content: space-between; gap: 10px; padding-left: max(16px, env(safe-area-inset-left)); padding-right: max(16px, env(safe-area-inset-right)); }
+.uinext .nx-bar .slots { gap: 8px; }
+.uinext .nx-bar .sl { width: 54px; height: 54px; border-radius: 14px; gap: 3px; }
+.uinext .nx-bar .sl .ic, .uinext .nx-bar .sl svg { width: 21px; height: 21px; }
+.uinext .nx-bar .sl-t { font-size: 11px; font-weight: 700; letter-spacing: .04em; }
+.uinext .nx-bar .solve-ring { width: 76px; height: 76px; }
+.uinext .nx-bar .sr-in b { font-size: 12px; }
+
+/* ---- 部屋の画面：上は「部屋の名前・Lv・自分のアイコン」の1本。右はプレゼントだけ ---- */
+.uinext .home .hud .nx-me { width: 46px; height: 46px; flex: none; padding: 2px; }
+.uinext .home .hud .nx-me .avatar { width: 38px; height: 38px; }
+.uinext .home .hud .nx-me .dot-only { position: absolute; top: -1px; right: -1px; width: 11px; height: 11px; min-width: 0; padding: 0; border-radius: 50%; }
+.uinext .home .side-tools { top: calc(var(--safe-t) + 70px); }
+.uinext .nx-buy {
+  position: absolute; left: max(16px, env(safe-area-inset-left)); bottom: calc(var(--tab-h) + var(--safe-b) + 6px);
+  display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px 8px 11px; border-radius: 99px;
+  background: var(--sk-panel); border: 1px solid color-mix(in srgb, var(--sk-accent) 70%, transparent); color: var(--sk-text);
+  backdrop-filter: var(--sk-blur); -webkit-backdrop-filter: var(--sk-blur); font: inherit; font-size: 13px; font-weight: 700;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--sk-accent) 18%, transparent), 0 6px 18px rgba(0,0,0,.35);
+}
+.uinext .nx-buy .ic, .uinext .nx-buy svg { width: 17px; height: 17px; color: var(--sk-accent); }
+.uinext .nx-buy b { color: var(--sk-accent); font-variant-numeric: tabular-nums; }
+/* ---- メニュー：部屋の画面から外した「勉強｜パズル」「写真」をここに ---- */
+.uinext .nx-menu-quick { display: flex; gap: 8px; align-items: stretch; margin: 0 0 12px; }
+.uinext .nx-menu-quick .mode-toggle { flex: 1; margin: 0; display: grid; grid-template-columns: 1fr 1fr; padding: 4px; border-radius: 14px; background: var(--sk-card, var(--card)); border: 1px solid var(--sk-card-line, var(--card-line)); }
+.uinext .nx-menu-quick .mode-toggle button { display: inline-flex; justify-content: center; align-items: center; gap: 5px; padding: 9px 6px; border: 0; border-radius: 10px; background: none; color: var(--sk-muted); font: inherit; font-size: 13.5px; font-weight: 700; }
+.uinext .nx-menu-quick .mode-toggle button.on { background: var(--sk-sel-bg); color: var(--sk-sel-fg); }
+.uinext .nx-menu-quick .mode-toggle .ic { width: 16px; height: 16px; }
+.uinext .nx-photo { flex: none; display: inline-flex; align-items: center; gap: 6px; padding: 0 14px; border-radius: 14px; border: 1px solid var(--sk-card-line, var(--card-line)); background: var(--sk-card, var(--card)); color: var(--sk-text); font: inherit; font-size: 13.5px; font-weight: 700; }
+.uinext .nx-photo .ic { width: 17px; height: 17px; }
+.uinext .home .room-name small { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.uinext .home .room-name .rn-t { min-width: 0; }
+/* ---- 解く：「前回のつづき」を1タップで ---- */
+.uinext .nx-continue { display: grid; gap: 8px; margin: 0 0 4px; }
+.uinext .nx-continue:empty { display: none; }
+.uinext .nx-cta {
+  display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; padding: 14px 14px 14px 16px; border-radius: var(--sk-radius, 16px); font: inherit; color: var(--sk-text);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--sk-accent) 22%, var(--sk-card, rgba(255,255,255,.06))), var(--sk-card, rgba(255,255,255,.06)));
+  border: 1px solid color-mix(in srgb, var(--sk-accent) 60%, transparent);
+}
+.uinext .nx-cta-t { flex: 1; min-width: 0; display: grid; gap: 1px; }
+.uinext .nx-cta-t small { font-size: 12px; font-weight: 700; color: var(--sk-accent); letter-spacing: .04em; }
+.uinext .nx-cta-t b { font-size: 17px; line-height: 1.35; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.uinext .nx-cta-t span { font-size: 12px; color: var(--sk-muted); }
+.uinext .nx-cta-go { flex: none; display: inline-flex; align-items: center; gap: 5px; padding: 10px 14px; border-radius: 99px; background: var(--sk-accent); color: var(--sk-hot-fg, var(--sk-btn-fg, #1d1a14)); font-size: 14px; font-weight: 700; }
+.uinext .nx-cta-go .ic, .uinext .nx-cta-go svg { width: 16px; height: 16px; }
+.uinext .nx-wrong { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 11px 12px; border-radius: 14px; border: 1px solid rgba(232,120,96,.45); background: rgba(232,120,96,.1); color: var(--sk-text); font: inherit; }
+.uinext .nx-wrong .sc-wic { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; background: rgba(232,120,96,.22); color: #f0a08c; flex: none; }
+.uinext .nx-wrong .sc-t { flex: 1; min-width: 0; display: grid; gap: 1px; }
+.uinext .nx-wrong .sc-t b { font-size: 14.5px; } .uinext .nx-wrong .sc-t small { font-size: 12px; color: var(--sk-muted); }
+.uinext .nx-wrong .sc-wn { font-weight: 700; color: #f0a08c; font-size: 14px; }
+.uinext .nx-sec { margin: 10px 2px 2px; font-size: 12px; font-weight: 700; color: var(--sk-muted); letter-spacing: .06em; }
+.uinext .subj-sheet .subjgrid .subj { min-height: 74px; }
+/* ---- 問題：上のバーは「今日の数」に（1問ずつなので、進みぐあいのバーは意味がなかった） ---- */
+.uinext .quiz .nx-today { flex: 1; min-width: 0; text-align: center; font-size: 12.5px; font-weight: 700; color: var(--sk-text); }
+.uinext .quiz .nx-today small { margin-left: 6px; padding: 2px 8px; border-radius: 99px; font-size: 11.5px; background: color-mix(in srgb, var(--sk-accent) 22%, transparent); color: var(--sk-accent); }
+/* ---- 答えた後：結果 → 正解 → ちがう理由 → 解説 → ごほうび。次へは下に ---- */
+.uinext .nx-answered .problem.nx-small { font-size: 14px; padding: 12px 14px; max-height: 26vh; overflow: auto; opacity: .85; }
+.uinext .nx-res { text-align: left; gap: 10px; padding: 0; background: none; border: 0; animation: none; }
+.uinext .nx-verdict { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 16px; border-radius: 18px; font-size: 22px; letter-spacing: .04em; animation: up .25s; }
+.uinext .nx-verdict .ic, .uinext .nx-verdict svg { width: 30px; height: 30px; padding: 5px; border-radius: 50%; stroke-width: 2.6; }
+.uinext .nx-res.ok .nx-verdict { background: rgba(110,196,140,.16); color: #9be0b3; border: 1px solid rgba(110,196,140,.4); }
+.uinext .nx-res.ok .nx-verdict svg { background: rgba(110,196,140,.25); }
+.uinext .nx-res.ng .nx-verdict { background: rgba(232,120,96,.14); color: #f4a590; border: 1px solid rgba(232,120,96,.4); }
+.uinext .nx-res.ng .nx-verdict svg { background: rgba(232,120,96,.25); }
+.uinext .nx-answer { display: grid; justify-items: center; gap: 0; padding: 4px 0 2px; }
+.uinext .nx-answer small { font-size: 12px; color: var(--sk-muted); }
+.uinext .nx-answer b { font-size: 19px; text-align: center; }
+.uinext .nx-res .reason { font-size: 15px; }
+.uinext .nx-gain { margin: 2px 0 0; text-align: center; font-size: 13px; color: var(--sk-muted); display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 0 2px; }
+.uinext .nx-gain i { font-style: normal; opacity: .5; }
+.uinext .nx-gain b { color: var(--sk-accent); display: inline-flex; align-items: center; gap: 3px; }
+.uinext .nx-gain svg { width: 14px; height: 14px; }
+.uinext .nx-res .pr-report { justify-self: center; }
+.uinext .nx-next { position: sticky; bottom: 0; z-index: 2; display: grid; gap: 2px; justify-items: center; margin-top: 12px; padding: 18px 0 calc(8px + var(--safe-b, 0px)); background: linear-gradient(transparent, rgba(22,19,15,.92) 30%); }
+.uinext .nx-next .more { width: 100%; }
+.uinext .nx-next .home { display: inline-flex; align-items: center; gap: 5px; font-size: 14px; padding: 10px; }
+.uinext .nx-next .home svg { width: 16px; height: 16px; }
+.uinext .nx-verdict > .ic { width: 34px; height: 34px; padding: 7px; box-sizing: border-box; flex: none; border-radius: 50%; display: grid; place-items: center; }
+.uinext .nx-verdict > .ic svg { width: 100%; height: 100%; padding: 0; stroke-width: 2.6; }
+.uinext .nx-res.ok .nx-verdict > .ic { background: rgba(110,196,140,.25); } .uinext .nx-res.ng .nx-verdict > .ic { background: rgba(232,120,96,.25); }
+.uinext .nx-next .more { display: inline-flex; flex-direction: row; justify-content: center; align-items: center; gap: 8px; min-height: 54px; font-size: 16px; }
+.uinext .nx-next .more svg { width: 20px; height: 20px; }
+/* ---- お知らせ：上の細い帯に1つずつ（まん中に出して問題文や部屋をかくさない） ---- */
+.uinext .toast.nx-toast {
+  left: max(12px, env(safe-area-inset-left)); right: max(12px, env(safe-area-inset-right)); top: calc(var(--safe-t) + 66px); transform: translateY(-10px);
+  max-width: 520px; margin: 0 auto; display: flex; align-items: center; gap: 10px; padding: 10px 12px 10px 14px; border-radius: 14px;
+  text-align: left; font-size: 13.5px; line-height: 1.45; font-weight: 700; border-left: 3px solid var(--sk-accent); pointer-events: auto; z-index: 60;
+}
+.uinext .toast.nx-toast.show { transform: translateY(0); }
+.uinext .toast.nx-toast .nx-tm { flex: 1; min-width: 0; }
+.uinext .toast.nx-toast u { flex: none; text-decoration: none; color: var(--sk-accent); font-size: 13px; }
+.uinext .toast.nx-toast .nx-tq { flex: none; font-style: normal; font-size: 11.5px; font-weight: 500; color: var(--sk-muted); }
+/* ---- 閉じ方のきまり：下から出る画面は右上の ×（＋下になぞる）。下の「やめる」の文字はかくす ---- */
+.uinext .sheet.nx-hasx > .link.close, .uinext .sheet.nx-hasx .sheet-foot > .link.close { display: none; }
+.uinext .sheet .grab { width: 44px; height: 5px; margin-top: -2px; margin-bottom: 10px; padding: 8px 0; background-clip: content-box; cursor: grab; touch-action: none; }
+.uinext .sheet .sh-head { touch-action: none; }
+.uinext .sheet .sh-head .sh-x { margin-left: auto; }
+.uinext .sheet { transition: transform .22s ease; }
+/* ---- 文字とボタンのきまり ----
+   明朝＝画面のタイトルとブランドだけ（ROOMIN の雰囲気はここで出す）。中身はゴシック。
+   文字の大きさは 22 / 17 / 15 / 12 の4つ。12 より小さくしない。
+   ボタン：白＝決める（1画面に1つ）、金＝ごほうび・買う、線＝ほかの選択、赤＝消す。押せない時は点線で、はっきり区別する */
+.uinext .bar h2 { letter-spacing: .08em; font-size: 19px; }
+.uinext .sheet small, .uinext .screen small, .uinext .sheet .sh-head p { font-size: max(12px, .85em); }
+.uinext .sheet .sh-head h3 { font-size: 18px; letter-spacing: .02em; }
+.uinext .btn:disabled, .uinext .btn[disabled] { background: transparent !important; color: var(--sk-muted) !important; border: 1.5px dashed var(--sk-card-line) !important; box-shadow: none !important; opacity: 1; }
+.uinext .subj small, .uinext .sc-row .sc-n, .uinext .zk-cat small { font-size: 12px; }
+/* ---- 家具を買う：ジャンルは上のタブ。ボタンに家具の名前 ---- */
+.uinext .nx-gtabs { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; margin: -2px -2px 10px; padding: 2px; }
+.uinext .nx-gtabs::-webkit-scrollbar { display: none; }
+.uinext .nx-gtabs button { flex: none; display: inline-flex; align-items: center; gap: 5px; padding: 8px 13px; border-radius: 99px; border: 1px solid var(--sk-card-line); background: var(--sk-card); color: var(--sk-text); font: inherit; font-size: 13.5px; font-weight: 700; }
+.uinext .nx-gtabs button.on { background: var(--sk-sel-bg); color: var(--sk-sel-fg); border-color: transparent; }
+.uinext .nx-gtabs .ic { width: 16px; height: 16px; }
+.uinext .cand-sheet .sh-head .sh-fold { margin-left: auto; }
+.uinext .cand-sheet .sh-head .sh-x { margin-left: 6px; }
+.uinext .cand-sheet .ok .ok-t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.uinext .cand-sheet.folded .nx-gtabs { display: none; }
+/* ---- プロフィール：まだの教科は「あと○問で出ます」。次の称号を目標に ---- */
+.uinext .pf-row.nx-empty b, .uinext .pf-row.nx-empty small { color: var(--sk-muted); }
+.uinext .pf-rank.r-none { opacity: .45; }
+.uinext .pf-row.nx-empty .pf-bar i { opacity: .55; }
+.uinext .nx-goal { display: flex; gap: 12px; align-items: center; padding: 12px 14px; margin: 10px 0 4px; border-radius: var(--sk-radius, 16px); background: var(--sk-card); border: 1px solid color-mix(in srgb, var(--sk-accent) 45%, var(--sk-card-line)); }
+.uinext .nx-goal-ic { width: 40px; height: 40px; flex: none; border-radius: 12px; display: grid; place-items: center; background: color-mix(in srgb, var(--sk-accent) 20%, transparent); color: var(--sk-accent); }
+.uinext .nx-goal-ic svg { width: 22px; height: 22px; }
+.uinext .nx-goal > div { flex: 1; min-width: 0; display: grid; gap: 3px; }
+.uinext .nx-goal small { font-size: 12px; color: var(--sk-accent); font-weight: 700; }
+.uinext .nx-goal b { font-size: 16px; }
+.uinext .nx-goal em { font-style: normal; font-size: 12px; color: var(--sk-muted); }
+.uinext .nx-goal .pf-bar { display: block; height: 6px; }
+/* ---- ガチャ：チケット0枚の時は「集め方」を出す（行き止まりにしない） ---- */
+.uinext .gc-pulls.nx-hide { display: none; }
+.uinext .nx-howto { display: grid; gap: 10px; padding: 14px; margin: 4px 0 8px; border-radius: var(--sk-radius, 16px); background: var(--sk-card); border: 1px solid var(--sk-card-line); }
+.uinext .nx-ht-h { margin: 0; display: flex; align-items: center; gap: 8px; }
+.uinext .nx-ht-h b { font-size: 16px; } .uinext .nx-ht-h small { margin-left: auto; font-size: 12px; color: var(--sk-muted); }
+.uinext .nx-ht-h svg, .uinext .nx-ht-h .tk { width: 34px; height: auto; }
+.uinext .nx-ht-row { display: grid; grid-template-columns: 34px 1fr auto; align-items: center; gap: 10px; }
+.uinext .nx-ht-ic { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; background: color-mix(in srgb, var(--sk-accent) 16%, transparent); color: var(--sk-accent); }
+.uinext .nx-ht-ic svg { width: 18px; height: 18px; }
+.uinext .nx-ht-t { display: grid; gap: 5px; min-width: 0; } .uinext .nx-ht-t b { font-size: 14px; }
+.uinext .nx-ht-row small { font-size: 12px; color: var(--sk-muted); white-space: nowrap; }
+.uinext .nx-howto .go { margin-top: 2px; display: inline-flex; justify-content: center; align-items: center; gap: 8px; }
+/* ---- 設定：4つのまとまりと見出し ---- */
+.uinext .nx-gh { margin: 18px 4px 6px; font-size: 12px; font-weight: 700; letter-spacing: .08em; color: var(--sk-accent); }
+.uinext .settings .nx-gh:first-of-type { margin-top: 4px; }
+/* ---- はじめての人：「さっそく1問」の1枚だけ ---- */
+.uinext .nx-welcome { display: grid; gap: 10px; padding: 6px 4px 4px; text-align: left; }
+.uinext .nx-w-k { margin: 0; font-size: 12.5px; font-weight: 700; color: var(--sk-accent); letter-spacing: .04em; }
+.uinext .nx-welcome h3 { margin: 0; font-family: var(--sk-head); font-size: 21px; line-height: 1.45; letter-spacing: .02em; text-wrap: balance; }
+.uinext .nx-w-s { margin: 0 0 6px; font-size: 14px; color: var(--sk-muted); line-height: 1.6; }
+.uinext .nx-welcome .go { display: inline-flex; justify-content: center; align-items: center; gap: 8px; }
+.uinext .nx-welcome .later { justify-self: center; font-size: 13.5px; }
+.uinext .nx-welcome .go { flex-direction: row; min-height: 54px; font-size: 16px; }
+.uinext .nx-welcome .go svg { width: 20px; height: 20px; }
+
+/* 「ざんねん、まちがい」の下に、やさしい一言 */
+.uinext .nx-verdict { flex-wrap: wrap; }
+.uinext .nx-verdict small { flex-basis: 100%; text-align: center; font-size: 13px; font-weight: 500; letter-spacing: 0; color: var(--sk-muted); margin-top: -2px; }
+/* 写真ボタンは横いっぱい */
+.uinext .nx-menu-quick .nx-photo { flex: 1; justify-content: center; padding: 12px 14px; }
+/* 下のメニュー：4つ＋右端の「解く」。せまい画面では少し小さく */
+@media (max-width: 370px) { .uinext .nx-bar .sl { width: 48px; } .uinext .nx-bar .slots { gap: 5px; } }
