@@ -791,6 +791,12 @@ async function enterHouse() {
     room3d = new Room3D(canvas);
     setInterval(() => room3d.refreshMood(), 60e3);
   }
+  room3d.onContextLost = () => {
+    ERR.report('WebGL context lost', '', 'contextlost');
+    try { S.save(); Sync.push(true); } catch (e) { /* なし */ }
+    toast('画面を読みこみなおします（記録は保存しました）', 2000);
+    setTimeout(() => location.reload(), 1200);
+  };
   room3d.onDoor = goThroughDoor;
   room3d.onSelect = onSelectItem;
   room3d.onPlacedChange = () => S.save();

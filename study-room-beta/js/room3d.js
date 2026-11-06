@@ -14,7 +14,7 @@ import { itemById, STARTER } from './items.js';
 import { buildProc } from './procfurn.js';
 import { buildGacha } from './gachafurn.js';
 import { gachaSpec } from './gacha.js';
-import { loadTex, texturedMaterial, loadModel, fitMaterial, shadowAll } from './loaders.js';
+import { loadTex, texturedMaterial, loadModel, fitMaterial, shadowAll, isLite } from './loaders.js';
 import { buildExterior } from './exterior.js';
 
 // 部屋の大きさ・形は部屋ごとにちがう（rooms.js の roomShape）。this.sh に入れて使う
@@ -72,11 +72,32 @@ export function moodNow(d = new Date()) {
 }
 const MAX_LIGHTS = 4;
 
+// 部屋を出る・作りなおす時に、前の物のメモリ（形・材質・絵）を返す（1.12.0）。
+// 前は返していなかったため、部屋を行き来するたびにメモリがたまり、スマホでアプリが強制終了されることがあった。
+// three.js は、返した物をまた使うと自動で作りなおすので、同じ家具が次の部屋にあっても大丈夫。
+function freeTree(root) {
+  if (!root) return;
+  const mats = new Set(), geos = new Set();
+  root.traverse(o => {
+    if (o.geometry) geos.add(o.geometry);
+    const m = o.material; if (m) (Array.isArray(m) ? m : [m]).forEach(x => mats.add(x));
+  });
+  for (const g of geos) g.dispose?.();
+  for (const m of mats) {
+    for (const k of Object.keys(m)) { const v = m[k]; if (v && v.isTexture) v.dispose(); }
+    m.uniforms && Object.values(m.uniforms).forEach(u => { if (u?.value?.isTexture) u.value.dispose(); });
+    m.dispose?.();
+  }
+}
+function clearFree(group) { const kids = [...group.children]; group.clear(); for (const k of kids) freeTree(k); }
 export class Room3D {
   constructor(canvas) {
     this.canvas = canvas;
     const r = this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
-    r.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    // 画質「かるい」では、画面のきめを少し落としてメモリを減らす（1.12.0）
+    r.setPixelRatio(Math.min(window.devicePixelRatio || 1, isLite() ? 1.5 : 2));
+    // 絵を描くしくみ（WebGL）がこわれた時（メモリが足りない時など）は、記録を保存して読みこみなおす
+    canvas.addEventListener('webglcontextlost', (e) => { e.preventDefault(); this.onContextLost && this.onContextLost(); });
     r.outputColorSpace = THREE.SRGBColorSpace;
     r.toneMapping = THREE.ACESFilmicToneMapping;
     r.shadowMap.enabled = true;
@@ -103,7 +124,7 @@ export class Room3D {
     this.sun.castShadow = true;
     const sc = this.sun.shadow.camera;
     sc.left = -15; sc.right = 15; sc.top = 15; sc.bottom = -15; sc.near = 0.5; sc.far = 80;
-    this.sun.shadow.mapSize.set(2048, 2048);
+    this.sun.shadow.mapSize.set(isLite() ? 1024 : 2048, isLite() ? 1024 : 2048);
     this.sun.shadow.bias = -0.0004;
     this.sun.shadow.normalBias = 0.03;
     this.sun.shadow.radius = 5;
@@ -538,8 +559,8 @@ export class Room3D {
     return id ? itemById(id) : null;
   }
   async placeAll(token = this.token) {
-    this.items.clear();
-    this.blobs?.clear();
+    clearFree(this.items);
+    if (this.blobs) clearFree(this.blobs);
     this.lamps = [];
     this.objByUid = {};
     const placed = this.st.placed || [];
@@ -1464,9 +1485,9 @@ export class Room3D {
   }
   removeObject(uid) {
     const o = this.objByUid?.[uid];
-    if (o) this.items.remove(o);
+    if (o) { this.items.remove(o); freeTree(o); }
     const b = this.blobs?.children.find(x => x.userData.uid === uid);
-    if (b) this.blobs.remove(b);
+    if (b) { this.blobs.remove(b); freeTree(b); }
     delete this.objByUid[uid];
     if (this.selected === uid) this.select(null);
     this.updateLights();
@@ -1681,7 +1702,7 @@ export class Room3D {
     const wallV = { name: darkWall ? '黒' : '' };
 
     const g = this.shell;
-    g.clear();
+    clearFree(g);
     const box = (w, h, d, x, y, z, mat, fw, fh) => {
       const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), fitMaterial(mat, fw ?? w, fh ?? h));
       m.position.set(x, y, z);
@@ -1820,7 +1841,7 @@ export class Room3D {
       const mood = this.mood;
       buildExterior(mood, level, home).then((ext) => {
         if (this.extKey !== key) return;
-        if (this.exterior) this.scene.remove(this.exterior.world);
+        if (this.exterior) { this.scene.remove(this.exterior.world); freeTree(this.exterior.world); }
         this.exterior = ext;
         this.scene.add(ext.world);
         placeExt();
@@ -1903,7 +1924,7 @@ export class Room3D {
   }
 
   makeRays() {
-    this.fx.clear();
+    clearFree(this.fx);
     const d = this.sunDir;
     const HD = this.sh.hd;
     const WINDOW = this.sh.windows[0];

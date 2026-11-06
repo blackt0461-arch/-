@@ -20,6 +20,10 @@ export function loadTex(url, srgb) {
   if (!texCache.has(k)) {
     texCache.set(k, new Promise((res) => {
       texLoader.load(url, t => {
+        // 画質「かるい」では、壁・床などの質感の絵を 512 にちぢめる（メモリがおよそ 1/4。1.12.0）
+        if (lite && /polyhaven/.test(url) && t.image && t.image.width > 512) {
+          try { const k = 512 / Math.max(t.image.width, t.image.height), c = document.createElement('canvas'); c.width = Math.round(t.image.width * k); c.height = Math.round(t.image.height * k); c.getContext('2d').drawImage(t.image, 0, 0, c.width, c.height); t.image = c; t.needsUpdate = true; } catch (e) { /* そのまま */ }
+        }
         t.wrapS = t.wrapT = THREE.RepeatWrapping;
         t.anisotropy = 8;
         if (srgb) t.colorSpace = THREE.SRGBColorSpace;

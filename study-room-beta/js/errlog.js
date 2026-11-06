@@ -17,3 +17,18 @@ export function report(msg, stack = '', place = '') {
 }
 window.addEventListener('error', (e) => report(e.message || e.error?.message, e.error?.stack || `${e.filename || ''}:${e.lineno || ''}:${e.colno || ''}`));
 window.addEventListener('unhandledrejection', (e) => { const r = e.reason; if (r && r.code) return; /* サーバーのよくある返事（ログイン切れなど）は記録しない */ report(r?.message || String(r), r?.stack || ''); });
+
+// 強制終了の見はり（1.12.0）：開いている間、5秒ごとに「いま開いている」と書いておく。
+// 画面をとじた・ほかのアプリに切りかえた時は「ちゃんと閉じた」にする。
+// 次に開いた時、「開いている」のまま残っていたら、前回は強制終了された（メモリ不足など）と考えて記録する。
+const HB = 'studyroom.hb';
+const screenNow = () => { const sc = document.querySelector('#app > .screen'); const sh = [...document.querySelectorAll('.sheet')].map(x => [...x.classList].filter(c => c !== 'sheet').join('.')).join('+'); return (sc ? [...sc.classList].filter(c => c !== 'screen' && c !== 'with-tabs').join('.') : document.querySelector('.home') ? (document.body.classList.contains('focus') ? 'home(focus)' : 'home') : 'start') + (sh ? ' / ' + sh : ''); };
+const beat = (vis) => { try { localStorage.setItem(HB, JSON.stringify({ t: Date.now(), v: version, s: screenNow(), vis, mem: Math.round((performance.memory?.usedJSHeapSize || 0) / 1048576) })); } catch (e) { /* なし */ } };
+try {
+  const last = JSON.parse(localStorage.getItem(HB) || 'null');
+  if (last && last.vis && Date.now() - last.t < 20 * 60e3) setTimeout(() => report('前回、強制終了された可能性', `screen=${last.s} mem=${last.mem}MB ver=${last.v}`, 'crash'), 4000);
+} catch (e) { /* なし */ }
+beat(document.visibilityState === 'visible');
+setInterval(() => { if (document.visibilityState === 'visible') beat(true); }, 5000);
+document.addEventListener('visibilitychange', () => beat(document.visibilityState === 'visible'));
+window.addEventListener('pagehide', () => beat(false));
