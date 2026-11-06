@@ -48,6 +48,10 @@ const serve = () => new Promise(res => { const srv = http.createServer((req, rsp
     delete p.side; p.mode = 'puzzle'; r.noSide = S.sideOf(); p.mode = 'study';
     return r;
   });
+  const gp = await N.page.evaluate(async () => { const S = await import('/js/store.js'); return { jp15: S.gaugePoints(true, false, 15, 'jp'), math60: S.gaugePoints(true, false, 60, 'math'), jpIdle: S.gaugePoints(true, false, 600, 'jp'), mathIdle: S.gaugePoints(true, false, 600, 'math'), wrong: S.gaugePoints(false, false, 60, 'math'), quick: S.gaugePoints(true, false, 2, 'jp') }; });
+  check(gp.jp15 === 23 && gp.math60 === 90, `ゲージはかかった時間に比例（国語15秒 ${gp.jp15}・数学60秒 ${gp.math60}）`);
+  check(gp.jpIdle < gp.mathIdle && gp.jpIdle === Math.round(45 * 1.5), `放っておいても上限まで（国語 ${gp.jpIdle}・数学 ${gp.mathIdle}）`);
+  check(gp.wrong === 0 && gp.quick === 12, `まちがいは0、すぐ答えても少しはたまる（${gp.wrong}・${gp.quick}）`);
   check(tk.wrong === 0, `まちがいは数えない（${tk.wrong}回）`);
   check(tk.first === 1 && tk.need2 === 10, `正解5問で1回、次は10問（${tk.first}回・あと${tk.need2}問）`);
   check(tk.nine === 1 && tk.second === 2 && tk.need3 === 15, `正解10問で2回目、その次は15問（${tk.second}回・あと${tk.need3}問）`);

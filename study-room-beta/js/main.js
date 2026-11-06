@@ -3390,7 +3390,7 @@ function runProblem(p, isReview, retry) {
       stepEl.innerHTML = `
         <div class="res ok">
           <div class="ttl">${retry ? '確認できました' : perfect ? '正解！' : '正解（文字は1回まちがい）'}</div>
-          ${!retry ? `<div class="pts">+${pts}<small>ゲージ ${perfect && secs <= 20 ? '・早い！ボーナス' : ''}${ss.bonus && pts ? '・今日の最初の5問 ×1.5' : ''}</small></div>` : ''}
+          ${!retry ? `<div class="pts">+${pts}<small>ゲージ（むずかしい問題ほど多い）${ss.bonus && pts ? '・今日の最初の5問 ×1.5' : ''}</small></div>` : ''}
           ${xpLine}
           ${mastered ? `<div class="master">${icon('trophy')}克服しました！ 特別な家具がもらえます</div>` : ''}
           <div class="formula">${fx}<small>${esc(p.formula.name)}</small></div>
@@ -3426,7 +3426,7 @@ function runProblem(p, isReview, retry) {
 // 1問の結果から、ゲージ・経験値・チケットなどのごほうびを出して記録する（物理も4択も共通）
 function awardResult(st, ss, p, perfect, ok, isReview, secs) {
   let pts = 0, mastered = false, xp = null;
-      pts = S.gaugePoints(perfect, ok && !perfect, secs);
+      pts = S.gaugePoints(perfect, ok && !perfect, secs, subjectId);
       if (ss.bonus) pts = Math.round(pts * 1.5);
       HS().gauge += pts;
       S.addPoints(pts); // ランキングのポイント
@@ -3521,7 +3521,7 @@ function runChoice(p, isReview) {
     stepEl.innerHTML = `
       <div class="res ${ok ? 'ok' : 'ng'}">
         <div class="ttl">${ok ? '正解！' : 'おしい！'}</div>
-        ${ok ? `<div class="pts">+${pts}<small>ゲージ${secs <= 20 ? '・早い！ボーナス' : ''}${ss.bonus && pts ? '・今日の最初の5問 ×1.5' : ''}</small></div>` : ''}
+        ${ok ? `<div class="pts">+${pts}<small>ゲージ（むずかしい問題ほど多い）${ss.bonus && pts ? '・今日の最初の5問 ×1.5' : ''}</small></div>` : ''}
         ${xpLine}
         ${mastered ? `<div class="master">${icon('trophy')}克服しました！ 特別な家具がもらえます</div>` : ''}
         <div class="formula">${fm(p.choices[p.answer])}<small>正解</small></div>

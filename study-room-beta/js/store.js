@@ -427,12 +427,17 @@ export function newUid() { const h = house(); return h.nextUid++; }
 export function gaugeMax(sub) {
   return Math.min(60 + sub.unlocks * 12, 150);
 }
-export function gaugePoints(perfect, step1Miss, seconds) {
-  if (!perfect && !step1Miss) return 0; // 公式を間違えたら、たまらない（減りもしない）
-  let pts = perfect ? 22 : 10;
-  if (perfect && seconds <= 20) pts += 8;       // 早いとボーナス
-  else if (perfect && seconds <= 35) pts += 4;
-  return pts;
+// ゲージ（1.12.3）：正解した問題に、かかった時間に比例してたまる（どの教科も、1分あたりはほぼ同じ）。
+// 画面では「むずかしい問題ほど多くたまる」と出す。放っておいてもふえないよう、教科ごとに上限の秒数がある。
+export const GAUGE_PER_SEC = 1.5;
+export const GAUGE_MIN_SEC = 8;
+export const GAUGE_CAP_SEC = { jp: 45, social: 45, english: 45, chem: 75, bio: 75, math: 120, physics4: 120, physics: 180 };
+export function gaugePoints(perfect, step1Miss, seconds, sid) {
+  if (!perfect && !step1Miss) return 0; // まちがえたら、たまらない（減りもしない）
+  const cap = GAUGE_CAP_SEC[sid] || 60;
+  const t = Math.min(cap, Math.max(GAUGE_MIN_SEC, seconds || 0));
+  const pts = Math.round(t * GAUGE_PER_SEC);
+  return perfect ? pts : Math.round(pts / 2); // 物理（公式）で、とちゅうでまちがえた時は半分
 }
 
 // 記録の書き出し・読み込み（予備）
