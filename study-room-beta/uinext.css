@@ -93,9 +93,9 @@
 .uinext .toast.nx-toast {
   left: max(12px, env(safe-area-inset-left)); right: max(12px, env(safe-area-inset-right)); top: calc(var(--safe-t) + 66px); transform: translateY(-10px);
   max-width: 520px; margin: 0 auto; display: flex; align-items: center; gap: 10px; padding: 10px 12px 10px 14px; border-radius: 14px;
-  text-align: left; font-size: 13.5px; line-height: 1.45; font-weight: 700; border-left: 3px solid var(--sk-accent); pointer-events: auto; z-index: 60;
+  text-align: left; font-size: 13.5px; line-height: 1.45; font-weight: 700; border-left: 3px solid var(--sk-accent); pointer-events: none; z-index: 60;
 }
-.uinext .toast.nx-toast.show { transform: translateY(0); }
+.uinext .toast.nx-toast.show { transform: translateY(0); pointer-events: auto; }
 .uinext .toast.nx-toast .nx-tm { flex: 1; min-width: 0; }
 .uinext .toast.nx-toast u { flex: none; text-decoration: none; color: var(--sk-accent); font-size: 13px; }
 .uinext .toast.nx-toast .nx-tq { flex: none; font-style: normal; font-size: 11.5px; font-weight: 500; color: var(--sk-muted); }
@@ -174,3 +174,22 @@
 .uinext .nx-bar .slots { gap: 6px; }
 .uinext .nx-bar .solve-ring { width: 72px; height: 72px; }
 @media (max-width: 370px) { .uinext .nx-bar .sl { width: 44px; } .uinext .nx-bar .slots { gap: 4px; } .uinext .nx-bar .sl-t { font-size: 10px; } .uinext .nx-bar .solve-ring { width: 66px; height: 66px; } }
+/* ---- メニュー：右上の丸ボタン（プレゼントの場所）。押すと下に項目がのびる（1.12.1） ---- */
+.uinext .nx-bar .sl { width: 54px; height: 54px; }
+.uinext .nx-bar .slots { gap: 8px; }
+.uinext .nx-bar .solve-ring { width: 76px; height: 76px; }
+.uinext .home .side-tools { z-index: 6; justify-items: end; }
+.uinext .nx-menubtn.on { background: var(--sk-sel-bg); color: var(--sk-sel-fg); border-color: transparent; }
+.uinext .nx-menubtn .dot-only, .uinext .nx-menubtn .gb-n.dot-only { position: absolute; top: -1px; right: -1px; width: 11px; height: 11px; min-width: 0; padding: 0; border-radius: 50%; }
+.uinext .nx-menu { position: absolute; right: 0; top: 52px; display: grid; gap: 8px; justify-items: end; z-index: 7; }
+.uinext .nx-menu button { display: flex; align-items: center; gap: 8px; padding: 0; border: 0; background: none; color: var(--sk-text); font: inherit; cursor: pointer;
+  animation: nmIn .22s cubic-bezier(.2,.8,.3,1) both; animation-delay: calc(var(--i) * 28ms); }
+.uinext .nx-menu .nm-t { padding: 6px 12px; border-radius: 99px; font-size: 13.5px; font-weight: 700; white-space: nowrap; background: var(--sk-panel); border: 1px solid var(--sk-panel-line); backdrop-filter: var(--sk-blur); -webkit-backdrop-filter: var(--sk-blur); box-shadow: 0 4px 14px rgba(0,0,0,.3); }
+.uinext .nx-menu .nm-ic { position: relative; width: 44px; height: 44px; flex: none; border-radius: 50%; display: grid; place-items: center; background: var(--sk-panel); border: 1px solid var(--sk-panel-line); backdrop-filter: var(--sk-blur); -webkit-backdrop-filter: var(--sk-blur); box-shadow: 0 4px 14px rgba(0,0,0,.3); }
+.uinext .nx-menu .nm-ic svg { width: 20px; height: 20px; }
+.uinext .nx-menu .nm-ic .gb-n { position: absolute; top: -3px; right: -3px; }
+.uinext .nx-menu button:active .nm-ic { background: var(--sk-sel-bg); color: var(--sk-sel-fg); }
+.uinext .nx-menu.out button { animation: nmOut .14s ease both; }
+@keyframes nmIn { from { opacity: 0; transform: translateY(-10px) scale(.92); } to { opacity: 1; transform: none; } }
+@keyframes nmOut { to { opacity: 0; transform: translateY(-6px); } }
+@media (prefers-reduced-motion: reduce) { .uinext .nx-menu button { animation: none; } }
