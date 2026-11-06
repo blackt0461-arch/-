@@ -3,7 +3,7 @@
 import * as store from './store.js';
 import * as cloud from './cloud.js';
 
-const APP_VERSION = '1.4.1';
+const APP_VERSION = '1.5.0';
 const $app = document.getElementById('app');
 let COURSES = [];
 const testCache = {};
@@ -13,6 +13,20 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '
 const shuffle = (a) => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 const pct = (x) => Math.round(x * 100);
 const buzz = (ms) => { try { navigator.vibrate && navigator.vibrate(ms); } catch (e) { /* */ } };
+// 数式（KaTeX）は、はじめに必要になったときに読みこむ。読みこみ中に来た画面は、読めたらまとめて表示しなおす
+const KATEX = 'https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/';
+let katexP = null;
+const pendingMath = new Set();
+function loadKatex() {
+  if (!katexP) {
+    katexP = new Promise((res) => {
+      const css = document.createElement('link'); css.rel = 'stylesheet'; css.href = KATEX + 'katex.min.css'; document.head.appendChild(css);
+      const add = (src, next) => { const sc = document.createElement('script'); sc.src = src; sc.onload = next; sc.onerror = () => res(false); document.head.appendChild(sc); };
+      add(KATEX + 'katex.min.js', () => add(KATEX + 'contrib/auto-render.min.js', () => res(true)));
+    }).then((ok) => { if (ok) { pendingMath.forEach((el) => el.isConnected && math(el)); } pendingMath.clear(); });
+  }
+  return katexP;
+}
 function math(el) {
   if (window.renderMathInElement) {
     try {
@@ -21,8 +35,9 @@ function math(el) {
         throwOnError: false,
       });
     } catch (e) { /* 数式が読めなくても文字のまま出す */ }
-  } else {
-    setTimeout(() => window.renderMathInElement && math(el), 300);
+  } else if (el.textContent.includes('$')) {
+    pendingMath.add(el);
+    loadKatex();
   }
 }
 
@@ -84,20 +99,54 @@ function dock(html) {
   $app.appendChild(d);
   return d;
 }
+// データは端末にもとっておき、2回目からはそれですぐ画面を出す（新しいデータは裏で確かめる）
+const JKEY = 'ts_json:';
+function cachedJSON(path) {
+  try { const t = localStorage.getItem(JKEY + path); return t ? JSON.parse(t) : null; } catch (e) { return null; }
+}
+const freshPaths = new Set(); // この起動ですでにネットから読んだもの
 async function getJSON(path) {
-  const r = await fetch(path + '?t=' + Date.now());
+  freshPaths.add(path);
+  const r = await fetch(path, { cache: 'no-cache' });
   if (!r.ok) throw new Error(path);
-  return r.json();
+  const text = await r.text();
+  let old = null;
+  try { old = localStorage.getItem(JKEY + path); localStorage.setItem(JKEY + path, text); } catch (e) { /* いっぱいでも動く */ }
+  return { data: JSON.parse(text), changed: old !== text };
+}
+function prepTest(key, d) {
+  d.questions = (d.questions || []).map((q) => ({ ...q, key: key + '/' + q.id }));
+  return d;
 }
 async function loadTest(course, test) {
   const key = course.id + '/' + test.id;
   if (!testCache[key]) {
-    const d = await getJSON(`data/${course.id}/${test.id}.json`);
-    d.questions = (d.questions || []).map((q) => ({ ...q, key: key + '/' + q.id }));
-    testCache[key] = d;
+    const path = `data/${course.id}/${test.id}.json`;
+    const c = cachedJSON(path);
+    testCache[key] = prepTest(key, c || (await getJSON(path)).data);
   }
   return testCache[key];
 }
+// 裏で新しいデータを確かめる。変わっていたら入れかえて、ホームなら表示しなおす
+async function refreshData() {
+  let changed = false;
+  try {
+    const cs = freshPaths.has('data/courses.json') ? { changed: false } : await getJSON('data/courses.json');
+    if (cs.changed) { COURSES = cs.data.courses || []; changed = true; }
+    for (const c of COURSES) for (const t of c.tests || []) {
+      const key = c.id + '/' + t.id;
+      try {
+        const path = `data/${c.id}/${t.id}.json`;
+        if (freshPaths.has(path)) continue;
+        const r = await getJSON(path);
+        if (r.changed || !testCache[key]) { testCache[key] = prepTest(key, r.data); changed = true; }
+      } catch (e) { /* 問題がまだない */ }
+    }
+  } catch (e) { /* 電波がないときは、とってあるデータのまま */ }
+  if (changed && onHome()) home();
+}
+const onHome = () => !!$app.querySelector('.tabbar [data-tab="home"].on') && !document.querySelector('.dock');
+
 async function allTests() {
   const out = [];
   for (const c of COURSES) for (const t of c.tests || []) {
@@ -765,12 +814,15 @@ async function answers(c, t, d) {
 // ---------- はじめ ----------
 (async () => {
   try {
-    const d = await getJSON('data/courses.json');
-    COURSES = d.courses || [];
-    home();
-    // ドライブの記録をとりこむ。ホームのままなら、とりこんだ内容で表示しなおす
-    cloud.onSynced(() => { if ($app.querySelector('.tabbar [data-tab="home"].on') && !document.querySelector('.dock')) home(); });
+    const cached = cachedJSON('data/courses.json');
+    COURSES = (cached || (await getJSON('data/courses.json')).data).courses || [];
+    await home();
+    refreshData();
+    // ドライブの記録をとりこむ。変わっていて、ホームのままなら表示しなおす
+    cloud.onSynced((changed) => { if (changed && onHome()) home(); });
     cloud.sync();
+    // 数式の道具は、画面が出たあとで先に読んでおく
+    setTimeout(loadKatex, 300);
   } catch (e) {
     $app.innerHTML = '<div class="loading">読みこめませんでした。電波のよい所でもう一度開いてください。</div>';
   }
