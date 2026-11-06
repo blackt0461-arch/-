@@ -1,62 +1,120 @@
-// 記録の保存。どの問題が何回・何回正解したか（localStorage）と、記述の答え・写真（IndexedDB）。
-// ドライブとのやりとりは cloud.js（state() と merge() を使う）。
+// 記録の保存（1.6.0〜）
+//
+// 「いつ・どの問題を・どう答えたか」を1回ずつ「できごと」として残し、問題ごとの状態（回数・正解数・
+// 記憶の安定度 S など）は、できごとを古い順にたどって計算しなおす。
+// こうしておくと、スマホとタブレットで別々に解いても、できごとを足し合わせるだけで記録が1つにまとまる。
+//
+// ぜんぶを1つの表 ALL（キー → 値）に入れる。値にはかならず t（最後に変えた時刻）があり、
+// ドライブ（server/Code.gs）は「キーごとに t が新しいほう」を残してあわせる。キーの種類：
+//   ev/<端末>/<番号>  できごと {q:問題, r:ok/mid/ng, at:答えた時刻, h:使ったヒント数, src}
+//   ★/<問題>          ⭐あとで見る {on}
+//   採/<答えのuid>     Claude の採点 {grade, score, comment, missing, better, q}
+//   tg/<テスト>@<日>   その日の目標の問題数 {n}
+//   dt/<テスト>        テストの日を変えたとき {date}
+//   dy/<日>            1.6.0 より前に数えていた日ごとの問題数 {n:{テスト:数}}
+//   <問題>（記号なし）  1.6.0 より前の問題ごとの状態。ここから先のできごとを足していく
+//
+// 記述の答え・写真は IndexedDB。ドライブとのやりとりは cloud.js（state()・merge()・sent()）。
 import * as mem from './memory.js';
-const KEY = 'ts_records_v1';
 
-function load() {
-  try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { return {}; }
+const AKEY = 'ts_all_v2', DKEY = 'ts_dirty_v2';
+const PRE = ['ev/', '★/', '採/', 'tg/', 'dt/', 'dy/'];
+const isLegacy = (k) => !PRE.some((p) => k.startsWith(p));
+const testOf = (q) => q.split('/').slice(0, 2).join('/');
+const dateKey = (ms) => { const d = new Date(ms); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+export const today = () => dateKey(Date.now());
+
+function readLS(k, d) { try { return JSON.parse(localStorage.getItem(k)) || d; } catch (e) { return d; } }
+function writeLS(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* いっぱいでも動きは止めない */ } }
+
+// この端末の名前（できごとのキーが端末どうしでぶつからないように）
+const DEV = (() => {
+  let d = null;
+  try { d = localStorage.getItem('ts_dev'); } catch (e) { /* */ }
+  if (!d) { d = Math.random().toString(36).slice(2, 8); try { localStorage.setItem('ts_dev', d); } catch (e) { /* */ } }
+  return d;
+})();
+
+let ALL = readLS(AKEY, null);
+const DIRTY = new Set(readLS(DKEY, []));
+// ---- 1.6.0 より前の記録を引っ越す ----
+if (!ALL) {
+  ALL = {};
+  const old = readLS('ts_records_v1', {});
+  for (const [k, r] of Object.entries(old)) { const { prev, ...rest } = r; ALL[k] = rest; } // 問題の状態と ★/
+  const plan = readLS('ts_plan_v1', {});
+  for (const [day, tests] of Object.entries(plan.days || {})) ALL['dy/' + day] = { n: tests, t: 1 };
+  for (const [tk, date] of Object.entries(plan.dates || {})) ALL['dt/' + tk] = { date, t: plan.datesAt || 1 };
+  for (const [k, n] of Object.entries(plan.targets || {})) ALL['tg/' + k] = { n, t: 1 };
+  Object.keys(ALL).forEach((k) => DIRTY.add(k));
+  writeLS(AKEY, ALL); writeLS(DKEY, [...DIRTY]);
 }
-let REC = load();
-function save() {
-  try { localStorage.setItem(KEY, JSON.stringify(REC)); } catch (e) { /* いっぱいでも動きは止めない */ }
-  changed();
-}
-// 記録が変わったらドライブへ送る（cloud.js が登録する）
-let listeners = [];
+let seq = Object.keys(ALL).filter((k) => k.startsWith(`ev/${DEV}/`)).reduce((m, k) => Math.max(m, +k.split('/')[2] || 0), 0);
+
+const listeners = [];
 export const onChange = (f) => listeners.push(f);
-function changed() { listeners.forEach((f) => { try { f(); } catch (e) { /* */ } }); }
+const notify = () => listeners.forEach((f) => { try { f(); } catch (e) { /* */ } });
+function put(k, v) {
+  ALL[k] = v; DIRTY.add(k); dirtyCalc = true;
+  writeLS(AKEY, ALL); writeLS(DKEY, [...DIRTY]);
+  notify();
+}
 
-// 1問ごとの記録：n=解いた回数, ok=正解回数, streak=続けて正解した回数, wrong=まちがい復習に入っているか,
-// S=記憶の安定度（日）, lt=最後に解いた時（memory.js を参照）
-export function record(key, res) {
-  const old = REC[key] || null;
-  const r = old ? { ...old } : { n: 0, ok: 0, streak: 0, wrong: false };
-  r.prev = old ? { ...old, prev: undefined } : null; // 「じつは合っていた」で直せるように
-  r.n++;
-  if (res === 'ok') { r.ok++; r.streak++; r.wrong = false; }
-  else { r.streak = 0; r.wrong = true; }
-  const now = Date.now();
-  r.S = mem.nextS(old, res, r, now);
-  r.last = res; r.t = now; r.lt = now;
-  REC[key] = r; save();
-  countToday(key.split('/').slice(0, 2).join('/'));
+// ---- できごとから、問題ごとの状態を計算しなおす ----
+let REC = {}, EVENTS = [], dirtyCalc = true;
+function step(r, res, at) {
+  const old = r && r.n ? r : null;
+  const n = old ? { ...old } : { n: 0, ok: 0, streak: 0, wrong: false };
+  n.n++;
+  if (res === 'ok') { n.ok++; n.streak++; n.wrong = false; }
+  else { n.streak = 0; n.wrong = true; }
+  n.S = mem.nextS(old, res, n, at);
+  n.last = res; n.t = at; n.lt = at;
+  return n;
 }
-// 「じつは合っていた」：直前の答えを正解として記録しなおす
+function calc() {
+  if (!dirtyCalc) return;
+  dirtyCalc = false;
+  REC = {};
+  for (const [k, v] of Object.entries(ALL)) if (isLegacy(k) && v && v.n) REC[k] = { ...v };
+  EVENTS = Object.entries(ALL).filter(([k, v]) => k.startsWith('ev/') && v && v.q).map(([id, v]) => ({ id, ...v })).sort((a, b) => a.at - b.at);
+  for (const e of EVENTS) {
+    const base = ALL[e.q]; // 引っ越し前の状態。それより前のできごとは、もう数えてある
+    if (base && base.n && e.at <= (base.t || 0)) continue;
+    REC[e.q] = step(REC[e.q], e.r, e.at);
+  }
+}
+
+// ---- 答えたとき ----
+// opt.h：使ったヒントの数、opt.src：'claude'（Claude の採点の反映）など
+const lastEvent = {};
+export function record(key, res, opt = {}) {
+  const at = Date.now();
+  seq++;
+  const id = `ev/${DEV}/${seq}`;
+  const ev = { q: key, r: res, at, t: at };
+  if (opt.h) ev.h = opt.h;
+  if (opt.src) ev.src = opt.src;
+  if (opt.solved) ev.s = 1; // ヒントを使って正解した
+  lastEvent[key] = id;
+  put(id, ev);
+}
+// 「じつは合っていた」：直前の答えを正解に直す（できごとを書きかえる。t を新しくするとドライブでも上書きされる）
 export function fix(key) {
-  const r = REC[key]; if (!r) return;
-  const old = r.prev || null;
-  const n = { ...(old || { n: 0, ok: 0, streak: 0 }) };
-  n.n++; n.ok++; n.streak = (old?.streak || 0) + 1; n.wrong = false;
-  n.S = mem.nextS(old, 'ok', n, r.t); n.last = 'ok'; n.t = r.t; n.lt = r.t; n.prev = old;
-  REC[key] = n; save(); changed();
+  const id = lastEvent[key];
+  if (!id || !ALL[id]) return;
+  put(id, { ...ALL[id], r: 'ok', t: Date.now() });
 }
-export const get = (key) => REC[key] || null;
-export const seen = (key) => !!(REC[key] && REC[key].n);
-// ⭐あとで見る。ドライブの受け口を変えずに同期できるよう、記録の中に「★/問題」という別の項目として持つ
-const STAR = '★/';
-export const starred = (key) => !!(REC[STAR + key] && REC[STAR + key].on);
-export function toggleStar(key) { REC[STAR + key] = { on: !starred(key), t: Date.now() }; save(); return starred(key); }
-// 日ごとに解いた数（全テストの合計）
-export function dayTotals() {
-  const out = {};
-  for (const [day, tests] of Object.entries(PLAN.days || {})) out[day] = Object.values(tests).reduce((a, b) => a + b, 0);
-  return out;
-}
-export const isWrong = (key) => !!(REC[key] && REC[key].wrong);
-export const recall = (key, at) => mem.recall(REC[key], at);
-export const isDue = (key, at) => mem.isDue(REC[key], at);
+
+export const get = (key) => { calc(); return REC[key] || null; };
+export const seen = (key) => { calc(); return !!(REC[key] && REC[key].n); };
+export const isWrong = (key) => { calc(); return !!(REC[key] && REC[key].wrong); };
+// 最後にまちがえた問題は、答えを見た直後でも「覚えている」とは言えないので、50% までしか数えない
+export const recall = (key, at) => { calc(); const r = REC[key]; const v = mem.recall(r, at); return r && r.wrong ? Math.min(v, 0.5) : v; };
+export const isDue = (key, at) => { calc(); return mem.isDue(REC[key], at); };
 // 覚えている＝いま 90% 以上思い出せる／まちがい＝最後にまちがえた／まだ＝解いていない
 export function summary(qs) {
+  calc();
   let mastered = 0, wrong = 0, unseen = 0;
   for (const q of qs) {
     const r = REC[q.key];
@@ -66,55 +124,73 @@ export function summary(qs) {
   }
   return { mastered, wrong, unseen };
 }
-export const all = () => REC;
+// できごとの一覧（ふりかえりレポート用）。Claude の採点の反映はふくめない
+export function events() { calc(); return EVENTS.filter((e) => e.src !== 'claude'); }
+
+// ---- ⭐あとで見る ----
+export const starred = (key) => !!(ALL['★/' + key] && ALL['★/' + key].on);
+export function toggleStar(key) { put('★/' + key, { on: !starred(key), t: Date.now() }); return starred(key); }
+
+// ---- Claude の採点（答えの uid ごと） ----
+export const grade = (uid) => ALL['採/' + uid] || null;
+export const grades = () => Object.entries(ALL).filter(([k]) => k.startsWith('採/')).map(([k, v]) => ({ uid: k.slice(2), ...v }));
+
+// ---- 日ごとの問題数 ----
+export function dayTotals() {
+  calc();
+  const out = {};
+  for (const [k, v] of Object.entries(ALL)) if (k.startsWith('dy/')) out[k.slice(3)] = Object.values(v.n || {}).reduce((a, b) => a + b, 0);
+  for (const e of EVENTS) if (e.src !== 'claude') { const d = dateKey(e.at); out[d] = (out[d] || 0) + 1; }
+  return out;
+}
+export function todayCount(testKey) {
+  calc();
+  const d = today();
+  let n = (ALL['dy/' + d]?.n || {})[testKey] || 0;
+  for (const e of EVENTS) if (e.src !== 'claude' && dateKey(e.at) === d && testOf(e.q) === testKey) n++;
+  return n;
+}
+// その日の目標は、その日はじめて計算した数で固定する（どの端末でも、先にドライブに入った数を使う）
+export function todayTarget(testKey, compute) {
+  const k = 'tg/' + testKey + '@' + today();
+  if (!ALL[k]) put(k, { n: compute(), t: 1 });
+  else if (ALL[k].n == null) put(k, { n: compute(), t: (ALL[k].t || 1) + 1 });
+  return ALL[k].n;
+}
+// ---- テストの日を変えたとき（その日の目標も計算しなおす） ----
+export const getDate = (testKey) => ALL['dt/' + testKey]?.date || null;
+export function setDate(testKey, date) {
+  const now = Date.now();
+  ALL['tg/' + testKey + '@' + today()] = { n: null, t: now }; DIRTY.add('tg/' + testKey + '@' + today());
+  put('dt/' + testKey, { date: date || null, t: now });
+}
 
 // ---- ドライブとのやりとり用 ----
+// 送るのは、まだドライブに入っていない（変えた）ものだけ
 export function state() {
-  const rec = {};
-  for (const [k, r] of Object.entries(REC)) { const { prev, ...rest } = r; rec[k] = rest; }
-  return { records: rec, plan: { days: PLAN.days, dates: PLAN.dates, datesAt: PLAN.datesAt || 0 } };
+  const records = {};
+  for (const k of DIRTY) if (ALL[k] !== undefined) records[k] = ALL[k];
+  return { records, plan: {} };
 }
-// ドライブの記録とこの端末の記録をあわせる（問題ごとに、新しく解いたほうを残す）
+// 送ったものが、送ったあとに変わっていなければ「送りずみ」にする
+export function sent(st) {
+  for (const [k, v] of Object.entries(st.records || {})) if (ALL[k] === v) DIRTY.delete(k);
+  writeLS(DKEY, [...DIRTY]);
+}
+// ドライブの記録とあわせる（キーごとに t が新しいほう）
 export function merge(remote) {
-  if (!remote) return;
+  if (!remote) return false;
   let changedAny = false;
   for (const [k, r] of Object.entries(remote.records || {})) {
-    const mine = REC[k];
-    if (!mine || (r.t || 0) > (mine.t || 0)) { REC[k] = r; changedAny = true; }
+    if (!r) continue;
+    const mine = ALL[k];
+    if (!mine || (r.t || 0) > (mine.t || 0) || (k.startsWith('tg/') && mine.n !== r.n && (r.t || 0) >= (mine.t || 0) && !DIRTY.has(k))) {
+      ALL[k] = r; changedAny = true;
+    }
   }
-  const rp = remote.plan || {};
-  for (const [day, tests] of Object.entries(rp.days || {})) {
-    const d = (PLAN.days[day] = PLAN.days[day] || {});
-    for (const [tk, n] of Object.entries(tests)) if ((d[tk] || 0) < n) { d[tk] = n; changedAny = true; }
-  }
-  if ((rp.datesAt || 0) > (PLAN.datesAt || 0)) { PLAN.dates = rp.dates || {}; PLAN.datesAt = rp.datesAt; changedAny = true; }
-  try { localStorage.setItem(KEY, JSON.stringify(REC)); localStorage.setItem(PKEY, JSON.stringify(PLAN)); } catch (e) { /* */ }
+  if (changedAny) { dirtyCalc = true; writeLS(AKEY, ALL); }
   return changedAny;
 }
-
-// ---- 勉強計画のための記録（日ごとに解いた数・その日の目標・テストの日の変更） ----
-const PKEY = 'ts_plan_v1';
-let PLAN = (() => { try { return JSON.parse(localStorage.getItem(PKEY)) || {}; } catch (e) { return {}; } })();
-PLAN.days = PLAN.days || {}; PLAN.targets = PLAN.targets || {}; PLAN.dates = PLAN.dates || {};
-function savePlan() { try { localStorage.setItem(PKEY, JSON.stringify(PLAN)); } catch (e) { /* 動きは止めない */ } changed(); }
-export function today() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-function countToday(testKey) {
-  const day = (PLAN.days[today()] = PLAN.days[today()] || {});
-  day[testKey] = (day[testKey] || 0) + 1; savePlan();
-}
-export const todayCount = (testKey) => (PLAN.days[today()] || {})[testKey] || 0;
-// その日の目標は、その日はじめて計算した数で固定する（解くたびに目標が動かないように）
-export function todayTarget(testKey, compute) {
-  const k = testKey + '@' + today();
-  if (PLAN.targets[k] === undefined) { PLAN.targets[k] = compute(); savePlan(); }
-  return PLAN.targets[k];
-}
-export function resetTarget(testKey) { delete PLAN.targets[testKey + '@' + today()]; savePlan(); }
-export const getDate = (testKey) => PLAN.dates[testKey] || null;
-export function setDate(testKey, date) { if (date) PLAN.dates[testKey] = date; else delete PLAN.dates[testKey]; PLAN.datesAt = Date.now(); resetTarget(testKey); }
 
 // ---- 記述の答え（写真も入るので IndexedDB） ----
 let dbp = null;
@@ -138,7 +214,7 @@ export async function saveAnswer(a) {
       tx.oncomplete = res; tx.onerror = () => rej(tx.error);
     });
   } catch (e) { alert('答えを保存できませんでした'); }
-  changed();
+  notify();
 }
 export async function markSynced(id) {
   try {

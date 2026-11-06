@@ -323,3 +323,29 @@ textarea.input { min-height: 160px; resize: vertical; }
 .howto svg { width: 15px; height: 15px; flex: none; margin-top: 1px; }
 .fig { margin: 14px 0 0; background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 8px; text-align: center; }
 .fig img { max-width: 100%; max-height: 300px; display: inline-block; }
+.hint { margin-top: 10px; padding: 10px 12px; border-radius: 12px; background: var(--mid-bg); color: var(--fg); font-size: 14px; }
+.hint b { display: block; font-size: 11px; color: var(--mid); letter-spacing: .06em; }
+.graded { margin-top: 12px; padding: 12px 14px; border-radius: 14px; background: var(--soft); font-size: 14px; }
+.graded.ok { background: var(--ok-bg); } .graded.ng { background: var(--ng-bg); } .graded.mid { background: var(--mid-bg); }
+.graded .gtop { display: flex; align-items: center; gap: 8px; }
+.graded .gtop svg { width: 18px; height: 18px; color: var(--acc); }
+.graded .gscore { margin-left: auto; font-size: 22px; font-weight: 800; }
+.graded .gscore small { font-size: 12px; margin-left: 2px; }
+.graded .gtext { white-space: pre-wrap; margin-top: 6px; }
+.graded .label { font-size: 11px; color: var(--sub); display: block; margin-top: 8px; font-weight: 700; }
+.gmiss { margin: 4px 0 0; padding-left: 18px; }
+.row.notice { border-color: var(--acc); }
+.tip { display: flex; gap: 8px; align-items: flex-start; padding: 6px 0; font-size: 14px; }
+.tip svg { width: 18px; height: 18px; flex: none; color: var(--acc); margin-top: 2px; }
+.tip + .tip { border-top: 1px dashed var(--line); }
+.trend { width: 100%; height: auto; display: block; }
+.kv { display: flex; justify-content: space-between; gap: 10px; padding: 6px 0; font-size: 14px; }
+.kv span { color: var(--sub); }
+.kv + .kv { border-top: 1px dashed var(--line); }
+.stats .stat:nth-child(n+4) b { font-size: 22px; }
+
+/* 長い数式がはみ出して画面が横にずれないように（数式だけ横にスクロール） */
+.choice > span:last-child { flex: 1; min-width: 0; overflow-x: auto; overflow-y: hidden; }
+.qtext, .explain, .rlist .qq, .qitem .qq, .graded .gtext { min-width: 0; overflow-wrap: anywhere; }
+.qtext .katex, .explain .katex, .qq .katex { white-space: nowrap; }
+.qtext, .explain { overflow-x: auto; overflow-y: hidden; }

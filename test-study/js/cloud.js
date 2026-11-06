@@ -65,7 +65,9 @@ export function sync() {
   if (running) { again = true; return running; }
   running = (async () => {
     try {
-      const merged = await call('sync', { state: store.state() });
+      const st = store.state();
+      const merged = await call('sync', { state: st });
+      store.sent(st);
       const changed = store.merge(merged);
       await sendAnswers();
       CFG.last = Date.now(); CFG.error = ''; saveCfg();
@@ -107,6 +109,7 @@ store.onChange(() => {
   clearTimeout(timer);
   timer = setTimeout(sync, 4000);
 });
+window.addEventListener('online', () => connected() && sync());
 document.addEventListener('visibilitychange', () => {
   if (!connected()) return;
   if (document.visibilityState === 'hidden') { clearTimeout(timer); sync(); }
