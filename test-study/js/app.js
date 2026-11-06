@@ -3,7 +3,7 @@
 import * as store from './store.js';
 import * as cloud from './cloud.js';
 
-const APP_VERSION = '1.2.0';
+const APP_VERSION = '1.2.1';
 const $app = document.getElementById('app');
 let COURSES = [];
 const testCache = {};
@@ -486,21 +486,18 @@ function cloudScreen() {
   if (cloud.connected()) {
     w.innerHTML = `<div class="card">☁️ グーグルドライブの「テスト勉強」フォルダにつながっています。<div class="muted">${cc.last ? '最後に保存：' + new Date(cc.last).toLocaleString('ja-JP') : ''}${cc.error ? '<br>⚠️ ' + esc(cc.error) : ''}</div></div>
       <button class="btn" data-now>いま保存する</button>
-      <div class="card muted">勉強の記録は「記録（さわらないでください）.json」、記述の答えと写真は「記述の答え」フォルダに入ります。ほかのスマホやパソコンでも、同じURLと合言葉でつなぐと記録が引きつがれます。</div>
+      <div class="card muted">勉強の記録は「記録（さわらないでください）.json」、記述の答えと写真は「記述の答え」フォルダに入ります。ほかのスマホやパソコンでこのアプリを開いても、記録が引きつがれます。</div>
       <button class="btn sub" data-off>この端末のつながりを切る</button>`;
     w.querySelector('[data-now]').onclick = async (e) => { e.target.disabled = true; e.target.textContent = '保存しています…'; await cloud.sync(); cloudScreen(); };
     w.querySelector('[data-off]').onclick = () => { if (confirm('この端末のつながりを切りますか？（ドライブの記録は消えません）')) { cloud.disconnect(); cloudScreen(); } };
     return;
   }
-  w.innerHTML = `<div class="card muted">グーグルドライブの準備（1回だけ）は、Claude が案内した手順でやってください。最後に出てくる「ウェブアプリのURL」をここに貼ります。</div>
-    <h2>ウェブアプリのURL</h2><input class="input" data-url placeholder="https://script.google.com/macros/s/…/exec" value="${esc(cc.url)}" autocomplete="off">
-    <h2>合言葉（4文字以上）</h2><input class="input" data-key type="password" placeholder="はじめてなら、ここで決めます" autocomplete="off">
-    <div class="muted small" style="margin-top:4px">はじめてつなぐときに入れた合言葉が登録されます。ほかの端末でつなぐときも同じ合言葉を使います。</div>
-    <button class="btn" data-go>つなぐ</button><div class="muted" data-msg></div>`;
+  w.innerHTML = `<div class="card muted">いまはドライブにつながっていません。つなぐと、勉強の記録と記述の答えがグーグルドライブの「テスト勉強」フォルダに入ります。</div>
+    <button class="btn" data-go>ドライブにつなぐ</button><div class="muted" data-msg></div>`;
   w.querySelector('[data-go]').onclick = async (e) => {
     const msg = w.querySelector('[data-msg]');
     e.target.disabled = true; msg.textContent = 'つないでいます…';
-    try { await cloud.connect(w.querySelector('[data-url]').value, w.querySelector('[data-key]').value); cloudScreen(); }
+    try { await cloud.connect(); cloudScreen(); }
     catch (err) { msg.textContent = '⚠️ ' + err.message; e.target.disabled = false; }
   };
 }

@@ -2,8 +2,16 @@
 // 記録はいつもこの端末に先に保存し、つながっているときにドライブとあわせる（電波がなくても勉強できる）。
 import * as store from './store.js';
 
+// 受け口のURLと鍵はアプリに入れておく（本人の希望で、URLの入力も合言葉もなし）。
+// 鍵は受け口に最初に登録されたものと同じでないと読み書きできない（server/Code.gs の check_）。
+const BUILTIN = {
+  url: 'https://script.google.com/macros/s/AKfycbyea0Gsfce0Ew9m5dkyaJGPqhq95pzdZbOgFMfmQZPpPChuvUbxXO-hlUKdiR8gqJsw/exec',
+  key: 'test-study-builtin-key',
+};
 const CKEY = 'ts_cloud_v1';
 let CFG = (() => { try { return JSON.parse(localStorage.getItem(CKEY)) || {}; } catch (e) { return {}; } })();
+// 「つながりを切る」を押していなければ、いつもつなぐ
+if (!CFG.off && !CFG.url) CFG = { ...CFG, ...BUILTIN };
 function saveCfg() { try { localStorage.setItem(CKEY, JSON.stringify(CFG)); } catch (e) { /* */ } }
 
 const MESSAGES = {
@@ -39,14 +47,14 @@ async function call(fn, args, cfg = CFG) {
 export const connected = () => !!(CFG.url && CFG.key);
 export const config = () => ({ url: CFG.url || '', last: CFG.last || 0, error: CFG.error || '' });
 
-export async function connect(url, key) {
+export async function connect(url = BUILTIN.url, key = BUILTIN.key) {
   const cfg = { url: String(url || '').trim(), key: String(key || '').trim() };
   if (cfg.key.length < 4) throw new CloudError('bad_key');
   await call('hello', {}, cfg);
   CFG = { ...cfg }; saveCfg();
   await sync();
 }
-export function disconnect() { CFG = {}; saveCfg(); }
+export function disconnect() { CFG = { off: true }; saveCfg(); }
 
 // ---- あわせる ----
 let running = null, again = false;
