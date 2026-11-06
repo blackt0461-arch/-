@@ -162,7 +162,27 @@ let visiting = null; // フレンドの部屋を見ているとき { username, h
 
 const h = (html) => { const t = document.createElement('template'); t.innerHTML = html.trim(); return t.content.firstElementChild; };
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+// 新しいデザイン：お知らせは上の細い帯に、1つずつ順番に。押すとその場所へ（称号 → プロフィール など）（1.12.0）
+const toastQ = [];
+let toastBusy = false;
+function toastNext() {
+  const t = document.getElementById('toast');
+  const item = toastQ.shift();
+  if (!item) { toastBusy = false; t.classList.remove('show'); return; }
+  toastBusy = true;
+  const go = /称号/.test(item.msg) ? () => showProfile() : /プレゼントBOX/.test(item.msg) ? () => showGiftBox() : null;
+  t.innerHTML = `<span class="nx-tm">${esc(item.msg)}</span>${go ? '<u>見る</u>' : ''}${toastQ.length ? `<i class="nx-tq">あと${toastQ.length}件</i>` : ''}`;
+  t.classList.add('show', 'nx-toast'); t.classList.toggle('tap', !!go);
+  t.onclick = () => { clearTimeout(t._h); if (go) { toastQ.length = 0; t.classList.remove('show'); toastBusy = false; go(); } else toastNext(); };
+  clearTimeout(t._h); t._h = setTimeout(() => { t.classList.remove('show'); setTimeout(toastNext, 260); }, Math.min(Math.max(item.ms, 1800), 3400));
+}
 function toast(msg, ms = 2200) {
+  if (UINEXT) {
+    if (toastQ.some(x => x.msg === msg) || document.getElementById('toast')?.querySelector('.nx-tm')?.textContent === msg && toastBusy) return;
+    toastQ.push({ msg, ms });
+    if (!toastBusy) toastNext(); else { const q = document.querySelector('#toast .nx-tq'); if (q) q.textContent = `あと${toastQ.length}件`; else document.getElementById('toast')?.insertAdjacentHTML('beforeend', `<i class="nx-tq">あと${toastQ.length}件</i>`); }
+    return;
+  }
   const t = document.getElementById('toast');
   t.textContent = msg; t.classList.add('show');
   clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), ms);
@@ -173,6 +193,9 @@ const HS = () => S.house();
 const isAdmin = () => Auth.isAdmin();
 // テスト版（study-room-beta/ に置いた物）。管理者だけが入れる。ためして許可が出たら study-room/ に写して本番にする
 const BETA = /-beta\//.test(location.pathname);
+// 新しいデザイン（試作）。設定でオンにした端末だけ。UI改善案（docs/roomin-ui-review.html）を本物のアプリで試す（1.12.0）
+const UINEXT = (() => { try { return localStorage.getItem('studyroom.uinext') === '1'; } catch (e) { return false; } })();
+if (UINEXT) document.body.classList.add('uinext');
 if (BETA) document.documentElement.classList.add('is-beta');
 function showBetaOnly() {
   room3d?.setActive(false);
@@ -197,7 +220,29 @@ function sheet(html, cls = '') {
   const el = h(`<div class="sheet ${cls}"><div class="grab"></div>${html}</div>`);
   app.append(el);
   hydrateThumbs(el);
+  if (UINEXT) setTimeout(() => nxCloseRule(el), 0);
   return el;
+}
+// 新しいデザイン：下から出る画面の閉じ方を「右上の × ・下になぞる」にそろえる（1.12.0）。
+// 画面ごとの「やめる」「とじる」の文字ボタンは、右上の × と同じ働きにして、下の文字ボタンはかくす
+function nxCloseRule(el) {
+  if (!el.isConnected) return;
+  const head = el.querySelector('.sh-head');
+  let x = el.querySelector('.sh-x');
+  const closer = el.querySelector('.link.close, button.close:not(.sh-x), .back2.link');
+  if (!x && head && closer) {
+    x = h(`<button class="sh-x nx-x" aria-label="とじる">${icon('x')}</button>`);
+    x.onclick = () => closer.click();
+    head.append(x);
+  }
+  if (x && closer && closer !== x && closer.classList.contains('link')) el.classList.add('nx-hasx');
+  const grab = el.querySelector('.grab');
+  if (!grab || (!x && !closer)) return;
+  let y0 = null;
+  const start = (e) => { y0 = e.clientY; el.style.transition = 'none'; };
+  const move = (e) => { if (y0 == null) return; const d = Math.max(0, e.clientY - y0); el.style.transform = `translateY(${d}px)`; };
+  const end = (e) => { if (y0 == null) return; const d = e.clientY - y0; y0 = null; el.style.transition = ''; el.style.transform = ''; if (d > 80) (x || closer).click(); };
+  for (const t of [grab, head].filter(Boolean)) { t.addEventListener('pointerdown', (e) => { if (e.target.closest('button')) return; t.setPointerCapture(e.pointerId); start(e); }); t.addEventListener('pointermove', move); t.addEventListener('pointerup', end); t.addEventListener('pointercancel', end); }
 }
 
 // =========================== ログイン ===========================
@@ -298,6 +343,7 @@ function tabbar(active) {
   const buy = canBuyNow();
   const first = active === 'room' ? ['buy', 'gift', '買う'] : ['room', 'home', '部屋'];
   const slots = [first, ['furn', 'sofa', '家具'], ['gacha', 'star', 'ガチャ'], ['zukan', 'book', '図鑑'], ['social', 'users', 'みんな'], ['menu', 'menu', 'メニュー']];
+  if (UINEXT) return tabbarNext(active, { resume, due, pct, buy });
   const dot = (k) => (k === 'menu' && newsBadge) || (k === 'social' && friendBadge) || (k === 'gacha' && ticketCount()) || (k === 'room' && buy);
   const el = h(`<nav class="tabbar hotbar ${active === 'room' ? 'on-room' : ''}">
     <div class="slots">${slots.map(([k, ic, n]) => `
@@ -321,6 +367,21 @@ function tabbar(active) {
       setTimeout(() => { toast('ゲージ満タン！「買う」で家具を1つ買えます', 3200); vibrate([30, 40, 60]); }, 700);
     } else if (!buy && hs.fullNotified) { hs.fullNotified = false; S.save(); }
   }
+  return el;
+}
+// 新しいデザインの下のメニュー：いつも同じ5つ（部屋・家具・解く・ガチャ・みんな）。メニューは右上の自分のアイコンから
+function tabbarNext(active, { resume, due, pct, buy }) {
+  const dot = (k) => (k === 'social' && friendBadge) || (k === 'gacha' && ticketCount());
+  const slot = ([k, ic, n]) => `<button data-t="${k}" class="sl ${k === active ? 'on' : ''}" aria-label="${n}">${icon(ic)}<span class="sl-t">${n}</span>${dot(k) ? '<i class="dot"></i>' : ''}</button>`;
+  const ring = isPuzzle()
+    ? `<button data-t="play" class="solve-ring ${buy ? 'full' : ''}" style="--p:${pct}" aria-label="パズル"><span class="sr-in">${icon('grid')}<b>パズル</b></span>${!S.playedToday() ? '<i class="dot"></i>' : ''}</button>`
+    : `<button data-t="play" class="solve-ring ${buy ? 'full' : ''}" style="--p:${pct}" aria-label="解く"><span class="sr-in">${icon(resume ? 'refresh' : 'pencil')}<b>${resume ? '続きから' : '解く'}</b></span>${resume || due || !S.playedToday() ? '<i class="dot"></i>' : ''}</button>`;
+  const el = h(`<nav class="tabbar hotbar nx-bar ${active === 'room' ? 'on-room' : ''}">
+    <div class="slots">${[['room', 'home', '部屋'], ['furn', 'sofa', '家具']].map(slot).join('')}</div>
+    <div class="solve-wrap">${ring}</div>
+    <div class="slots">${[['gacha', 'star', 'ガチャ'], ['social', 'users', 'みんな']].map(slot).join('')}</div>
+  </nav>`);
+  el.querySelectorAll('[data-t]').forEach(b => b.onclick = () => goTab(b.dataset.t));
   return el;
 }
 function goTab(t) {
@@ -562,7 +623,8 @@ function showGacha(banner = null) {
       <button class="chip shard-btn" data-r="5"><span class="shard s5">${icon('sparkle')}</span>★5かけら <b>${s5}/${G.SHARD_COST}</b></button>
       <button class="chip rates-btn">割合</button>
     </div>
-    <div class="pull-btns gc-pulls">
+    ${UINEXT && t1 < 1 && !t4 && !(t5 && act.length) ? ticketHowTo() : ''}
+    <div class="pull-btns gc-pulls ${UINEXT && t1 < 1 && !t4 && !(t5 && act.length) ? 'nx-hide' : ''}">
       <button class="btn ghost pull1" ${t1 < 1 ? 'disabled' : ''}><span>1回引く<small>レアチケット 1枚</small></span></button>
       <button class="btn gold pull10" ${t1 < 10 ? 'disabled' : ''}><span>10回引く<small>10枚・★4以上1つ確定</small></span></button>
       ${t4 ? `<button class="btn special pull4 wide">${ticketSVG('ticket4', 'mini')}<span>★4以上確定で引く<small>のこり ${t4}枚</small></span></button>` : ''}
@@ -618,6 +680,7 @@ function showGacha(banner = null) {
     sh.querySelector('.close').onclick = () => sh.remove();
   };
   const opts = () => ({ banner: cur().id });
+  el.querySelector('.nx-howto .go')?.addEventListener('click', () => { goTab('play'); });
   el.querySelector('.pull1')?.addEventListener('click', () => doPull(() => [G.pullWithTicket('ticket', gachaOwned, Math.random, opts())], { ticket: 1 }, cur().id));
   el.querySelector('.pull10')?.addEventListener('click', () => doPull(() => G.pullTen(gachaOwned, Math.random, opts()), { ticket: 10 }, cur().id));
   el.querySelector('.pull4')?.addEventListener('click', () => doPull(() => [G.pullWithTicket('ticket4', gachaOwned, Math.random, opts())], { ticket4: 1 }, cur().id));
@@ -812,9 +875,10 @@ async function enterHouse() {
     await Promise.race([packsReady, new Promise(r => setTimeout(r, 1500))]);
     if (!S.profile().mode) await askMode();
   }
-  const lbShown = showLoginBonus();
+  const fresh = UINEXT && !(S.profile().solved || 0) && !(S.profile().puzzleClears || 0) && !S.getState().loginBonus;
+  const lbShown = fresh ? false : showLoginBonus(); // 新しいデザイン：始めたばかりの日は、ログインボーナスを出さない（2日目から）
   if (added.length > 1) toast(`新しい部屋「${added.map(r => r.name).join('・')}」が開きました`, 3000);
-  if (!lbShown && !curRoom().style) askStyle(); // ログインボーナスがあれば、閉じたあとに出す
+  if (!lbShown && !curRoom().style && !UINEXT) askStyle(); // ログインボーナスがあれば、閉じたあとに出す
 }
 
 function remainCapacity(room = curRoom()) {
@@ -857,20 +921,24 @@ function showHome() {
       <header class="hud">
         <div class="room-name">
           <span class="rn-ic">${icon(def.icon)}</span>
-          <span class="rn-t"><span class="rn-n">${esc(roomLabel(r))}<i class="rn-edit">${icon('chevronRight')}</i></span><small>${({ sunny: '晴れ', cloudy: 'くもり', rain: '雨' })[weatherToday()]}・${r.style ? styleDef(r.style).name + '・' : ''}置いている ${r.placed.length} / ${S.capacity()}</small></span>
+          <span class="rn-t"><span class="rn-n">${esc(roomLabel(r))}<i class="rn-edit">${icon('chevronRight')}</i></span><small>${UINEXT ? '' : ({ sunny: '晴れ', cloudy: 'くもり', rain: '雨' })[weatherToday()] + '・' + (r.style ? styleDef(r.style).name + '・' : '')}置いている ${r.placed.length} / ${S.capacity()}</small></span>
         </div>
         <button class="rankchip" aria-label="ランク">
           <span class="lv">Lv<b>${rk.rank}</b></span>
           <span class="xpbar"><i style="width:${Math.round(rk.into / rk.need * 100)}%"></i></span>
         </button>
+        ${UINEXT ? `<button class="round nx-me" aria-label="メニュー（プロフィール・記録・設定）">${avatarHTML(S.profile(), 'avatar')}${newsBadge ? '<i class="gb-n dot-only"></i>' : ''}</button>` : ''}
       </header>
+      ${UINEXT && canBuyNow() ? `<button class="nx-buy">${icon('gift')}<span>家具が買える</span><b>${buyCount() > 1 ? '×' + buyCount() : ''}</b></button>` : ''}
       <div class="side-tools">
-        <button class="round photo" aria-label="写真をとる">${icon('camera')}</button>
+        ${UINEXT ? '' : `<button class="round photo" aria-label="写真をとる">${icon('camera')}</button>`}
         ${EV.activeEvent() ? `<button class="round evbtn" aria-label="${esc(EV.activeEvent().name)}">${icon('snow')}${EV.readyCount(EV.activeEvent()) ? `<i class="gb-n">${EV.readyCount(EV.activeEvent())}</i>` : ''}</button>` : ''}
         <button class="round giftbox" aria-label="プレゼントBOX">${icon('gift')}${S.gifts().length ? `<i class="gb-n">${S.gifts().length > 99 ? '99+' : S.gifts().length}</i>` : ''}</button>
       </div>
     </div>`);
-  el.querySelector('.photo').onclick = photoMode;
+  el.querySelector('.photo')?.addEventListener('click', photoMode);
+  el.querySelector('.nx-me')?.addEventListener('click', showMenu);
+  el.querySelector('.nx-buy')?.addEventListener('click', buyFlow);
   el.querySelector('.giftbox')?.addEventListener('click', () => showGiftBox());
   refreshGifts();
   el.querySelector('.evbtn')?.addEventListener('click', () => showEvent());
@@ -882,6 +950,21 @@ function showHome() {
   if (hs.villaNew) celebrateVilla();
   maybeTour();
 }
+// 新しいデザイン：はじめての人には、7枚の案内のかわりに「さっそく1問」の1枚だけ（ボタンの説明は使う時に）（1.12.0）
+function nxWelcome() {
+  const pz = isPuzzle();
+  const el = sheet(`
+    <div class="nx-welcome">
+      <p class="nx-w-k">ようこそ、${esc(user.name)}さん</p>
+      <h3>${pz ? 'パズルを解くと、この部屋に家具が増えていきます' : '問題を解くと、この部屋に家具が増えていきます'}</h3>
+      <p class="nx-w-s">${pz ? '★1のパズルから始めましょう。わからない時は、パズル画面の「i」で遊び方を見られます' : '1問ずつ、好きな教科から。まちがえても、あとで解き直せます'}</p>
+      <button class="btn primary big go">${icon(pz ? 'grid' : 'pencil')}${pz ? 'パズルで遊んでみる' : 'さっそく1問解く'}</button>
+      <button class="link later">あとで</button>
+    </div>`, 'nx-welcome-sheet');
+  const done = () => { const pf = S.profile(); if (!pf.tour) { pf.tour = 1; S.save(); } };
+  el.querySelector('.go').onclick = () => { done(); el.remove(); app.querySelector('.solve-ring')?.click(); };
+  el.querySelector('.later').onclick = () => { done(); el.remove(); };
+}
 // はじめての人の案内（1.12.0）：登録してまだ1問も解いていない人に、部屋の画面のボタンを順に説明する。1回だけ
 let tourWait = null, tourOn = false;
 function maybeTour(tries = 0) {
@@ -890,13 +973,14 @@ function maybeTour(tries = 0) {
   try { if (localStorage.getItem('studyroom.notour')) return; } catch (e) { /* なし */ } // 自動の確かめ（テスト）では出さない
   if (tourOn || pf.tour || (pf.solved || 0) > 0 || (pf.puzzleClears || 0) > 0 || (pf.xp || 0) > 60) return;
   tourWait = setTimeout(() => {
-    const busy = !app.querySelector('.home') || visiting || !pf.mode || !curRoom()?.style || document.querySelector('.sheet, .lb-screen, .mode-sheet, .overlay, .title-screen');
+    const busy = !app.querySelector('.home') || visiting || !pf.mode || (!UINEXT && !curRoom()?.style) || document.querySelector('.sheet, .lb-screen, .mode-sheet, .overlay, .title-screen');
     if (busy) { if (tries < 40) maybeTour(tries + 1); return; }
     startTour();
   }, tries ? 1500 : 900);
 }
 async function startTour(again = false) {
   if (tourOn) return;
+  if (UINEXT && !again) return nxWelcome();
   tourOn = true;
   const pz = isPuzzle();
   const steps = [
@@ -1022,7 +1106,7 @@ async function goThroughDoor() {
 }
 
 // 新しい部屋の雰囲気をえらぶ（選ぶと壁と床がその場で変わる）
-function askStyle() {
+function askStyle(after = null) {
   const r = curRoom(), def = curDef();
   let picked = null;
   const el = sheet(`
@@ -1053,6 +1137,7 @@ function askStyle() {
     el.remove();
     await room3d.previewSurfaces(null);
     showHome();
+    if (after) after();
     toast(`${styleDef(picked).name}の${def.name}にしました`);
   };
 }
@@ -1119,6 +1204,8 @@ const candArt = (it) => it.ticket ? `<span class="thumb tk-thumb">${ticketSVG(it
 function buyFlow() {
   const o = currentOffer();
   if (!o.genres.length) return toast('買える家具はもう全部そろっています');
+  if (UINEXT && !curRoom().style) return askStyle(() => buyFlow()); // 新しいデザイン：部屋の雰囲気は、はじめて家具を買う時に聞く
+  if (UINEXT) return chooseCandidate(o.genres[0]); // 新しいデザイン：ジャンルは上のタブで切りかえる（1つ前の画面をはさまない）
   const el = sheet(`
     <div class="sh-head"><span class="sh-ic gold">${icon('gift')}</span><div><h3>何を買いますか？</h3><p>ジャンルを選ぶと、右の3つから1つ選べます</p></div></div>
     <div class="genrelist">${o.genres.map(gid => {
@@ -1147,7 +1234,9 @@ function chooseCandidate(genreId) {
   for (const it of cands) if (it.src?.model) loadModel(it.src.model).catch(() => {});
   let picked = null;
   const el = sheet(`
-    <div class="sh-head"><button class="sh-back">${icon('back')}</button><div><h3>${g.name}</h3><p>買うと、部屋の合う場所に自動で置きます</p></div><button class="sh-fold" aria-label="たたんで部屋を見る">${icon('eye')}<span>部屋を見る</span></button></div>
+    ${UINEXT ? `<div class="sh-head"><span class="sh-ic gold">${icon('gift')}</span><div><h3>家具を買う</h3><p>${buyCount() > 1 ? `あと ${buyCount()}個 買えます` : 'えらんで買うと、部屋に置かれます'}</p></div><button class="sh-fold" aria-label="たたんで部屋を見る">${icon('eye')}<span>部屋を見る</span></button><button class="sh-x nx-buyx" aria-label="とじる">${icon('x')}</button></div>
+    <div class="nx-gtabs">${currentOffer().genres.map(gid => `<button data-g="${gid}" class="${gid === genreId ? 'on' : ''}">${icon(GENRE_ICON[gid] || 'box')}${GENRES.find(x => x.id === gid)?.name || ''}</button>`).join('')}</div>`
+    : `<div class="sh-head"><button class="sh-back">${icon('back')}</button><div><h3>${g.name}</h3><p>買うと、部屋の合う場所に自動で置きます</p></div><button class="sh-fold" aria-label="たたんで部屋を見る">${icon('eye')}<span>部屋を見る</span></button></div>`}
     <div class="candgrid">${cands.map(it => `
       <button class="cand ${it.rare || it.ticket ? 'rare' : ''} ${it.ticket ? 'ticket' : ''}" data-id="${it.id}">
         ${candArt(it)}
@@ -1156,9 +1245,11 @@ function chooseCandidate(genreId) {
         <span class="chips">${it.ticket ? '<i>ガチャに使える</i>' : (it.styles || []).slice(0, 2).map(s => `<i>${styleDef(s).name}</i>`).join('')}</span>
       </button>`).join('')}</div>
     <p class="pv-tip">選ぶと、部屋のどこに置かれるかが見られます</p>
-    <button class="btn gold big ok" disabled>${icon('check')}これを買う</button>`, 'cand-sheet');
+    <button class="btn gold big ok" disabled>${icon('check')}${UINEXT ? '<span class="ok-t">家具をえらんでください</span>' : 'これを買う'}</button>`, 'cand-sheet');
   setFocus(true); app.querySelector('.tabbar')?.classList.add('hide');
-  el.querySelector('.sh-back').onclick = () => { room3d?.clearPreview(); buyFlow(); };
+  el.querySelector('.sh-back')?.addEventListener('click', () => { room3d?.clearPreview(); buyFlow(); });
+  el.querySelector('.nx-buyx')?.addEventListener('click', () => { room3d?.clearPreview(); el.remove(); showHome(); });
+  el.querySelectorAll('.nx-gtabs [data-g]').forEach(b => b.onclick = () => { if (b.dataset.g === genreId) return; room3d?.clearPreview(); chooseCandidate(b.dataset.g); });
   // 「部屋を見る」：下の画面を小さくたたんで、置いた様子（ラグなど床の物も）を見られるように（1.11.0）
   const fold = (on) => { el.classList.toggle('folded', on); el.querySelector('.sh-fold span').textContent = on ? 'もどす' : '部屋を見る'; el.querySelector('.sh-fold').setAttribute('aria-label', on ? '選ぶ画面にもどす' : 'たたんで部屋を見る'); };
   el.querySelector('.sh-fold').onclick = () => fold(!el.classList.contains('folded'));
@@ -1170,6 +1261,7 @@ function chooseCandidate(genreId) {
     if (picked.place !== 'surface' && room3d?.surfPreview) room3d.previewSurfaceItem(null);
     el.querySelectorAll('.cand').forEach(x => x.classList.toggle('on', x === b));
     el.querySelector('.ok').disabled = false;
+    const okT = el.querySelector('.ok .ok-t'); if (okT) okT.textContent = `${picked.name}を${picked.ticket ? 'もらう' : '買う'}`;
     const tip = el.querySelector('.pv-tip');
     if (picked.ticket) {
       room3d?.clearPreview();
@@ -1824,12 +1916,14 @@ async function chooseSubject() {
   const loading = SUBJECTS.some(x => x.bank && !bankDone[x.id]);
   const el = sheet(`
     <div class="sh-head"><span class="sh-ic">${icon('pencil')}</span><div><h3>どの教科を解く？</h3><p>どの教科を解いても、同じ家が育ちます</p></div><button class="sh-x close" aria-label="とじる">${icon('x')}</button></div>
+    ${UINEXT ? '<div class="nx-continue"></div><p class="nx-sec">ほかの教科</p>' : ''}
     <div class="subjgrid"></div>
-    <div class="sheet-foot">${switchBtn('puzzle')}</div>`, 'subj-sheet');
+    ${UINEXT ? '' : `<div class="sheet-foot">${switchBtn('puzzle')}</div>`}`, 'subj-sheet');
   app.querySelector('.tabbar')?.classList.add('hide');
   el.querySelector('.close').onclick = () => { el.remove(); showHome(); };
   el.querySelector('.mode-switch')?.addEventListener('click', () => { setMode('puzzle'); el.remove(); showHome(); showPuzzleHub(); });
   const draw = () => {
+    if (UINEXT) drawContinue(el);
     el.querySelector('.subjgrid').innerHTML = SUBJECTS.map(s0 => {
       const ready = probs(s0.id).length > 0;
       const st = ready ? S.subject(s0.id) : null;
@@ -1843,6 +1937,24 @@ async function chooseSubject() {
   };
   draw();
   if (loading) { await loadAllBanks(); if (el.isConnected && el.querySelector('.subjgrid')) draw(); }
+}
+// 新しいデザイン：「解く」を押したら、いちばん上に「前回のつづき」（1タップで始まる）と「まちがえた問題」（1.12.0）
+function drawContinue(el) {
+  const box = el.querySelector('.nx-continue'); if (!box) return;
+  const ls = S.profile().lastStudy, subj = ls && SUBJECTS.find(x => x.id === ls.sid);
+  const ready = subj && probs(subj.id).length > 0;
+  const st = ready ? S.subject(subj.id) : null;
+  const resume = st && st.session && st.session.idx < st.session.set.length;
+  const sc = ls?.scope, list = ready ? probs(subj.id).filter(p => !sc || sc.wrong || ((!sc.genre || p.genre === sc.genre) && (!sc.unit || p.unit === sc.unit))) : [];
+  const seen = st ? list.filter(p => st.srs[p.id]?.seen).length : 0;
+  const wrongs = SUBJECTS.filter(x => probs(x.id).length).map(x => ({ x, n: S.wrongList(S.subject(x.id), probs(x.id)).length })).filter(o => o.n).sort((a, b) => b.n - a.n);
+  const wTotal = wrongs.reduce((n, o) => n + o.n, 0);
+  box.innerHTML = (ready ? `<button class="nx-cta">
+      <span class="nx-cta-t"><small>${resume ? 'とちゅうから' : '前回のつづき'}</small><b>${esc(subj.name)}${ls.scope?.unit || ls.scope?.genre ? ' ・ ' + esc(ls.scope.unit || ls.scope.genre) : ''}</b><span>${seen} / ${list.length}問 解いた</span></span>
+      <span class="nx-cta-go">${icon('pencil')}はじめる</span></button>` : '')
+    + (wTotal ? `<button class="nx-wrong"><span class="sc-wic">${icon('refresh')}</span><span class="sc-t"><b>まちがえた問題を解き直す</b><small>${wrongs.slice(0, 3).map(o => `${esc(o.x.name)} ${o.n}`).join('・')}</small></span><span class="sc-wn">${wTotal}問</span>${icon('chevronRight')}</button>` : '');
+  box.querySelector('.nx-cta')?.addEventListener('click', () => { subjectId = subj.id; const s2 = S.subject(subj.id); if (JSON.stringify(s2.scope || null) !== JSON.stringify(ls.scope)) { s2.scope = ls.scope; s2.session = null; S.save(); } el.remove(); startSet(); });
+  box.querySelector('.nx-wrong')?.addEventListener('click', () => { const top = wrongs[0].x; subjectId = top.id; const s2 = S.subject(top.id); s2.scope = { wrong: true }; s2.session = null; S.save(); el.remove(); startSet(); });
 }
 // 教科 → ジャンル → 単元 をえらぶ（同じ下からの画面の中で切りかえる）
 function chooseScope(el, genre = null) {
@@ -1910,6 +2022,9 @@ function showMenu() {
         <small>次のLvまで ${rk.need - rk.into} XP ・ 置ける家具 ${S.capacity()}個</small></div>
       ${icon('chevronRight')}
     </button>
+    ${UINEXT ? `<div class="nx-menu-quick">
+      <div class="mode-toggle nx-mode" role="group" aria-label="勉強とパズルの切りかえ"><button data-mode="study" class="${isPuzzle() ? '' : 'on'}">${icon('pencil')}勉強</button><button data-mode="puzzle" class="${isPuzzle() ? 'on' : ''}">${icon('grid')}パズル${!freePuzzle() ? `<i class="mt-n">${S.puzzleTickets()}</i>` : ''}</button></div>
+      <button class="nx-photo">${icon('camera')}写真をとる</button></div>` : ''}
     <nav class="menu-list">
       <button data-m="skins">${icon('palette')}<span>着せ替え<small>画面の見た目を変える（ガチャで集める）</small></span>${icon('chevronRight')}</button>
       <button data-m="report">${icon('calendar')}<span>勉強レポート<small>週・月ごとのまとめ。画像で保存できる</small></span>${icon('chevronRight')}</button>
@@ -1921,6 +2036,8 @@ function showMenu() {
       ${isAdmin() ? `<button data-m="admin">${icon('shield')}<span>管理者<small>みんなの記録と部屋</small></span>${icon('chevronRight')}</button>` : ''}
     </nav>`);
   el.querySelector('.pc-tap').onclick = () => showProfile();
+  el.querySelector('.nx-photo')?.addEventListener('click', () => { showHome(); setTimeout(photoMode, 300); });
+  el.querySelectorAll('.nx-mode [data-mode]').forEach(b => b.onclick = () => { if (b.classList.contains('on')) return; setMode(b.dataset.mode); vibrate(12); showMenu(); });
   el.querySelectorAll('.menu-list button').forEach(b => b.onclick = () => ({ skins: () => showSkins(), records: showRecords, report: () => showReport(), feedback: () => showFeedback(), bag: () => showBag(), news: showNews, ranking: showRanking, friends: showFriends, settings: showSettings, admin: showAdmin, beta: () => { location.href = BETA ? '../study-room/' : '../study-room-beta/'; } })[b.dataset.m]());
   paintSync();
 }
@@ -1961,8 +2078,10 @@ function showProfile(view = null, back = null) {
   const name = mine ? user.name : view.username;
   const accPct = Math.round(c.acc * 100);
   const studySec = `<section class="pf-sec"><h3 class="sec">${icon('pencil')}勉強のパラメータ</h3>
-      <div class="pf-radar">${radarSVG(c.study, { color: '#f2b84b' })}</div>
-      <div class="pf-list">${c.study.map(a => `<div class="pf-row"><b>${a.label}</b><span class="pf-rank r-${a.rank}">${a.rank}</span><span class="pf-bar"><i style="width:${a.value}%"></i></span><small>${a.solved}問・${a.solved ? Math.round(a.acc * 100) : 0}%</small></div>`).join('')}</div>
+      <div class="pf-radar">${radarSVG(UINEXT ? c.study.map(a => a.solved < 3 ? { ...a, rank: 'まだ', value: 0, hideValue: true } : a) : c.study, { color: '#f2b84b' })}</div>
+      <div class="pf-list">${c.study.map(a => UINEXT && a.solved < 3
+        ? `<div class="pf-row nx-empty"><b>${a.label}</b><span class="pf-rank r-none">—</span><span class="pf-bar"><i style="width:${a.solved / 3 * 100}%"></i></span><small>あと${3 - a.solved}問で出ます</small></div>`
+        : `<div class="pf-row"><b>${a.label}</b><span class="pf-rank r-${a.rank}">${a.rank}</span><span class="pf-bar"><i style="width:${a.value}%"></i></span><small>${a.solved}問・${a.solved ? Math.round(a.acc * 100) : 0}%</small></div>`).join('')}</div>
       <p class="pf-note">解いた数が多いほど、正解率が高いほど上がります</p></section>`;
   const puzzleSec = `<section class="pf-sec"><h3 class="sec">${icon('grid')}パズルのパラメータ</h3>
       <div class="pf-radar">${radarSVG(c.puzzle, { color: '#6cbf8a' })}</div>
@@ -1976,6 +2095,7 @@ function showProfile(view = null, back = null) {
         ${mine ? `<button class="title-chip big pf-tbtn">${tt ? esc(tt.name) : '称号をえらぶ'}${icon('chevronRight')}</button>` : tt ? `<span class="title-chip big">${esc(tt.name)}</span>` : ''}
         <small>Lv${rk.rank} ・ ${puzzleMain ? 'パズル' : '勉強'}で部屋づくり</small></div>
     </section>
+    ${UINEXT && mine ? nextTitleCard(c, earned) : ''}
     <div class="stats4">
       <div>${icon('pencil')}<b>${c.solved}</b><span>解いた数</span></div>
       <div>${icon('check')}<b>${accPct}%</b><span>正解率</span></div>
@@ -2000,6 +2120,16 @@ function showProfile(view = null, back = null) {
     toast(pf.title ? `称号を「${titleById(id).name}」にしました` : '称号を外しました', 1800);
     showProfile();
   });
+}
+// 新しいデザイン：次にもらえる称号と、あとどれくらいか（目標をいつも1つ見せる）（1.12.0）
+function nextTitleCard(c, earned) {
+  const goals = [['first', c.solved, 1, '問'], ['s50', c.solved, 50, '問'], ['s300', c.solved, 300, '問'], ['s1000', c.solved, 1000, '問'], ['s3000', c.solved, 3000, '問'],
+    ['streak3', c.streak, 3, '日'], ['streak7', c.streak, 7, '日'], ['streak30', c.streak, 30, '日'], ['pz1', c.pzClears, 1, '回'], ['pz50', c.pzClears, 50, '回'], ['lv10', c.rank, 10, ''], ['lv30', c.rank, 30, ''], ['lv50', c.rank, 50, '']]
+    .filter(([id]) => !earned.has(id)).map(([id, v, n, u]) => ({ t: titleById(id), v: v || 0, n, u, r: (v || 0) / n })).filter(g => g.t).sort((a, b) => b.r - a.r);
+  const g = goals[0];
+  if (!g) return '';
+  const val = g.u === '' ? `Lv${g.v} / Lv${g.n}` : `${g.v} / ${g.n}${g.u}`;
+  return `<section class="nx-goal"><span class="nx-goal-ic">${icon('trophy')}</span><div><small>次の称号</small><b>${esc(g.t.name)}</b><span class="pf-bar"><i style="width:${Math.min(100, g.r * 100)}%"></i></span><em>${esc(g.t.how)} ・ ${val}</em></div></section>`;
 }
 // 通報：運営（管理者の「要望・バグを見る」）に届く（1.12.0）
 function reportUser(name) {
@@ -2103,6 +2233,17 @@ function showRankRoad() {
     const road = el.querySelector('.rr-road'), nx = el.querySelector('.rr-row.next') || el.querySelector('.rr-row.got');
     if (road && nx) road.scrollTop = nx.offsetTop - road.clientHeight * 0.55;
   }, 30);
+}
+// 新しいデザイン：チケットが0枚の時、ガチャ画面を行き止まりにせず「集め方」と「あと○」を出す（1.12.0）
+function ticketHowTo() {
+  const pf = S.profile(), rk = rankNow(), lb = S.getState().loginBonus || { count: 0 };
+  const s50 = 50 - ((pf.solved || 0) % 50), lbLeft = 5 - ((lb.count || 0) % 5);
+  const row = (ic, name, pct, left) => `<div class="nx-ht-row"><span class="nx-ht-ic">${icon(ic)}</span><span class="nx-ht-t"><b>${name}</b><span class="pf-bar"><i style="width:${pct}%"></i></span></span><small>${left}</small></div>`;
+  return `<section class="nx-howto"><p class="nx-ht-h">${ticketSVG('ticket', 'mini')}<b>チケットの集め方</b><small>いまは 0枚</small></p>
+    ${row('pencil', isPuzzle() ? 'パズルや問題を50回' : '問題を50問解く', (50 - s50) / 50 * 100, `あと${s50}問で1枚`)}
+    ${row('gift', 'ログインボーナス', (5 - lbLeft) / 5 * 100, `あと${lbLeft}日で1枚`)}
+    ${row('level', 'Lvアップ', rk.into / rk.need * 100, `あと${rk.need - rk.into} XPで1枚`)}
+    <button class="btn primary big go">${icon(isPuzzle() ? 'grid' : 'pencil')}${isPuzzle() ? 'パズルで集める' : '問題を解いて集める'}</button></section>`;
 }
 // 期間限定イベント（1.12.0）
 function evToast(r) {
@@ -2641,7 +2782,9 @@ async function showVisit() {
     </div>`);
   if (v.sample) el.querySelector('.rn-ic').innerHTML = icon('star');
   el.querySelector('.back').onclick = () => leaveVisit(true);
-  el.querySelector('.photo').onclick = photoMode;
+  el.querySelector('.photo')?.addEventListener('click', photoMode);
+  el.querySelector('.nx-me')?.addEventListener('click', showMenu);
+  el.querySelector('.nx-buy')?.addEventListener('click', buyFlow);
   el.querySelectorAll('.rooms button').forEach(b => b.onclick = () => { v.current = +b.dataset.i; showVisit(); });
   app.append(el);
   scrollRoomsNav(el);
@@ -2907,7 +3050,7 @@ function showSettings() {
   try { q = localStorage.getItem('studyroom.quality') || 'low'; } catch (e) { /* なし */ }
   const ver = (() => { try { return localStorage.getItem('studyroom.version') || ''; } catch (e) { return ''; } })();
   const el = screenWithTabs('settings', `<button class="icon back">${icon('back')}</button><h2>設定</h2><span></span>`, 'menu', `
-    <section class="group">
+    <section class="group g-user">
       <div class="row-item"><span class="lbl">ユーザー</span><span class="val">${esc(user.name)}${isAdmin() ? '（管理者）' : ''}</span></div>
       <div class="row-item"><span class="lbl">保存</span><span class="val sync"></span></div>
     </section>
@@ -2918,7 +3061,7 @@ function showSettings() {
         <div class="code-list">${SUBJECTS.filter(x => x.pack).map(x => `<span class="code-chip">${icon(SUBJECT_ICON[x.id] || 'star')}${esc(x.name)}<small>${probs(x.id).length}問</small></span>`).join('')}</div>
       </div>
     </section>
-    <section class="group">
+    <section class="group g-view">
       <div class="row-item col"><span class="lbl">画質</span>
         <div class="seg">${[['high', 'きれい'], ['mid', 'ふつう'], ['low', 'かるい']].map(([k, n]) => `<button data-q="${k}" class="${k === q ? 'on' : ''}">${n}</button>`).join('')}</div>
         <small>カクカクするときは「ふつう」か「かるい」に</small></div>
@@ -2943,7 +3086,8 @@ function showSettings() {
       <a class="row-item tap" href="legal/terms.html" target="_blank" rel="noopener"><span class="lbl">${icon('book')}利用規約</span>${icon('chevronRight')}</a>
       <a class="row-item tap" href="legal/privacy.html" target="_blank" rel="noopener"><span class="lbl">${icon('book')}プライバシーポリシー</span>${icon('chevronRight')}</a>
     </section>
-    <section class="group">
+    ${isAdmin() ? `<section class="group g-uinext"><button class="row-item tap uinext-tg"><span class="lbl">${icon('palette')}新しいデザイン（試作）</span><span class="val">${UINEXT ? 'オン' : 'オフ'}</span>${icon('chevronRight')}</button></section>` : ''}
+    <section class="group g-tour">
       <button class="row-item tap tour-again"><span class="lbl">${icon('info')}使い方の案内をもう一度見る</span>${icon('chevronRight')}</button>
     </section>
     <section class="group">
@@ -2989,9 +3133,20 @@ function showSettings() {
   };
   el.querySelector('.logout').onclick = async () => { await Sync.push(); Auth.logOut(); showLogin(); };
   el.querySelector('.recov').onclick = showRecovery;
+  if (UINEXT) {
+    // 新しいデザイン：4つのまとまりに分けて、見出しをつける（1.12.0）
+    const body = el.querySelector('.g-user')?.parentElement;
+    const anchor = el.querySelector('.logout')?.closest('.group');
+    const put = (title, sels) => { body.insertBefore(h(`<p class="nx-gh">${title}</p>`), anchor); for (const q of sels) { const g = el.querySelector(q); if (g) body.insertBefore(g, anchor); } };
+    put('アカウント', ['.g-user', '.acct']);
+    put('画面と音', ['.g-view', '.bgm-set']);
+    put('学習', ['.codes', '.g-tour']);
+    if (isAdmin()) put('管理者', ['.admin-only', '.g-uinext']);
+  }
+  el.querySelector('.uinext-tg')?.addEventListener('click', () => { try { localStorage.setItem('studyroom.uinext', UINEXT ? '0' : '1'); } catch (e) { /* なし */ } toast(UINEXT ? 'いまのデザインにもどします' : '新しいデザイン（試作）にします', 1200); setTimeout(() => location.reload(), 900); });
   el.querySelector('.blocks').onclick = showBlocks;
   el.querySelector('.del-me')?.addEventListener('click', confirmDeleteMe);
-  rpc('sr_recovery_status', { p_token: Auth.currentUser()?.token }).then(r => { const v = el.querySelector('.rc-st'); if (v) { v.textContent = r.has ? '作ってある' : 'まだ作っていない'; v.classList.toggle('warn', !r.has); } }).catch(() => { const v = el.querySelector('.rc-st'); if (v) v.textContent = ''; });
+  rpc('sr_recovery_status', { p_token: Auth.currentUser()?.token }).then(r => { const v = el.querySelector('.rc-st'); if (v) { v.textContent = r.has ? '作ってある' : (UINEXT ? 'まだ' : 'まだ作っていない'); v.classList.toggle('warn', !r.has); } }).catch(() => { const v = el.querySelector('.rc-st'); if (v) v.textContent = ''; });
   el.querySelector('.tour-again').onclick = () => { showHome(); setTimeout(() => startTour(true), 500); };
   // 管理者だけ：記録をすべて消して最初から（ログインはそのまま）
   el.querySelector('.reset-all')?.addEventListener('click', async () => {
@@ -3033,6 +3188,7 @@ async function startSet() {
     st.session = { set, idx: 0, results: [], gained: 0, xp: 0, rankUp: false, startedAt: Date.now(), bonus: S.solvedToday() < S.BONUS_PER_DAY };
     S.save();
   }
+  S.profile().lastStudy = { sid: subjectId, scope: st.scope || null }; // 「前回のつづき」用（1.12.0）
   room3d.setActive(false);
   canvas.classList.add('dim');
   nextProblem();
@@ -3266,7 +3422,7 @@ function runChoice(p, isReview) {
     <div class="screen quiz choice">
       <header class="bar">
         <button class="icon back" aria-label="部屋にもどる">${icon('x')}</button>
-        <div class="qprog"><i style="width:${ss.idx / ss.set.length * 100}%"></i></div>
+        ${UINEXT ? `<span class="nx-today">${S.solvedToday() < S.BONUS_PER_DAY ? `今日 ${S.solvedToday()} / ${S.BONUS_PER_DAY}問<small>ボーナス中</small>` : `今日 ${S.solvedToday()}問`}</span>` : `<div class="qprog"><i style="width:${ss.idx / ss.set.length * 100}%"></i></div>`}
         <span class="tag">${isReview ? `${icon('refresh')}復習` : esc(p.unit)}</span>
       </header>
       <div class="problem ${fx ? 'fx' : ''}">${fm(p.text).replace(/\n/g, '<br>')}</div>
@@ -3289,6 +3445,28 @@ function runChoice(p, isReview) {
     const { pts, xp, mastered } = awardResult(st, ss, p, ok, ok, isReview, secs);
     vibrate(ok ? [20, 30, 20] : [60, 40, 60]);
     const xpLine = xp ? `<div class="xpgain">${icon('level')}+${xp.gained} XP${xp.rankUp ? `<b>Lv${xp.rank}にアップ！</b>` : ''}</div>` : '';
+    if (UINEXT) {
+      // 新しいデザイン：正解・まちがいを色と形と言葉で。読む順に「結果 → 正解 → ちがう理由 → 解説 → ごほうび」。次へは指の届く下に
+      el.classList.add('nx-answered');
+      el.querySelector('.problem')?.classList.add('nx-small');
+      stepEl.innerHTML = `
+      <div class="res nx-res ${ok ? 'ok' : 'ng'}">
+        <div class="nx-verdict">${icon(ok ? 'check' : 'x')}<b>${ok ? '正解！' : 'ちがいます'}</b></div>
+        <div class="nx-answer"><small>正解</small><b>${fm(p.choices[p.answer])}</b></div>
+        ${!ok && p.why?.[picked] ? `<div class="why-wrong"><b>${icon('info')}えらんだ「${fm(p.choices[picked])}」は</b><p>${fm(p.why[picked])}</p></div>` : ''}
+        ${p.explain ? (fx ? explainHTML(p.explain) : `<p class="reason">${esc(p.explain)}</p>`) : ''}
+        ${p.detail ? `<details class="detail-ex"${ok ? '' : ' open'}><summary>${icon('book')}くわしい解説</summary>${explainHTML(p.detail)}</details>` : ''}
+        ${mastered ? `<div class="master">${icon('trophy')}克服しました！ 特別な家具がもらえます</div>` : ''}
+        ${ss.rewards && (ss.rewards.ticket || ss.rewards.ticket4 || ss.rewards.ticket5) ? `<div class="ru-tickets">${['ticket', 'ticket4', 'ticket5'].filter(k => ss.rewards[k]).map(k => `<span>${ticketSVG(k, 'mini')}<b>×${ss.rewards[k]}</b></span>`).join('')}<small class="ru-box">${icon('gift')}プレゼントBOXに届きました</small></div>` : ''}
+        <p class="nx-gain">${[pts ? `ゲージ +${pts}${ss.bonus ? '（×1.5）' : ''}` : '', xp ? `+${xp.gained} XP` : '', xp?.rankUp ? `<b>Lv${xp.rank}にアップ！</b>` : '', HS().gauge >= S.gaugeMax(HS()) ? `<b>${icon('gift')}家具が買えます</b>` : ''].filter(Boolean).join('<i>・</i>')}</p>
+        <button class="link pr-report">${icon('info')}この問題のまちがいを報告</button>
+      </div>
+      <div class="nx-next"><button class="btn primary big more">${icon('pencil')}次の問題</button><button class="link home">${icon('home')}部屋にもどる</button></div>`;
+      stepEl.querySelector('.home').onclick = () => endOne(true);
+      stepEl.querySelector('.more').onclick = () => endOne(false);
+      stepEl.querySelector('.pr-report').onclick = () => reportProblem(p);
+      return;
+    }
     stepEl.innerHTML = `
       <div class="res ${ok ? 'ok' : 'ng'}">
         <div class="ttl">${ok ? '正解！' : 'おしい！'}</div>
@@ -3479,4 +3657,4 @@ if ('serviceWorker' in navigator && location.protocol === 'https:') {
   navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(r => r.update()).catch(() => {});
 }
 // テスト用
-window.__app = { showEdit, putIntoRoom, get room3d() { return room3d; }, S, sub, HS, switchRoom, ensureRooms, goHome, showHome, curRoom, visitFriend, leaveVisit, showLoginBonus, showGiftBox, showArrange, arrange: (sel, style) => { arrSel = sel; return runArrange(style); } };
+window.__app = { toast, showEdit, putIntoRoom, get room3d() { return room3d; }, S, sub, HS, switchRoom, ensureRooms, goHome, showHome, curRoom, visitFriend, leaveVisit, showLoginBonus, showGiftBox, showArrange, arrange: (sel, style) => { arrSel = sel; return runArrange(style); } };
