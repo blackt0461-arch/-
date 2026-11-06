@@ -302,8 +302,19 @@ textarea.input { min-height: 160px; resize: vertical; }
   body { background: #fff; }
   .bar, .noprint, .tabbar, .dock { display: none !important; }
   .wrap { max-width: none; padding: 0; }
-  .sheet { padding: 0; font-size: 9.8pt; line-height: 1.45; }
-  @page { size: A4; margin: 8mm; }
+  /* A4 片面1枚：2段組み・小さめの文字 */
+  .sheet { padding: 0; font-size: 8.1pt; line-height: 1.32; column-count: 2; column-gap: 5mm; column-rule: .3pt solid #bbb; }
+  .sheet h1 { font-size: 11pt; margin: 0 0 2pt; column-span: all; }
+  .sheet h1 + p { column-span: all; margin: 0 0 3pt !important; }
+  .sheet h2 { font-size: 8.6pt; margin: 5pt 0 2pt; border-bottom-width: 1pt; break-after: avoid; }
+  .sheet table { margin: 2pt 0; break-inside: avoid; }
+  .sheet th, .sheet td { padding: 1pt 3pt; }
+  .sheet ul { padding-left: 11pt; margin: 1pt 0; }
+  .sheet li { margin: 0; }
+  .sheet p { margin: 2pt 0; }
+  .sheet .katex { font-size: 1.02em; }
+  .sheet .katex-display { margin: 1pt 0; }
+  @page { size: A4; margin: 7mm; }
 }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
 

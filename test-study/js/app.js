@@ -3,7 +3,7 @@
 import * as store from './store.js';
 import * as cloud from './cloud.js';
 
-const APP_VERSION = '1.4.0';
+const APP_VERSION = '1.4.1';
 const $app = document.getElementById('app');
 let COURSES = [];
 const testCache = {};
@@ -742,7 +742,7 @@ async function sheet(c, t, d) {
   try {
     const r = await fetch(`data/${c.id}/${d.sheet}?t=${Date.now()}`);
     const html = await r.text();
-    w.innerHTML = `<div class="noprint"><button class="btn" data-print style="margin:14px 0">${icon('sheet')}印刷する（PDFにも保存できます）</button></div><div class="sheet">${html}</div>`;
+    w.innerHTML = `<div class="noprint"><button class="btn" data-print style="margin:14px 0">${icon('sheet')}印刷する（A4・片面1枚。PDFにも保存できます）</button></div><div class="sheet">${html}</div>`;
     math(w);
     w.querySelector('[data-print]').onclick = () => window.print();
   } catch (e) { w.innerHTML = '<div class="empty">読みこめませんでした</div>'; }
