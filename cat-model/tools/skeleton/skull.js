@@ -18,7 +18,9 @@ export function buildSkull(api, lm) {
   // ---- 頭骨（成長すると癒合する多くの骨をひとつにまとめる） ----
   // 形は解剖書の図（横・上・下）からなぞったデータで作る（skull_core.js）
   {
-    const { skull } = buildCranium(Q, AX);
+    const cr = buildCranium(Q, AX);
+    const skull = cr.skull;
+    lm.F.cranium = cr;
     api.bone({ id: 'Skull', ja: '頭蓋（頭骨）', la: 'Cranium', region: 'skull', parent: 'C1', joint: O, shape: skull, h: 0.42,
       rom: { joint: '環椎後頭関節（うなずく動き）', flexion: 0, extension: 0 } });
   }

@@ -5,6 +5,7 @@
 import { add, sub, mul, norm, lerp, spline } from './sdf.js';
 import { profile as P } from './muscle.js';
 import { buildFineMuscles } from './muscles_fine.js';
+import { buildHeadMuscles } from './head_muscles.js';
 
 export function buildMuscles(api, lm) {
   const F = lm.F, V = lm.vert;
@@ -44,22 +45,7 @@ export function buildMuscles(api, lm) {
   const S = (pts, prof) => ({ pts, prof });
 
   // ===================== 頭 =====================
-  M('Temporalis', '側頭筋', 'M. temporalis', 'head', 2, { origin: '頭骨の側頭窩', insertion: '下顎骨の筋突起', action: '口を閉じる（かむ）' }, [
-    S([sk(8, 18, 16.5), sk(20, 14, 19.5), sk(30, 13, 18.5)], P(3.2, 0, 0.15, true)),
-    S([sk(18, 26, 13.5), sk(25, 18, 18.5), sk(31, 15, 18)], P(3.2, 0, 0.15, true)),
-    S([sk(32, 27, 11), sk(34, 20, 16.5), sk(32, 16, 17.5)], P(3.0, 0, 0.15, true)),
-    S([sk(40, 21, 14.5), sk(37, 16, 17.5), sk(33, 14, 17.8)], P(2.6, 0, 0.15, true)),
-  ], { bones: ['Skull', 'Mandible'] });
-  M('Masseter', '咬筋', 'M. masseter', 'head', 1, { origin: '頬骨弓の下の面', insertion: '下顎骨の外側（咬筋窩）', action: '口を閉じる（強くかむ）' }, [
-    S([sk(36, 1.5, 29), sk(32, -4, 23), sk(27, -8.5, 19.5)], P(3.2, 0.05, 0.05, true)),
-    S([sk(46, 2.5, 31), sk(42, -4, 24), sk(37, -9.5, 19.5)], P(3.4, 0.05, 0.05, true)),
-    S([sk(55, 4, 28.5), sk(50, -3, 22), sk(46, -10, 18)], P(3.0, 0.05, 0.05, true)),
-  ], { bones: ['Skull', 'Mandible'] });
-  M('Digastric', '顎二腹筋', 'M. digastricus', 'head', 1, { origin: '後頭骨の傍顆突起', insertion: '下顎骨の下の縁', action: '口を開ける' }, [
-    S([sk(3, -1, 12.5), sk(18, -12, 10.5), sk(38, -15.5, 9.5), sk(58, -14, 8.5)], P(2.3, 0.08, 0.1)),
-  ], { bones: ['Skull', 'Mandible'] });
-
-  // ===================== 首 =====================
+  buildHeadMuscles(lm, M, S, P);
   M('Sternocephalicus', '胸骨頭筋（胸鎖乳突筋）', 'M. sternocephalicus', 'neck', 1, { origin: '胸骨柄', insertion: '頭骨の乳様突起・項稜', action: '頭と首を下げる・横に向ける' }, [
     S([at(stern(0, 0.2), 3, -2, 0), at(stern(0, 0), 9, 8, 18), [15, 248, 352], [18, 270, 375], sk(12, 1, 20)], P(2.8, 0.05, 0.1)),
   ]);

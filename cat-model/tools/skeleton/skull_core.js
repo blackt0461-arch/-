@@ -41,30 +41,13 @@ export function buildCranium(Q, AX) {
   const [u, v, w] = AX, O = Q(0, 0, 0);
 
   // 本体：前後の各位置で、上の線・下の線・幅に合う丸い断面（上は丸く、下は平たい）。鼻づらは上ほど細い
-  const core = {
-    f: (x, y, z) => {
-      const px = x - O[0], py = y - O[1], pz = z - O[2];
-      const a = px * u[0] + py * u[1] + pz * u[2], b = px * v[0] + py * v[1] + pz * v[2], c = px * w[0] + py * w[1] + pz * w[2];
-      const t0 = top(a), b0 = base(a);
-      const hh = Math.max(0.5, (t0 - b0) / 2), bm = (t0 + b0) / 2;
-      const yy = (b - bm) / hh;                                  // -1（下）〜 1（上）
-      const face = Math.max(0, Math.min(1, (a - 48) / 10));       // 鼻づららしさ
-      const taper = 1 - (0.12 + 0.3 * face) * Math.max(0, yy);   // 上ほど細い
-      const wc = Math.max(0.5, wCore(a) * taper);
-      const p = yy > 0 ? 2.3 : 3.2;
-      const k = Math.pow(Math.pow(Math.abs(c) / wc, p) + Math.pow(Math.abs(yy), p), 1 / p);
-      const dSec = (k - 1) * Math.min(wc, hh);
-      const dEnd = Math.max(aMin - a, a - aMax);
-      return Math.max(dSec, dEnd);
-    },
-    lo: [O[0] - 40, O[1] - 30, O[2] - 40], hi: [O[0] + 40, O[1] + 60, O[2] + 100],
-  };
-
+  const core = sectionShape(Q, AX, top, base, wCore, aMin, aMax);
   // 頬骨のアーチ：上から見た中心と厚み、横から見た上下の帯
   const archLat = D.arch_lateral.map(([a, t, b]) => { const p = rot([a, (t + b) / 2]); return [p[0], p[1], (t - b) / 2]; });
   const archMid = sampler(archLat, 1), archHalfH = sampler(archLat, 2);
   const ad = D.arch_dorsal.map((r) => [r[0] * cosT, (r[1] + r[2]) / 2, (r[2] - r[1]) / 2]).sort((p, q) => p[0] - q[0]);
   const step = Math.max(1, Math.floor(ad.length / 14));
+  const cr0 = sampler(ad.map((r) => [r[0], r[1]]));
   const archPts = [], archR = [], archFlat = [];
   for (let i = 0; i < ad.length; i += step) {
     const [a, cMid, halfW] = ad[i];
@@ -96,7 +79,13 @@ export function buildCranium(Q, AX) {
     ellipsoid(Q(L.mastoid[0], L.mastoid[1] + 2, s * 17), [2.4, 2.8, 2.0], AX),
     ellipsoid(Q(L.jugular_proc[0], L.jugular_proc[1] + 1, s * 12.5), [2.3, 3.0, 2.2], AX),
   ]);
-  let skull = smoothUnion(1.6, core, ...arches, ...procs, ...bits);
+  // 頬骨のアーチの前の付け根（上顎骨・涙骨）：アーチの前端を鼻づらの横へつなぐ
+  const aF = Math.max(...ad.map((r) => r[0]));
+  const roots = [1, -1].map((s) => smoothUnion(1.5,
+    cone(Q(aF - 2, archMid(aF - 2), s * cr0(aF - 2)), Q(aF + 4, archMid(aF) - 1, s * (wCore(aF + 4) - 1.5)), 3.4, 3.0, { dir: w, ratio: 0.6 }),
+    cone(Q(aF - 1, archMid(aF) + 2.5, s * (cr0(aF) - 1)), Q(aF + 3, archMid(aF) + 6, s * (wCore(aF + 3) - 2)), 2.2, 2.0),
+  ));
+  let skull = smoothUnion(1.6, core, ...arches, ...roots, ...procs, ...bits);
   // 中をけずる：眼窩、頭蓋腔、大後頭孔、鼻の穴、鼻腔、外耳道、下顎窩
   const ga = L.glenoid, me = L.meatus;
   const cav = {
@@ -118,7 +107,10 @@ export function buildCranium(Q, AX) {
       cone(Q(me[0], me[1], s * 13), Q(me[0], me[1], s * 21), 2.2, 2.2),
     ]),
   );
-  return { skull, wCore, wOut, top, base, archMid };
+  const archC = sampler(ad.map((r) => [r[0], r[1]]));
+  const archHalfW = sampler(ad.map((r) => [r[0], r[2]]));
+  const grown = (grow) => sectionShape(Q, AX, top, base, wCore, aMin, aMax, grow);
+  return { skull, core, grown, wCore, wOut, top, base, archMid, archHalfH, archC, archHalfW, aMin, aMax };
 }
 
 // ---- 下あごと歯（解剖書の図 36 と 40 から） ----
@@ -200,8 +192,38 @@ export function buildJaw(Q, AX) {
     { id: 'LP4', ja: '下顎第4前臼歯', shape: blade(T.LP4_base[0] - 3.8, T.LP4_base[0] + 3.8, T.LP4_base[1], [[T.LP4_tip[0] - 2.7, T.LP4_base[1] + 2.0, 1.1], [T.LP4_tip[0], T.LP4_tip[1], 1.8], [T.LP4_tip[0] + 2.8, T.LP4_base[1] + 1.8, 1.0]], lc(T.LP4_base[0]), 1) },
     { id: 'LM1', ja: '下顎第1後臼歯（裂肉歯）', shape: blade(T.LM1_tip_a[0] - 1.8, T.LM1_tip_b[0] + 1.6, T.LM1_base[1], [[T.LM1_tip_a[0], T.LM1_tip_a[1], 1.8], [T.LM1_tip_b[0], T.LM1_tip_b[1], 1.9]], lc(T.LM1_base[0]), 1, 2.0) },
   ];
-  return { mandible, condyle: (s) => Q(cond[0], cond[1], s * condC), upper, lower, c0 };
+  return { mandible, condyle: (s) => Q(cond[0], cond[1], s * condC), coronoidTip: Q(T.coronoid_tip[0], T.coronoid_tip[1], c0(T.coronoid_tip[0])), upper, lower, c0 };
 }
 const sub3 = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
 const mul3 = (a, k) => [a[0] * k, a[1] * k, a[2] * k];
 const norm3 = (a) => { const l = Math.hypot(...a) || 1; return [a[0] / l, a[1] / l, a[2] / l]; };
+
+// 前後の各位置で、上の線・下の線・幅に合う断面（上は丸く・下は平たい・鼻づらは上ほど細い）の立体。
+// grow(a,b) を渡すと、その厚みだけ外へふくらませた形になる（筋肉の外側の面に使う）
+export function sectionShape(Q, AX, top, base, wf, aMin, aMax, grow = null) {
+  const [u, v, w] = AX, O = Q(0, 0, 0);
+  return {
+    f: (x, y, z) => {
+      const px = x - O[0], py = y - O[1], pz = z - O[2];
+      const a = px * u[0] + py * u[1] + pz * u[2], b = px * v[0] + py * v[1] + pz * v[2], c = px * w[0] + py * w[1] + pz * w[2];
+      let t0 = top(a), b0 = base(a);
+      let wc0 = wf(a);
+      // 鼻先は丸くおさめる
+      const R = 3.5;
+      if (a > aMax - R) { const k = Math.sqrt(Math.max(0.05, 1 - ((a - (aMax - R)) / R) ** 2)); const m = (t0 + b0) / 2; t0 = m + (t0 - m) * k; b0 = m + (b0 - m) * k; wc0 *= k; }
+      const g = grow ? grow(a, b, c) : [0, 0];                  // [上と横へ, 下へ]
+      t0 += g[0]; b0 -= g[1]; wc0 += g[0];
+      const hh = Math.max(0.5, (t0 - b0) / 2), bm = (t0 + b0) / 2;
+      const yy = (b - bm) / hh;
+      const face = Math.max(0, Math.min(1, (a - 48) / 10));
+      const taper = 1 - (0.12 + 0.3 * face) * Math.max(0, Math.min(1.5, yy));
+      const wc = Math.max(0.5, wc0 * taper);
+      const p = yy > 0 ? 2.3 : 3.2;
+      const k = Math.pow(Math.pow(Math.abs(c) / wc, p) + Math.pow(Math.abs(yy), p), 1 / p);
+      const dSec = (k - 1) * Math.min(wc, hh);
+      const dEnd = Math.max(aMin - a, a - aMax);
+      return Math.max(dSec, dEnd);
+    },
+    lo: [O[0] - 45, O[1] - 35, O[2] - 45], hi: [O[0] + 45, O[1] + 65, O[2] + 105],
+  };
+}
