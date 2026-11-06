@@ -265,15 +265,15 @@ def amp_flow():
     f.resistor_h(286, 336, yc)
     f.text(311, yc - 18, 'R', 'middle', 14)
     f.arrow(340, yc, 356, yc)
-    wave(362, 438, 45, RED)
+    wave(362, 438, -45, RED)  # 出力は V_DD − R·I なので、電流と逆向き（逆相）
     f.text(42, 165, '入力', 'middle', 13, ACC)
     f.text(42, 183, '（小さい）', 'middle', 12, ACC)
     f.text(140, 165, '蛇口', 'middle', 13)
     f.text(234, 165, '電流が', 'middle', 13, GRN)
     f.text(234, 183, '大きく変わる', 'middle', 12, GRN)
-    f.text(311, 165, 'V=IR', 'middle', 13)
+    f.text(311, 165, 'V_{DD}−RI', 'middle', 13)
     f.text(400, 165, '出力', 'middle', 13, RED)
-    f.text(400, 183, '（大きい）', 'middle', 12, RED)
+    f.text(400, 183, '（大きく・逆向き）', 'middle', 12, RED)
     f.save('l0-amp-flow')
 
 

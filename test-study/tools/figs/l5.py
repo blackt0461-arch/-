@@ -33,7 +33,7 @@ def weak_strong():
     f.text(vt, y0 + 22, 'V_{T}', 'middle', 13)
     # 弱反転：直線、強反転：曲がって寝る
     pts = []
-    for k in range(0, 121):
+    for k in range(0, 111):
         x = x0 + 10 + k * 3.0
         if x <= vt:
             y = 225 - (x - x0 - 10) * 0.95
@@ -43,9 +43,9 @@ def weak_strong():
         pts.append((x, y))
     f.line(*[p for p in pts if p[0] <= vt], color=ACC, w=3)
     f.line(*[p for p in pts if p[0] >= vt], color=RED, w=3)
-    f.text(140, 120, '弱反転', 'middle', 14, ACC)
-    f.text(140, 138, '指数関数', 'middle', 12, ACC)
-    f.text(140, 154, '→ 対数軸で直線', 'middle', 12, ACC)
+    f.text(x0 + 12, 60, '弱反転', 'start', 14, ACC)
+    f.text(x0 + 12, 78, '指数関数', 'start', 12, ACC)
+    f.text(x0 + 12, 94, '→ 対数軸で直線', 'start', 12, ACC)
     f.text(325, 55, '強反転', 'middle', 14, RED)
     f.text(325, 73, '曲がって寝てくる', 'middle', 12, RED)
     f.text(325, 89, '（この授業で主に扱う）', 'middle', 12, SUB)
@@ -59,7 +59,7 @@ def slope_ball():
     pts = [(x, gx(x)) for x in range(40, 341, 4)]
     f.add('<polygon points="' + ' '.join(f'{x},{y:.1f}' for x, y in pts) + ' 340,262 40,262" fill="#e9eafc"/>')
     f.line(*pts, color=INK, w=3)
-    f.text(345, 40, '坂 ＝ I_{D} のグラフ', 'end', 12, SUB)
+    f.text(330, 252, '坂 ＝ I_{D} のグラフ', 'end', 12, SUB)
     for (bx, c, lab1, lab2) in [(120, ACC, 'ゆるい所', '高さ 少し変わる'), (285, RED, '急な所', '高さ 大きく変わる')]:
         by = gx(bx)
         d = 22
@@ -72,11 +72,11 @@ def slope_ball():
         f.line((bx + d, y2), (xr + 6, y2), color=c, w=1.2, dash='3 3')
         f.arrow(xr, (y1 + y2) / 2, xr, y2, color=c, w=2.2)
         f.arrow(xr, (y1 + y2) / 2, xr, y1, color=c, w=2.2)
-    f.text(120, 195, 'ゆるい所', 'middle', 13, ACC)
-    f.text(165, 220, '→ 高さ 少し変わる', 'start', 12, ACC)
+    f.text(120, 165, 'ゆるい所 → 高さ', 'middle', 13, ACC)
+    f.text(120, 183, '少し変わる', 'middle', 13, ACC)
     f.text(240, 70, '急な所 → 高さ', 'end', 13, RED)
     f.text(240, 88, '大きく変わる', 'end', 13, RED)
-    f.text(120, 150, '同じだけ揺らす', 'middle', 12, SUB)
+    f.text(20, 28, 'ボールを左右に同じだけ揺らす', 'start', 12, SUB)
     f.text(395, 140, '傾き', 'middle', 13, INK)
     f.text(395, 158, '＝ g_{m}', 'middle', 13, INK)
     f.save('l5-slope-ball')
@@ -89,8 +89,8 @@ def bias_abc():
     axes(f, x0, y0, 420, 25, 'V_{GS}', 'I_{D}')
     sx, vt = 60, 1.0
     X = lambda v: x0 + v * sx
-    Y = lambda v: y0 - 30 * (v - vt) ** 2
-    pts = [(X(v), Y(v)) for v in [vt + k * 3.45 / 80 for k in range(81)]]
+    Y = lambda v: y0 - 17 * (v - vt) ** 2
+    pts = [(X(v), Y(v)) for v in [vt + k * 3.5 / 80 for k in range(81)]]
     f.line((x0, y0), (X(vt), y0), *pts, color=INK, w=2.5)
     f.line((X(vt), y0), (X(vt), y0 + 5)); f.text(X(vt), y0 + 20, 'V_{T}', 'middle', 12)
     d = 0.22
@@ -136,12 +136,11 @@ def dc_signal():
     f.arrow(x1, ym, 440, ym); f.arrow(x1, 200, x1, 40)
     f.text(440, ym + 20, '時間', 'end', 12, SUB)
     f.text(x1 + 4, 32, 'i_{d}', 'start', 13)
-    f.text(x1 - 6, ym + 5, '0', 'end', 12)
+    f.text(x1 - 6, ym + 18, '0', 'end', 12)
     pts = [(x1 + 10 + k, ym - 32 * math.sin(k / 160 * 2 * math.pi * 2.5)) for k in range(0, 161, 2)]
     f.line(*pts, color=RED, w=2.5)
     f.text(350, 190, '小信号 i_{d}（ゆれ・小文字）', 'middle', 12, RED)
     f.text(350, 210, '直流を取りのぞいた部分', 'middle', 12, SUB)
-    f.arrow(222, 120, 252, 120, color=SUB, w=2.5)
     f.save('l5-dc-signal')
 
 
@@ -171,20 +170,20 @@ def gm_triangle():
     axes(f, x0, y0, 400, 25, 'V_{GS}', 'I_{D}')
     sx, vt = 70, 0.8
     X = lambda v: x0 + v * sx
-    Y = lambda v: y0 - 32 * (v - vt) ** 2
+    Y = lambda v: y0 - 20 * (v - vt) ** 2
     pts = [(X(v), Y(v)) for v in [vt + k * 3.6 / 80 for k in range(81)] if Y(v) > 30]
     f.line((x0, y0), (X(vt), y0), *pts, color=INK, w=2.5)
     vb = 3.0
-    g = 64 * (vb - vt)           # 傾き（画面上：縦px / V）
-    dv = 0.75
+    g = 40 * (vb - vt)           # 傾き（画面上：縦px / V）
+    dv = 0.7
     px, py = X(vb), Y(vb)
-    f.line((px - 1.3 * sx, py + g * 1.3), (px + 1.2 * sx, py - g * 1.2), color=ACC, w=2, dash='6 4')
+    f.line((px - 1.0 * sx, py + g * 1.0), (px + 1.2 * sx, py - g * 1.2), color=ACC, w=2, dash='6 4')
     f.line((px, py), (px + dv * sx, py), color=SUB, w=2.5)
     f.line((px + dv * sx, py), (px + dv * sx, py - g * dv), color=RED, w=3)
     f.dot(px, py, 5, INK)
     f.text(px + dv * sx / 2, py + 20, 'v_{gs}', 'middle', 14, SUB)
     f.text(px + dv * sx + 8, py - g * dv / 2 + 5, 'i_{d}＝g_{m}v_{gs}', 'start', 14, RED)
-    f.text(px - 1.1 * sx, py + g * 1.1 - 12, '傾き g_{m}', 'end', 13, ACC)
+    f.text(px - 0.8 * sx, py + g * 0.8 + 4, '傾き g_{m}', 'end', 13, ACC)
     f.text(px - 6, py + 2, 'バイアス点', 'end', 12, INK)
     f.text(x0 + 10, 42, '縦のずれ ＝ 傾き × 横のずれ', 'start', 13, INK)
     f.save('l5-gm-triangle')
@@ -254,7 +253,7 @@ def gmb_shift():
     X = lambda v: x0 + v * sx
     vg = 4.2
     for vt, c, lab in [(1.0, INK, 'はじめ'), (1.6, RED, 'ソース↑のあと')]:
-        Y = lambda v, vt=vt: y0 - 22 * (v - vt) ** 2
+        Y = lambda v, vt=vt: y0 - 14 * (v - vt) ** 2
         pts = [(X(v), Y(v)) for v in [vt + k * 4.0 / 80 for k in range(81)] if Y(v) > 35]
         f.line((x0, y0), (X(vt), y0), *pts, color=c, w=2.5)
         f.line((X(vt), y0), (X(vt), y0 + 5), color=c)
@@ -265,7 +264,7 @@ def gmb_shift():
     f.text(X(1.45), y0 - 22, 'V_{T}↑', 'middle', 12, RED)
     f.line((X(vg), y0), (X(vg), 40), color=SUB, w=1.4, dash='5 4')
     f.text(X(vg), y0 + 20, '同じ V_{GS}', 'middle', 12, SUB)
-    y1, y2 = y0 - 22 * (vg - 1.0) ** 2, y0 - 22 * (vg - 1.6) ** 2
+    y1, y2 = y0 - 14 * (vg - 1.0) ** 2, y0 - 14 * (vg - 1.6) ** 2
     f.arrow(X(vg) + 16, y1, X(vg) + 16, y2, color=RED, w=2.5)
     f.text(X(vg) + 24, (y1 + y2) / 2 + 5, '電流↓', 'start', 14, RED)
     f.text(x0 + 10, 42, '黒：はじめ', 'start', 12, INK)
@@ -295,18 +294,18 @@ def r0_slope():
     f.text((xa + xb) / 2, ya + 20, 'ΔV_{DS}（大きく変えても）', 'middle', 12, SUB)
     f.text(xb + 6, yb - 6, 'ΔI_{D}', 'start', 13, RED)
     f.text(xb + 6, yb + 10, '（少し）', 'start', 12, RED)
-    f.text(200, 50, 'r_{0}＝ΔV_{DS}÷ΔI_{D}', 'middle', 14, ACC)
-    f.text(200, 70, '＝ 傾きの逆数（微分抵抗）', 'middle', 13, ACC)
-    f.text(200, 90, '線が寝ているほど r_{0} は大きい', 'middle', 12, INK)
-    f.text(x0 + vk + 70, y0 - 30, '飽和（少しだけ右上がり）', 'start', 12, SUB)
+    f.text(270, 160, 'r_{0}＝ΔV_{DS}÷ΔI_{D}', 'middle', 14, ACC)
+    f.text(270, 180, '＝ 傾きの逆数（微分抵抗）', 'middle', 13, ACC)
+    f.text(270, 200, '線が寝ているほど r_{0} は大きい', 'middle', 12, INK)
+    f.text(270, 228, '飽和：少しだけ右上がり', 'middle', 12, SUB)
     f.save('l5-r0-slope')
 
 
 # ===== 11. 水圧を変えても流れが変わらない蛇口 =====
 def faucet():
-    f = Fig(440, 270)
+    f = Fig(440, 290)
     for k, (lv, lab) in enumerate([(70, '水圧 小'), (25, '水圧 大')]):
-        x = 30 + k * 215
+        x = 30 + k * 200
         # タンク
         f.add(f'<rect x="{x}" y="{lv + 20}" width="70" height="{150 - lv}" fill="#bfe0ff"/>')
         f.line((x, 20), (x, 170), (x + 70, 170), (x + 70, 20), w=2.5)
@@ -318,9 +317,8 @@ def faucet():
         # 流れ（同じ太さ）
         f.add(f'<rect x="{x + 135}" y="186" width="10" height="44" fill="#7cc0ff"/>')
         f.text(x + 155, 215, '同じ量', 'start', 13, GRN)
-    f.arrow(110, 250, 330, 250, color=SUB, w=2)
-    f.text(220, 242, '水圧（V_{DS}）を変えても', 'middle', 12, SUB)
-    f.text(220, 268, '流れ（I_{D}）はほぼ同じ → 変化に対して抵抗が高い', 'middle', 12, INK)
+    f.text(220, 256, '水圧（V_{DS}）を変えても 流れ（I_{D}）はほぼ同じ', 'middle', 12, SUB)
+    f.text(220, 278, '→ 変化に対しては抵抗が高い', 'middle', 13, INK)
     f.save('l5-faucet')
 
 
@@ -354,12 +352,12 @@ def gm_r0_id():
     f = Fig(420, 280)
     x0, y0 = 50, 230
     axes(f, x0, y0, 400, 25, 'I_{D}（バイアス電流）', '')
-    pts = [(x0 + 5 + t, y0 - 13 * math.sqrt(t)) for t in range(0, 331, 4)]
+    pts = [(x0 + 5 + t, y0 - 9 * math.sqrt(t)) for t in range(0, 331, 4)]
     f.line(*pts, color=ACC, w=3)
-    f.text(390, y0 - 13 * math.sqrt(330) - 10, 'g_{m}≈√(2βI_{D})　増える', 'end', 13, ACC)
+    f.text(390, y0 - 9 * math.sqrt(330) - 10, 'g_{m}≈√(2βI_{D})　増える', 'end', 13, ACC)
     pts = [(x0 + 5 + t, y0 - min(190, 2600 / (t + 12))) for t in range(4, 331, 3)]
     f.line(*pts, color=RED, w=3)
-    f.text(385, y0 - 2600 / 342 - 12, 'r_{0}≈1/(λI_{D})　減る', 'end', 13, RED)
+    f.text(385, y0 - 32, 'r_{0}≈1/(λI_{D})　減る', 'end', 13, RED)
     f.text(x0 + 10, 270, '動作点（I_{D}）を決めると g_{m} と r_{0} が決まる', 'start', 12, INK)
     f.save('l5-gm-r0-id')
 
@@ -419,7 +417,7 @@ def gain_triangle():
     f = Fig(440, 290)
     x0, y0 = 40, 250
     axes(f, x0, y0, 420, 25, 'V_{DS}', 'I_{D}')
-    I0 = 150
+    I0 = 110
     s = 0.22                      # 特性線の傾き（px/px）= 1/r_0
     i = 46                        # 電流の増加分
     x1 = 340
@@ -430,8 +428,8 @@ def gain_triangle():
     f.line((xl, y0 - L1(xl)), (xr, y0 - L1(xr)), color=INK, w=2.5)
     f.line((xl, y0 - L2(xl)), (xr - 50, y0 - L2(xr - 50)), color=ACC, w=2.5)
     f.line((x0, y0 - I0), (415, y0 - I0), color=RED, w=1.8)
-    f.text(415, y0 - I0 + 18, 'I_{D}＝I_{0}', 'end', 12, RED)
-    f.text(xr, y0 - L1(xr) - 8, 'V_{IN}', 'end', 12, INK)
+    f.text(x0 + 6, y0 - I0 - 8, 'I_{D}＝I_{0}', 'start', 12, RED)
+    f.text(xr, y0 - L1(xr) + 20, 'V_{IN}', 'end', 12, INK)
     f.text(xr - 54, y0 - L2(xr - 50) - 8, 'V_{IN}+v_{in}', 'end', 12, ACC)
     # 三角形
     tri = f'{x2},{y0 - I0} {x1},{y0 - I0 - i} {x1},{y0 - I0}'
@@ -440,7 +438,7 @@ def gain_triangle():
     f.line((x2, y0 - I0), (x1, y0 - I0), color=RED, w=4)
     f.dot(x1, y0 - I0, 5, INK); f.dot(x2, y0 - I0, 5, ACC)
     f.text(x1 + 6, y0 - I0 - i / 2 + 5, 'i＝g_{m}v_{in}', 'start', 13, GRN)
-    f.text((x1 + x2) / 2, y0 - I0 + 20, '底辺 |v_{out}|', 'middle', 13, RED)
+    f.text((x1 + x2) / 2, y0 - I0 + 50, '底辺 |v_{out}|', 'middle', 13, RED)
     f.text(x2 + 30, y0 - I0 - i - 14, '傾き 1/r_{0}', 'middle', 13, ACC)
     f.text(x0 + 10, 40, '高さ＝傾き×底辺 → i＝|v_{out}|/r_{0}', 'start', 13, INK)
     f.text(x0 + 10, 60, '→ |v_{out}|＝r_{0}g_{m}v_{in}', 'start', 13, INK)

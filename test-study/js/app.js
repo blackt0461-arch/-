@@ -73,6 +73,9 @@ function termify(root) {
     const frag = document.createDocumentFragment();
     while ((m = GLOSS.re.exec(text))) {
       const w = m[0];
+      // 英字の言葉（MOS など）は、もっと長い英単語の一部（CMOS など）には当てない
+      if (/^[A-Za-z]/.test(w) && /[A-Za-z]/.test(text[m.index - 1] || '')) continue;
+      if (/[A-Za-z]$/.test(w) && /[A-Za-z]/.test(text[m.index + w.length] || '')) continue;
       if (used.has(GLOSS.map[w].t)) continue; // 同じ言葉は1画面に1回だけ
       used.add(GLOSS.map[w].t); hit = true;
       frag.appendChild(document.createTextNode(text.slice(last, m.index)));
