@@ -179,6 +179,14 @@ export function buildHindlimb(api, lm) {
     const dirP = norm(rotate([0, -0.5, 0.87], [0, 1, 0], splay));
     const dirM = norm(rotate([0, -0.12, 0.99], [0, 1, 0], splay * 1.3));
     const lens = { 2: [10.5, 6.5, 6.5], 3: [12, 7.5, 7], 4: [12, 7.5, 7], 5: [10.5, 6.5, 6.5] }[m.d];
+    // 筋肉づくり用：指の付け根・関節の位置
+    {
+      const p1b = add(head, mul(dirP, lens[0]));
+      const hasM = true;
+      const p2b = hasM ? add(p1b, mul(dirM, lens[1])) : p1b;
+      lm.F.digH ||= {};
+      lm.F.digH[m.d] = { mcBase: a, mcHead: b, head, p1b, p2b, dirP, dirM, lens, r: m.r };
+    }
     const bones = buildDigit({ name: 'H' + m.d, base: head, dirP, dirM, lens, r: m.r * 0.92, side: 1, prefix: '', parentId: 'MT' + m.d, label: names[m.d] });
     for (const b2 of bones) reg({ ...b2, h: b2.h ?? 0.15 });
   }
