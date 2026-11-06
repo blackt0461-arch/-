@@ -183,7 +183,7 @@ def gm_triangle():
     f.dot(px, py, 5, INK)
     f.text(px + dv * sx / 2, py + 20, 'v_{gs}', 'middle', 14, SUB)
     f.text(px + dv * sx + 8, py - g * dv / 2 + 5, 'i_{d}＝g_{m}v_{gs}', 'start', 14, RED)
-    f.text(px - 0.8 * sx, py + g * 0.8 + 4, '傾き g_{m}', 'end', 13, ACC)
+    f.text(px - 0.45 * sx - 22, py + g * 0.45 - 4, '傾き g_{m}', 'end', 13, ACC)
     f.text(px - 6, py + 2, 'バイアス点', 'end', 12, INK)
     f.text(x0 + 10, 42, '縦のずれ ＝ 傾き × 横のずれ', 'start', 13, INK)
     f.save('l5-gm-triangle')
@@ -287,13 +287,13 @@ def r0_slope():
         return 130 * (1 + lam * d)
     pts = [(x, y0 - I(x)) for x in range(x0, 401, 3)]
     f.line(*pts, color=INK, w=2.5)
-    xa, xb = 210, 360
+    xa, xb = 190, 330
     ya, yb = y0 - I(xa), y0 - I(xb)
-    f.line((xa, ya), (xb, ya), color=SUB, w=2)
+    f.line((xa, ya), (xb, ya), color=SUB, w=3, dash='6 4')
     f.line((xb, ya), (xb, yb), color=RED, w=3)
     f.text((xa + xb) / 2, ya + 20, 'ΔV_{DS}（大きく変えても）', 'middle', 12, SUB)
-    f.text(xb + 6, yb - 6, 'ΔI_{D}', 'start', 13, RED)
-    f.text(xb + 6, yb + 10, '（少し）', 'start', 12, RED)
+    f.text(xb + 8, (ya + yb) / 2 + 24, 'ΔI_{D}', 'start', 13, RED)
+    f.text(xb + 8, (ya + yb) / 2 + 40, '（少し）', 'start', 12, RED)
     f.text(270, 160, 'r_{0}＝ΔV_{DS}÷ΔI_{D}', 'middle', 14, ACC)
     f.text(270, 180, '＝ 傾きの逆数（微分抵抗）', 'middle', 13, ACC)
     f.text(270, 200, '線が寝ているほど r_{0} は大きい', 'middle', 12, INK)
@@ -349,7 +349,7 @@ def ohm_vs_sat():
 
 # ===== 13. g_m と r_0 はバイアス電流で決まる =====
 def gm_r0_id():
-    f = Fig(420, 280)
+    f = Fig(420, 295)
     x0, y0 = 50, 230
     axes(f, x0, y0, 400, 25, 'I_{D}（バイアス電流）', '')
     pts = [(x0 + 5 + t, y0 - 9 * math.sqrt(t)) for t in range(0, 331, 4)]
@@ -358,7 +358,7 @@ def gm_r0_id():
     pts = [(x0 + 5 + t, y0 - min(190, 2600 / (t + 12))) for t in range(4, 331, 3)]
     f.line(*pts, color=RED, w=3)
     f.text(385, y0 - 32, 'r_{0}≈1/(λI_{D})　減る', 'end', 13, RED)
-    f.text(x0 + 10, 270, '動作点（I_{D}）を決めると g_{m} と r_{0} が決まる', 'start', 12, INK)
+    f.text(x0 + 10, 285, '動作点（I_{D}）を決めると g_{m} と r_{0} が決まる', 'start', 12, INK)
     f.save('l5-gm-r0-id')
 
 
@@ -424,12 +424,12 @@ def gain_triangle():
     x2 = x1 - i / s
     L1 = lambda x: I0 - s * (x1 - x)        # 下の線（V_IN）
     L2 = lambda x: I0 + i - s * (x1 - x)    # 上の線（V_IN+v_in）
-    xl, xr = 60, 410
+    xl, xr = 110, 410
     f.line((xl, y0 - L1(xl)), (xr, y0 - L1(xr)), color=INK, w=2.5)
     f.line((xl, y0 - L2(xl)), (xr - 50, y0 - L2(xr - 50)), color=ACC, w=2.5)
     f.line((x0, y0 - I0), (415, y0 - I0), color=RED, w=1.8)
-    f.text(x0 + 6, y0 - I0 - 8, 'I_{D}＝I_{0}', 'start', 12, RED)
-    f.text(xr, y0 - L1(xr) + 20, 'V_{IN}', 'end', 12, INK)
+    f.text(x0 + 6, y0 - I0 + 18, 'I_{D}＝I_{0}', 'start', 12, RED)
+    f.text(xr, y0 - L1(xr) + 34, 'V_{IN}', 'end', 12, INK)
     f.text(xr - 54, y0 - L2(xr - 50) - 8, 'V_{IN}+v_{in}', 'end', 12, ACC)
     # 三角形
     tri = f'{x2},{y0 - I0} {x1},{y0 - I0 - i} {x1},{y0 - I0}'
@@ -439,7 +439,7 @@ def gain_triangle():
     f.dot(x1, y0 - I0, 5, INK); f.dot(x2, y0 - I0, 5, ACC)
     f.text(x1 + 6, y0 - I0 - i / 2 + 5, 'i＝g_{m}v_{in}', 'start', 13, GRN)
     f.text((x1 + x2) / 2, y0 - I0 + 50, '底辺 |v_{out}|', 'middle', 13, RED)
-    f.text(x2 + 30, y0 - I0 - i - 14, '傾き 1/r_{0}', 'middle', 13, ACC)
+    f.text(x2 + 56, y0 - I0 - 18, '傾き 1/r_{0}', 'end', 13, ACC)
     f.text(x0 + 10, 40, '高さ＝傾き×底辺 → i＝|v_{out}|/r_{0}', 'start', 13, INK)
     f.text(x0 + 10, 60, '→ |v_{out}|＝r_{0}g_{m}v_{in}', 'start', 13, INK)
     f.save('l5-gain-triangle')
