@@ -13,7 +13,7 @@
 const ROOT_NAME = 'LYRIC BOOK';
 const DB_NAME = 'データ（さわらないでください）.json';
 const KEEP_DAYS = 30;
-const SERVER_VERSION = 2;
+const SERVER_VERSION = 3;
 
 // ---------- はじめの準備 ----------
 function setup() {
@@ -301,6 +301,34 @@ const API = {
     for (const t in db.sessions) if (db.sessions[t].uid === u.id) delete db.sessions[t];
     delete db.users[a.p_uid];
     db._dirty = true;
+  },
+  // メンバーに見せている曲（自分以外の人の、shared の曲）
+  lb_shared(db, a) {
+    const me = who_(db, a.p_token);
+    const out = [];
+    Object.keys(db.users).forEach(id => {
+      const u = db.users[id];
+      if (u === me) return;
+      Object.keys(u.songs || {}).forEach(sid => {
+        const s = u.songs[sid];
+        if (!s.data || !s.data.shared || s.data.deleted_at) return;
+        const artist = s.data.artist_id && u.artists[s.data.artist_id] ? u.artists[s.data.artist_id].data.name : '';
+        out.push({ owner_id: u.id, owner: u.username, id: sid, data: s.data, artist: artist, updated_at: s.updated_at });
+      });
+    });
+    return out;
+  },
+  // 試聴の音を取りよせる（Apple の試聴だけ。キーとテンポの推定に使う）
+  lb_preview(db, a) {
+    who_(db, a.p_token);
+    const url = String(a.p_url || '');
+    if (!/^https:\/\/[a-z0-9.-]+\.(apple\.com|mzstatic\.com)\//.test(url)) throw err_('not_found');
+    const res = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
+    if (res.getResponseCode() >= 300) throw err_('not_found');
+    const blob = res.getBlob();
+    const bytes = blob.getBytes();
+    if (bytes.length > 4000000) throw err_('too_big');
+    return { mime: blob.getContentType() || 'audio/mp4', audio: Utilities.base64Encode(bytes) };
   },
   lb_get_recording(db, a) {
     const u = who_(db, a.p_token);

@@ -12,7 +12,13 @@ export function parse(text) {
   let li = 0;
   for (const raw of (text || '').replace(/\r/g, '').split('\n')) {
     const m = raw.match(PART_RE);
-    if (m) { cur = { name: m[1].trim(), lines: [] }; parts.push(cur); continue; }
+    if (m) {
+      // [間奏 8] のように数字があれば、その小節数だけ待つ
+      const nm = m[1].trim().match(/^(.*?)[\s　]*([0-9０-９]+(?:\.[0-9]+)?)$/);
+      const bars = nm ? +nm[2].normalize('NFKC') : null;
+      cur = { name: nm && nm[1] ? nm[1].trim() : m[1].trim(), bars, lines: [] };
+      parts.push(cur); continue;
+    }
     if (!cur) { cur = { name: '', lines: [] }; parts.push(cur); }
     cur.lines.push({ t: raw, idx: li++ });
   }
@@ -42,19 +48,47 @@ export function realign(oldAnno, newText) {
     for (let k = ptr; k < old.length; k++) if (!old[k].used && old[k].a.t === t) { hit = old[k]; break; }
     if (!hit) for (let k = 0; k < ptr && k < old.length; k++) if (!old[k].used && old[k].a.t === t) { hit = old[k]; break; }
     if (hit) { hit.used = true; ptr = hit.i + 1; out.push({ ...hit.a, t }); continue; }
-    // 同じ位置の行が少しだけ変わった場合：はみ出さない書きこみとメモは残す
+    // 同じ位置の行が少しだけ変わった場合：変わっていない前後の文字についた書きこみは、位置をずらして残す
     const same = old[j] && !old[j].used && t.trim() && old[j].a.t.trim() ? old[j] : null;
     if (same) {
       same.used = true;
+      const map = charMap(same.a.t, t);
       out.push({
         t,
-        m: (same.a.m || []).filter(x => x.i < [...t].length),
-        c: (same.a.c || []).filter(x => x.s < [...t].length).map(x => ({ ...x, e: Math.min(x.e, [...t].length) })),
+        m: (same.a.m || []).map(x => ({ ...x, i: map(x.i) })).filter(x => x.i != null),
+        c: (same.a.c || []).map(x => {
+          let s = null, e = null;
+          for (let i = x.s; i < x.e; i++) { const n = map(i); if (n == null) continue; if (s == null) s = n; e = n + 1; }
+          return s == null ? null : { ...x, s, e };
+        }).filter(Boolean),
         memo: same.a.memo || '',
       });
     } else out.push({ t, m: [], c: [], memo: '' });
   }
   return out;
+}
+
+// 古い行の i 文字目が、新しい行の何文字目になるか（同じ文字の並びを照らし合わせる。書き換えた文字は null）
+function charMap(oldT, newT) {
+  const a = [...oldT], b = [...newT];
+  const n = a.length, m = b.length;
+  const dp = Array.from({ length: n + 1 }, () => new Uint16Array(m + 1));
+  for (let i = n - 1; i >= 0; i--) for (let j = m - 1; j >= 0; j--) {
+    dp[i][j] = a[i] === b[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
+  }
+  const map = new Map();
+  let i = 0, j = 0;
+  while (i < n && j < m) {
+    if (a[i] === b[j]) { map.set(i, j); i++; j++; }
+    else if (dp[i + 1][j] >= dp[i][j + 1]) i++;
+    else j++;
+  }
+  return k => (map.has(k) ? map.get(k) : null);
+}
+
+// 1行の文字数（空白・記号を除く）
+export function charCount(t) {
+  return [...String(t || '').replace(/[\s　、。，．！？!?・「」『』（）()…ー〜~,.\-]/g, '')].length;
 }
 
 export function ensureAnno(song) {
