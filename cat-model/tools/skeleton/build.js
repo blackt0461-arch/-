@@ -8,7 +8,9 @@ import { availableParallelism } from 'node:os';
 import { ROM } from './landmarks.js';
 import { mirrorX } from './mesher.js';
 import { writeGLB } from './glb.js';
-import { prepare } from './jobs.js';
+import { prepare, taubin } from './jobs.js';
+import { buildSkin, skinWeightsFromSources, tabbyColor } from './skin.js';
+import { MeshoptSimplifier } from 'meshoptimizer';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const args = Object.fromEntries(process.argv.slice(2).map((a) => { const [k, v] = a.replace(/^--/, '').split('='); return [k, v ?? true]; }));
@@ -29,11 +31,15 @@ export const MATERIALS = [
   { key: 'disc', name: '椎間板', color: [0.62, 0.76, 0.84, 1], roughness: 0.4 },
   { key: 'claw', name: '爪', color: [0.86, 0.82, 0.72, 1], roughness: 0.4 },
   { key: 'muscle', name: '筋肉', color: [1, 1, 1, 1], roughness: 0.5 },
+  { key: 'organ', name: '内臓', color: [1, 1, 1, 1], roughness: 0.4 },
+  { key: 'eye', name: '目', color: [1, 1, 1, 1], roughness: 0.06 },
+  { key: 'skin', name: '皮ふ', color: [1, 1, 1, 1], roughness: 0.8 },
+  { key: 'whisker', name: 'ひげ', color: [0.96, 0.95, 0.92, 1], roughness: 0.35 },
 ];
 const matIndex = Object.fromEntries(MATERIALS.map((m, i) => [m.key, i]));
 
 const t0 = Date.now();
-const { defs, mdefs } = prepare(opts);
+const { defs, mdefs, lm } = prepare(opts);
 
 // 同じ名前が2つないか確かめる
 {
@@ -42,7 +48,7 @@ const { defs, mdefs } = prepare(opts);
 }
 
 // ---- 手分けして形を作る ----
-const jobs = [...defs.filter((d) => d.shape).map((d) => ({ type: 'bone', id: d.id })), ...mdefs.map((m) => ({ type: 'muscle', id: m.id }))];
+const jobs = [...defs.filter((d) => d.shape || d.mesh).map((d) => ({ type: 'bone', id: d.id })), ...mdefs.map((m) => ({ type: 'muscle', id: m.id }))];
 // 重い仕事（筋肉・大きな骨）から順に、空いている作業員へ
 const weight = (j) => (j.type === 'muscle' ? 10 : 1);
 jobs.sort((a, b) => weight(b) - weight(a));
@@ -71,7 +77,7 @@ const jointOf = (it) => (it.side === 'R' ? [-it.joint[0], it.joint[1], it.joint[
 let tris = 0;
 const nodes = items.map((it) => {
   let mesh = null;
-  if (it.shape) {
+  if (it.shape || it.mesh) {
     let m = results.get('bone:' + it.baseId).m;
     if (it.side === 'R') m = mirrorX(m);
     const j = jointOf(it);
@@ -79,7 +85,7 @@ const nodes = items.map((it) => {
     for (let q = 0; q < p.length; q += 3) {
       p[q] = (m.positions[q] - j[0]) / 1000; p[q + 1] = (m.positions[q + 1] - j[1]) / 1000; p[q + 2] = (m.positions[q + 2] - j[2]) / 1000;
     }
-    mesh = { positions: p, normals: m.normals, indices: m.indices };
+    mesh = { positions: p, normals: m.normals, indices: m.indices, ...(m.colors ? { colors: m.colors } : {}) };
     tris += m.indices.length / 3;
   }
   const j = jointOf(it);
@@ -112,7 +118,7 @@ if (mdefs.length) {
       const mm = side === 'R' ? mirrorX(r.m) : r.m;
       const n = mm.positions.length / 3;
       const joints = new Uint16Array(n * 4), weights = new Float32Array(n * 4), colors = new Uint8Array(n * 4);
-      const base = md.kind === 'tendon' ? tendonColor : layerColor[md.layer];
+      const base = md.color || (md.kind === 'tendon' ? tendonColor : layerColor[md.layer]);
       for (let v = 0; v < n; v++) {
         const js = r.joints[v], ws = r.weights[v];
         let sum = 0;
@@ -131,12 +137,56 @@ if (mdefs.length) {
       nodes.push({
         name: 'M_' + md.id + (side ? '_' + side : ''), parent: -1, translation: [0, 0, 0],
         mesh: { positions: p, normals: mm.normals, indices: mm.indices, colors, joints, weights },
-        material: matIndex.muscle,
-        extras: { ja: md.ja, la: md.la, region: 'muscle', group: md.region, layer: md.layer, side, kind: md.kind || 'muscle', origin: md.origin, insertion: md.insertion, action: md.action },
+        material: md.kind === 'organ' ? matIndex.organ : matIndex.muscle,
+        extras: { ja: md.ja, la: md.la, region: md.kind === 'organ' ? 'organ' : 'muscle', group: md.region, layer: md.layer, side, kind: md.kind || 'muscle', origin: md.origin, insertion: md.insertion, action: md.action },
       });
       tris += mm.indices.length / 3;
       counts[md.kind || 'muscle'] = (counts[md.kind || 'muscle'] || 0) + 1;
     }
+  }
+  // ---- 皮ふ ----
+  if (args.skin !== '0') {
+    const ts = Date.now();
+    const skip = new Set(['claw', 'tooth', 'whisker', 'skin', 'eye']);
+    const sources = [];
+    items.forEach((it, i) => {
+      if (!(it.shape || it.mesh) || skip.has(it.mat || 'bone')) return;
+      let m = results.get('bone:' + it.baseId).m;
+      if (it.side === 'R') m = mirrorX(m);
+      sources.push({ positions: m.positions, indices: m.indices, weightsOf: () => [[i], [1]], stride: 2 });
+    });
+    for (const nd of nodes) if (nd.mesh && nd.mesh.joints) {
+      const P = new Float32Array(nd.mesh.positions.length); for (let q = 0; q < P.length; q++) P[q] = nd.mesh.positions[q] * 1000;
+      const J = nd.mesh.joints, Wt = nd.mesh.weights;
+      sources.push({ positions: P, indices: nd.mesh.indices, weightsOf: (v) => [[J[v * 4], J[v * 4 + 1], J[v * 4 + 2], J[v * 4 + 3]], [Wt[v * 4], Wt[v * 4 + 1], Wt[v * 4 + 2], Wt[v * 4 + 3]]], stride: 1 });
+    }
+    let sm = buildSkin({ sources, lm, h: Number(args.skinh || 1.0) });
+    taubin(sm, 4);
+    await MeshoptSimplifier.ready;
+    {
+      const target = Math.min(sm.indices.length, 3 * Number(args.skintris || 170000));
+      const [ind] = MeshoptSimplifier.simplify(sm.indices, sm.positions, 3, target, 0.0006, []);
+      const remap = new Int32Array(sm.positions.length / 3).fill(-1); const P = [], Nn = [];
+      const out = new Uint32Array(ind.length);
+      for (let q = 0; q < ind.length; q++) { const v = ind[q]; if (remap[v] < 0) { remap[v] = P.length / 3; P.push(sm.positions[v * 3], sm.positions[v * 3 + 1], sm.positions[v * 3 + 2]); Nn.push(sm.normals[v * 3], sm.normals[v * 3 + 1], sm.normals[v * 3 + 2]); } out[q] = remap[v]; }
+      sm = { positions: new Float32Array(P), normals: new Float32Array(Nn), indices: out };
+      taubin(sm, 1);
+    }
+    const sw = skinWeightsFromSources(sm, sources);
+    const n = sm.positions.length / 3;
+    const colors = new Uint8Array(n * 4);
+    for (let v = 0; v < n; v++) {
+      const p = [sm.positions[v * 3], sm.positions[v * 3 + 1], sm.positions[v * 3 + 2]], nn = [sm.normals[v * 3], sm.normals[v * 3 + 1], sm.normals[v * 3 + 2]];
+      const c = tabbyColor(p, nn, items[sw.dominant[v]]?.baseId || '', lm);
+      for (let k = 0; k < 4; k++) colors[v * 4 + k] = Math.round(Math.max(0, Math.min(1, c[k])) * 255);
+    }
+    const p = new Float32Array(sm.positions.length); for (let q = 0; q < p.length; q++) p[q] = sm.positions[q] / 1000;
+    nodes.push({ name: 'Skin', parent: -1, translation: [0, 0, 0], material: matIndex.skin,
+      mesh: { positions: p, normals: sm.normals, indices: sm.indices, colors, joints: sw.joints, weights: sw.weights },
+      extras: { ja: '皮ふと毛', la: 'Cutis et pili', region: 'skin', kind: 'skin', furMaxMM: 12, note: '頂点の色＝毛の色、A＝毛の長さ（1 で 12mm）' } });
+    counts.skin = (counts.skin || 0) + 1;
+    tris += sm.indices.length / 3;
+    console.log(`皮ふ 三角形 ${(sm.indices.length / 3).toLocaleString()} 枚・${((Date.now() - ts) / 1000).toFixed(1)} 秒`);
   }
   // 骨格を「骨組み（スキン）」として登録する。休んだ姿勢では回転がないので、逆行列は平行移動だけ
   const ibm = new Float32Array(items.length * 16);

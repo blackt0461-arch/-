@@ -8,12 +8,13 @@ const byId = new Map(defs.map((d) => [d.id, d]));
 const mById = new Map(mdefs.map((m) => [m.id, m]));
 const ctx = {
   boneDefs: defs.filter((d) => d.shape && (d.mat || 'bone') === 'bone'),
+  organDefs: defs.filter((d) => d.shape && d.mat === 'organ'),
   carveDefs: defs.filter((d) => d.shape && ['bone', 'cartilage'].includes(d.mat || 'bone')),
 };
 for (const job of jobs) {
   if (job.type === 'bone') {
     const m = await meshBone(byId.get(job.id), opts);
-    parentPort.postMessage({ ...job, m }, [m.positions.buffer, m.normals.buffer, m.indices.buffer]);
+    parentPort.postMessage({ ...job, m });
   } else {
     const r = await meshMuscle(mById.get(job.id), ctx, opts);
     parentPort.postMessage({ ...job, r });
