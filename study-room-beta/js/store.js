@@ -171,6 +171,10 @@ export function stats(sub, problems) {
   return { waiting, mastered, seen, total: problems.length, due: reviewDue(sub, problems).length };
 }
 
+// まちがえた問題（まだ克服していない）。3回続けて正解すると克服になり、外れる（1.12.0）
+export function wrongList(sub, problems) {
+  return problems.filter(p => { const r = sub.srs[p.id]; return r && r.wrongs > 0 && !r.mastered; });
+}
 // 1セット：期限の来た復習を優先、残りを新しい問題、それでも足りなければ解いたことのある問題
 export function buildSet(sub, problems) {
   const due = shuffle(reviewDue(sub, problems));

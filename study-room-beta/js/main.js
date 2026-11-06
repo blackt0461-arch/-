@@ -84,11 +84,12 @@ const loadAllBanks = () => Promise.all(SUBJECTS.filter(x => x.bank).map(x => loa
 // えらんだ範囲（ジャンル・単元）の問題だけ
 function scoped(sid = subjectId) {
   const sc = S.subject(sid).scope, all = probs(sid);
+  if (sc?.wrong) { const w = S.wrongList(S.subject(sid), all); return w.length ? w : all; }
   if (!sc || (!sc.genre && !sc.unit)) return all;
   const list = all.filter(p => (!sc.genre || p.genre === sc.genre) && (!sc.unit || p.unit === sc.unit));
   return list.length ? list : all;
 }
-const scopeLabel = (sc) => !sc || (!sc.genre && !sc.unit) ? 'すべて' : [sc.genre, sc.unit].filter(Boolean).join(' ・ ');
+const scopeLabel = (sc) => sc?.wrong ? 'まちがえた問題' : !sc || (!sc.genre && !sc.unit) ? 'すべて' : [sc.genre, sc.unit].filter(Boolean).join(' ・ ');
 
 // ---- テスト勉強用の問題集（設定でコードを入れると、教科えらびに科目が増える） ----
 // 中身は js/packs.js に暗号で入っていて、コードがないと開けない。入れたコードは記録（profile.codes）に残す
@@ -1719,7 +1720,7 @@ async function chooseSubject() {
       const st = ready ? S.subject(s0.id) : null;
       const resume = st && st.session && st.session.idx < st.session.set.length;
       const stats = st ? S.stats(st, probs(s0.id)) : null;
-      const meta = !ready ? (s0.bank && !bankDone[s0.id] ? '読みこみ中' : '準備中') : resume ? '続きから' : stats.due ? `復習 ${stats.due}問` : `${probs(s0.id).length}問`;
+      const meta = !ready ? (s0.bank && !bankDone[s0.id] ? '読みこみ中' : '準備中') : resume ? '続きから' : stats.due ? `復習 ${stats.due}問` : S.wrongList(st, probs(s0.id)).length ? `まちがい ${S.wrongList(st, probs(s0.id)).length}問` : `${probs(s0.id).length}問`;
       return `<button class="subj ${ready ? '' : 'soon'}" data-s="${s0.id}" ${ready ? '' : 'disabled'}>
         <span class="s-ic">${icon(SUBJECT_ICON[s0.id] || 'book')}</span><b>${esc(s0.name)}</b><small>${meta}</small></button>`;
     }).join('');
@@ -1739,8 +1740,9 @@ function chooseScope(el, genre = null) {
   };
   const genres = [...new Set(all.map(p => p.genre).filter(Boolean))];
   const units = (g) => [...new Set(all.filter(p => (g ? p.genre === g : !p.genre || genres.length === 0)).map(p => p.unit).filter(Boolean))];
-  // ジャンルも単元も1つしかない教科は、そのまま始める
-  if (!genre && genres.length <= 1 && units(genres[0] || null).length <= 1) return go(null);
+  const wrongs = S.wrongList(st, all);
+  // ジャンルも単元も1つしかない教科は、そのまま始める（まちがえた問題がある時は、えらべるように出す）
+  if (!genre && !wrongs.length && genres.length <= 1 && units(genres[0] || null).length <= 1) return go(null);
   if (!genre && genres.length === 1) genre = genres[0];
   const done = (list) => { const n = list.filter(p => st.srs[p.id]?.seen).length; return `${n} / ${list.length}`; };
   const bar = (list) => `<span class="sc-bar"><i style="width:${list.length ? list.filter(p => st.srs[p.id]?.seen).length / list.length * 100 : 0}%"></i></span>`;
@@ -1758,11 +1760,13 @@ function chooseScope(el, genre = null) {
   el.innerHTML = `<div class="grab"></div>
     <div class="sh-head"><button class="icon sc-back" aria-label="もどる">${icon('back')}</button><div><h3>${esc(genre || subj.name)}</h3><p>${genre ? `${esc(subj.name)}・単元をえらぶ` : 'ジャンルをえらぶ'}</p></div><button class="sh-x close" aria-label="とじる">${icon('x')}</button></div>
     ${resume ? `<button class="btn primary big sc-resume">${icon('refresh')}続きから<small>（${esc(scopeLabel(st.scope))}）</small></button>` : ''}
+    ${!genre && wrongs.length ? `<button class="sc-wrong"><span class="sc-wic">${icon('refresh')}</span><span class="sc-t"><b>まちがえた問題を解き直す</b><small>3回続けて正解すると、リストから外れます</small></span><span class="sc-wn">${wrongs.length}問</span>${icon('chevronRight')}</button>` : ''}
     <div class="sc-list">${body}</div>`;
   el.querySelector('.close').onclick = () => { el.remove(); showHome(); };
   el.querySelector('.sc-back').onclick = () => { if (genre && genres.length > 1) chooseScope(el); else { el.remove(); chooseSubject(); } };
   el.querySelector('.sc-resume')?.addEventListener('click', () => { el.remove(); startSet(); });
   el.querySelector('[data-all]')?.addEventListener('click', () => go(null));
+  el.querySelector('.sc-wrong')?.addEventListener('click', () => go({ wrong: true }));
   el.querySelectorAll('[data-g]').forEach(b => b.onclick = () => chooseScope(el, b.dataset.g));
   el.querySelector('[data-gall]')?.addEventListener('click', () => go(genre ? { genre } : null));
   el.querySelectorAll('[data-u]').forEach(b => b.onclick = () => go({ genre: genre || null, unit: b.dataset.u }));
@@ -2707,8 +2711,14 @@ async function startSet() {
   BGM.duck(true); // 解いている間は BGM を小さく
   await loadBank(subjectId); // 問題バンクの問題が入ったセットの続きでも、問題が見つかるように
   const st = sub();
+  if (st.scope?.wrong && !(st.session && st.session.idx < st.session.set.length) && !S.wrongList(st, probs(subjectId)).length) {
+    st.scope = null; S.save(); toast('まちがえた問題を、ぜんぶ克服しました！', 3000);
+    BGM.duck(false); return showHome();
+  }
   if (!(st.session && st.session.idx < st.session.set.length)) {
-    st.session = { set: S.buildSet(st, scoped()), idx: 0, results: [], gained: 0, xp: 0, rankUp: false, startedAt: Date.now(), bonus: S.solvedToday() < S.BONUS_PER_DAY };
+    const set = S.buildSet(st, scoped());
+    if (st.scope?.wrong) set.forEach(x => { x.review = true; }); // 正解するたびに克服に近づく
+    st.session = { set, idx: 0, results: [], gained: 0, xp: 0, rankUp: false, startedAt: Date.now(), bonus: S.solvedToday() < S.BONUS_PER_DAY };
     S.save();
   }
   room3d.setActive(false);
@@ -2958,9 +2968,9 @@ function runChoice(p, isReview) {
     const ok = +b.dataset.i === p.answer;
     stepEl.querySelectorAll('.fcard').forEach(x => { x.disabled = true; if (+x.dataset.i === p.answer) x.classList.add('right'); });
     if (!ok) b.classList.add('wrong');
-    setTimeout(() => result(ok), ok ? 400 : 700);
+    setTimeout(() => result(ok, +b.dataset.i), ok ? 400 : 700);
   });
-  function result(ok) {
+  function result(ok, picked) {
     const secs = (Date.now() - t0) / 1000;
     const { pts, xp, mastered } = awardResult(st, ss, p, ok, ok, isReview, secs);
     vibrate(ok ? [20, 30, 20] : [60, 40, 60]);
@@ -2973,6 +2983,8 @@ function runChoice(p, isReview) {
         ${mastered ? `<div class="master">${icon('trophy')}克服しました！ 特別な家具がもらえます</div>` : ''}
         <div class="formula">${fm(p.choices[p.answer])}<small>正解</small></div>
         ${fx ? explainHTML(p.explain) : `<p class="reason">${esc(p.explain || '')}</p>`}
+        ${!ok && p.why?.[picked] ? `<div class="why-wrong"><b>${icon('info')}えらんだ「${fm(p.choices[picked])}」がちがう理由</b><p>${fm(p.why[picked])}</p></div>` : ''}
+        ${p.detail ? `<details class="detail-ex"${ok ? '' : ' open'}><summary>${icon('book')}くわしい解説</summary>${explainHTML(p.detail)}</details>` : ''}
         ${ss.rewards && (ss.rewards.ticket || ss.rewards.ticket4 || ss.rewards.ticket5) ? `<div class="ru-tickets">${['ticket', 'ticket4', 'ticket5'].filter(k => ss.rewards[k]).map(k => `<span>${ticketSVG(k, 'mini')}<b>×${ss.rewards[k]}</b></span>`).join('')}<small class="ru-box">${icon('gift')}プレゼントBOXに届きました</small></div>` : ''}
         ${HS().gauge >= S.gaugeMax(HS()) ? `<div class="gold-t">${icon('gift')}ゲージ満タン！ 家具が買えます</div>` : ''}
         <div class="row2 after"><button class="btn ghost home">${icon('home')}部屋にもどる</button><button class="btn primary more">${icon('pencil')}もう1問</button></div>
