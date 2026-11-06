@@ -2,7 +2,7 @@
 // 問題は data/ の JSON（Claude がレジュメから作る）。記録はこの端末（localStorage と IndexedDB）。
 import * as store from './store.js';
 
-const APP_VERSION = '1.0.0';
+const APP_VERSION = '1.1.0';
 const $app = document.getElementById('app');
 let COURSES = [];
 const testCache = {};
@@ -51,20 +51,93 @@ function daysLeft(date) {
   const d = new Date(date + 'T00:00:00'); const now = new Date(); now.setHours(0, 0, 0, 0);
   return Math.round((d - now) / 86400000);
 }
+// ---------- 勉強計画 ----------
+// 「完璧」＝続けて2回正解した問題。テストの前の日までに全部を完璧にする量を毎日に分ける。前日は総復習、当日は見直し。
+const PERFECT = 2;
+const tkey = (c, t) => c.id + '/' + t.id;
+const testDate = (c, t) => store.getDate(tkey(c, t)) || t.date;
+function needOf(q) { const r = store.get(q.key); return Math.max(0, PERFECT - (r ? r.streak || 0 : 0)); }
+function plan(c, t, d) {
+  const dl = daysLeft(testDate(c, t));
+  if (dl === null || dl < 0) return null;
+  const qs = d.questions;
+  const left = qs.filter((q) => needOf(q) > 0);
+  const need = left.reduce((s, q) => s + needOf(q), 0);
+  const perfect = qs.length - left.length;
+  const done = store.todayCount(tkey(c, t));
+  let phase, target, pool;
+  if (dl === 0) {
+    phase = 'テスト当日：まちがえた問題だけ見直し';
+    pool = qs.filter((q) => store.isWrong(q.key));
+    target = store.todayTarget(tkey(c, t), () => pool.length);
+  } else if (dl === 1) {
+    phase = 'テスト前日：総復習';
+    pool = left.length ? left : qs;
+    target = store.todayTarget(tkey(c, t), () => (left.length ? need : Math.min(qs.length, 30)));
+  } else {
+    const days = dl - 1; // 前日は総復習にとっておく
+    phase = `全問を完璧に（続けて2回正解）できるよう、前日までの${days}日に分けています`;
+    pool = left;
+    target = store.todayTarget(tkey(c, t), () => Math.ceil(need / days));
+  }
+  return { dl, perfect, total: qs.length, need, done, target, rest: Math.max(0, target - done), pool, phase };
+}
+function startToday(c, t, d) {
+  const p = plan(c, t, d);
+  if (!p || !p.pool.length) { alert('いまやる問題はありません'); return home(); }
+  const mode = {
+    id: 'today', name: '今日の勉強',
+    back: home,
+    // 1回は10問ずつ。今日の目標が残っていれば「続ける」を出す
+    refill: () => { const n = plan(c, t, d); return n && n.rest > 0 && n.pool.length ? { pool: n.pool, limit: Math.min(10, n.rest), rest: n.rest } : null; },
+  };
+  startQuiz(c, t, d, p.pool, mode, { limit: Math.min(10, p.rest || 10) });
+}
+function dayLabel(dl) { return dl === 0 ? 'テスト当日' : dl === 1 ? 'テストは明日' : `あと${dl}日`; }
+
 const TYPE_NAME = { choice: '選択', fill: '穴うめ', calc: '計算', card: 'カード', written: '記述・説明' };
 
 // ---------- ホーム：授業の一覧 ----------
 async function home() {
   const w = screen('テスト勉強', '<div class="loading">読みこんでいます…</div>', { side: 'v' + APP_VERSION });
-  let html = '<h2>授業</h2>';
+  let html = '';
+  const todays = [];
+  for (const c of COURSES) for (const t of c.tests || []) {
+    const dl = daysLeft(testDate(c, t));
+    if (dl === null || dl < 0) continue;
+    try { const d = await loadTest(c, t); const p = plan(c, t, d); if (p) todays.push({ c, t, d, p }); } catch (e) { /* 問題がまだない */ }
+  }
+  todays.sort((a, b) => a.p.dl - b.p.dl);
+  if (todays.length) {
+    html += '<h2>今日の勉強</h2>';
+    todays.forEach(({ c, t, p }, k) => {
+      const fin = p.target > 0 && p.done >= p.target;
+      const allPerfect = p.perfect === p.total;
+      html += `<div class="card today">
+        <div class="today-top"><b>${esc(c.name)}・${esc(t.name)}</b><span class="badge ${p.dl <= 7 ? 'soon' : ''}">${dayLabel(p.dl)}</span></div>
+        <div class="muted">${esc(p.phase)}</div>
+        <div class="today-num">${fin ? '🎉 今日の分は終わり！' : p.target ? `今日の目標 <b>${p.target}問</b>　<span class="muted">済 ${Math.min(p.done, p.target)}問</span>` : allPerfect ? '✨ ぜんぶ完璧です' : '今日やる問題はありません'}</div>
+        <div class="meter"><i style="width:${p.target ? Math.min(100, (p.done / p.target) * 100) : 100}%"></i></div>
+        <div class="muted" style="margin-top:6px">完璧 ${p.perfect} / ${p.total}問</div>
+        ${p.pool.length ? `<button class="btn ${fin ? 'sub' : ''}" data-today="${k}">${fin ? 'もっとやる（10問）' : p.dl === 0 ? '見直しをはじめる' : '今日の分をはじめる'}</button>` : ''}
+      </div>`;
+    });
+  }
+  html += '<h2>授業</h2>';
   for (const c of COURSES) {
-    const next = (c.tests || []).map((t) => ({ t, d: daysLeft(t.date) })).filter((x) => x.d !== null && x.d >= 0).sort((a, b) => a.d - b.d)[0];
+    const next = (c.tests || []).map((t) => ({ t, d: daysLeft(testDate(c, t)) })).filter((x) => x.d !== null && x.d >= 0).sort((a, b) => a.d - b.d)[0];
     html += `<button class="item" data-c="${esc(c.id)}"><div class="t"><div class="name">${esc(c.name)}</div>
       <div class="meta">${next ? `<span class="badge ${next.d <= 7 ? 'soon' : ''}">${esc(next.t.name)}まで あと${next.d}日</span>` : ''}${(c.tests || []).length ? '' : 'まだ問題がありません'}</div></div><span class="arrow">›</span></button>`;
   }
   if (!COURSES.length) html += '<div class="empty">まだ授業がありません</div>';
   html += `<h2>使い方</h2><div class="card muted">問題は Claude がドライブのレジュメから作ります。ふやしたいときは Claude に「〇〇の期末の問題を作って」と頼んでください。</div>`;
   w.innerHTML = html;
+  w.querySelectorAll('[data-today]').forEach((b) => (b.onclick = () => {
+    const x = todays[+b.dataset.today];
+    const p = plan(x.c, x.t, x.d);
+    if (p.rest > 0) startToday(x.c, x.t, x.d);
+    else startQuiz(x.c, x.t, x.d, p.pool, { id: 'today', name: 'もっとやる', back: home }, { limit: 10 });
+  }));
   w.querySelectorAll('[data-c]').forEach((b) => (b.onclick = () => course(COURSES.find((c) => c.id === b.dataset.c))));
 }
 
@@ -79,7 +152,7 @@ async function course(c) {
       const s = store.summary(d.questions);
       stat = `<div class="meta">${d.questions.length}問・できた ${s.mastered}問</div><div class="meter"><i style="width:${d.questions.length ? (s.mastered / d.questions.length) * 100 : 0}%"></i></div>`;
     } catch (e) { stat = '<div class="meta">まだ問題がありません</div>'; }
-    const dl = daysLeft(t.date);
+    const dl = daysLeft(testDate(c, t));
     html += `<button class="item" data-t="${esc(t.id)}"><div class="t"><div class="name">${esc(t.name)}
       ${dl !== null && dl >= 0 ? `<span class="badge ${dl <= 7 ? 'soon' : ''}">あと${dl}日</span>` : ''}</div>${stat}</div><span class="arrow">›</span></button>`;
   }
@@ -110,6 +183,8 @@ async function testMenu(c, t) {
     const inRange = qs.filter((q) => !q.lecture || sel.has(q.lecture));
     w.innerHTML = `
       ${d.note ? `<div class="card muted">${esc(d.note)}</div>` : ''}
+      <div class="card"><span class="muted">テストの日</span>　<input type="date" class="date-in" data-date value="${esc(testDate(c, t) || '')}">
+        ${store.getDate(tkey(c, t)) ? '<button class="link" data-date-reset>もとの日にもどす</button>' : ''}</div>
       <div class="card"><b>${qs.length}問</b>　<span class="muted">できた ${s.mastered}・まちがい ${s.wrong}・まだ ${s.unseen}</span>
         <div class="meter"><i style="width:${qs.length ? (s.mastered / qs.length) * 100 : 0}%"></i></div></div>
       <h2>勉強のしかた</h2>
@@ -133,6 +208,8 @@ async function testMenu(c, t) {
       if (sel.has(l)) { if (sel.size > 1) sel.delete(l); } else sel.add(l);
       UI.lectures = { key: t.id, set: [...sel] }; render();
     }));
+    w.querySelector('[data-date]').onchange = (e) => { store.setDate(tkey(c, t), e.target.value); testMenu(c, t); };
+    const dr = w.querySelector('[data-date-reset]'); if (dr) dr.onclick = () => { store.setDate(tkey(c, t), null); testMenu(c, t); };
     const sb = w.querySelector('[data-sheet]'); if (sb) sb.onclick = () => sheet(c, t, d);
     w.querySelector('[data-answers]').onclick = () => answers(c, t, d);
   };
@@ -152,13 +229,14 @@ function order(qs) {
 
 // ---------- 問題を解く ----------
 let fixResult = () => {};
-function startQuiz(c, t, d, pool, mode) {
+function startQuiz(c, t, d, pool, mode, opt = {}) {
   let list = order(pool);
-  if (UI.count) list = list.slice(0, UI.count);
+  const limit = opt.limit ?? UI.count;
+  if (limit) list = list.slice(0, limit);
   const results = [];
   fixResult = (q) => { const r = results.find((x) => x.q === q); if (r) r.res = 'ok'; };
   let i = 0;
-  const backToMenu = () => testMenu(c, t);
+  const backToMenu = mode.back || (() => testMenu(c, t));
   const next = () => { i++; if (i < list.length) show(); else finish(); };
   const show = () => {
     const q = list[i];
@@ -198,9 +276,16 @@ function startQuiz(c, t, d, pool, mode) {
       ${results.map((r) => `<div class="card ${r.res === 'ok' ? 'okitem' : 'wrongitem'}"><div class="muted">${{ ok: '⭕', mid: '🔺', ng: '❌' }[r.res]} ${esc(r.q.lecture || '')}</div><div>${esc(r.q.q)}</div></div>`).join('')}
       <button class="btn" data-again>もう一度（同じ形式）</button><button class="btn sub" data-menu>もどる</button>`;
     math(w);
-    w.querySelector('[data-again]').onclick = () => startQuiz(c, t, d, mode.id === 'wrong' ? pool.filter((q) => store.isWrong(q.key)) : pool, mode);
+    const again = w.querySelector('[data-again]');
     w.querySelector('[data-menu]').onclick = backToMenu;
-    if (mode.id === 'wrong' && !pool.some((q) => store.isWrong(q.key))) w.querySelector('[data-again]').hidden = true;
+    if (mode.refill) {
+      const r = mode.refill();
+      if (r) { again.textContent = `続ける（今日あと${r.rest}問）`; again.onclick = () => startQuiz(c, t, d, r.pool, mode, { limit: r.limit }); }
+      else { again.hidden = true; w.querySelector('.score .muted').textContent = '🎉 今日の分は終わりです。おつかれさま！'; }
+      return;
+    }
+    again.onclick = () => startQuiz(c, t, d, mode.id === 'wrong' ? pool.filter((q) => store.isWrong(q.key)) : pool, mode);
+    if (mode.id === 'wrong' && !pool.some((q) => store.isWrong(q.key))) again.hidden = true;
   };
   if (!list.length) { alert('この形式の問題がありません'); return backToMenu(); }
   show();

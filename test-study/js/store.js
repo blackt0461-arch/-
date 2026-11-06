@@ -18,6 +18,7 @@ export function record(key, res) {
   else { r.streak = 0; r.wrong = true; }
   r.last = res; r.t = Date.now();
   REC[key] = r; save();
+  countToday(key.split('/').slice(0, 2).join('/'));
 }
 // 「じつは合っていた」：直前のまちがいを正解に直す
 export function fix(key) {
@@ -38,6 +39,30 @@ export function summary(qs) {
   return { mastered, wrong, unseen };
 }
 export const all = () => REC;
+
+// ---- 勉強計画のための記録（日ごとに解いた数・その日の目標・テストの日の変更） ----
+const PKEY = 'ts_plan_v1';
+let PLAN = (() => { try { return JSON.parse(localStorage.getItem(PKEY)) || {}; } catch (e) { return {}; } })();
+PLAN.days = PLAN.days || {}; PLAN.targets = PLAN.targets || {}; PLAN.dates = PLAN.dates || {};
+function savePlan() { try { localStorage.setItem(PKEY, JSON.stringify(PLAN)); } catch (e) { /* 動きは止めない */ } }
+export function today() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+function countToday(testKey) {
+  const day = (PLAN.days[today()] = PLAN.days[today()] || {});
+  day[testKey] = (day[testKey] || 0) + 1; savePlan();
+}
+export const todayCount = (testKey) => (PLAN.days[today()] || {})[testKey] || 0;
+// その日の目標は、その日はじめて計算した数で固定する（解くたびに目標が動かないように）
+export function todayTarget(testKey, compute) {
+  const k = testKey + '@' + today();
+  if (PLAN.targets[k] === undefined) { PLAN.targets[k] = compute(); savePlan(); }
+  return PLAN.targets[k];
+}
+export function resetTarget(testKey) { delete PLAN.targets[testKey + '@' + today()]; savePlan(); }
+export const getDate = (testKey) => PLAN.dates[testKey] || null;
+export function setDate(testKey, date) { if (date) PLAN.dates[testKey] = date; else delete PLAN.dates[testKey]; resetTarget(testKey); }
 
 // ---- 記述の答え（写真も入るので IndexedDB） ----
 let dbp = null;
