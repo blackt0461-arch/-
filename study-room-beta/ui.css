@@ -89,7 +89,7 @@ body { font-feature-settings: "palt"; }
 .eb-top .cap { font-size: 13px; color: var(--muted); background: rgba(255,255,255,.07); padding: 4px 10px; border-radius: 99px; }
 .eb-top .cap b { color: var(--gold1); font-size: 14px; }
 .eb-hint { margin: 0; font-size: 12px; color: var(--muted); }
-.eb-btns { display: grid; grid-template-columns: 1fr 1.4fr 1fr; gap: 8px; }
+.eb-btns { display: grid; grid-template-columns: .8fr 1fr 1.4fr 1fr; gap: 8px; }
 .eb-btns .btn { font-size: 13px; padding: 11px 6px; }
 .float-bar { position: absolute; left: 50%; top: calc(var(--safe-t) + 120px); transform: translateX(-50%); display: flex; align-items: center; gap: 6px; padding: 6px; border-radius: 16px; background: rgba(24,20,16,.88); border: 1px solid var(--card-line); backdrop-filter: blur(12px); box-shadow: 0 10px 30px rgba(0,0,0,.4); z-index: 5; max-width: calc(100% - 24px); }
 .float-bar .fb-name { font-size: 13px; font-weight: 700; padding: 0 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 120px; }
@@ -1138,3 +1138,17 @@ button.pf-open { border: 0; background: none; padding: 0; display: inline-flex; 
 .ev-row .ev-tk > * { width: 40px !important; height: auto !important; max-height: 30px; }
 .ev-row .ev-tk svg { width: 40px; height: 26px; }
 .ev-claim { white-space: nowrap; flex: none; }
+/* 模様がえ：矢印で少しずつ動かす・置いている家具の一覧（1.12.0） */
+.nudge { position: absolute; right: 12px; top: calc(var(--safe-t, 0px) + 178px); z-index: 5; display: grid; grid-template-columns: repeat(3, 42px); grid-template-rows: repeat(3, 42px); gap: 4px; padding: 6px; border-radius: 18px; background: rgba(24,20,16,.82); border: 1px solid var(--card-line); backdrop-filter: blur(10px); touch-action: none; user-select: none; -webkit-user-select: none; }
+.nudge button { border: 0; border-radius: 12px; background: rgba(255,255,255,.1); color: #f4f1ea; display: grid; place-items: center; touch-action: none; }
+.nudge button:active { background: rgba(230,192,104,.35); }
+.nudge button .ic { width: 20px; height: 20px; }
+.nudge [data-d="0,1"] { grid-area: 1 / 2; } .nudge [data-d="0,1"] .ic { transform: rotate(-90deg); }
+.nudge [data-d="-1,0"] { grid-area: 2 / 1; } .nudge [data-d="-1,0"] .ic { transform: rotate(180deg); }
+.nudge .ng-c { grid-area: 2 / 2; display: grid; place-items: center; opacity: .45; }
+.nudge .ng-c .ic { width: 18px; height: 18px; }
+.nudge [data-d="1,0"] { grid-area: 2 / 3; }
+.nudge [data-d="0,-1"] { grid-area: 3 / 2; } .nudge [data-d="0,-1"] .ic { transform: rotate(90deg); }
+.pl-sheet .pl-list h4 { margin: 12px 0 6px; font-size: 13px; display: flex; gap: 6px; align-items: baseline; opacity: .85; }
+.pl-sheet .pl-list h4 small { font-size: 11px; opacity: .6; }
+.pl-sheet .pl-item.on { border-color: #e6c068; }

@@ -172,9 +172,11 @@ export class Room3D {
       this.itemDrag = null;
       if (this.editMode && pts.size === 1 && this.selected) {
         const hit = this.pickItem(e.clientX, e.clientY);
-        if (hit && hit.userData.uid === this.selected) {
-          this.itemDrag = { moved: false };
-          this.lastValid = { ...(this.lastValid || {}), [hit.userData.uid]: { ...hit.userData.p } };
+        // 選んでいる家具の上、または画面でそのまわり（指1本ぶん）なら、つかむ。小さい物・遠い物もつかみやすく（1.12.0）
+        if ((hit && hit.userData.uid === this.selected) || (!hit && this.nearSelected(e.clientX, e.clientY))) {
+          const so = this.objByUid?.[this.selected];
+          this.itemDrag = { moved: false, grab: this.grabOffset(e.clientX, e.clientY) };
+          if (so) this.lastValid = { ...(this.lastValid || {}), [so.userData.uid]: { ...so.userData.p } };
         }
       }
       if (pts.size === 2) {
@@ -1290,6 +1292,69 @@ export class Room3D {
     this.onSelect && this.onSelect(this.selected);
   }
   selectedPlacement() { return this.selected ? this.objByUid?.[this.selected]?.userData.p : null; }
+  // 画面の上での、家具の四角い範囲（指1本ぶん広げる）に入っているか
+  screenRect(o) {
+    const bb = this.boxOf(o), r = this.canvas.getBoundingClientRect();
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity, front = false;
+    for (const x of [bb.min.x, bb.max.x]) for (const y of [bb.min.y, bb.max.y]) for (const z of [bb.min.z, bb.max.z]) {
+      const v = new THREE.Vector3(x, y, z).project(this.camera);
+      if (v.z < 1) front = true;
+      const sx = r.left + (v.x + 1) / 2 * r.width, sy = r.top + (1 - v.y) / 2 * r.height;
+      x0 = Math.min(x0, sx); x1 = Math.max(x1, sx); y0 = Math.min(y0, sy); y1 = Math.max(y1, sy);
+    }
+    return front ? { x0, y0, x1, y1 } : null;
+  }
+  nearSelected(cx, cy, pad = 28) {
+    const o = this.selected && this.objByUid?.[this.selected];
+    const q = o && this.screenRect(o);
+    return !!q && cx > q.x0 - pad && cx < q.x1 + pad && cy > q.y0 - pad && cy < q.y1 + pad;
+  }
+  // つかんだ所と家具の中心のずれ（床・天井の物）。指の下に家具がついてくるように
+  grabOffset(cx, cy) {
+    const o = this.selected && this.objByUid?.[this.selected], p = o?.userData.p, item = o?.userData.item;
+    if (!o || !item || item.place === 'wall' || p.on != null) return null;
+    const planeY = item.place === 'ceiling' ? this.boxOf(o).max.y : 0;
+    const hit = this.ray(cx, cy).ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), -planeY), new THREE.Vector3());
+    if (!hit || hit.distanceTo(this.camera.position) > 30) return null;
+    const dx = hit.x - (p.x || 0), dz = hit.z - (p.z || 0);
+    return Math.hypot(dx, dz) < 1.5 ? { dx, dz } : null;
+  }
+  // 矢印ボタンで少しずつ動かす（1.12.0）。right / up は画面の向き（右・奥（壁の物は上））。step はメートル
+  nudgeSelected(right, up, step = 0.05) {
+    const o = this.selected && this.objByUid?.[this.selected];
+    if (!o) return false;
+    const p = o.userData.p, item = o.userData.item, before = { ...p };
+    if (item.place === 'wall') {
+      const seg = this.sh.walls.find(w => w.id === p.wall);
+      // 壁の右向き：カメラから見て右が、壁の a の増える向きか
+      const camRight = new THREE.Vector3(1, 0, 0).applyQuaternion(this.camera.quaternion);
+      const along = seg?.axis === 'z' ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 0, 1);
+      const sgn = camRight.dot(along) >= 0 ? 1 : -1;
+      p.a = (p.a || 0) + right * step * sgn;
+      p.y = (p.y || 1.5) + up * step;
+    } else {
+      const f = new THREE.Vector3(0, 0, -1).applyQuaternion(this.camera.quaternion); f.y = 0;
+      if (f.lengthSq() < 1e-6) f.set(0, 0, -1); f.normalize();
+      const rt = new THREE.Vector3(-f.z, 0, f.x);
+      p.x = (p.x || 0) + (rt.x * right + f.x * up) * step;
+      p.z = (p.z || 0) + (rt.z * right + f.z * up) * step;
+      // 棚・テーブルの上の物は、その上からはみ出さない
+      const sup = p.on != null && this.objByUid?.[p.on];
+      if (sup) { const sb = this.boxOf(sup); if (p.x < sb.min.x + 0.03 || p.x > sb.max.x - 0.03 || p.z < sb.min.z + 0.03 || p.z > sb.max.z - 0.03) { Object.assign(p, before); return false; } }
+    }
+    this.mountPlaced(o, p);
+    if (!this.checkPlacement(o)) { Object.assign(p, before); if (before.on == null) { delete p.on; } this.mountPlaced(o, p); this.selBox && this.selBox.update(); return false; }
+    if (item.place !== 'wall') this.moveRiders(p.uid, p.x - before.x, p.z - before.z);
+    this.updateBlob(o);
+    this.selBox && this.selBox.update();
+    return true;
+  }
+  // 選んだ家具のほうを向く（一覧からえらんだ時）
+  focusSelected() {
+    const o = this.selected && this.objByUid?.[this.selected];
+    if (!o || this.topView) return;
+    this.lookAt(this.boxOf(o).getCenter(new THREE.Vector3()));
+  }
   // 指の位置まで、選んでいる家具を動かす
   dragSelectedTo(cx, cy) {
     const o = this.objByUid?.[this.selected];
@@ -1338,9 +1403,12 @@ export class Room3D {
         // 棚にのっている物を、棚の段と段の間（前の板など）の上で動かしているあいだは、床に落とさずその場で待つ
         return;
       } else {
-        const hit = ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), new THREE.Vector3());
-        if (!hit) return;
-        p.x = hit.x; p.z = hit.z;
+        // 天井の物は天井の高さ、ほかは床の高さで、指の光線と交わる所（1.12.0：天井の物は前は床で計算していて、見上げると動かなかった）
+        const planeY = item.place === 'ceiling' ? this.boxOf(o).max.y : 0;
+        const hit = ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), -planeY), new THREE.Vector3());
+        if (!hit || hit.distanceTo(ray.origin) > 30) return;
+        const g = this.itemDrag?.grab;
+        p.x = hit.x - (g?.dx || 0); p.z = hit.z - (g?.dz || 0);
       }
     }
     this.mountPlaced(o, p);

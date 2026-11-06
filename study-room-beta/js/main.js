@@ -1294,15 +1294,17 @@ function showEdit() {
   app.querySelector('.dock')?.remove();
   app.querySelector('.side-tools')?.remove();
   app.querySelector('.hint')?.remove();
+  app.querySelector('.mode-toggle')?.remove(); // 模様がえ中は「勉強｜パズル」を出さない（完了ボタンと重なるため）
   app.querySelector('.tabbar .on')?.classList.remove('on');
   app.querySelector('.tabbar [data-t=edit]')?.classList.add('on');
   room3d.setEditMode(true);
   const bar = h(`
     <div class="editbar">
       <div class="eb-top"><b>${icon('sofa')}模様がえ</b><span class="cap">置いている <b>${curRoom().placed.length}</b> / ${S.capacity()}</span></div>
-      <p class="eb-hint">家具をタップして選ぶ → そのまま指でなぞって動かす</p>
+      <p class="eb-hint">家具をタップして選ぶ → なぞって動かす。細かい位置は矢印で。小さい物や天井の物は「一覧」から</p>
       <div class="eb-view seg"><button data-v="eye" class="on">${icon('eye')}ふつう</button><button data-v="top">${icon('grid')}上から</button></div>
       <div class="eb-btns">
+        <button class="btn ghost plist">${icon('menu')}一覧</button>
         <button class="btn ghost inv">${icon('box')}持ち物</button>
         <button class="btn ghost surf">${icon('brush')}壁・床・ドア・窓</button>
         <button class="btn primary done">${icon('check')}完了</button>
@@ -1313,9 +1315,23 @@ function showEdit() {
     room3d.setTopView(b.dataset.v === 'top');
   });
   bar.querySelector('.inv').onclick = showInventory;
+  bar.querySelector('.plist').onclick = showPlacedList;
   bar.querySelector('.surf').onclick = showSurfaces;
   bar.querySelector('.done').onclick = () => { room3d.setEditMode(false); S.save(); showHome(); };
   app.querySelector('.home').append(bar);
+}
+// 模様がえ：置いている家具の一覧からえらぶ（小さい物・天井の物・棚の中の物も、えらびやすく。1.12.0）
+function showPlacedList() {
+  const r = curRoom();
+  const groups = [['floor', '床', 'sofa'], ['on', 'テーブル・棚の上', 'box'], ['wall', '壁', 'image'], ['ceiling', '天井', 'light'], ['rug', 'ラグ', 'grid']];
+  const kindOf = (p, it) => p.on != null ? 'on' : it.place === 'wall' ? 'wall' : it.place === 'ceiling' ? 'ceiling' : it.place === 'rug' ? 'rug' : 'floor';
+  const rows = r.placed.map(p => ({ p, it: itemById(p.item) })).filter(x => x.it);
+  const el = sheet(`
+    <div class="sh-head"><span class="sh-ic">${icon('menu')}</span><div><h3>置いている家具</h3><p>えらぶと、その家具のほうを向いて選んだ状態になります</p></div><button class="sh-x close" aria-label="とじる">${icon('x')}</button></div>
+    <div class="pl-list">${groups.map(([k, n]) => { const list = rows.filter(x => kindOf(x.p, x.it) === k); return list.length ? `<h4>${n}<small>${list.length}</small></h4><div class="invgrid">${list.map(x => `<button class="inv-item pl-item ${room3d.selected === x.p.uid ? 'on' : ''}" data-u="${x.p.uid}"><span class="thumb">${thumbHTML(x.it)}</span><b>${esc(x.it.name)}</b></button>`).join('')}</div>` : ''; }).join('') || '<p class="empty">まだ何も置いていません</p>'}</div>`, 'inv-sheet pl-sheet');
+  hydrateThumbs(el);
+  el.querySelector('.close').onclick = () => el.remove();
+  el.querySelectorAll('.pl-item').forEach(b => b.onclick = () => { el.remove(); const u = r.placed.find(x => String(x.uid) === b.dataset.u)?.uid; room3d.select(u); room3d.focusSelected(); vibrate(10); });
 }
 function refreshEditCount() {
   const c = app.querySelector('.editbar .cap b');
@@ -1323,6 +1339,7 @@ function refreshEditCount() {
 }
 function onSelectItem(uid) {
   app.querySelector('.float-bar')?.remove();
+  app.querySelector('.nudge')?.remove();
   if (!uid || !room3d.editMode) return;
   const p = curRoom().placed.find(x => x.uid === uid);
   const it = p && itemById(p.item);
@@ -1353,6 +1370,23 @@ function onSelectItem(uid) {
   };
   fb.querySelector('.x').onclick = () => room3d.select(null);
   app.querySelector('.home')?.append(fb);
+  // 矢印で少しずつ動かす（押しつづけると動きつづける）。壁の物は上下、ほかは奥・手前（1.12.0）
+  const wall = it.place === 'wall';
+  const pad = h(`<div class="nudge" aria-label="少しずつ動かす">
+    <button data-d="0,1" aria-label="${wall ? '上へ' : '奥へ'}">${icon('chevronRight')}</button>
+    <button data-d="-1,0" aria-label="左へ">${icon('chevronRight')}</button>
+    <span class="ng-c">${icon('move')}</span>
+    <button data-d="1,0" aria-label="右へ">${icon('chevronRight')}</button>
+    <button data-d="0,-1" aria-label="${wall ? '下へ' : '手前へ'}">${icon('chevronRight')}</button></div>`);
+  let rep = null, moved = false;
+  const stop = () => { clearTimeout(rep); rep = null; if (moved) { S.save(); moved = false; } };
+  pad.querySelectorAll('button').forEach(b => {
+    const [dx, dy] = b.dataset.d.split(',').map(Number);
+    const step = (n) => { if (room3d.nudgeSelected(dx, dy)) moved = true; else if (n === 0) { toast('そこには動かせません', 1200); vibrate(30); } rep = setTimeout(() => step(n + 1), n === 0 ? 380 : 70); };
+    b.addEventListener('pointerdown', (e) => { e.preventDefault(); stop(); step(0); });
+    for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) b.addEventListener(ev, stop);
+  });
+  app.querySelector('.home')?.append(pad);
 }
 // 入れかえ：同じ種類の家具と、場所と向きはそのままで取りかえる
 function showSwap(uid) {
@@ -3276,4 +3310,4 @@ if ('serviceWorker' in navigator && location.protocol === 'https:') {
   navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(r => r.update()).catch(() => {});
 }
 // テスト用
-window.__app = { putIntoRoom, get room3d() { return room3d; }, S, sub, HS, switchRoom, ensureRooms, goHome, showHome, curRoom, visitFriend, leaveVisit, showLoginBonus, showGiftBox, showArrange, arrange: (sel, style) => { arrSel = sel; return runArrange(style); } };
+window.__app = { showEdit, putIntoRoom, get room3d() { return room3d; }, S, sub, HS, switchRoom, ensureRooms, goHome, showHome, curRoom, visitFriend, leaveVisit, showLoginBonus, showGiftBox, showArrange, arrange: (sel, style) => { arrSel = sel; return runArrange(style); } };
