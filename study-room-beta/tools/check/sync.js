@@ -16,7 +16,7 @@ const serve = () => new Promise(res => { const srv = http.createServer((req, rsp
   async function device(opts = {}) {
     const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } }); await mock(ctx, db, opts);
     const page = await ctx.newPage(); page.on('dialog', d => d.accept());
-    await page.addInitScript(() => { localStorage.setItem('studyroom.download', 'later'); localStorage.setItem('studyroom.quality', 'low'); });
+    await page.addInitScript(() => { localStorage.setItem('studyroom.download', 'later'); localStorage.setItem('studyroom.notour', '1'); localStorage.setItem('studyroom.quality', 'low'); });
     return { ctx, page };
   }
   async function login(page, signup) {

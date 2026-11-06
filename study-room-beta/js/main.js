@@ -21,6 +21,7 @@ import * as R from './report.js';
 import { rpc } from './cloud.js';
 import { PUZZLES, puzzleById, levelInfo, mountPuzzle, livesOf } from './puzzles.js';
 import { openPuzzleHelp } from './puzzlehelp.js';
+import { runTour } from './tour.js';
 import * as BGM from './bgm.js';
 import { AVATARS, AVATAR_COLORS, GACHA_AVATARS, NIGHT_COLORS, avatarHTML, avatarItemId, pullRewards } from './avatars.js';
 import { studyParams, puzzleParams, radarSVG, TITLES, titleById, earnedTitles } from './profile.js';
@@ -837,6 +838,39 @@ function showHome() {
   scrollRoomsNav(el);
   if (!notesChecked) { notesChecked = true; checkUpdateNotes(); }
   if (hs.villaNew) celebrateVilla();
+  maybeTour();
+}
+// はじめての人の案内（1.12.0）：登録してまだ1問も解いていない人に、部屋の画面のボタンを順に説明する。1回だけ
+let tourWait = null, tourOn = false;
+function maybeTour(tries = 0) {
+  clearTimeout(tourWait);
+  const pf = S.profile();
+  try { if (localStorage.getItem('studyroom.notour')) return; } catch (e) { /* なし */ } // 自動の確かめ（テスト）では出さない
+  if (tourOn || pf.tour || (pf.solved || 0) > 0 || (pf.puzzleClears || 0) > 0 || (pf.xp || 0) > 60) return;
+  tourWait = setTimeout(() => {
+    const busy = !app.querySelector('.home') || visiting || !pf.mode || !curRoom()?.style || document.querySelector('.sheet, .lb-screen, .mode-sheet, .overlay, .title-screen');
+    if (busy) { if (tries < 40) maybeTour(tries + 1); return; }
+    startTour();
+  }, tries ? 1500 : 900);
+}
+async function startTour(again = false) {
+  if (tourOn) return;
+  tourOn = true;
+  const pz = isPuzzle();
+  const steps = [
+    { title: 'ROOMIN へようこそ', text: pz ? 'パズルを解いて、自分の部屋を育てるアプリです。おもなボタンを紹介します' : '問題を解いて、自分の部屋を育てるアプリです。おもなボタンを紹介します' },
+    { sel: '.solve-ring', title: pz ? 'パズルで遊ぶ' : '問題を解く', text: pz ? 'ここから4種類のパズルを遊べます。クリアするとまわりのゲージがたまります' : 'ここから問題を解きます。教科と単元をえらんで、1問ずつ進みます。正解するとまわりのゲージがたまります' },
+    { sel: '.tabbar [data-t=buy]', title: '家具を買う', text: 'ゲージが満タンになると、ここから家具を買って部屋に置けます' },
+    { sel: '.tabbar [data-t=gacha]', title: 'ガチャ', text: 'チケットでガチャが引けます。レアな家具や着せ替えが出ます' },
+    { sel: '.home .giftbox', title: 'プレゼントBOX', text: 'ログインボーナスやごほうびはここに届きます。忘れずに受け取りましょう' },
+    { sel: '.tabbar [data-t=menu]', title: 'メニュー', text: '記録・勉強レポート・設定はここから。この案内は、設定からもう一度見られます' },
+    { title: pz ? 'さっそく遊んでみよう' : 'さっそく1問解いてみよう', text: pz ? 'まずは★1のパズルから。わからない時はパズル画面の「i」で遊び方を見られます' : 'まずは好きな教科から1問。まちがえても、あとで解き直せます' },
+  ];
+  const how = await runTour(steps, { finish: again ? 'とじる' : pz ? '遊んでみる' : '解いてみる' });
+  tourOn = false;
+  const pf = S.profile();
+  if (!pf.tour) { pf.tour = 1; S.save(); }
+  if (how === 'done' && !again) app.querySelector('.solve-ring')?.click();
 }
 // 部屋のボタンが多いので、今の部屋が見える所まで横に送る
 // 左上の部屋名から開く「部屋えらび」
@@ -2694,6 +2728,9 @@ function showSettings() {
         <small>経験値はその Lv のはじめの値になります。新しい部屋や置ける数もすぐ変わります</small></div>
     </section>` : ''}
     <section class="group">
+      <button class="row-item tap tour-again"><span class="lbl">${icon('info')}使い方の案内をもう一度見る</span>${icon('chevronRight')}</button>
+    </section>
+    <section class="group">
       <button class="row-item tap logout"><span class="lbl danger">${icon('logout')}ログアウト</span></button>
     </section>
     ${isAdmin() ? `<section class="group">
@@ -2733,6 +2770,7 @@ function showSettings() {
     showSettings();
   };
   el.querySelector('.logout').onclick = async () => { await Sync.push(); Auth.logOut(); showLogin(); };
+  el.querySelector('.tour-again').onclick = () => { showHome(); setTimeout(() => startTour(true), 500); };
   // 管理者だけ：記録をすべて消して最初から（ログインはそのまま）
   el.querySelector('.reset-all')?.addEventListener('click', async () => {
     if (!isAdmin()) return;
