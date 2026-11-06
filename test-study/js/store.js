@@ -12,13 +12,14 @@
 //   tg/<テスト>@<日>   その日の目標の問題数 {n}
 //   dt/<テスト>        テストの日を変えたとき {date}
 //   dy/<日>            1.6.0 より前に数えていた日ごとの問題数 {n:{テスト:数}}
+//   ls/<授業>          授業をどこまで見たか {last:スライド番号, done:見終わったか}
 //   <問題>（記号なし）  1.6.0 より前の問題ごとの状態。ここから先のできごとを足していく
 //
 // 記述の答え・写真は IndexedDB。ドライブとのやりとりは cloud.js（state()・merge()・sent()）。
 import * as mem from './memory.js';
 
 const AKEY = 'ts_all_v2', DKEY = 'ts_dirty_v2';
-const PRE = ['ev/', '★/', '採/', 'tg/', 'dt/', 'dy/'];
+const PRE = ['ev/', '★/', '採/', 'tg/', 'dt/', 'dy/', 'ls/'];
 const isLegacy = (k) => !PRE.some((p) => k.startsWith(p));
 const testOf = (q) => q.split('/').slice(0, 2).join('/');
 const dateKey = (ms) => { const d = new Date(ms); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
@@ -130,6 +131,15 @@ export function events() { calc(); return EVENTS.filter((e) => e.src !== 'claude
 // ---- ⭐あとで見る ----
 export const starred = (key) => !!(ALL['★/' + key] && ALL['★/' + key].on);
 export function toggleStar(key) { put('★/' + key, { on: !starred(key), t: Date.now() }); return starred(key); }
+
+// ---- 授業をどこまで見たか ----
+export const lesson = (key) => ALL['ls/' + key] || null;
+export function setLesson(key, last, done) {
+  const o = ALL['ls/' + key] || {};
+  const d = !!(o.done || done);
+  if (o.last === last && o.done === d) return;
+  put('ls/' + key, { last, done: d, t: Date.now() });
+}
 
 // ---- Claude の採点（答えの uid ごと） ----
 export const grade = (uid) => ALL['採/' + uid] || null;

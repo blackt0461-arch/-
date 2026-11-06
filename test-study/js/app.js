@@ -3,7 +3,7 @@
 import * as store from './store.js';
 import * as cloud from './cloud.js';
 
-const APP_VERSION = '1.6.0';
+const APP_VERSION = '1.7.0';
 const $app = document.getElementById('app');
 let COURSES = [];
 const testCache = {};
@@ -361,6 +361,7 @@ async function testMenu(c, t) {
         ${store.getDate(tkey(c, t)) ? '<button class="link" data-date-reset>もとの日にもどす</button>' : ''}
         ${d.note ? `<div class="muted small" style="margin-top:8px">${esc(d.note)}</div>` : ''}
       </div>
+      ${lessonsCard(c, t, d)}
       <h2>勉強のしかた</h2>
       <div class="tiles">${MODES.map((md) => {
         const n = md.id === 'mock' ? Math.min(15, inRange.filter(md.pick).length) : inRange.filter(md.pick).length;
@@ -395,6 +396,7 @@ async function testMenu(c, t) {
     w.querySelector('[data-sheet]').onclick = () => sheet(c, t, d);
     w.querySelector('[data-answers]').onclick = () => answers(c, t, d);
     w.querySelector('[data-list]').onclick = () => qlist(c, t, d);
+    const lb = w.querySelector('[data-lessons]'); if (lb) lb.onclick = () => lessonList(c, t, d);
   };
   render();
 }
@@ -470,7 +472,8 @@ function startQuiz(c, t, d, pool, mode, opt = {}) {
       const label = o.label || { ok: '正解！', mid: 'おしい', ng: 'まちがい' }[res];
       const ic = { ok: 'check', mid: 'tri', ng: 'x' }[res];
       const html = o.quiet ? '' : `<div class="verdict ${res}">${icon(ic)}${label}</div>${o.extra || ''}${explainHTML(q)}`;
-      after.insertAdjacentHTML('beforeend', html + (q.figAfter ? `<div class="card">${figHTML(c, q)}</div>` : ''));
+      after.insertAdjacentHTML('beforeend', html + (q.figAfter ? `<div class="card">${figHTML(c, q)}</div>` : '') + lessonLink(c, t, d, q));
+      bindLessonLink(after, c, t, d);
       math(after);
       const dk = dock(`<button class="btn" data-next>${i + 1 < list.length ? '次へ' : '結果を見る'}${icon('next')}</button>`);
       dk.querySelector('[data-next]').onclick = next;
@@ -911,6 +914,148 @@ async function report() {
     ${stillWeak.length ? `<h2>まだ覚えきれていない問題（まちがえたことがある）</h2><div class="rlist">${stillWeak.slice(0, 8).map((k) => resultRow(qmap[k].q, 'ng')).join('')}</div>` : ''}
     <div class="cloud-line">v${APP_VERSION}</div>`;
   math(w); bindStars(w);
+}
+
+// ---------- 授業（スライド） ----------
+// テストの JSON の lessons：[{id, lecture, title, sub, minutes, file}]。授業の中身は data/<授業>/lessons/<id>.json
+const lessonCache = {};
+async function loadLesson(c, L) {
+  const path = `data/${c.id}/${L.file}`;
+  if (!lessonCache[path]) lessonCache[path] = cachedJSON(path) || (await getJSON(path)).data;
+  return lessonCache[path];
+}
+const lkey = (c, t, L) => `${c.id}/${t.id}/${L.id}`;
+// この問題を説明している授業とスライド（授業の covers から）
+function lessonFor(d, q) {
+  for (const L of d.lessons || []) { const s = L.covers && L.covers[q.id]; if (s && s.length) return { L, slide: s[0] }; }
+  return null;
+}
+function lessonLink(c, t, d, q) {
+  const f = lessonFor(d, q);
+  return f ? `<button class="btn ghost lesson-link" data-lesson-go="${esc(f.L.id)}:${f.slide}">${icon('play')}この問題の授業を見る（${esc(f.L.lecture || '')}）</button>` : '';
+}
+function bindLessonLink(root, c, t, d) {
+  root.querySelectorAll('[data-lesson-go]').forEach((b) => (b.onclick = () => {
+    const [id, n] = b.dataset.lessonGo.split(':');
+    const L = (d.lessons || []).find((x) => x.id === id);
+    if (L) playLesson(c, t, d, L, +n, { from: 'question' });
+  }));
+}
+function lessonsCard(c, t, d) {
+  const ls = d.lessons || [];
+  if (!ls.length) return '';
+  const done = ls.filter((L) => store.lesson(lkey(c, t, L))?.done).length;
+  return `<button class="row lessons-card" data-lessons style="position:relative;z-index:2"><span class="av c3">${icon('cards')}</span>
+    <div class="t"><div class="name">授業で学ぶ</div><div class="meta">${ls.length}本・見終わった ${done}本　知識ゼロからでもわかる</div>
+    <div class="meter ok"><i style="width:${(done / ls.length) * 100}%"></i></div></div><span class="arrow">${icon('next')}</span></button>`;
+}
+function lessonList(c, t, d) {
+  const w = screen('授業', { back: () => testMenu(c, t) });
+  w.innerHTML = `<div class="card flat muted small" style="margin-top:14px">上から順に見ると、テストの問題がぜんぶ解けるようになります。1本 10〜15分。とちゅうでやめても、続きから見られます。</div>` +
+    (d.lessons || []).map((L, i) => {
+      const st = store.lesson(lkey(c, t, L));
+      const qs = d.questions.filter((q) => L.lecture && q.lecture === L.lecture);
+      const m = qs.length ? memStats(qs).now : null;
+      return `<button class="row" data-l="${i}"><span class="av ${COLORS[i % COLORS.length]}">${st?.done ? icon('check') : esc(String(i))}</span>
+        <div class="t"><div class="meta">${esc(L.lecture || '')}・${L.minutes || 10}分${st?.done ? '・見終わった' : st ? '・とちゅう' : ''}</div><div class="name">${esc(L.title)}</div>
+        ${L.sub ? `<div class="meta">${esc(L.sub)}</div>` : ''}${m !== null ? `<div class="meta">この回の問題 ${qs.length}問・いま覚えている度 ${pct(m)}%</div>` : ''}</div><span class="arrow">${icon('next')}</span></button>`;
+    }).join('');
+  math(w);
+  w.querySelectorAll('[data-l]').forEach((b) => (b.onclick = () => {
+    const L = d.lessons[+b.dataset.l];
+    const st = store.lesson(lkey(c, t, L));
+    playLesson(c, t, d, L, st && !st.done ? st.last || 0 : 0);
+  }));
+}
+// 本文の書き方：**太字** ==マーカー== 行頭「- 」で箇条書き、改行。$...$ は数式
+function md(s) {
+  const lines = esc(s || '').split('\n');
+  let out = '', inList = false;
+  for (const ln of lines) {
+    const li = ln.match(/^\s*[-・]\s+(.*)$/);
+    if (li && !inList) { out += '<ul>'; inList = true; }
+    if (!li && inList) { out += '</ul>'; inList = false; }
+    const x = (li ? li[1] : ln).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/==(.+?)==/g, '<mark>$1</mark>');
+    out += li ? `<li>${x}</li>` : x ? `<p>${x}</p>` : '';
+  }
+  return out + (inList ? '</ul>' : '');
+}
+function slideHTML(c, s) {
+  const fig = s.fig ? `<figure class="fig"><img src="data/${c.id}/${s.fig}" alt="図"></figure>` : '';
+  const html = slideInner(s, fig);
+  return s.fig && !html.includes('<figure') ? html.replace(/<\/div>$/, fig + '</div>') : html;
+}
+function slideInner(s, fig) {
+  switch (s.type) {
+    case 'cover': return `<div class="sl cover"><div class="kicker">授業</div><h2>${esc(s.title)}</h2>${s.sub ? `<p>${esc(s.sub)}</p>` : ''}</div>`;
+    case 'analogy': return `<div class="sl analogy"><div class="kicker">${icon('spark')}たとえるなら</div><h3>${esc(s.title || '')}</h3>${md(s.body)}${fig}</div>`;
+    case 'formula': return `<div class="sl formula"><div class="kicker">大事な式</div><h3>${esc(s.title || '')}</h3><div class="tex">$$${esc(s.tex)}$$</div>${md(s.body)}</div>`;
+    case 'point': return `<div class="sl point"><div class="kicker">${icon('check')}ここを覚える</div><h3>${esc(s.title || '')}</h3><ul class="pts">${(s.items || []).map((x) => `<li>${md(x)}</li>`).join('')}</ul></div>`;
+    case 'flow': return `<div class="sl flow"><h3>${esc(s.title || '')}</h3><div class="fl">${(s.items || []).map((x) => `<div class="fb">${md(x)}</div>`).join('<div class="fa">↓</div>')}</div>${md(s.body)}</div>`;
+    case 'steps': return `<div class="sl stp"><h3>${esc(s.title || '')}</h3><ol class="st">${(s.items || []).map((x) => `<li>${md(x)}</li>`).join('')}</ol>${md(s.body)}</div>`;
+    case 'table': return `<div class="sl"><h3>${esc(s.title || '')}</h3><div class="tw"><table><thead><tr>${(s.head || []).map((h) => `<th>${md(h)}</th>`).join('')}</tr></thead><tbody>${(s.rows || []).map((r) => `<tr>${r.map((x) => `<td>${md(String(x))}</td>`).join('')}</tr>`).join('')}</tbody></table></div>${md(s.body)}</div>`;
+    case 'quiz': return `<div class="sl quiz"><div class="kicker">${icon('quiz')}確認クイズ</div><h3>${md(s.q)}</h3><div class="choices">${(s.choices || []).map((x, k) => `<button class="choice" data-qk="${k}"><span class="k">${KEYS[k]}</span><span>${md(x)}</span></button>`).join('')}</div><div data-qres></div></div>`;
+    case 'summary': return `<div class="sl summary"><div class="kicker">${icon('check')}まとめ</div><h3>${esc(s.title || 'この回のまとめ')}</h3><ul class="pts">${(s.items || []).map((x) => `<li>${md(x)}</li>`).join('')}</ul></div>`;
+    default: return `<div class="sl"><h3>${esc(s.title || '')}</h3>${md(s.body)}${fig}</div>`;
+  }
+}
+async function playLesson(c, t, d, L, start = 0, opt = {}) {
+  let data;
+  try { data = await loadLesson(c, L); } catch (e) { alert('授業を読みこめませんでした'); return; }
+  const slides = data.slides || [];
+  const key = lkey(c, t, L);
+  let i = Math.max(0, Math.min(start, slides.length - 1));
+  const answered = {};
+  const show = () => {
+    store.setLesson(key, i, i === slides.length - 1);
+    const s = slides[i];
+    const w = screen(L.title, { back: () => lessonList(c, t, d) });
+    w.innerHTML = `<div class="qtop"><span class="p">${i + 1}<small> / ${slides.length}</small></span><span class="lec">${esc(L.lecture || '')}</span></div>
+      <div class="meter"><i style="width:${((i + 1) / slides.length) * 100}%"></i></div>
+      <div class="card slide" data-slide>${slideHTML(c, s)}</div>
+      ${i === slides.length - 1 ? lessonEnd(c, t, d, L) : ''}`;
+    math(w);
+    if (s.type === 'quiz') {
+      const res = w.querySelector('[data-qres]');
+      const mark = (k) => {
+        w.querySelectorAll('[data-qk]').forEach((b) => { b.disabled = true; if (+b.dataset.qk === s.answer) b.classList.add('ok'); });
+        if (k !== s.answer) w.querySelector(`[data-qk="${k}"]`).classList.add('ng');
+        res.innerHTML = `<div class="verdict ${k === s.answer ? 'ok' : 'ng'}">${icon(k === s.answer ? 'check' : 'x')}${k === s.answer ? '正解！' : 'ざんねん'}</div>${s.explain ? `<div class="explain qexp">${md(s.explain)}</div>` : ''}`;
+        math(res);
+      };
+      if (answered[i] !== undefined) mark(answered[i]);
+      w.querySelectorAll('[data-qk]').forEach((b) => (b.onclick = () => { answered[i] = +b.dataset.qk; mark(answered[i]); buzz(answered[i] === s.answer ? 15 : [30, 40, 30]); }));
+    }
+    if (i === slides.length - 1) bindLessonEnd(w, c, t, d, L);
+    const dk = dock(`<div style="display:flex;gap:10px">${i ? `<button class="btn sub" data-prev style="flex:1">${icon('back')}</button>` : ''}<button class="btn" data-next style="flex:3">${i + 1 < slides.length ? '次へ' : '授業の一覧へ'}${icon('next')}</button></div>`);
+    dk.querySelector('[data-next]').onclick = () => { if (i + 1 < slides.length) { i++; show(); } else lessonList(c, t, d); };
+    const pv = dk.querySelector('[data-prev]'); if (pv) pv.onclick = () => { i--; show(); };
+    // 横にスワイプでめくる
+    const card = w.querySelector('[data-slide]');
+    let x0 = null, y0 = null;
+    card.addEventListener('touchstart', (e) => { x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; }, { passive: true });
+    card.addEventListener('touchend', (e) => {
+      if (x0 === null) return;
+      const dx = e.changedTouches[0].clientX - x0, dy = e.changedTouches[0].clientY - y0; x0 = null;
+      if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+      if (dx < 0 && i + 1 < slides.length) { i++; show(); } else if (dx > 0 && i > 0) { i--; show(); }
+    });
+  };
+  show();
+}
+function lessonEnd(c, t, d, L) {
+  const qs = d.questions.filter((q) => L.lecture && q.lecture === L.lecture);
+  const idx = (d.lessons || []).indexOf(L);
+  const nextL = (d.lessons || [])[idx + 1];
+  return `<div class="card result" style="text-align:center"><div class="msg">🎉 授業おわり！</div><div class="muted small">見たことを、問題で確かめよう</div>
+    ${qs.length ? `<button class="btn" data-lq>${icon('play')}この回の問題を解く（${qs.length}問）</button>` : ''}
+    ${nextL ? `<button class="btn sub" data-ln>次の授業：${esc(nextL.lecture || '')} ${esc(nextL.title)}</button>` : ''}</div>`;
+}
+function bindLessonEnd(w, c, t, d, L) {
+  const qb = w.querySelector('[data-lq]');
+  if (qb) qb.onclick = () => startQuiz(c, t, d, d.questions.filter((q) => q.lecture === L.lecture), { id: 'lesson', name: `${L.lecture}の問題`, back: () => lessonList(c, t, d) }, { limit: 0 });
+  const nb = w.querySelector('[data-ln]');
+  if (nb) nb.onclick = () => { const n = d.lessons[d.lessons.indexOf(L) + 1]; playLesson(c, t, d, n, 0); };
 }
 
 // ---------- まとめシート ----------
