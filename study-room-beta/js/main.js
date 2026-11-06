@@ -118,6 +118,29 @@ function addPack(p) {
   packOf[sid] = p;
   return sid;
 }
+// 管理者がサイドを変えた知らせ（MODE:side:時刻）を当てる。サイドは管理者だけが変えられる。
+// 前は「勉強｜パズル」を押した時刻（modeAt）とくらべていたため、押したあとだと管理者の変更が無視された。
+// いまは、サイドだけの時刻（sideAt）とくらべる（サーバーも記録に直接書く：sr_admin_set_side）
+function applySide(modes) {
+  const pr = S.profile(), last = modes[modes.length - 1];
+  if (!last || last.t <= (pr.sideAt || 0)) return false;
+  const changed = (pr.side || pr.mode) !== last.m;
+  pr.side = last.m; pr.sideAt = last.t; pr.mode = last.m; pr.modeAt = Date.now(); S.save(); Sync.push?.();
+  app.querySelector('.mode-sheet')?.remove();
+  if (changed && app.querySelector('.home')) { showHome(); toast(`管理者が「${last.m === 'puzzle' ? 'パズルサイド' : 'スタディサイド'}」に変えました`, 3200); }
+  return changed;
+}
+const modesOf = (codes) => codes.filter(c => /^MODE:/.test(c)).map(c => c.split(':')).map(([, m, t]) => ({ m, t: +t || 0 })).filter(x => x.m === 'study' || x.m === 'puzzle').sort((a, b) => a.t - b.t);
+// 開いている間も、ときどき（3分ごと・画面にもどった時）管理者の変更を見る
+let sideCheckedAt = 0;
+async function checkSide() {
+  const u = Auth.currentUser();
+  if (!u || Date.now() - sideCheckedAt < 60e3 || !houseEntered) return;
+  sideCheckedAt = Date.now();
+  try { applySide(modesOf((await rpc('sr_my_codes', { p_token: u.token })) || [])); } catch (e) { /* オフライン */ }
+}
+setInterval(checkSide, 180e3);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkSide(); });
 // ログインした時に、入れてあるコードの問題集を開く。管理者から渡された問題集も受け取る
 async function loadSavedPacks() {
   const pr = S.profile();
@@ -126,15 +149,9 @@ async function loadSavedPacks() {
   let granted = [];
   if (u) { try { granted = (await rpc('sr_my_codes', { p_token: u?.token })) || []; } catch (e) { /* まだ準備できていない・オフライン */ } }
   // 「MODE:puzzle:時刻」は、管理者がモードを変えた知らせ（問題集ではない）。いちばん新しいものを使う
-  const modes = granted.filter(c => /^MODE:/.test(c)).map(c => c.split(':')).map(([, m, t]) => ({ m, t: +t || 0 })).filter(x => x.m === 'study' || x.m === 'puzzle').sort((a, b) => a.t - b.t);
+  const modes = modesOf(granted);
   granted = granted.filter(c => !/^MODE:/.test(c));
-  const last = modes[modes.length - 1];
-  if (last && last.t > (pr.modeAt || 0)) {
-    const changed = pr.mode !== last.m;
-    pr.side = last.m; pr.mode = last.m; pr.modeAt = last.t; S.save(); Sync.push?.();
-    app.querySelector('.mode-sheet')?.remove();
-    if (changed && app.querySelector('.home')) { showHome(); toast(`管理者が「${last.m === 'puzzle' ? 'パズルサイド' : 'スタディサイド'}」に変えました`, 3200); }
-  }
+  applySide(modes);
   const fresh = granted.map(normCode).filter(c => !(pr.codes || []).includes(c));
   const got = [];
   for (const c of [...(pr.codes || []), ...fresh]) {
@@ -2928,8 +2945,8 @@ function changeMode(name, now) {
     if (m === now) return cf.remove();
     cf.querySelectorAll('[data-m]').forEach(x => { x.disabled = true; });
     try {
-      if (name === Auth.currentUser()?.name) { const pr = S.profile(); pr.side = m; setMode(m, true); }
-      else await rpc('sr_admin_grant_code', { p_token: Auth.currentUser()?.token, p_username: name, p_code: `MODE:${m}:${t}` });
+      if (name === Auth.currentUser()?.name) { const pr = S.profile(); pr.side = m; pr.sideAt = t; setMode(m, true); S.save(); }
+      else await rpc('sr_admin_set_side', { p_token: Auth.currentUser()?.token, p_username: name, p_side: m });
       toast(`「${name}」を「${m === 'puzzle' ? 'パズルサイド' : 'スタディサイド'}」にしました`); cf.remove(); showAdmin();
     } catch (ex) { toast(String(ex.message || ex), 3400); cf.querySelectorAll('[data-m]').forEach(x => { x.disabled = false; }); }
   });
