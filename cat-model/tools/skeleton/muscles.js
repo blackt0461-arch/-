@@ -32,7 +32,7 @@ export function buildMuscles(api, lm) {
   const tab = (arr, z) => { for (let i = 0; i < zs.length - 1; i++) if (z <= zs[i] && z >= zs[i + 1]) { const t = (zs[i] - z) / (zs[i] - zs[i + 1]); return arr[i] + (arr[i + 1] - arr[i]) * t; } return z > zs[0] ? arr[0] : arr[arr.length - 1]; };
   const wall = (z, th, inset = 0) => {
     const A = tab(Az, z) - inset, B = tab(Bz, z) + inset;
-    const ctrl = [[20 - inset * 0.5, 247], [A, 226], [A * 0.88, B + 22], [A * 0.45, B + 4], [2, B]];
+    const ctrl = [[11 - inset * 0.5, 255], [A * 0.75, 246], [A, 226], [A * 0.88, B + 22], [A * 0.45, B + 4], [2, B]];
     const pts = spline(ctrl.map(([x, y]) => [x, y, z]), 8);
     const x = th * (pts.length - 1); const k = Math.min(pts.length - 2, Math.floor(x));
     return lerp(pts[k], pts[k + 1], x - k);
@@ -75,7 +75,7 @@ export function buildMuscles(api, lm) {
 
   // ===================== 背中・体幹 =====================
   const spineIds = ['S', 'L7', 'L6', 'L5', 'L4', 'L3', 'L2', 'L1', 'T13', 'T12', 'T11', 'T10', 'T9', 'T8', 'T7', 'T6', 'T5', 'T4', 'T3', 'T2', 'T1', 'C7', 'C6', 'C5', 'C4', 'C3', 'C2'];
-  const lonR = (id) => id[0] === 'L' || id === 'S' ? 5.5 : id[0] === 'T' ? (+id.slice(1) > 9 ? 4.8 : 3.6) : 2.6;
+  const lonR = (id) => id[0] === 'L' || id === 'S' ? 6.5 : id[0] === 'T' ? (+id.slice(1) > 9 ? 4.8 : 3.6) : 2.6;
   M('Longissimus', '最長筋（背最長筋）', 'M. longissimus', 'trunk', 3, { origin: '腸骨・仙骨・腰椎', insertion: '胸椎・頸椎・肋骨、頭骨の乳様突起', action: '背中を反らす・伸ばす（跳ぶ・走るときの主役）' }, [
     S([at(F.W, -3, 6, 6), ...spineIds.map((id) => vt(id, 0, 6.5, 9)), vt('C1', 0, 2, 12), sk(11, 2, 17.5)], [[3.5, 0.3], ...spineIds.map((id) => [lonR(id), 0]), [2.2, 0], [1.2, 1]]),
   ]);
@@ -95,7 +95,7 @@ export function buildMuscles(api, lm) {
   const eo = [];
   for (let k = 0; k < 9; k++) {
     const z0 = 238 - k * 24;
-    eo.push(S([wall(z0, 0.22, -2.5), wall(z0 - 14, 0.45, -2.5), wall(z0 - 26, 0.72, -2.5), wall(Math.max(4, z0 - 34), 0.97, -2.5)], P(1.3, 0, 0.25, true)));
+    eo.push(S([wall(z0, 0.0, -2.5), wall(z0 - 14, 0.45, -2.5), wall(z0 - 26, 0.72, -2.5), wall(Math.max(4, z0 - 34), 0.97, -2.5)], P(1.3, 0, 0.25, true)));
   }
   M('ObliquusExt', '外腹斜筋', 'M. obliquus externus abdominis', 'trunk', 1, { origin: '第4〜13肋骨の外側・胸腰筋膜', insertion: '白線（お腹のまん中）・恥骨', action: 'お腹をしめる、体をまるめる・ひねる、息をはく' }, eo, { k: 2.4 });
   const io = [];
