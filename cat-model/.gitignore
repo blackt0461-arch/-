@@ -1,2 +1,7 @@
 models/test.glb
 models/skull.glb
+models/head.glb
+models/fit_full.glb
+models/fit_skel.glb
+models/bengal_rest.npz
+__pycache__/

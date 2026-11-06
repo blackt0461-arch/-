@@ -5,6 +5,7 @@
 import { add, sub, mul, norm, lerp, spline } from './sdf.js';
 import { profile as P } from './muscle.js';
 import { buildFineMuscles } from './muscles_fine.js';
+import { buildHeadMuscles } from './head_muscles.js';
 
 export function buildMuscles(api, lm) {
   const F = lm.F, V = lm.vert;
@@ -25,13 +26,16 @@ export function buildMuscles(api, lm) {
   const stern = (i, f = 0.5) => lerp(F.sternebrae[i].a, F.sternebrae[i].b, f);
   const up = (p, d) => add(p, [0, d, 0]);
   const at = (p, dx = 0, dy = 0, dz = 0) => add(p, [dx, dy, dz]);
+  // 古い骨格の座標で書いた点は、合わせた体の場所へ移す
+  const R = lm.remap || ((p) => p);
 
   // 腹の壁の形（z の位置、θ=0 背中側〜1 腹のまん中、inset=内側へ）
   const zs = [260, 220, 180, 150, 100, 60, 30, 5];
   const Az = [38, 38.5, 37.5, 37, 33, 27, 20, 15];
   const Bz = [150, 140, 139, 141, 150, 168, 188, 204];
   const tab = (arr, z) => { for (let i = 0; i < zs.length - 1; i++) if (z <= zs[i] && z >= zs[i + 1]) { const t = (zs[i] - z) / (zs[i] - zs[i + 1]); return arr[i] + (arr[i + 1] - arr[i]) * t; } return z > zs[0] ? arr[0] : arr[arr.length - 1]; };
-  const wall = (z, th, inset = 0) => {
+  const wall = (z, th, inset = 0) => R(wall0(z, th, inset));
+  const wall0 = (z, th, inset = 0) => {
     const A = tab(Az, z) - inset, B = tab(Bz, z) + inset;
     const ctrl = [[11 - inset * 0.5, 255], [A * 0.75, 246], [A, 226], [A * 0.88, B + 22], [A * 0.45, B + 4], [2, B]];
     const pts = spline(ctrl.map(([x, y]) => [x, y, z]), 8);
@@ -44,24 +48,9 @@ export function buildMuscles(api, lm) {
   const S = (pts, prof) => ({ pts, prof });
 
   // ===================== 頭 =====================
-  M('Temporalis', '側頭筋', 'M. temporalis', 'head', 2, { origin: '頭骨の側頭窩', insertion: '下顎骨の筋突起', action: '口を閉じる（かむ）' }, [
-    S([sk(8, 18, 16.5), sk(20, 14, 19.5), sk(30, 13, 18.5)], P(3.2, 0, 0.15, true)),
-    S([sk(18, 26, 13.5), sk(25, 18, 18.5), sk(31, 15, 18)], P(3.2, 0, 0.15, true)),
-    S([sk(32, 27, 11), sk(34, 20, 16.5), sk(32, 16, 17.5)], P(3.0, 0, 0.15, true)),
-    S([sk(40, 21, 14.5), sk(37, 16, 17.5), sk(33, 14, 17.8)], P(2.6, 0, 0.15, true)),
-  ], { bones: ['Skull', 'Mandible'] });
-  M('Masseter', '咬筋', 'M. masseter', 'head', 1, { origin: '頬骨弓の下の面', insertion: '下顎骨の外側（咬筋窩）', action: '口を閉じる（強くかむ）' }, [
-    S([sk(36, 1.5, 29), sk(32, -4, 23), sk(27, -8.5, 19.5)], P(3.2, 0.05, 0.05, true)),
-    S([sk(46, 2.5, 31), sk(42, -4, 24), sk(37, -9.5, 19.5)], P(3.4, 0.05, 0.05, true)),
-    S([sk(55, 4, 28.5), sk(50, -3, 22), sk(46, -10, 18)], P(3.0, 0.05, 0.05, true)),
-  ], { bones: ['Skull', 'Mandible'] });
-  M('Digastric', '顎二腹筋', 'M. digastricus', 'head', 1, { origin: '後頭骨の傍顆突起', insertion: '下顎骨の下の縁', action: '口を開ける' }, [
-    S([sk(3, -1, 12.5), sk(18, -12, 10.5), sk(38, -15.5, 9.5), sk(58, -14, 8.5)], P(2.3, 0.08, 0.1)),
-  ], { bones: ['Skull', 'Mandible'] });
-
-  // ===================== 首 =====================
+  buildHeadMuscles(lm, M, S, P);
   M('Sternocephalicus', '胸骨頭筋（胸鎖乳突筋）', 'M. sternocephalicus', 'neck', 1, { origin: '胸骨柄', insertion: '頭骨の乳様突起・項稜', action: '頭と首を下げる・横に向ける' }, [
-    S([at(stern(0, 0.2), 3, -2, 0), at(stern(0, 0), 9, 8, 18), [15, 248, 352], [18, 270, 375], sk(12, 1, 20)], P(2.8, 0.05, 0.1)),
+    S([at(stern(0, 0.2), 3, -2, 0), at(stern(0, 0), 9, 8, 18), R([15, 248, 352]), R([18, 270, 375]), sk(12, 1, 20)], P(2.8, 0.05, 0.1)),
   ]);
   M('Splenius', '板状筋', 'M. splenius', 'neck', 2, { origin: '第1〜3胸椎の棘突起・項靱帯', insertion: '頭骨の項稜', action: '頭と首を上げる' }, [
     S([vt('T3', 0, 19, 2), vt('C7', 0, 13, 7), vt('C4', 0, 9, 10.5), vt('C2', 0, 10, 11), sk(3, 20, 15)], P(3.2, 0.03, 0.08, true)),
@@ -87,10 +76,10 @@ export function buildMuscles(api, lm) {
     S(['L7', 'L5', 'L3', 'L1', 'T12', 'T10', 'T8', 'T6', 'T4', 'T2', 'C7', 'C5', 'C3', 'C2'].map((id) => vt(id, 0, id[0] === 'L' ? 9 : id[0] === 'T' ? 11 : 9, 3.6)), P(2.0, 0.03, 0.05, true)),
   ]);
   M('Latissimus', '広背筋', 'M. latissimus dorsi', 'trunk', 1, { origin: '第5胸椎〜第4腰椎の棘突起（胸腰筋膜）', insertion: '上腕骨の大円筋粗面（内側）', action: '前足を後ろへ引く（走る・登るときに体を前へ引き上げる）' }, [
-    S([vt('T6', 0, 19, 3), at(rib(5, 0.12, 6), 0, 6, 0), [37, 214, 268], hu(28, -3, -5)], P(1.8, 0, 0.12, true)),
-    S([vt('T9', 0, 17, 3), at(rib(8, 0.15, 6), 0, 6, 0), [40, 212, 250], [37, 200, 262], hu(28, -3, -5)], P(1.8, 0, 0.14, true)),
-    S([vt('T12', 0, 15, 3), at(rib(11, 0.2, 6), 0, 4, 0), [41, 210, 225], [38, 198, 255], hu(28, -3, -5)], P(1.7, 0, 0.16, true)),
-    S([vt('L2', 0, 15, 3), [22, 252, 150], at(rib(13, 0.35, 5), 0, 0, 0), [41, 208, 205], [38, 196, 250], hu(28, -3, -5)], P(1.6, 0, 0.18, true)),
+    S([vt('T6', 0, 19, 3), at(rib(5, 0.12, 6), 0, 6, 0), R([37, 214, 268]), hu(28, -3, -5)], P(1.8, 0, 0.12, true)),
+    S([vt('T9', 0, 17, 3), at(rib(8, 0.15, 6), 0, 6, 0), R([40, 212, 250]), R([37, 200, 262]), hu(28, -3, -5)], P(1.8, 0, 0.14, true)),
+    S([vt('T12', 0, 15, 3), at(rib(11, 0.2, 6), 0, 4, 0), R([41, 210, 225]), R([38, 198, 255]), hu(28, -3, -5)], P(1.7, 0, 0.16, true)),
+    S([vt('L2', 0, 15, 3), R([22, 252, 150]), at(rib(13, 0.35, 5), 0, 0, 0), R([41, 208, 205]), R([38, 196, 250]), hu(28, -3, -5)], P(1.6, 0, 0.18, true)),
   ]);
   // 腹の壁
   const eo = [];
@@ -106,7 +95,7 @@ export function buildMuscles(api, lm) {
   }
   M('ObliquusInt', '内腹斜筋', 'M. obliquus internus abdominis', 'trunk', 2, { origin: '胸腰筋膜・腸骨', insertion: '最後の数本の肋骨・白線', action: 'お腹をしめる、体をまるめる・ひねる' }, io, { k: 2.2 });
   M('RectusAbd', '腹直筋', 'M. rectus abdominis', 'trunk', 2, { origin: '恥骨（骨盤結合）', insertion: '胸骨と第1〜9肋軟骨', action: '体をまるめる（背中を丸める）、お腹をしめる' }, [
-    S([at(F.P1, 3, 1, 4), [5, 186, 30], [6, tab(Bz, 70) + 3, 70], [6, tab(Bz, 130) + 3, 130], [7, 141, 190], [8, 146, 235], at(stern(3), 6, 3, 0), at(stern(1), 7, 4, 0)], P(2.3, 0.05, 0.05, true)),
+    S([at(F.P1, 3, 1, 4), R([5, 186, 30]), R([6, tab(Bz, 70) + 3, 70]), R([6, tab(Bz, 130) + 3, 130]), R([7, 141, 190]), R([8, 146, 235]), at(stern(3), 6, 3, 0), at(stern(1), 7, 4, 0)], P(2.3, 0.05, 0.05, true)),
   ]);
   // 肋間筋（肋骨のあいだ）
   const ic = [], icg = [];
@@ -118,7 +107,7 @@ export function buildMuscles(api, lm) {
   M('Intercostales', '肋間筋', 'Mm. intercostales', 'trunk', 3, { origin: '肋骨の後ろの縁', insertion: 'うしろ隣の肋骨の前の縁', action: '肋骨を動かして息をする' }, ic, { groups: icg, sheetN: 4, noCarve: true });
   // 横隔膜（左右をまとめて1枚）
   {
-    const C = [0, 196, 252];
+    const C = R([0, 196, 252]);
     const rim = [vt('L1', 0, -6, 2), vt('L3', 0, -6, 3), rib(12, 0.5), rib(13, 0.7), rib(13, 0.95), cart(12, 0.5), cart(11, 0.5), cart(10, 0.5), cart(9, 0.7), cart(9, 0.35)];
     const strands = [];
     for (const [sgn, list] of [[1, rim], [-1, [...rim].reverse()]]) for (const r of list) {
@@ -131,14 +120,14 @@ export function buildMuscles(api, lm) {
 
   // ===================== 肩と前足 =====================
   M('Trapezius', '僧帽筋（鎖骨部・肩峰部・棘部）', 'M. trapezius', 'forelimb', 1, { origin: '頭骨の項稜〜第10胸椎の棘突起', insertion: '鎖骨、肩甲骨の肩峰と肩甲棘', action: '肩甲骨を持ち上げ前後に引く、前足を前へ出す' }, [
-    S([vt('C3', 0, 15, 2), vt('C6', 0, 16, 9), [22, 222, 312], [22, 210, 314]], P(1.7, 0, 0.1, true)),
-    S([vt('C7', 0, 19, 2), [12, 262, 300], sc(30, 1, 10)], P(1.6, 0, 0.1, true)),
-    S([vt('T2', 0, 22, 2), [10, 265, 280], sc(45, 1, 9.5)], P(1.6, 0, 0.1, true)),
-    S([vt('T5', 0, 21, 2), [9, 263, 263], sc(60, 0.5, 9)], P(1.5, 0, 0.1, true)),
-    S([vt('T8', 0, 18, 2), [9, 258, 243], sc(68, 0, 8)], P(1.4, 0, 0.12, true)),
+    S([vt('C3', 0, 15, 2), vt('C6', 0, 16, 9), R([22, 222, 312]), R([22, 210, 314])], P(1.7, 0, 0.1, true)),
+    S([vt('C7', 0, 19, 2), R([12, 262, 300]), sc(30, 1, 10)], P(1.6, 0, 0.1, true)),
+    S([vt('T2', 0, 22, 2), R([10, 265, 280]), sc(45, 1, 9.5)], P(1.6, 0, 0.1, true)),
+    S([vt('T5', 0, 21, 2), R([9, 263, 263]), sc(60, 0.5, 9)], P(1.5, 0, 0.1, true)),
+    S([vt('T8', 0, 18, 2), R([9, 258, 243]), sc(68, 0, 8)], P(1.4, 0, 0.12, true)),
   ], { k: 2.2 });
   M('Clavobrachialis', '鎖骨上腕筋（三角筋の鎖骨部）', 'M. clavobrachialis', 'forelimb', 1, { origin: '鎖骨', insertion: '尺骨の近位（前腕の前）', action: '前足を前へ振り出す、肘を曲げる' }, [
-    S([[22, 210, 314], hu(5, 13, 1), hu(45, 10, 2), hu(Lh - 5, 7.5, 1), fa(5, 5, 0)], P(2.8, 0.05, 0.12)),
+    S([R([22, 210, 314]), hu(5, 13, 1), hu(45, 10, 2), hu(Lh - 5, 7.5, 1), fa(5, 5, 0)], P(2.8, 0.05, 0.12)),
   ]);
   M('Rhomboideus', '菱形筋', 'M. rhomboideus', 'forelimb', 3, { origin: '第7頸椎〜第4胸椎の棘突起・項靱帯（頭部は後頭骨）', insertion: '肩甲骨の背側の縁（内側）', action: '肩甲骨を背骨のほうへ引きよせる' }, [
     S([vt('C6', 0, 13, 2), vt('C7', 0, 14, 5), sc(66, 18, -1.5)], P(2.2, 0, 0.05, true)),
@@ -151,7 +140,7 @@ export function buildMuscles(api, lm) {
   sv.push(S([vt('C5', 0, 1, 9), vt('C7', 0, 3, 13), sc(62, 21, -2)], P(2.2, 0.03, 0.05, true)));
   M('SerratusVentralis', '腹鋸筋', 'M. serratus ventralis', 'forelimb', 3, { origin: '第1〜9肋骨の外側・第3〜7頸椎の横突起', insertion: '肩甲骨の内側面（背側の縁の近く）', action: '胴体を前足のあいだにつり下げる、肩甲骨を回す' }, sv, { k: 2.0 });
   M('LevatorScapulaeV', '腹側肩甲挙筋', 'M. levator scapulae ventralis', 'forelimb', 2, { origin: '環椎の翼（横突起）', insertion: '肩甲骨の肩峰（鉤上突起）', action: '肩甲骨を前へ引く' }, [
-    S([vt('C1', 0, 4, 15), vt('C3', 0, 0, 15), [26, 222, 318], sc(13, -5, 9)], P(2.0, 0.05, 0.1)),
+    S([vt('C1', 0, 4, 15), vt('C3', 0, 0, 15), R([26, 222, 318]), sc(13, -5, 9)], P(2.0, 0.05, 0.1)),
   ]);
   M('Deltoideus', '三角筋（肩峰部・棘部）', 'M. deltoideus', 'forelimb', 1, { origin: '肩甲骨の肩峰と肩甲棘', insertion: '上腕骨の三角筋粗面', action: '肩を曲げる、前足を外へ上げる' }, [
     S([sc(8, 3, 9.5), hu(4, 5, 10), hu(22, 4.5, 6)], P(2.8, 0, 0.12)),
@@ -238,11 +227,11 @@ export function buildMuscles(api, lm) {
     S([il(Li + 2, -2, 3), il(32, 0, 5.5), il(14, 1, 7), fe(-1, -1.5, 11.5)], P(4.2, 0, 0.1)),
   ], { k: 2.4 });
   M('GluteusSup', '浅殿筋', 'M. gluteus superficialis', 'hindlimb', 1, { origin: '仙骨・第1尾椎（殿筋膜）', insertion: '大腿骨の大転子の下（第三転子）', action: '股をのばす、後ろ足を外へ開く' }, [
-    S([vt('S', 4, 9, 4), [18, 252, 20], fe(-6, -3, 14.5), fe(14, -2, 11)], P(2.4, 0, 0.12, true)),
-    S([vt('Cd1', 0, 6, 4), [20, 244, 0], fe(-4, -6, 14), fe(15, -3, 11)], P(2.2, 0, 0.12, true)),
+    S([vt('S', 4, 9, 4), R([18, 252, 20]), fe(-6, -3, 14.5), fe(14, -2, 11)], P(2.4, 0, 0.12, true)),
+    S([vt('Cd1', 0, 6, 4), R([20, 244, 0]), fe(-4, -6, 14), fe(15, -3, 11)], P(2.2, 0, 0.12, true)),
   ]);
   M('Caudofemoralis', '尾大腿筋', 'M. caudofemoralis', 'hindlimb', 1, { origin: '第2・3尾椎の横突起', insertion: '大腿骨の遠位（膝蓋骨の外側へ腱）', action: '股をのばす、後ろ足を外へ開く（猫にある筋肉）' }, [
-    S([vt('Cd2', 0, 1, 9), [21, 232, -16], fe(30, -7, 13), fe(60, -2, 11.5), fe(Lf - 6, 4, 8)], P(2.6, 0.03, 0.3)),
+    S([vt('Cd2', 0, 1, 9), R([21, 232, -16]), fe(30, -7, 13), fe(60, -2, 11.5), fe(Lf - 6, 4, 8)], P(2.6, 0.03, 0.3)),
   ]);
   M('TensorFL', '大腿筋膜張筋', 'M. tensor fasciae latae', 'hindlimb', 1, { origin: '腸骨の腹側の稜（腸骨棘）', insertion: '大腿筋膜（膝の外側へ）', action: '股を曲げる、膝をのばす' }, [
     S([il(Li + 2, -5, 2), fe(12, 8, 11), fe(50, 6, 10), fe(Lf - 8, 7.5, 6)], P(2.4, 0, 0.25, true)),
@@ -273,7 +262,7 @@ export function buildMuscles(api, lm) {
     S([at(F.P1, 5, 1, 5), fe(15, -2, -6), fe(30, -3, -4.5)], P(2.0, 0, 0.1)),
   ]);
   M('Iliopsoas', '腸腰筋（大腰筋・腸骨筋）', 'M. iliopsoas', 'hindlimb', 3, { origin: '腰椎の椎体（腹側）・腸骨の内側', insertion: '大腿骨の小転子', action: '股を曲げる（後ろ足を前へ）、背中を丸める' }, [
-    S([vt('L2', 0, -6, 4), vt('L4', 0, -7, 6), vt('L6', 0, -8, 8), [13, 230, 26], fe(14, -4, -1)], P(3.6, 0, 0.1)),
+    S([vt('L2', 0, -6, 4), vt('L4', 0, -7, 6), vt('L6', 0, -8, 8), R([13, 230, 26]), fe(14, -4, -1)], P(3.6, 0, 0.1)),
     S([il(35, -4, -3), il(18, -6, -3), fe(14, -4, 1)], P(2.6, 0, 0.1)),
   ], { k: 2.0 });
   M('RectusFemoris', '大腿直筋（大腿四頭筋）', 'M. rectus femoris', 'hindlimb', 2, { origin: '腸骨（寛骨臼のすぐ前）', insertion: '膝蓋骨 →（膝蓋靱帯）→ 脛骨粗面', action: '膝をのばす、股を曲げる' }, [

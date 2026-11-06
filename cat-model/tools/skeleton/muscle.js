@@ -98,7 +98,10 @@ export function muscleShape(def, boneShapes) {
   if (sc !== 1) for (const L of lines) for (const q of L) q.r *= sc;
   let shape;
   const groups = def.groups || (def.sheet && lines.length > 1 ? [lines.map((_, i) => i)] : null);
-  if (groups) {
+  if (def.volume) {
+    // 形を直接わたされた筋肉（骨の面にそって厚みをつけた筋肉など）。すじは骨の重みづけにだけ使う
+    shape = def.volume;
+  } else if (groups) {
     const N = def.sheetN ?? 14;
     const tris = [], fill = [];
     const tubeOf = (L) => smoothUnion(def.kTube ?? 0.6, ...L.slice(0, -1).map((a, i) => cone(a.p, L[i + 1].p, Math.max(0.35, a.r), Math.max(0.35, L[i + 1].r))));

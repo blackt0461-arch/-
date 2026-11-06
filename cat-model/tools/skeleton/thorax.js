@@ -18,8 +18,8 @@ export function buildThorax(api, lm) {
   const V = lm.vert;
 
   // ---- 胸骨 ----
-  const M0 = [0, 192, V.T1.c[2] + 24];      // 胸骨柄の頭側の端
-  const X0 = [0, 138, V.T9.c[2] + 2];       // 剣状突起の尾側の端
+  const M0 = lm.fit?.sternum ? lm.fit.sternum.M0 : [0, 192, V.T1.c[2] + 24];      // 胸骨柄の頭側の端
+  const X0 = lm.fit?.sternum ? lm.fit.sternum.X0 : [0, 138, V.T9.c[2] + 2];       // 剣状突起の尾側の端
   const SL = [14, 11, 11, 11, 11, 11, 10, 14];
   const gap = 1.5;
   const total = SL.reduce((a, b) => a + b, 0) + gap * 7;
@@ -98,7 +98,7 @@ export function buildThorax(api, lm) {
     const y0 = v.cr[1] + 0.8, z0 = v.cr[2];
     const head = [bw + 1.0, y0, z0];
     const tub = [bw + 4.2, y0 + 4.6, z0 - 1.0];
-    const w = W[i - 1], f = SHIFT[i - 1];
+    const w = W[i - 1] * (lm.fit?.ribScale ?? 1), f = SHIFT[i - 1];
     const sAtt = i <= 9 ? sternalAttach(i) : null;
     // 胸の深さ（背骨から胸骨・または肋骨弓まで）
     const ys = sAtt ? sAtt[1] : mix(150, 175, (i - 10) / 3);

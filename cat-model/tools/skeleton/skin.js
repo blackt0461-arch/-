@@ -95,7 +95,9 @@ export function buildSkin({ sources, lm, nodeName, h = 1.0, closeR = 4.5, bigR =
   const rcAt = (q) => {
     const j = ((q / nx) | 0) % ny, k = (q / (nx * ny)) | 0;
     const y = lo[1] + j * h, z = lo[2] + k * h;
-    return (closeR + (bigR - closeR) * sm(80, 128, y) * sm(-28, -6, z) * sm(385, 352, z)) / h; // 頭（z>385）は細かく包む
+    const body = closeR + (bigR - closeR) * sm(80, 128, y) * sm(-28, -6, z);
+    const head = closeR + 2.8 * sm(452, 432, z);                  // 頭はなめらかに包む（鼻づらの先は細かく）
+    return (body + (head - body) * sm(352, 385, z)) / h;
   };
   const out = new Uint8Array(N);
   const queue = new Int32Array(N);
@@ -163,12 +165,18 @@ export function buildSkin({ sources, lm, nodeName, h = 1.0, closeR = 4.5, bigR =
 
 // ---- 骨と一緒に動くための重み ----
 // sources の頂点（重みつき）から近いものを集め、皮ふの上でならす
-export function skinWeightsFromSources(mesh, sources, cell = 3) {
-  const grid = new Map();
+export function skinWeightsFromSources(mesh, sources, cell = 3, grp = null) {
+  // grp があるときは、体の部分（胴・左右の前足・後ろ足）ごとに分けて探し、
+  // 頂点ごとの「どの部分にどれだけ属するか」（grp.VG、K 個ずつ）で混ぜる
+  const K = grp ? grp.K : 1;
+  const grids = Array.from({ length: K }, () => new Map());
   const key = (x, y, z) => `${Math.floor(x / cell)},${Math.floor(y / cell)},${Math.floor(z / cell)}`;
   for (const s of sources) {
     const P = s.positions;
     for (let v = 0; v < P.length / 3; v += s.stride || 1) {
+      let g = 0;
+      if (grp) { const [js, ws] = s.weightsOf(v); let b = 0; for (let k = 1; k < js.length; k++) if (ws[k] > ws[b]) b = k; g = grp.ofJoint(js[b]); }
+      const grid = grids[g];
       const k = key(P[v * 3], P[v * 3 + 1], P[v * 3 + 2]);
       let a = grid.get(k); if (!a) grid.set(k, (a = []));
       a.push([P[v * 3], P[v * 3 + 1], P[v * 3 + 2], s, v]);
@@ -179,20 +187,27 @@ export function skinWeightsFromSources(mesh, sources, cell = 3) {
   for (let v = 0; v < n; v++) {
     const x = mesh.positions[v * 3], y = mesh.positions[v * 3 + 1], z = mesh.positions[v * 3 + 2];
     const cx = Math.floor(x / cell), cy = Math.floor(y / cell), cz = Math.floor(z / cell);
-    let found = [];
-    for (let r = 1; r <= 8 && found.length < 6; r++) {
-      found = [];
-      for (let a = -r; a <= r; a++) for (let b = -r; b <= r; b++) for (let c = -r; c <= r; c++) {
-        const arr = grid.get(`${cx + a},${cy + b},${cz + c}`); if (!arr) continue;
-        for (const e of arr) found.push(e);
-      }
-    }
-    found.sort((p, q) => ((p[0] - x) ** 2 + (p[1] - y) ** 2 + (p[2] - z) ** 2) - ((q[0] - x) ** 2 + (q[1] - y) ** 2 + (q[2] - z) ** 2));
     const m = new Map();
-    for (const e of found.slice(0, 6)) {
-      const dd = Math.hypot(e[0] - x, e[1] - y, e[2] - z) + 0.5, wgt = 1 / dd;
-      const [js, ws] = e[3].weightsOf(e[4]);
-      for (let k = 0; k < js.length; k++) m.set(js[k], (m.get(js[k]) || 0) + ws[k] * wgt);
+    for (let g = 0; g < K; g++) {
+      const gw = grp ? grp.VG[v * K + g] : 1;
+      if (gw < 0.01) continue;
+      const grid = grids[g];
+      let found = [];
+      for (let r = 1; r <= (grp ? 40 : 20) && found.length < 6; r++) {
+        found = [];
+        for (let a = -r; a <= r; a++) for (let b = -r; b <= r; b++) for (let c = -r; c <= r; c++) {
+          const arr = grid.get(`${cx + a},${cy + b},${cz + c}`); if (!arr) continue;
+          for (const e of arr) found.push(e);
+        }
+      }
+      found.sort((p, q) => ((p[0] - x) ** 2 + (p[1] - y) ** 2 + (p[2] - z) ** 2) - ((q[0] - x) ** 2 + (q[1] - y) ** 2 + (q[2] - z) ** 2));
+      const mg = new Map(); let tot = 0;
+      for (const e of found.slice(0, 6)) {
+        const dd = Math.hypot(e[0] - x, e[1] - y, e[2] - z) + 0.5, wgt = 1 / dd;
+        const [js, ws] = e[3].weightsOf(e[4]);
+        for (let k = 0; k < js.length; k++) { mg.set(js[k], (mg.get(js[k]) || 0) + ws[k] * wgt); tot += ws[k] * wgt; }
+      }
+      for (const [j, w] of mg) m.set(j, (m.get(j) || 0) + gw * w / (tot || 1));
     }
     W[v] = m;
   }
@@ -265,12 +280,18 @@ export function tabbyColor(p, n, bone, lm) {
     // ほおの後ろはふさふさ
     fur = 0.28 + 0.3 * sm(30, 10, a) * sm(10, 22, c);
     // 鼻（鼻鏡）：毛のないピンク
-    const nt = lm.noseTip; const dn = Math.hypot(x - nt[0], p[1] - nt[1], p[2] - nt[2]);
-    if (dn < 9 && a > 85) { col = [0.9, 0.56, 0.55]; fur = 0; }
-    // まぶたのふち：黒っぽい
-    if (de < 11.8) { col = [0.3, 0.18, 0.14]; fur = 0; }
-    // 唇のふち
-    if (a > 58 && a < 86 && b < -4.5 && b > -9 && c > 3 && Math.abs(b - (-6.5 + (a - 70) * 0.02)) < 0.9) { col = [0.45, 0.25, 0.22]; fur = 0.05; }
+    // 鼻（鼻鏡）：毛のない逆三角形（上の辺 約10mm、高さ 約8mm）
+    if (a > 83.5 && b > 0.5 && b < 9.8 && c < Math.max(0.8, (b - 0.5) * 0.62)) { col = [0.84, 0.52, 0.52]; fur = 0; }
+    // まぶたのふち：黒っぽい細いふち
+    const ea = lm.eyeAxes;
+    if (ea) {
+      const d = [x - ea.C[0], p[1] - ea.C[1], p[2] - ea.C[2]];
+      const hx = (d[0] * ea.hv[0] + d[1] * ea.hv[1] + d[2] * ea.hv[2]) / 8.6, vy = (d[0] * ea.vv[0] + d[1] * ea.vv[1] + d[2] * ea.vv[2]) / 7.4;
+      const fwd = d[0] * ea.g[0] + d[1] * ea.g[1] + d[2] * ea.g[2];
+      const rr = Math.hypot(hx, vy);
+      if (fwd > 0 && rr < 1.18) { col = [0.22, 0.14, 0.1]; fur = 0; }
+      else if (fwd > 0 && rr < 1.45) { col = mix(col, LIGHT, 0.7); fur *= 0.5; }   // 目のまわりの明るい毛
+    }
   } else if (isTail) {
     // しっぽ：輪の縞、先は濃い
     const m = /^Cd(\d+)/.exec(bone); const i = m ? +m[1] : 2;

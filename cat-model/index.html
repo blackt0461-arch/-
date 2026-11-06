@@ -250,7 +250,7 @@ function furMaterial(t) {
 }
 function buildFur() {
   for (const o of nodes.values()) {
-    if (o.userData.kind !== 'skin') continue;
+    if (o.userData.kind !== 'skin' || o.userData.textured) continue; // 模様つきの皮ふには毛の層をつけない
     const base = ownMesh(o); if (!base) continue;
     for (let i = 1; i <= FUR_N; i++) {
       const t = i / FUR_N;
