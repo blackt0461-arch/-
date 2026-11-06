@@ -298,7 +298,9 @@ export function addAnswer(sub, unit, kind) {
 export function profile() { return state.profile || (state.profile = blankProfile()); }
 // サイド（1.11.0）：はじめに選んだ目的。'puzzle'＝パズルサイド（勉強とパズルを自由に行き来）、'study'＝スタディサイド（勉強をすると、パズルが遊べる）
 export const STUDY_PER_PUZZLE = 5; // スタディサイドは、問題を5問解くごとにパズル1回
-export function sideOf() { const p = profile(); return p.side || p.mode || 'study'; }
+// サイドは管理者だけが変えられる（「勉強｜パズル」の切りかえ＝mode では変わらない）。
+// サイドがまだ記録されていない前からの人は、はじめに見た時のモードをサイドとして決める（それ以降はモードについていかない）
+export function sideOf() { const p = profile(); if (!p.side && p.mode) { p.side = p.mode; } return p.side || 'study'; }
 export const puzzleTickets = () => profile().puzzleTickets || 0;
 export const studyToNextPuzzle = () => STUDY_PER_PUZZLE - (profile().studyCount || 0);
 // 1問解いたら呼ぶ。パズルが1回ふえたら 1 を返す
