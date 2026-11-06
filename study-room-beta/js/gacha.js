@@ -251,6 +251,17 @@ function poolFor(rarity, banner, rng) {
   }
   return POOL[rarity];
 }
+// 1回引いた時の、家具ごとの出る確率（提供割合の表示用。1.12.0）。合計 1
+export function oddsFor(banner = 'standard') {
+  const out = [];
+  for (const r of [5, 4, 3]) {
+    const lim = r >= 4 && banner && banner !== 'standard' ? bySeries(banner).filter((it) => it.rarity === r) : [];
+    const share = lim.length ? BANNER_LIMITED_SHARE : 0;
+    for (const it of lim) out.push({ item: it, rarity: r, p: RATES[r] * share / lim.length, limited: true });
+    for (const it of POOL[r]) out.push({ item: it, rarity: r, p: RATES[r] * (1 - share) / POOL[r].length });
+  }
+  return out;
+}
 function pick(rarity, owned, rng, banner) {
   const pool = poolFor(rarity, banner, rng);
   const item = pool[Math.min(pool.length - 1, Math.floor(rng() * pool.length))];

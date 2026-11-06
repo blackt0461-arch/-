@@ -1152,3 +1152,44 @@ button.pf-open { border: 0; background: none; padding: 0; display: inline-flex; 
 .pl-sheet .pl-list h4 { margin: 12px 0 6px; font-size: 13px; display: flex; gap: 6px; align-items: baseline; opacity: .85; }
 .pl-sheet .pl-list h4 small { font-size: 11px; opacity: .6; }
 .pl-sheet .pl-item.on { border-color: #e6c068; }
+/* 提供割合：家具ごとの確率（1.12.0） */
+.sheet.rates-sheet { max-height: 88vh; overflow-y: auto; }
+.odds-h { margin: 12px 0 6px; font-size: 13.5px; }
+.odds { display: flex; flex-direction: column; }
+.odds-g { display: flex; justify-content: space-between; align-items: baseline; padding: 10px 2px 4px; border-bottom: 1px solid rgba(255,255,255,.12); }
+.odds-g b { color: var(--gold1, #e6c068); }
+.odds-g small { font-size: 11.5px; opacity: .7; }
+.odds-r { display: flex; justify-content: space-between; gap: 10px; padding: 5px 2px; font-size: 12.5px; border-bottom: 1px solid rgba(255,255,255,.05); }
+.odds-r span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.odds-r i { font-style: normal; font-size: 10.5px; margin-left: 6px; padding: 1px 6px; border-radius: 99px; background: rgba(230,192,104,.18); color: #e6c068; }
+.odds-r b { font-variant-numeric: tabular-nums; flex: none; }
+/* 通報・ブロック・復元コード・エラーの記録など（1.12.0） */
+.pf-safety { display: flex; justify-content: center; gap: 18px; margin: 18px 0 8px; }
+.pf-safety .link { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; opacity: .7; }
+.pf-safety .ic { width: 15px; height: 15px; }
+.rp-reasons { display: grid; gap: 6px; margin: 4px 0 10px; }
+.rp-reasons label { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 12px; background: rgba(255,255,255,.05); font-size: 14px; }
+.rp-detail { width: 100%; box-sizing: border-box; min-height: 70px; font: inherit; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--card-line); background: rgba(0,0,0,.25); color: inherit; margin-bottom: 10px; }
+.pr-report { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; opacity: .6; margin: 2px auto 0; }
+.pr-report .ic { width: 13px; height: 13px; }
+.rc-code { font: 800 26px/1.3 ui-monospace, Menlo, monospace; letter-spacing: .08em; text-align: center; padding: 16px; margin: 6px 0 10px; border-radius: 14px; background: rgba(230,192,104,.12); border: 1px dashed rgba(230,192,104,.6); color: #f4d58a; user-select: all; }
+.settings .val.warn { color: #f0a08c; }
+.bl-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 4px; border-bottom: 1px solid rgba(255,255,255,.06); }
+.pr-form, .pr-sheet form { display: grid; gap: 10px; }
+.pr-form label { display: grid; gap: 4px; font-size: 13px; }
+.pr-form input { font: inherit; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--card-line); background: rgba(0,0,0,.25); color: inherit; }
+.login .forgot { margin-top: 2px; font-size: 13px; opacity: .75; }
+.login .agree { font-size: 12px; }
+.login .agree a { color: var(--gold1, #e6c068); }
+.er-row { border-bottom: 1px solid rgba(255,255,255,.07); padding: 8px 2px; }
+.er-row summary { cursor: pointer; display: grid; gap: 2px; }
+.er-row summary b { font-size: 13px; word-break: break-all; }
+.er-row summary small { font-size: 11px; opacity: .65; }
+.er-row pre { white-space: pre-wrap; word-break: break-all; font-size: 10.5px; opacity: .75; margin: 6px 0 0; }
+.sheet.er-sheet { max-height: 88vh; overflow-y: auto; }
+/* 集中モード：操作の途中は、関係ない物をかくす（1.12.0） */
+body.focus .tabbar, body.focus .home > header.hud, body.focus .side-tools, body.focus .mode-toggle, body.focus .hint, body.focus .dock { display: none !important; }
+body.focus .editbar { bottom: 0; padding-bottom: calc(10px + var(--safe-b, 0px)); gap: 6px; }
+body.focus .editbar .eb-view { margin: 0 0 4px; }
+body.focus .float-bar { top: calc(var(--safe-t, 0px) + 12px); }
+body.focus .nudge { top: calc(var(--safe-t, 0px) + 72px); }

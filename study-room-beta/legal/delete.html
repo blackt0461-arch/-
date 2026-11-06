@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>アカウントを消す | ROOMIN</title><link rel="stylesheet" href="style.css"></head>
+<body><main>
+<a class="back" href="../">← ROOMIN にもどる</a>
+<h1>ROOMIN のアカウントを消す</h1>
+<p>アプリが開けない時も、このページからアカウントを消せます（アプリの「設定 → アカウントを消す」でも同じことができます）。</p>
+<div class="box">消すと、記録・部屋・家具・アイテム・フレンドのつながりがすべて消え、元に戻せません。データが消えた時のためのバックアップも、14日以内に消えます。</div>
+<form id="f">
+  <label>ユーザー名<input name="u" autocomplete="username" required></label>
+  <label>パスワード<input name="p" type="password" autocomplete="current-password" required></label>
+  <label><span><input type="checkbox" name="c" required> 元に戻せないことをわかったうえで消します</span></label>
+  <button type="submit">アカウントを消す</button>
+  <p class="msg" id="m"></p>
+</form>
+<p>パスワードを忘れた時は、アプリのログイン画面の「パスワードを忘れた」から、復元コードで新しいパスワードにしてください。復元コードもない時は、アプリの「要望・バグ報告」（ほかのアカウントから）で、消したいユーザー名を知らせてください。</p>
+<p><a href="privacy.html">プライバシーポリシー</a> ・ <a href="terms.html">利用規約</a></p>
+<script type="module">
+const URL0 = 'https://ytvocegvtlgrnxupmbnf.supabase.co/rest/v1/rpc/', KEY = 'sb_publishable_dRcpHiDz_wRt_SZz4P98TA_oNfDqqy7';
+const rpc = async (n, b) => { const r = await fetch(URL0 + n, { method: 'POST', headers: { apikey: KEY, 'Content-Type': 'application/json' }, body: JSON.stringify(b) }); const j = await r.json().catch(() => null); if (!r.ok) throw new Error(j?.message || 'server'); return j; };
+const T = { bad_login: 'ユーザー名かパスワードがちがいます', cannot_delete_admin: '管理者のアカウントは、このページでは消せません', server: 'うまくいきませんでした。少ししてからもう一度ためしてください' };
+const f = document.getElementById('f'), m = document.getElementById('m');
+f.onsubmit = async (e) => {
+  e.preventDefault();
+  const btn = f.querySelector('button'); btn.disabled = true; m.className = 'msg'; m.textContent = '消しています…';
+  try {
+    const s = await rpc('sr_login', { p_username: f.u.value.trim(), p_password: f.p.value });
+    await rpc('sr_delete_me', { p_token: s.token, p_password: f.p.value });
+    m.className = 'msg ok'; m.textContent = `「${s.username}」のアカウントを消しました。ご利用ありがとうございました。`;
+    f.reset();
+  } catch (err) { m.className = 'msg ng'; m.textContent = T[err.message] || T.server; btn.disabled = false; }
+};
+</script>
+</main></body></html>

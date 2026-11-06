@@ -19,6 +19,7 @@ import * as DL from './download.js';
 import * as Sync from './sync.js';
 import * as R from './report.js';
 import * as EV from './events.js';
+import * as ERR from './errlog.js';
 import { rpc } from './cloud.js';
 import { PUZZLES, puzzleById, levelInfo, mountPuzzle, livesOf } from './puzzles.js';
 import { openPuzzleHelp } from './puzzlehelp.js';
@@ -221,11 +222,13 @@ function showLogin(mode = usedHereBefore() ? 'login' : 'signup') {
           <button class="btn primary big" type="submit">${mode === 'login' ? 'ログイン' : '登録してはじめる'}</button>
         </form>
         <button class="link swap">${mode === 'login' ? 'はじめての人は、こちらで登録' : 'もう登録している人は、ログイン'}</button>
+        ${mode === 'login' ? '<button class="link forgot">パスワードを忘れた</button>' : `<p class="note agree">登録すると、<a href="legal/terms.html" target="_blank" rel="noopener">利用規約</a>と<a href="legal/privacy.html" target="_blank" rel="noopener">プライバシーポリシー</a>に同意したことになります。</p>`}
         <p class="note">記録はネット上に保存されます。どのスマホ・パソコンからでも、同じユーザー名とパスワードで続きから遊べます。</p>
       </div>
     </div>`);
   app.append(el);
   el.querySelector('.swap').onclick = () => showLogin(mode === 'login' ? 'signup' : 'login');
+  el.querySelector('.forgot')?.addEventListener('click', showPasswordReset);
   el.querySelector('form').onsubmit = async (e) => {
     e.preventDefault();
     const f = e.target;
@@ -245,6 +248,29 @@ function showLogin(mode = usedHereBefore() ? 'login' : 'signup') {
       startAs(Auth.currentUser());
       if (welcome) setTimeout(() => toast('新規登録記念のプレゼントが、プレゼントBOXに届いています', 3600), 1500);
     } catch (ex) { err.textContent = ex.message; vibrate(80); btn.disabled = false; }
+  };
+}
+
+// パスワードを忘れた：ユーザー名＋復元コードで新しいパスワードにする（1.12.0）
+function showPasswordReset() {
+  const el = sheet(`
+    <div class="sh-head"><span class="sh-ic">${icon('lock')}</span><div><h3>パスワードを忘れた</h3><p>設定で作った「復元コード」で、新しいパスワードにできます</p></div><button class="sh-x close" aria-label="とじる">${icon('x')}</button></div>
+    <form class="pr-form">
+      <label>ユーザー名<input name="u" autocomplete="username" required maxlength="16"></label>
+      <label>復元コード<input name="c" placeholder="XXXX-XXXX-XXXX" autocomplete="off" autocapitalize="characters" spellcheck="false" required></label>
+      <label>新しいパスワード<input name="p" type="password" autocomplete="new-password" required minlength="4"></label>
+      <p class="err"></p>
+      <button class="btn primary big" type="submit">新しいパスワードにする</button>
+    </form>
+    <p class="note">復元コードを作っていない時は、新しく登録したアカウントの「要望・バグ報告」から、管理者に知らせてください。</p>`, 'news-sheet pr-sheet');
+  el.querySelector('.close').onclick = () => el.remove();
+  el.querySelector('form').onsubmit = async (e) => {
+    e.preventDefault();
+    const f = e.target, err = f.querySelector('.err'), btn = f.querySelector('button'); btn.disabled = true; err.textContent = '';
+    try {
+      const r = await rpc('sr_password_reset', { p_username: f.u.value.trim(), p_code: f.c.value, p_new: f.p.value });
+      el.remove(); toast(`「${r.username}」のパスワードを変えました。新しいパスワードでログインしてください（復元コードは使ったので、ログインしたら作りなおしてください）`, 5200);
+    } catch (ex) { err.textContent = ex.code === 'bad_code' ? 'ユーザー名か復元コードがちがいます' : ex.code === 'too_many' ? '何度もまちがえたので、1時間ほど待ってからためしてください' : ex.message; btn.disabled = false; vibrate(60); }
   };
 }
 
@@ -584,7 +610,10 @@ function showGacha(banner = null) {
     const b = cur();
     const sh = sheet(`<div class="sh-head"><span class="sh-ic">${icon('star')}</span><div><h3>提供割合</h3><p>${esc(b.limited ? b.name : 'スタンダード')}</p></div></div>
       <div class="rates-body"><p>★5：5%（${b.limited ? 'うち半分は限定シリーズ' : 'いつでも出る家具のみ'}）<br>★4：25%<br>★3：70%</p>
-      <p>10回引くと★4以上が必ず1つ入ります。</p><p>★4・★5がかぶったら、それぞれのかけら1個になります。★3がかぶったら、もう1つ持てます。</p></div>
+      <p>10回引くと★4以上が必ず1つ入ります。</p><p>★4・★5がかぶったら、それぞれのかけら1個になります。★3がかぶったら、もう1つ持てます。</p>
+      <p>引いた回数のごほうび（アイコン）は、決まった回数で必ずもらえます。ガチャからランダムには出ません。</p></div>
+      <h4 class="odds-h">家具ごとの出る確率（1回あたり）</h4>
+      <div class="odds">${[5, 4, 3].map(r => { const list = G.oddsFor(b.id).filter(o => o.rarity === r); return `<div class="odds-g"><b>★${r}</b><small>合計 ${(list.reduce((n, o) => n + o.p, 0) * 100).toFixed(1)}%・${list.length}種</small></div>${list.map(o => `<div class="odds-r"><span>${esc(o.item.name)}${o.limited ? '<i>限定</i>' : ''}</span><b>${(o.p * 100).toFixed(o.p * 100 < 0.1 ? 3 : 2)}%</b></div>`).join('')}`; }).join('')}</div>
       <button class="link close">とじる</button>`, 'rates-sheet');
     sh.querySelector('.close').onclick = () => sh.remove();
   };
@@ -754,6 +783,7 @@ let houseEntered = false; // 部屋を一度でも出したか（ネットの記
 async function enterHouse() {
   if (BETA && !isAdmin()) return showBetaOnly();
   houseEntered = true;
+  loadBlocks();
   setTimeout(loadAllBanks, 2500); // 問題バンクは、部屋が出てから裏で読みこむ
   const packsReady = loadSavedPacks();
   const added = ensureRooms();
@@ -786,7 +816,10 @@ function remainCapacity(room = curRoom()) {
 }
 
 let notesChecked = false;
+// 何かの操作の途中（模様がえ・家具をえらぶ など）は、下のメニュー・部屋の名前・横のボタンをかくして、部屋を広く見せる（1.12.0）
+function setFocus(on) { document.body.classList.toggle('focus', !!on); }
 function showHome() {
+  setFocus(false);
   BGM.duck(false);
   try { checkNewTitles(); } catch (e) { console.warn('titles', e); }
   // ログイン情報がない（ログアウトされた）のに部屋を出そうとしたら、ログイン画面へ（こわれた画面にしない）
@@ -1095,7 +1128,7 @@ function buyFlow() {
         ${icon('chevronRight')}</button>`;
     }).join('')}</div>
     <button class="link close">あとで</button>`, 'buy-sheet');
-  app.querySelector('.tabbar')?.classList.add('hide');
+  setFocus(true); app.querySelector('.tabbar')?.classList.add('hide');
   el.querySelector('.close').onclick = () => { el.remove(); showHome(); };
   el.querySelectorAll('.genre-row').forEach(b => b.onclick = () => chooseCandidate(b.dataset.g));
 }
@@ -1118,7 +1151,7 @@ function chooseCandidate(genreId) {
       </button>`).join('')}</div>
     <p class="pv-tip">選ぶと、部屋のどこに置かれるかが見られます</p>
     <button class="btn gold big ok" disabled>${icon('check')}これを買う</button>`, 'cand-sheet');
-  app.querySelector('.tabbar')?.classList.add('hide');
+  setFocus(true); app.querySelector('.tabbar')?.classList.add('hide');
   el.querySelector('.sh-back').onclick = () => { room3d?.clearPreview(); buyFlow(); };
   // 「部屋を見る」：下の画面を小さくたたんで、置いた様子（ラグなど床の物も）を見られるように（1.11.0）
   const fold = (on) => { el.classList.toggle('folded', on); el.querySelector('.sh-fold span').textContent = on ? 'もどす' : '部屋を見る'; el.querySelector('.sh-fold').setAttribute('aria-label', on ? '選ぶ画面にもどす' : 'たたんで部屋を見る'); };
@@ -1298,15 +1331,17 @@ function showEdit() {
   app.querySelector('.tabbar .on')?.classList.remove('on');
   app.querySelector('.tabbar [data-t=edit]')?.classList.add('on');
   room3d.setEditMode(true);
+  setFocus(true);
+  let hintN = 0; try { hintN = +(localStorage.getItem('studyroom.ebHint') || 0); localStorage.setItem('studyroom.ebHint', String(hintN + 1)); } catch (e) { /* なし */ }
   const bar = h(`
     <div class="editbar">
       <div class="eb-top"><b>${icon('sofa')}模様がえ</b><span class="cap">置いている <b>${curRoom().placed.length}</b> / ${S.capacity()}</span></div>
-      <p class="eb-hint">家具をタップして選ぶ → なぞって動かす。細かい位置は矢印で。小さい物や天井の物は「一覧」から</p>
+      ${hintN < 3 ? '<p class="eb-hint">家具をタップして選ぶ → なぞって動かす。細かい位置は矢印で。小さい物や天井の物は「一覧」から</p>' : ''}
       <div class="eb-view seg"><button data-v="eye" class="on">${icon('eye')}ふつう</button><button data-v="top">${icon('grid')}上から</button></div>
       <div class="eb-btns">
         <button class="btn ghost plist">${icon('menu')}一覧</button>
         <button class="btn ghost inv">${icon('box')}持ち物</button>
-        <button class="btn ghost surf">${icon('brush')}壁・床・ドア・窓</button>
+        <button class="btn ghost surf">${icon('brush')}壁・床など</button>
         <button class="btn primary done">${icon('check')}完了</button>
       </div>
     </div>`);
@@ -1529,6 +1564,7 @@ function photoMode() {
 // =========================== 更新のお知らせ ===========================
 // このプログラムの版（version.json と同じにする。公開のたびに上げる）
 const APP_VERSION = '1.12.0';
+ERR.setVersion(APP_VERSION);
 // 新しい版が出たら、みんな同じタイミングでそろうように強制で再起動する。
 // 開いた時・画面に戻った時・1分ごとに version.json を見る
 async function latestVersion() {
@@ -1943,9 +1979,14 @@ function showProfile(view = null, back = null) {
     ${puzzleMain ? puzzleSec + studySec : studySec + puzzleSec}
     <section class="pf-sec"><h3 class="sec">${icon('trophy')}称号<small>${earned.size} / ${list.length}</small></h3>
       <div class="pf-titles">${list.map(t => `<button class="pf-t ${earned.has(t.id) ? 'got' : ''} ${pf.title === t.id ? 'on' : ''}" data-t="${t.id}" ${earned.has(t.id) && mine ? '' : 'disabled'}><b>${earned.has(t.id) ? esc(t.name) : '？？？'}</b><small>${esc(t.how)}</small></button>`).join('')}</div>
-      ${mine ? '<p class="pf-note">手に入れた称号を押すと、名前の下に出せます（フレンドにも見えます）</p>' : ''}</section>`);
+      ${mine ? '<p class="pf-note">手に入れた称号を押すと、名前の下に出せます（フレンドにも見えます）</p>' : ''}</section>
+    ${!mine ? `<div class="pf-safety"><button class="link pf-report">${icon('info')}通報する</button><button class="link pf-block">${icon('shield')}${blockedNames.has(name) ? 'ブロック中' : 'ブロックする'}</button></div>` : ''}`);
   el.querySelector('.back').onclick = back || showMenu;
-  if (!mine) return;
+  if (!mine) {
+    el.querySelector('.pf-report').onclick = () => reportUser(name);
+    el.querySelector('.pf-block').onclick = () => blockUser(name, () => showProfile(view, back));
+    return;
+  }
   el.querySelector('.pf-avbtn').onclick = () => pickAvatar(() => showProfile());
   el.querySelector('.pf-tbtn').onclick = () => el.querySelector('.pf-titles').scrollIntoView({ behavior: 'smooth', block: 'center' });
   el.querySelectorAll('.pf-t.got').forEach(b => b.onclick = () => {
@@ -1953,6 +1994,34 @@ function showProfile(view = null, back = null) {
     toast(pf.title ? `称号を「${titleById(id).name}」にしました` : '称号を外しました', 1800);
     showProfile();
   });
+}
+// 通報：運営（管理者の「要望・バグを見る」）に届く（1.12.0）
+function reportUser(name) {
+  const R = ['名前がよくない', 'プロフィール・部屋がよくない', 'いやがらせ', 'その他'];
+  const el = sheet(`
+    <div class="sh-head"><span class="sh-ic danger">${icon('info')}</span><div><h3>「${esc(name)}」を通報する</h3><p>運営が内容を確かめます。通報したことは相手には伝わりません</p></div><button class="sh-x close" aria-label="やめる">${icon('x')}</button></div>
+    <div class="rp-reasons">${R.map((x, i) => `<label><input type="radio" name="r" value="${i}" ${i === 0 ? 'checked' : ''}>${x}</label>`).join('')}</div>
+    <textarea class="rp-detail" maxlength="400" placeholder="くわしく（なくてもOK）"></textarea>
+    <button class="btn danger big rp-send">${icon('info')}通報する</button>`, 'news-sheet report-sheet');
+  el.querySelector('.close').onclick = () => el.remove();
+  el.querySelector('.rp-send').onclick = async () => {
+    const b = el.querySelector('.rp-send'); b.disabled = true;
+    const r = R[+el.querySelector('input[name=r]:checked').value], d = el.querySelector('.rp-detail').value.trim();
+    try { await rpc('sr_feedback_send', { p_token: Auth.currentUser()?.token, p_kind: 'report', p_body: `【通報】${name}／${r}${d ? '\n' + d : ''}` }); el.remove(); toast('通報しました。ありがとうございます', 2600); }
+    catch (ex) { toast(ex.message, 3000); b.disabled = false; }
+  };
+}
+// ブロック：その人とのフレンドが外れ、申請もできなくなる。ランキングにも出なくなる
+function blockUser(name, after) {
+  if (blockedNames.has(name)) return showBlocks();
+  const cf = sheet(`
+    <div class="sh-head"><span class="sh-ic">${icon('shield')}</span><div><h3>「${esc(name)}」をブロックしますか？</h3><p>フレンドから外れ、おたがいにフレンド申請ができなくなります。ランキングにも出なくなります。設定からいつでも解除できます</p></div></div>
+    <div class="row2"><button class="btn ghost back2">やめる</button><button class="btn danger go">${icon('shield')}ブロックする</button></div>`, 'news-sheet');
+  cf.querySelector('.back2').onclick = () => cf.remove();
+  cf.querySelector('.go').onclick = async () => {
+    try { await rpc('sr_block', { p_token: Auth.currentUser()?.token, p_username: name }); blockedNames.add(name); cf.remove(); toast(`「${name}」をブロックしました`); after && after(); }
+    catch (ex) { toast(ex.message, 3000); }
+  };
 }
 // ほかの人のプロフィールを開く（ランキング・フレンド・管理者画面から）
 async function openUserProfile(username, back) {
@@ -2194,7 +2263,7 @@ async function showFeedbackInbox() {
     const day = (t) => new Date(t).toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
     el.querySelector('.fblist').innerHTML = list.length ? list.map(f => `
       <article class="news-card fb-card ${f.done ? 'done' : 'unread'}">
-        <div class="nc-top"><i class="fb-kind ${f.kind}">${f.kind === 'bug' ? 'バグ' : '要望'}</i><b>${esc(f.username || '（消えたユーザー）')}</b><small>${day(f.created_at)}</small></div>
+        <div class="nc-top"><i class="fb-kind ${f.kind}">${({ bug: 'バグ', request: '要望', problem: '問題のまちがい', report: '通報' })[f.kind] || f.kind}</i><b>${esc(f.username || '（消えたユーザー）')}</b><small>${day(f.created_at)}</small></div>
         <p>${esc(f.body).replace(/\n/g, '<br>')}</p>
         <button class="btn ghost sm done-btn" data-id="${f.id}" data-done="${f.done ? 0 : 1}">${f.done ? '未対応にもどす' : `${icon('check')}対応ずみにする`}</button>
       </article>`).join('') : '<p class="empty">まだ届いていません。</p>';
@@ -2328,6 +2397,7 @@ async function showRanking() {
   el.querySelector('.rk-me').innerHTML = `<div class="rk-mecard"><span class="rk-pos">${r.me ? r.me.pos + '<small>位</small>' : '—'}</span>
     ${avatarHTML(pf, 'avatar rk-av')}<div><b>あなた<span class="rk-pt">${S.weekPoints()}<small>pt</small></span></b><small>${r.total || 0}人中 ・ 問題 ${wkd.solved || 0}問・パズル ${wkd.puzzle || 0}回</small></div></div>`;
   const medal = (p) => p <= 3 ? `<span class="medal m${p}">${p}</span>` : `<span class="rk-n">${p}</span>`;
+  r.top = (r.top || []).filter(x => !blockedNames.has(x.username)); // ブロックした人は出さない
   el.querySelector('.rk-list').innerHTML = (r.top || []).length ? r.top.map(x => `
     <button class="rk-row ${x.me ? 'me' : ''}" data-u="${esc(x.username)}">${medal(x.pos)}${avatarHTML(x, 'avatar rk-av')}<b>${esc(x.username)}${x.title && titleById(x.title) ? `<small class="rk-title">${esc(titleById(x.title).name)}</small>` : ''}</b><span><span class="rk-pts">${x.points}<small>pt</small></span><small>${[x.solved ? `問題 ${x.solved}` : '', x.puzzle ? `パズル ${x.puzzle}` : ''].filter(Boolean).join('・') || '—'}</small></span></button>`).join('')
     : `<p class="empty">今週はまだだれもポイントをかせいでいません。いちばん乗りしよう！</p>`;
@@ -2581,11 +2651,12 @@ async function leaveVisit(goBack) {
 // =========================== 管理者 ===========================
 async function showAdmin() {
   if (!isAdmin()) return showMenu();
-  const el = screenWithTabs('admin', `<button class="icon back">${icon('back')}</button><h2>管理者</h2><span></span>`, 'menu', `<div class="row2 admin-btns"><button class="btn primary compose">${icon('bell')}お知らせを書く</button><button class="btn ghost inbox">${icon('chat')}要望・バグを見る</button></div><button class="btn ghost big sendgift">${icon('gift')}みんなにプレゼントを送る</button><button class="btn ghost big evpreview">${icon('snow')}${EV.previewing() ? 'イベントのためしをやめる' : `イベントをためす（${esc(EV.EVENTS.at(-1).name)}）`}</button><div class="alist"><p class="empty">読み込み中…</p></div>`);
+  const el = screenWithTabs('admin', `<button class="icon back">${icon('back')}</button><h2>管理者</h2><span></span>`, 'menu', `<div class="row2 admin-btns"><button class="btn primary compose">${icon('bell')}お知らせを書く</button><button class="btn ghost inbox">${icon('chat')}要望・バグを見る</button></div><button class="btn ghost big sendgift">${icon('gift')}みんなにプレゼントを送る</button><button class="btn ghost big errlog">${icon('info')}エラーの記録を見る</button><button class="btn ghost big evpreview">${icon('snow')}${EV.previewing() ? 'イベントのためしをやめる' : `イベントをためす（${esc(EV.EVENTS.at(-1).name)}）`}</button><div class="alist"><p class="empty">読み込み中…</p></div>`);
   el.querySelector('.back').onclick = showMenu;
   el.querySelector('.compose').onclick = () => composeNews(showNews);
   el.querySelector('.inbox').onclick = showFeedbackInbox;
   el.querySelector('.sendgift').onclick = () => composeGift();
+  el.querySelector('.errlog').onclick = showErrors;
   el.querySelector('.evpreview').onclick = () => { EV.setPreview(EV.previewing() ? null : EV.EVENTS.at(-1).id); toast(EV.previewing() ? 'この端末だけ、イベントを期間の前でもためせます' : 'イベントのためしをやめました'); showAdmin(); };
   const u = Auth.currentUser();
   let list = [];
@@ -2652,6 +2723,17 @@ function compensate(name, lvNow) {
       } catch (ex) { toast(String(ex.message || ex), 3600); go.disabled = false; }
     };
   };
+}
+// 管理者：アプリで起きたエラー（この7日。同じエラーはまとめて数える）（1.12.0）
+async function showErrors() {
+  const el = sheet(`
+    <div class="sh-head"><span class="sh-ic">${icon('info')}</span><div><h3>エラーの記録（7日）</h3><p>みんなのアプリで自動で記録されたエラーです。Claude に見せると直しやすくなります</p></div><button class="sh-x close" aria-label="とじる">${icon('x')}</button></div>
+    <div class="er-list"><p class="empty">読み込み中…</p></div>`, 'news-sheet er-sheet');
+  el.querySelector('.close').onclick = () => el.remove();
+  let list = [];
+  try { list = await rpc('sr_admin_errors', { p_token: Auth.currentUser()?.token }); } catch (ex) { el.querySelector('.er-list').innerHTML = `<p class="empty">${esc(ex.message)}</p>`; return; }
+  const day = (t) => new Date(t).toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  el.querySelector('.er-list').innerHTML = list.length ? list.map(e => `<details class="er-row"><summary><b>${esc(e.msg)}</b><small>${e.n}回・${e.users}人・最後 ${day(e.last)}・${esc(e.version || '')}・${esc(e.place || '')}</small></summary><pre>${esc(e.stack || '')}\n${esc(e.ua || '')}</pre></details>`).join('') : '<p class="empty">この7日、エラーはありません</p>';
 }
 // 管理者：記録をサーバーのバックアップ（1時間ごと・14日分）から元に戻す（1.12.0）
 async function restoreUser(name) {
@@ -2763,6 +2845,57 @@ function confirmDeleteUser(name) {
 }
 
 // =========================== 設定 ===========================
+// 復元コード：パスワードを忘れた時に、これで新しいパスワードにできる（1.12.0）
+function showRecovery() {
+  const el = sheet(`
+    <div class="sh-head"><span class="sh-ic">${icon('lock')}</span><div><h3>パスワードの復元コード</h3><p>パスワードを忘れた時、ログイン画面の「パスワードを忘れた」で、このコードを入れると新しいパスワードにできます</p></div><button class="sh-x close" aria-label="とじる">${icon('x')}</button></div>
+    <div class="rc-box"><p class="note">コードは作った時に一度だけ出ます。スクリーンショットかメモで、なくさない所にとっておいてください。作りなおすと、前のコードは使えなくなります。</p></div>
+    <button class="btn gold big rc-make">${icon('lock')}復元コードを作る</button>`, 'news-sheet rc-sheet');
+  el.querySelector('.close').onclick = () => el.remove();
+  el.querySelector('.rc-make').onclick = async () => {
+    const b = el.querySelector('.rc-make'); b.disabled = true;
+    try {
+      const r = await rpc('sr_recovery_make', { p_token: Auth.currentUser()?.token });
+      el.querySelector('.rc-box').innerHTML = `<div class="rc-code">${esc(r.code)}</div><p class="note">ユーザー名「${esc(user.name)}」の復元コードです。この画面を閉じると、もう見られません。</p><button class="btn ghost rc-copy">${icon('check')}コピーする</button>`;
+      el.querySelector('.rc-copy').onclick = async () => { try { await navigator.clipboard.writeText(`ROOMIN ${user.name} 復元コード ${r.code}`); toast('コピーしました'); } catch (e) { toast('コピーできませんでした。スクリーンショットでとっておいてください'); } };
+      b.remove();
+    } catch (ex) { toast(ex.message, 3000); b.disabled = false; }
+  };
+}
+// ブロックしている人の一覧（解除できる）
+async function showBlocks() {
+  const el = sheet(`
+    <div class="sh-head"><span class="sh-ic">${icon('shield')}</span><div><h3>ブロックしている人</h3><p>ブロックした人は、フレンド申請ができず、ランキングにも出ません</p></div><button class="sh-x close" aria-label="とじる">${icon('x')}</button></div>
+    <div class="bl-list"><p class="empty">読み込み中…</p></div>`, 'news-sheet');
+  el.querySelector('.close').onclick = () => el.remove();
+  let list = [];
+  try { list = await rpc('sr_block_list', { p_token: Auth.currentUser()?.token }); blockedNames = new Set(list); } catch (ex) { el.querySelector('.bl-list').innerHTML = `<p class="empty">${esc(ex.message)}</p>`; return; }
+  el.querySelector('.bl-list').innerHTML = list.length ? list.map(n => `<div class="bl-row"><b>${esc(n)}</b><button class="btn ghost sm unb" data-u="${esc(n)}">解除</button></div>`).join('') : '<p class="empty">ブロックしている人はいません</p>';
+  el.querySelectorAll('.unb').forEach(b => b.onclick = async () => { b.disabled = true; try { await rpc('sr_unblock', { p_token: Auth.currentUser()?.token, p_username: b.dataset.u }); blockedNames.delete(b.dataset.u); toast(`「${b.dataset.u}」のブロックを解除しました`); el.remove(); showBlocks(); } catch (ex) { toast(ex.message); b.disabled = false; } });
+}
+let blockedNames = new Set();
+async function loadBlocks() { try { blockedNames = new Set(await rpc('sr_block_list', { p_token: Auth.currentUser()?.token })); } catch (e) { /* なし */ } }
+// 自分でアカウントを消す（パスワードを入れて確かめる）
+function confirmDeleteMe() {
+  const cf = sheet(`
+    <div class="sh-head"><span class="sh-ic danger">${icon('trash')}</span><div><h3>アカウントを消しますか？</h3><p>記録・部屋・家具・アイテム・フレンドのつながりがすべて消え、元に戻せません</p></div></div>
+    <label class="del-lbl">確かめのため、パスワードを入れてください<input class="del-in" type="password" autocomplete="current-password"></label>
+    <p class="err"></p>
+    <div class="row2"><button class="btn ghost back2">やめる</button><button class="btn danger go" disabled>${icon('trash')}消す</button></div>`, 'news-sheet del-sheet');
+  const inp = cf.querySelector('.del-in'), go = cf.querySelector('.go');
+  inp.oninput = () => { go.disabled = inp.value.length < 4; };
+  cf.querySelector('.back2').onclick = () => cf.remove();
+  go.onclick = async () => {
+    go.disabled = true;
+    try {
+      await rpc('sr_delete_me', { p_token: Auth.currentUser()?.token, p_password: inp.value });
+      try { for (const k of Object.keys(localStorage)) if (k.startsWith('studyroom.v1.user.') || k.startsWith('studyroom.backup.')) localStorage.removeItem(k); } catch (e) { /* なし */ }
+      Auth.forget(); cf.remove(); showLogin('signup');
+      toast('アカウントを消しました。ご利用ありがとうございました', 4000);
+    } catch (ex) { cf.querySelector('.err').textContent = ex.code === 'bad_login' ? 'パスワードがちがいます' : ex.message; go.disabled = false; }
+  };
+}
+
 function showSettings() {
   let q = 'low';
   try { q = localStorage.getItem('studyroom.quality') || 'low'; } catch (e) { /* なし */ }
@@ -2798,12 +2931,19 @@ function showSettings() {
           <input class="lvin" type="number" min="1" max="99" value="${rankNow().rank}"><button class="btn ghost sm lvset">この Lv にする</button></div>
         <small>経験値はその Lv のはじめの値になります。新しい部屋や置ける数もすぐ変わります</small></div>
     </section>` : ''}
+    <section class="group acct">
+      <button class="row-item tap recov"><span class="lbl">${icon('lock')}パスワードの復元コード</span><span class="val rc-st">…</span>${icon('chevronRight')}</button>
+      <button class="row-item tap blocks"><span class="lbl">${icon('shield')}ブロックしている人</span>${icon('chevronRight')}</button>
+      <a class="row-item tap" href="legal/terms.html" target="_blank" rel="noopener"><span class="lbl">${icon('book')}利用規約</span>${icon('chevronRight')}</a>
+      <a class="row-item tap" href="legal/privacy.html" target="_blank" rel="noopener"><span class="lbl">${icon('book')}プライバシーポリシー</span>${icon('chevronRight')}</a>
+    </section>
     <section class="group">
       <button class="row-item tap tour-again"><span class="lbl">${icon('info')}使い方の案内をもう一度見る</span>${icon('chevronRight')}</button>
     </section>
     <section class="group">
       <button class="row-item tap logout"><span class="lbl danger">${icon('logout')}ログアウト</span></button>
     </section>
+    ${!isAdmin() ? `<section class="group"><button class="row-item tap del-me"><span class="lbl danger">${icon('trash')}アカウントを消す</span></button></section>` : ''}
     ${isAdmin() ? `<section class="group">
       <button class="row-item tap reset-all"><span class="lbl danger">${icon('trash')}最初からやり直す（管理者）</span></button>
     </section>` : ''}
@@ -2842,6 +2982,10 @@ function showSettings() {
     showSettings();
   };
   el.querySelector('.logout').onclick = async () => { await Sync.push(); Auth.logOut(); showLogin(); };
+  el.querySelector('.recov').onclick = showRecovery;
+  el.querySelector('.blocks').onclick = showBlocks;
+  el.querySelector('.del-me')?.addEventListener('click', confirmDeleteMe);
+  rpc('sr_recovery_status', { p_token: Auth.currentUser()?.token }).then(r => { const v = el.querySelector('.rc-st'); if (v) { v.textContent = r.has ? '作ってある' : 'まだ作っていない'; v.classList.toggle('warn', !r.has); } }).catch(() => { const v = el.querySelector('.rc-st'); if (v) v.textContent = ''; });
   el.querySelector('.tour-again').onclick = () => { showHome(); setTimeout(() => startTour(true), 500); };
   // 管理者だけ：記録をすべて消して最初から（ログインはそのまま）
   el.querySelector('.reset-all')?.addEventListener('click', async () => {
@@ -3147,6 +3291,7 @@ function runChoice(p, isReview) {
         ${mastered ? `<div class="master">${icon('trophy')}克服しました！ 特別な家具がもらえます</div>` : ''}
         <div class="formula">${fm(p.choices[p.answer])}<small>正解</small></div>
         ${fx ? explainHTML(p.explain) : `<p class="reason">${esc(p.explain || '')}</p>`}
+        <button class="link pr-report">${icon('info')}この問題のまちがいを報告</button>
         ${!ok && p.why?.[picked] ? `<div class="why-wrong"><b>${icon('info')}えらんだ「${fm(p.choices[picked])}」がちがう理由</b><p>${fm(p.why[picked])}</p></div>` : ''}
         ${p.detail ? `<details class="detail-ex"${ok ? '' : ' open'}><summary>${icon('book')}くわしい解説</summary>${explainHTML(p.detail)}</details>` : ''}
         ${ss.rewards && (ss.rewards.ticket || ss.rewards.ticket4 || ss.rewards.ticket5) ? `<div class="ru-tickets">${['ticket', 'ticket4', 'ticket5'].filter(k => ss.rewards[k]).map(k => `<span>${ticketSVG(k, 'mini')}<b>×${ss.rewards[k]}</b></span>`).join('')}<small class="ru-box">${icon('gift')}プレゼントBOXに届きました</small></div>` : ''}
@@ -3155,7 +3300,25 @@ function runChoice(p, isReview) {
       </div>`;
     stepEl.querySelector('.home').onclick = () => endOne(true);
     stepEl.querySelector('.more').onclick = () => endOne(false);
+    stepEl.querySelector('.pr-report').onclick = () => reportProblem(p);
   }
+}
+// 問題のまちがいを報告（1.12.0）：管理者の「要望・バグを見る」に、問題の番号といっしょに届く
+function reportProblem(p) {
+  const R = ['答えがちがう', '解説がおかしい', '問題文・選択肢がおかしい', 'その他'];
+  const el = sheet(`
+    <div class="sh-head"><span class="sh-ic">${icon('info')}</span><div><h3>問題のまちがいを報告</h3><p>運営が確かめて直します。ありがとうございます</p></div><button class="sh-x close" aria-label="やめる">${icon('x')}</button></div>
+    <div class="rp-reasons">${R.map((x, i) => `<label><input type="radio" name="r" value="${i}" ${i === 0 ? 'checked' : ''}>${x}</label>`).join('')}</div>
+    <textarea class="rp-detail" maxlength="400" placeholder="どこがおかしいか（なくてもOK）"></textarea>
+    <button class="btn primary big rp-send">${icon('check')}送る</button>`, 'news-sheet report-sheet');
+  el.querySelector('.close').onclick = () => el.remove();
+  el.querySelector('.rp-send').onclick = async () => {
+    const b = el.querySelector('.rp-send'); b.disabled = true;
+    const r = R[+el.querySelector('input[name=r]:checked').value], d = el.querySelector('.rp-detail').value.trim();
+    const body = `【問題】${r}\n${p.id}（${SUBJECTS.find(x => x.id === subjectId)?.name || subjectId}／${p.genre || ''}／${p.unit || ''}）\n${String(p.text).slice(0, 300)}${d ? '\n―\n' + d : ''}`;
+    try { await rpc('sr_feedback_send', { p_token: Auth.currentUser()?.token, p_kind: 'problem', p_body: body }); el.remove(); toast('報告しました。ありがとうございます', 2400); }
+    catch (ex) { toast(ex.message, 3000); b.disabled = false; }
+  };
 }
 
 // 1問おわったあと：部屋へ戻るか、もう1問

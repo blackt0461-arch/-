@@ -1,0 +1,18 @@
+:root { color-scheme: dark; }
+body { margin: 0; font-family: "Hiragino Sans", "Noto Sans JP", "Yu Gothic", sans-serif; background: #17161c; color: #ece8df; line-height: 1.8; }
+main { max-width: 720px; margin: 0 auto; padding: 28px 18px 60px; }
+h1 { font-size: 24px; margin: 0 0 4px; }
+.date { color: #a9a49a; font-size: 13px; margin: 0 0 24px; }
+h2 { font-size: 17px; margin: 28px 0 8px; color: #e6c068; }
+p, li { font-size: 15px; }
+ul { padding-left: 1.3em; }
+a { color: #e6c068; }
+.back { display: inline-block; margin-bottom: 18px; font-size: 14px; }
+form { display: grid; gap: 12px; margin: 18px 0; padding: 16px; border-radius: 14px; background: #221f28; border: 1px solid #3a3542; }
+label { display: grid; gap: 4px; font-size: 14px; }
+input { font: inherit; padding: 10px 12px; border-radius: 10px; border: 1px solid #4a4452; background: #17161c; color: inherit; }
+button { font: inherit; font-weight: 700; padding: 12px; border-radius: 12px; border: 0; background: #c8463c; color: #fff; cursor: pointer; }
+button:disabled { opacity: .5; }
+.msg { min-height: 1.5em; font-size: 14px; }
+.ok { color: #8fd19e; } .ng { color: #f0a08c; }
+.box { padding: 12px 14px; border-radius: 12px; background: rgba(240,160,140,.1); border: 1px solid rgba(240,160,140,.35); font-size: 14px; }
