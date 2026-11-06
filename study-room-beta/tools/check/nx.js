@@ -42,7 +42,7 @@ const serve = () => new Promise(res => { const srv = http.createServer((req, rsp
   await page.waitForFunction(() => { const b = document.querySelector('.subj[data-s=math]'); return b && !b.disabled; }, null, { timeout: 30000 });
   await page.click('.subj[data-s=math]'); await page.waitForTimeout(400);
   await page.evaluate(() => (document.querySelector('.sc-list [data-all]') || document.querySelector('.sc-list [data-gall]'))?.click()); await page.waitForSelector('.fcard');
-  const ans = await page.evaluate(async () => { const t = document.querySelector('.choice .problem').textContent.trim(); const r = await fetch('/data/bank/math.json'); const a = await r.json(); return a.find(p => t.startsWith(p.text.slice(0, 12)))?.answer; });
+  const ans = await page.evaluate(async () => { const t = document.querySelector('.choice .problem').textContent.trim(); const r = await fetch('/data/bank/math.json'); const a = await r.json(); const n = (x) => String(x).replace(/\s+/g, ''); return a.find(p => n(p.text) === n(t))?.answer; });
   await page.evaluate((ans) => { const c = [...document.querySelectorAll('.fcard')].find(b => +b.dataset.i !== ans); c.click(); }, ans);
   await page.waitForSelector('.nx-verdict', { timeout: 8000 });
   const verdict = (await page.locator('.nx-verdict').textContent()).trim();
