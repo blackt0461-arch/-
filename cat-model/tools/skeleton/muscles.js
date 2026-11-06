@@ -339,5 +339,8 @@ export function buildMuscles(api, lm) {
   const G = { Pectoralis: [[0], [1, 2, 3, 4], [5, 6, 7, 8, 9], [10]], SerratusVentralis: [[0, 1, 2, 3, 4, 5, 6, 7], [8]], Rhomboideus: [[0, 1, 2], [3]],
     Triceps: null, Deltoideus: [[0], [1, 2]], GluteusSup: [[0, 1]], Temporalis: [[0, 1, 2, 3]] };
   for (const m of list) if (G[m.id]) m.groups = G[m.id];
+  // 首から胸を通る管（気管・食道）も、首の動きにあわせて曲がるよう同じ作り方にする
+  for (const t of lm.softTubes || []) list.push({ id: t.id, ja: t.ja, la: t.la, region: 'organ', layer: 3, kind: 'organ', color: t.color, pair: false, noCarve: true,
+    origin: '—', insertion: '—', action: t.id === 'Trachea' ? '空気の通り道' : '食べ物の通り道', strands: [{ pts: t.pts, prof: t.r.map((r) => [r, 0]) }], scale: 1 });
   return list;
 }

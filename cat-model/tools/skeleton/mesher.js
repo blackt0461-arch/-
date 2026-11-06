@@ -21,6 +21,23 @@ export function meshSDF(shape, h) {
     }
   }
 
+  return meshGrid(val, nx, ny, nz, lo, h, f);
+}
+
+// 格子の値（負＝中）から三角形の網を作る。f があれば表面へ引きよせ・法線に使う
+export function meshGrid(val, nx, ny, nz, lo, h, f = null) {
+  const idx = (i, j, k) => i + nx * (j + ny * k);
+  if (!f) {
+    // 格子の値をなめらかにつないだ関数
+    f = (x, y, z) => {
+      const gx = Math.min(nx - 1.001, Math.max(0, (x - lo[0]) / h)), gy = Math.min(ny - 1.001, Math.max(0, (y - lo[1]) / h)), gz = Math.min(nz - 1.001, Math.max(0, (z - lo[2]) / h));
+      const i = Math.floor(gx), j = Math.floor(gy), k = Math.floor(gz), fx = gx - i, fy = gy - j, fz = gz - k;
+      const c = (a, b, d) => val[idx(i + a, j + b, k + d)];
+      const x00 = c(0, 0, 0) * (1 - fx) + c(1, 0, 0) * fx, x10 = c(0, 1, 0) * (1 - fx) + c(1, 1, 0) * fx;
+      const x01 = c(0, 0, 1) * (1 - fx) + c(1, 0, 1) * fx, x11 = c(0, 1, 1) * (1 - fx) + c(1, 1, 1) * fx;
+      return ((x00 * (1 - fy) + x10 * fy) * (1 - fz) + (x01 * (1 - fy) + x11 * fy) * fz);
+    };
+  }
   const cellVert = new Int32Array((nx - 1) * (ny - 1) * (nz - 1)).fill(-1);
   const cidx = (i, j, k) => i + (nx - 1) * (j + (ny - 1) * k);
   const pos = [];
@@ -115,5 +132,5 @@ export function mirrorX(m) {
   for (let i = 0; i < positions.length; i += 3) { positions[i] = -positions[i]; normals[i] = -normals[i]; }
   const indices = new Uint32Array(m.indices.length);
   for (let i = 0; i < indices.length; i += 3) { indices[i] = m.indices[i]; indices[i + 1] = m.indices[i + 2]; indices[i + 2] = m.indices[i + 1]; }
-  return { positions, normals, indices };
+  return { positions, normals, indices, ...(m.colors ? { colors: m.colors } : {}) };
 }

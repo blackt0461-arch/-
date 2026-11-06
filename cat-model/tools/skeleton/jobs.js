@@ -8,9 +8,10 @@ import { buildSkull } from './skull.js';
 import { buildForelimb } from './forelimb.js';
 import { buildHindlimb } from './hindlimb.js';
 import { buildMuscles } from './muscles.js';
+import { buildSoft } from './soft.js';
 import { muscleShape, skinWeights } from './muscle.js';
 
-export const BUILDERS = { spine: buildSpine, thorax: buildThorax, skull: buildSkull, forelimb: buildForelimb, hindlimb: buildHindlimb };
+export const BUILDERS = { spine: buildSpine, thorax: buildThorax, skull: buildSkull, forelimb: buildForelimb, hindlimb: buildHindlimb, soft: buildSoft };
 
 // 設計図からすべての骨と筋肉の定義を作る（何度呼んでも同じ結果）
 export function prepare(opts) {
@@ -48,10 +49,28 @@ const sizeOf = (s) => Math.max(s.hi[0] - s.lo[0], s.hi[1] - s.lo[1], s.hi[2] - s
 
 export async function meshBone(def, opts) {
   await MeshoptSimplifier.ready;
-  const size = sizeOf(def.shape);
-  let h = def.h ?? Math.min(0.55, Math.max(0.16, size / 90));
-  if (opts.fast) h *= 2;
-  return simplify(meshSDF(def.shape, h), size, opts.err);
+  let m;
+  if (def.mesh) m = { positions: Float32Array.from(def.mesh.positions), normals: Float32Array.from(def.mesh.normals), indices: Uint32Array.from(def.mesh.indices) };
+  else {
+    const size = sizeOf(def.shape);
+    let h = def.h ?? Math.min(0.55, Math.max(0.16, size / 90));
+    if (opts.fast) h *= 2;
+    m = meshSDF(def.shape, h);
+    if (!def.noSimplify) m = simplify(m, size, opts.err);
+  }
+  // 色（RGB）と毛の長さ（A）
+  if (def.color || def.colorFn || def.furFn) {
+    const n = m.positions.length / 3, c = new Uint8Array(n * 4);
+    for (let i = 0; i < n; i++) {
+      const p = [m.positions[i * 3], m.positions[i * 3 + 1], m.positions[i * 3 + 2]], nn = [m.normals[i * 3], m.normals[i * 3 + 1], m.normals[i * 3 + 2]];
+      let col = def.color, fur = 0;
+      if (def.colorFn) col = def.colorFn(p, nn);
+      if (def.furFn) { const r = def.furFn(p, nn); col = r.color; fur = r.fur; }
+      c[i * 4] = Math.round(col[0] * 255); c[i * 4 + 1] = Math.round(col[1] * 255); c[i * 4 + 2] = Math.round(col[2] * 255); c[i * 4 + 3] = def.furFn ? Math.round(fur * 255) : 255;
+    }
+    m.colors = c;
+  }
+  return m;
 }
 
 // 筋肉：形・重み（骨の名前は左側の名前）・腱らしさ

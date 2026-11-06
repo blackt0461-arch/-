@@ -64,6 +64,8 @@
   <h2>名前でさがす</h2>
   <select id="bonelist" style="width:100%;background:#2a2f36;color:var(--text);border:1px solid var(--line);border-radius:8px;padding:6px;font-size:13px"><option value="">— 骨・筋肉をえらぶ —</option></select>
   <label class="row"><input type="checkbox" id="onlysel"> えらんだものだけ表示</label>
+  <h2>体の層</h2>
+  <div id="layers"></div>
   <h2>表示する部分</h2>
   <div id="regions"></div>
   <h2>ポーズを試す</h2>
@@ -78,8 +80,8 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 const params = new URLSearchParams(location.search);
 const modelUrl = 'models/' + (params.get('model') || 'cat-anatomy.glb');
 
-const REGIONS = { skull: '頭の骨・歯', spine: '背骨', tail: 'しっぽ', thorax: '肋骨・胸骨', forelimb: '前足', hindlimb: '後ろ足' };
-const KINDS = { bone: '骨', tooth: '歯', cartilage: '軟骨', disc: '椎間板', claw: '爪', muscle: '筋肉', tendon: '腱・靱帯' };
+const REGIONS = { skull: '頭の骨・歯', spine: '背骨', tail: 'しっぽ', thorax: '肋骨・胸骨', forelimb: '前足', hindlimb: '後ろ足', organ: '内臓・目', skin: '皮ふ・毛' };
+const KINDS = { bone: '骨', tooth: '歯', cartilage: '軟骨', disc: '椎間板', claw: '爪', muscle: '筋肉', tendon: '腱・靱帯', organ: '内臓', eye: '目', skin: '皮ふ', whisker: 'ひげ' };
 const LAYERS = { 1: '表層（いちばん外）', 2: '中間層', 3: '深層（骨のすぐそば）' };
 const GROUPS = { head: '頭', neck: '首', trunk: '胴', forelimb: '肩・前足', hindlimb: '腰・後ろ足', tail: 'しっぽ' };
 // 骨のノードは、筋肉の骨組み（ボーン）にもなっているので、形はその子にある
@@ -154,6 +156,8 @@ new GLTFLoader().load(modelUrl, (gltf) => {
   });
   document.getElementById('stat').textContent = Object.entries(counts).map(([k, v]) => `${KINDS[k] || k} ${v}`).join('・') + `　三角形 ${Math.round(tris / 1000)}k`;
   document.getElementById('loading').remove();
+  buildFur();
+  buildLayers();
   buildRegions();
   buildPose();
   buildList();
@@ -214,6 +218,85 @@ function buildList() {
   document.getElementById('onlysel').onchange = () => { if (!document.getElementById('onlysel').checked) { floor.visible = grid.visible = true; } apply(); };
 }
 
+// ===== 毛（皮ふを少しずつ外へずらした層を重ねる） =====
+const furLayers = [];
+const FUR_N = params.get('fur') ? +params.get('fur') : (Math.min(innerWidth, innerHeight) < 700 || (navigator.hardwareConcurrency || 4) < 6 ? 12 : 26);
+function furMaterial(t) {
+  const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, metalness: 0 });
+  m.onBeforeCompile = (sh) => {
+    sh.uniforms.uT = { value: t };
+    sh.uniforms.uLen = { value: 0.012 };   // A=1 のときの毛の長さ（m）
+    sh.vertexShader = 'uniform float uT; uniform float uLen; varying vec3 vRest; varying float vFur;\n' + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
+      vRest = position;
+      float furL = vColor.a * uLen;
+      vFur = vColor.a;
+      vec3 comb = vec3(0.0, -0.45, -0.9);
+      comb = normalize(comb - objectNormal * dot(comb, objectNormal) + vec3(1e-5));
+      transformed += objectNormal * furL * uT + comb * furL * uT * uT * 0.9;`).replace('#include <color_vertex>', '').replace('#include <begin_vertex>', '#include <color_vertex>\n#include <begin_vertex>');
+    sh.fragmentShader = 'uniform float uT; varying vec3 vRest; varying float vFur;\n' +
+      'float h31(vec3 p){ p = fract(p * vec3(0.1031, 0.1030, 0.0973)); p += dot(p, p.yxz + 33.33); return fract((p.x + p.y) * p.z); }\n' +
+      sh.fragmentShader.replace('#include <alphatest_fragment>', `
+      if (vFur < 0.02) discard;
+      vec3 q = vRest * 2600.0;               // 毛の太さ：約0.4mm のます目
+      vec3 c = floor(q);
+      float r = h31(c);
+      float d = length(fract(q) - 0.5);
+      float lenR = 0.55 + 0.45 * r;           // 毛ごとの長さのちがい
+      if (uT > lenR || d > 0.55 * (1.0 - uT / lenR) + 0.08) discard;
+      diffuseColor.rgb *= mix(0.55, 1.08, uT) * (0.9 + 0.2 * r);`);
+  };
+  m.customProgramCacheKey = () => 'fur' + t.toFixed(3);
+  return m;
+}
+function buildFur() {
+  for (const o of nodes.values()) {
+    if (o.userData.kind !== 'skin') continue;
+    const base = ownMesh(o); if (!base) continue;
+    for (let i = 1; i <= FUR_N; i++) {
+      const t = i / FUR_N;
+      let shell;
+      if (base.isSkinnedMesh) { shell = new THREE.SkinnedMesh(base.geometry, furMaterial(t)); shell.bind(base.skeleton, base.bindMatrix); }
+      else shell = new THREE.Mesh(base.geometry, furMaterial(t));
+      shell.position.copy(base.position); shell.quaternion.copy(base.quaternion); shell.scale.copy(base.scale);
+      shell.frustumCulled = false; shell.castShadow = i === 1; shell.receiveShadow = true;
+      shell.userData.furOf = o;
+      base.parent.add(shell);
+      furLayers.push(shell);
+    }
+  }
+}
+
+// ===== 体の層（毛・皮ふ・筋肉・内臓・骨） =====
+const LAYER_DEF = [
+  { key: 'fur', label: '毛', test: null },
+  { key: 'skin', label: '皮ふ（ひげ・目をふくむ）', test: (u) => ['skin', 'whisker'].includes(u.kind) || u.kind === 'eye' },
+  { key: 'muscle', label: '筋肉・腱', test: (u) => u.region === 'muscle' },
+  { key: 'organ', label: '内臓', test: (u) => u.region === 'organ' && u.kind !== 'eye' },
+  { key: 'bone', label: '骨・歯・軟骨・爪', test: (u) => !['muscle', 'organ', 'skin'].includes(u.region) && !['skin', 'whisker', 'eye'].includes(u.kind) },
+];
+const layerOn = {};
+function applyLayers() {
+  for (const L of LAYER_DEF) {
+    if (L.key === 'fur') { for (const f of furLayers) f.visible = layerOn.fur && layerOn.skin; continue; }
+    for (const o of nodes.values()) if (L.test(o.userData)) setOwnVisible(o, layerOn[L.key]);
+  }
+}
+function buildLayers() {
+  const box = document.getElementById('layers');
+  const hasSkin = [...nodes.values()].some((o) => o.userData.kind === 'skin');
+  for (const L of LAYER_DEF) {
+    if ((L.key === 'fur' || L.key === 'skin') && !hasSkin) continue;
+    // 皮ふがあるときは、中の層はかくしておく（軽くするため）
+    layerOn[L.key] = params.get('layers') ? params.get('layers').split(',').includes(L.key) : (hasSkin ? ['fur', 'skin'].includes(L.key) : true);
+    const row = document.createElement('label'); row.className = 'row';
+    row.innerHTML = `<input type="checkbox" ${layerOn[L.key] ? 'checked' : ''}> ${L.label}`;
+    row.querySelector('input').onchange = (e) => { layerOn[L.key] = e.target.checked; applyLayers(); };
+    box.appendChild(row);
+  }
+  if (!hasSkin) { layerOn.fur = false; layerOn.skin = false; }
+  applyLayers();
+}
+
 // 部分の表示切りかえ
 function buildRegions() {
   const box = document.getElementById('regions');
@@ -232,7 +315,7 @@ function buildRegions() {
     box.appendChild(sl);
     const head2 = document.createElement('div'); head2.className = 'sub'; head2.style.cssText = 'color:var(--sub);font-size:12px;margin:8px 0 2px'; head2.textContent = '骨'; box.appendChild(head2);
   }
-  for (const [k, label] of Object.entries(REGIONS)) {
+  for (const [k, label] of Object.entries(REGIONS)) { if (k === "organ" || k === "skin") continue;
     if (!present.has(k)) continue;
     const row = document.createElement('label'); row.className = 'row';
     row.innerHTML = `<input type="checkbox" checked> ${label}`;
