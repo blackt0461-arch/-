@@ -27,6 +27,7 @@ import { runTour } from './tour.js';
 import * as BGM from './bgm.js';
 import { AVATARS, AVATAR_COLORS, GACHA_AVATARS, NIGHT_COLORS, avatarHTML, avatarItemId, pullRewards } from './avatars.js';
 import { studyParams, puzzleParams, radarSVG, TITLES, titleById, earnedTitles } from './profile.js';
+import * as Calc from './calc.js';
 
 // bank：data/bank/<科目>.json の問題バンク（教科書に合わせた 教科 → ジャンル → 単元）。あとから読みこむ
 const SUBJECTS = [
@@ -3494,6 +3495,9 @@ function awardResult(st, ss, p, perfect, ok, isReview, secs) {
   return { pts, xp, mastered };
 }
 
+// 関数電卓（1.14.0）：数学・物理の4択で出す。履歴は、アプリを開いている間は問題をまたいで残る
+const CALC_SUBJECTS = ['math', 'physics4'];
+const calcStore = { hist: [], ans: 0 };
 // 4択の問題（物理以外の教科）
 function runChoice(p, isReview) {
   // テスト勉強の問題集（電子回路など）は、記号を添え字にして・解説を1文ずつにして見やすくする
@@ -3512,21 +3516,47 @@ function runChoice(p, isReview) {
         <span class="tag">${isReview ? `${icon('refresh')}復習` : esc(p.unit)}</span>
       </header>
       <div class="problem ${fx ? 'fx' : ''}">${fm(p.text).replace(/\n/g, '<br>')}</div>
+      ${CALC_SUBJECTS.includes(subjectId) || p.steps ? `<div class="calc-row">${p.steps ? `<button class="calc-btn steps-btn">${icon('level')}段階に分けて解く</button>` : ''}${CALC_SUBJECTS.includes(subjectId) ? `<button class="calc-btn" aria-label="電卓をひらく">${icon('calc')}電卓</button>` : ''}</div>` : ''}
       <div class="step">
         <p class="ask">正しいものを <b>1つ</b> 選ぼう</p>
         <div class="cards ch4">${order.map(i => `<button class="fcard" data-i="${i}">${fm(p.choices[i])}</button>`).join('')}</div>
       </div>
     </div>`);
   app.append(el);
-  el.querySelector('.back').onclick = () => { S.save(); showHome(); };
+  el.querySelector('.back').onclick = () => { Calc.closeCalc(); S.save(); showHome(); };
+  el.querySelector('.calc-btn:not(.steps-btn)')?.addEventListener('click', (e) => Calc.openCalc({ screen: el, problem: el.querySelector('.problem'), btn: e.currentTarget, store: calcStore }));
   const stepEl = el.querySelector('.step');
-  stepEl.querySelectorAll('.fcard').forEach(b => b.onclick = () => {
+  const bindCards = () => stepEl.querySelectorAll('.fcard').forEach(b => b.onclick = () => {
     const ok = +b.dataset.i === p.answer;
     stepEl.querySelectorAll('.fcard').forEach(x => { x.disabled = true; if (+x.dataset.i === p.answer) x.classList.add('right'); });
     if (!ok) b.classList.add('wrong');
     setTimeout(() => result(ok, +b.dataset.i), ok ? 400 : 700);
   });
+  bindCards();
+  // 段階に分けて解く（1.14.0）：小問を1つずつ。途中でまちがえたらヒントを出して、もう一度。最後は元の問題の選択肢
+  el.querySelector('.steps-btn')?.addEventListener('click', (e) => {
+    e.currentTarget.remove();
+    const steps = p.steps;
+    const show = (k) => {
+      const s0 = steps[k], last = k === steps.length - 1;
+      const ord = S.shuffle([0, 1, 2, 3]);
+      stepEl.innerHTML = `
+        <div class="st-prog">${steps.map((_, j) => `<i class="${j < k ? 'done' : j === k ? 'on' : ''}"></i>`).join('')}<small>ステップ ${k + 1} / ${steps.length}</small></div>
+        <p class="ask st-ask">${fm(s0.ask)}</p>
+        <div class="cards ch4">${(last ? order : ord).map(i => `<button class="fcard" data-i="${i}">${fm((last ? p.choices : s0.choices)[i])}</button>`).join('')}</div>
+        <p class="st-hint hide"></p>`;
+      if (last) return bindCards();
+      stepEl.querySelectorAll('.fcard').forEach(b => b.onclick = () => {
+        if (+b.dataset.i === s0.answer) { b.classList.add('right'); vibrate(15); setTimeout(() => show(k + 1), 450); return; }
+        b.classList.add('wrong'); b.disabled = true; vibrate([40, 30, 40]);
+        const h0 = stepEl.querySelector('.st-hint'); if (s0.hint) { h0.textContent = s0.hint; h0.classList.remove('hide'); }
+      });
+    };
+    show(0);
+  });
   function result(ok, picked) {
+    Calc.closeCalc();
+    el.querySelector('.calc-row')?.remove();
     const secs = (Date.now() - t0) / 1000;
     const { pts, xp, mastered } = awardResult(st, ss, p, ok, ok, isReview, secs);
     vibrate(ok ? [20, 30, 20] : [60, 40, 60]);
@@ -3747,4 +3777,4 @@ if ('serviceWorker' in navigator && location.protocol === 'https:') {
   navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(r => r.update()).catch(() => {});
 }
 // テスト用
-window.__app = { toast, showEdit, putIntoRoom, get room3d() { return room3d; }, S, sub, HS, switchRoom, ensureRooms, goHome, showHome, curRoom, visitFriend, leaveVisit, showLoginBonus, showGiftBox, showArrange, arrange: (sel, style) => { arrSel = sel; return runArrange(style); } };
+window.__app = { toast, showEdit, putIntoRoom, get room3d() { return room3d; }, S, sub, HS, switchRoom, ensureRooms, goHome, showHome, curRoom, visitFriend, leaveVisit, showLoginBonus, showGiftBox, showArrange, problemById: (id) => byId[id], runChoice, arrange: (sel, style) => { arrSel = sel; return runArrange(style); } };
