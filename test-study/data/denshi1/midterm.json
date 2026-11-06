@@ -1,0 +1,11 @@
+{
+  "note": "ためし",
+  "sheet": "midterm-sheet.html",
+  "questions": [
+    { "id": "t1", "lecture": "第1回", "type": "card", "q": "ダイオード", "a": "一方向にだけ電流を流す素子", "explain": "pn接合" },
+    { "id": "t2", "lecture": "第1回", "type": "choice", "q": "オームの法則は？", "choices": ["$V=RI$", "$V=I/R$", "$P=VI$"], "answer": 0, "explain": "電圧＝抵抗×電流" },
+    { "id": "t3", "lecture": "第2回", "type": "fill", "q": "pn接合で、p形側にプラスをかける向きを（　）方向という", "answers": ["順", "順方向"], "explain": "逆は逆方向" },
+    { "id": "t4", "lecture": "第2回", "type": "calc", "q": "$R=2\\,\\mathrm{k\\Omega}$ に $I=3\\,\\mathrm{mA}$ 流れるとき $V$ は？", "answer": 6, "unit": "V", "explain": "$V=RI=6$" },
+    { "id": "t5", "lecture": "第2回", "type": "written", "q": "整流とは何か説明せよ", "model": "交流を一方向の電流に変えること", "points": ["交流を", "一方向に"], "explain": "ダイオードを使う" }
+  ]
+}
