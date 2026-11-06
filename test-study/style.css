@@ -389,3 +389,17 @@ textarea.input { min-height: 160px; resize: vertical; }
 .qexp p { font-size: 15px; margin: 4px 0; }
 .lessons-card { border-color: var(--ok); }
 .lesson-link { margin-top: 12px; }
+
+/* むずかしい言葉（長押しで説明） */
+.term { text-decoration: underline dotted var(--acc); text-decoration-thickness: 2px; text-underline-offset: 3px; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; cursor: help; }
+.gpop-wrap { position: fixed; inset: 0; z-index: 60; background: rgba(10, 12, 30, .35); display: flex; align-items: flex-end; justify-content: center; animation: fade .15s ease; }
+@keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+.gpop { width: 100%; max-width: 720px; background: var(--card); border-radius: 22px 22px 0 0; padding: 18px 18px calc(22px + env(safe-area-inset-bottom)); box-shadow: 0 -10px 30px rgba(0, 0, 0, .2); animation: up .2s ease; max-height: 70vh; overflow-y: auto; }
+@keyframes up { from { transform: translateY(30px); } to { transform: none; } }
+.gpop .gh { display: flex; align-items: baseline; gap: 10px; }
+.gpop .gh b { font-size: 20px; font-weight: 900; color: var(--acc); }
+.gpop .gh span { color: var(--sub); font-size: 13px; }
+.gpop .gx { margin-left: auto; width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; color: var(--sub); background: var(--soft); }
+.gpop .gx svg { width: 18px; height: 18px; }
+.gpop .gd p { margin: 8px 0; font-size: 16px; line-height: 1.75; }
+.gpop .tex { margin-top: 8px; padding: 10px; border-radius: 12px; background: var(--card2); overflow-x: auto; }
