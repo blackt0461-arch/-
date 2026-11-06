@@ -17,6 +17,7 @@ import * as S from './store.js';
 import * as Auth from './auth.js';
 import * as DL from './download.js';
 import * as Sync from './sync.js';
+import * as R from './report.js';
 import { rpc } from './cloud.js';
 import { PUZZLES, puzzleById, levelInfo, mountPuzzle, livesOf } from './puzzles.js';
 import { openPuzzleHelp } from './puzzlehelp.js';
@@ -1797,6 +1798,7 @@ function showMenu() {
     </button>
     <nav class="menu-list">
       <button data-m="skins">${icon('palette')}<span>着せ替え<small>画面の見た目を変える（ガチャで集める）</small></span>${icon('chevronRight')}</button>
+      <button data-m="report">${icon('calendar')}<span>勉強レポート<small>週・月ごとのまとめ。画像で保存できる</small></span>${icon('chevronRight')}</button>
       <button data-m="records">${icon('chart')}<span>記録<small>分野ごとの成績・連続日数</small></span>${icon('chevronRight')}</button>
       <button data-m="feedback">${icon('chat')}<span>要望・バグ報告<small>管理者に送る</small></span>${icon('chevronRight')}</button>
       <button data-m="news">${icon('bell')}<span>お知らせ<small>アップデートや運営からのお知らせ</small></span>${newsBadge ? `<i class="badge">${newsBadge}</i>` : ''}${icon('chevronRight')}</button>
@@ -1805,7 +1807,7 @@ function showMenu() {
       ${isAdmin() ? `<button data-m="admin">${icon('shield')}<span>管理者<small>みんなの記録と部屋</small></span>${icon('chevronRight')}</button>` : ''}
     </nav>`);
   el.querySelector('.pc-tap').onclick = () => showProfile();
-  el.querySelectorAll('.menu-list button').forEach(b => b.onclick = () => ({ skins: () => showSkins(), records: showRecords, feedback: () => showFeedback(), bag: () => showBag(), news: showNews, ranking: showRanking, friends: showFriends, settings: showSettings, admin: showAdmin, beta: () => { location.href = BETA ? '../study-room/' : '../study-room-beta/'; } })[b.dataset.m]());
+  el.querySelectorAll('.menu-list button').forEach(b => b.onclick = () => ({ skins: () => showSkins(), records: showRecords, report: () => showReport(), feedback: () => showFeedback(), bag: () => showBag(), news: showNews, ranking: showRanking, friends: showFriends, settings: showSettings, admin: showAdmin, beta: () => { location.href = BETA ? '../study-room/' : '../study-room-beta/'; } })[b.dataset.m]());
   paintSync();
 }
 
@@ -1954,6 +1956,56 @@ function showRankRoad() {
     const road = el.querySelector('.rr-road'), nx = el.querySelector('.rr-row.next') || el.querySelector('.rr-row.got');
     if (road && nx) road.scrollTop = nx.offsetTop - road.clientHeight * 0.55;
   }, 30);
+}
+// 勉強レポート（1.12.0）：週・月ごとのまとめ。画像で保存できる
+function showReport(kind = 'week', offset = 0) {
+  const log = S.dayLog(), p = R.period(kind, offset), pv = R.period(kind, offset - 1);
+  const cur = R.summarize(log, p), prev = R.summarize(log, pv);
+  const names = Object.fromEntries(SUBJECTS.map(x => [x.id, x.name]));
+  const diff = (a, b, u = '') => { const d = a - b; return !b && !a ? '' : `<small class="${d > 0 ? 'up' : d < 0 ? 'down' : ''}">${d > 0 ? '+' : ''}${d}${u}</small>`; };
+  const max = Math.max(5, ...cur.days.map(d => d.n));
+  const today = S.dayKey(), bw = 100 / cur.days.length;
+  const bars = `<svg class="rp-bars" viewBox="0 0 100 46" preserveAspectRatio="none" aria-label="毎日の解いた数">${cur.days.map((d, i) => { const hh = d.n / max * 38; return `<rect x="${(i * bw + bw * .18).toFixed(2)}" y="2" width="${(bw * .64).toFixed(2)}" height="38" rx="1" class="bg"/>${hh ? `<rect x="${(i * bw + bw * .18).toFixed(2)}" y="${(40 - hh).toFixed(2)}" width="${(bw * .64).toFixed(2)}" height="${hh.toFixed(2)}" rx="1" class="${d.key === today ? 'now' : 'v'}"/>` : ''}`; }).join('')}</svg>
+    <div class="rp-days">${cur.days.map((d, i) => `<span>${kind === 'week' ? '月火水木金土日'[i] : (i % 5 === 0 || i === cur.days.length - 1) ? +d.key.slice(8) : ''}</span>`).join('')}</div>`;
+  const subjRows = Object.entries(cur.bySid).sort((a, b) => b[1][0] - a[1][0]).map(([sid, [n, c]]) => `<div class="rp-row"><span class="ic2">${icon(SUBJECT_ICON[sid] || 'book')}</span><b>${esc(names[sid] || sid)}</b><span class="rp-bar"><i style="width:${n / Math.max(1, cur.n) * 100}%"></i></span><span class="rp-n">${n}問<small>${Math.round(c / n * 100)}%</small></span></div>`).join('');
+  const unitRows = (list, weak) => list.length ? list.map((u, i) => `<div class="rp-row rp-unit"><span class="rp-rank ${weak ? 'weak' : 'strong'}">${i + 1}</span><span class="rp-ut"><b>${esc(u.unit)}</b><small>${esc(names[u.sid] || '')}・${u.n}問・正解率 ${Math.round(u.rate * 100)}%</small></span>${weak ? `<button class="btn ghost sm rp-go" data-s="${u.sid}" data-u="${esc(u.unit)}">${icon('pencil')}解く</button>` : ''}</div>`).join('') : `<p class="empty sm">3問以上解いた単元が出ます</p>`;
+  const el = screenWithTabs('report', `<button class="icon back">${icon('back')}</button><h2>勉強レポート</h2><span></span>`, 'menu', `
+    <div class="rp-tabs" role="tablist"><button data-k="week" class="${kind === 'week' ? 'on' : ''}">週</button><button data-k="month" class="${kind === 'month' ? 'on' : ''}">月</button></div>
+    <div class="rp-nav"><button class="icon rp-prev" aria-label="前へ">${icon('back')}</button><div><b>${p.name}</b><small>${p.label}</small></div><button class="icon rp-next" aria-label="次へ" ${offset >= 0 ? 'disabled' : ''}>${icon('chevronRight')}</button></div>
+    <p class="rp-comment">${icon('sparkle')}${esc(R.comment(cur, prev, p))}</p>
+    <div class="stats4">
+      <div>${icon('pencil')}<b>${cur.n}</b><span>解いた数</span>${diff(cur.n, prev.n)}</div>
+      <div>${icon('check')}<b>${Math.round(cur.rate * 100)}%</b><span>正解率</span></div>
+      <div>${icon('flame')}<b>${cur.studyDays}</b><span>勉強した日</span>${diff(cur.studyDays, prev.studyDays)}</div>
+      <div>${icon('grid')}<b>${cur.pz}</b><span>パズル</span>${diff(cur.pz, prev.pz)}</div>
+    </div>
+    <section class="rp-card"><h3>毎日の解いた数</h3>${bars}</section>
+    <section class="rp-card"><h3>教科ごと</h3>${subjRows || '<p class="empty sm">この期間はまだ解いていません</p>'}</section>
+    <section class="rp-card"><h3 class="weak">のびしろの単元<small>正解率が低い順</small></h3>${unitRows(cur.weak, true)}</section>
+    <section class="rp-card"><h3 class="strong">得意な単元<small>正解率が高い順</small></h3>${unitRows(cur.strong, false)}</section>
+    <button class="btn gold big rp-save">${icon('download')}画像で保存</button>
+    <p class="note">保存した画像は、写真やファイル（Google ドライブなど）に入れられます。記録は 1.12.0 から集まり始めます</p>`);
+  el.querySelector('.back').onclick = showMenu;
+  el.querySelectorAll('.rp-tabs button').forEach(b => b.onclick = () => showReport(b.dataset.k, 0));
+  el.querySelector('.rp-prev').onclick = () => showReport(kind, offset - 1);
+  el.querySelector('.rp-next').onclick = () => showReport(kind, Math.min(0, offset + 1));
+  el.querySelectorAll('.rp-go').forEach(b => b.onclick = async () => {
+    subjectId = b.dataset.s; await loadBank(subjectId);
+    const st = S.subject(subjectId), q = probs(subjectId).find(x => x.unit === b.dataset.u);
+    st.scope = { genre: q?.genre || null, unit: b.dataset.u }; st.session = null; S.save();
+    startSet();
+  });
+  el.querySelector('.rp-save').onclick = async () => {
+    const btn = el.querySelector('.rp-save'); btn.disabled = true;
+    try {
+      const cv = R.drawImage({ user: user.name, p, cur, prev, names });
+      const blob = await new Promise(r => cv.toBlob(r, 'image/png'));
+      const file = new File([blob], `roomin-report-${p.start}.png`, { type: 'image/png' });
+      if (navigator.canShare?.({ files: [file] })) { await navigator.share({ files: [file], title: 'ROOMIN 勉強レポート' }).catch(() => {}); }
+      else { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = file.name; document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); toast('画像を保存しました'); }
+    } catch (e) { toast('画像を作れませんでした'); }
+    btn.disabled = false;
+  };
 }
 function showRecords(subj = subjectId) {
   const rk = rankNow(), pf = S.profile();
@@ -2916,6 +2968,7 @@ function awardResult(st, ss, p, perfect, ok, isReview, secs) {
       ({ mastered } = S.recordResult(st, p.id, perfect, isReview));
       if (mastered) HS().pendingSpecials++;
       xp = S.addAnswer(st, p.unit, perfect ? 'perfect' : ok ? 'ok' : 'wrong');
+      S.logDay({ sid: subjectId, unit: p.unit, ok });
       if (S.countStudyForPuzzle()) setTimeout(() => toast('パズルが1回できるようになりました', 2400), 1200);
       const firstPlay = S.markPlayedToday();
       // 50問ごと・連続7日ごと・克服でたまにレアチケット

@@ -67,6 +67,27 @@ const Q = BANK.find(p => p.detail && /重心/.test(p.text));
   check(await page.locator('.home').count() === 1, 'ぜんぶ克服したら部屋にもどる');
   await openMath();
   check(await page.locator('.sc-wrong').count() === 0, '解き直しの行が消える');
+  console.log('3. 勉強レポート');
+  // 先週の記録も少し入れておく（前の期間とのくらべ）
+  await page.evaluate(() => { const S = window.__app.S, log = S.dayLog(), lw = S.addDays(S.weekKey(), -3); log[lw] = { n: 2, c: 1, pz: 0, u: { 'math|図形の性質': [2, 1] } }; for (let i = 0; i < 4; i++) S.logDay({ sid: 'english', unit: '関係詞', ok: i > 0 }); S.logDay({ pz: true }); S.save(); });
+  await page.evaluate(() => window.__app.showHome()); await page.waitForTimeout(400);
+  await page.evaluate(() => document.querySelector('[data-t=menu]')?.click()); await page.waitForTimeout(400);
+  await page.click('.menu-list [data-m=report]'); await page.waitForSelector('.rp-card');
+  const nums = await page.locator('.report .stats4 b').allTextContents();
+  check(+nums[0] >= 8, `今週の解いた数（${nums.join(' / ')}）`);
+  check(/問 多く解きました/.test(await page.locator('.rp-comment').textContent()), `ひとこと：${(await page.locator('.rp-comment').textContent()).trim()}`);
+  check(await page.locator('.rp-unit').count() >= 1, `単元の得意・のびしろが出る（${await page.locator('.rp-unit').count()}行）`);
+  await page.screenshot({ path: path.join(OUT, 'study-report.png'), fullPage: true });
+  await page.click('.rp-tabs [data-k=month]'); await page.waitForSelector('.rp-card');
+  check(/\d+年\d+月/.test(await page.locator('.rp-nav small').textContent()), '「月」に切りかわる');
+  await page.click('.rp-prev'); await page.waitForTimeout(300);
+  check(/先月/.test(await page.locator('.rp-nav b').textContent()), '前の月に戻れる');
+  await page.click('.rp-tabs [data-k=week]'); await page.waitForSelector('.rp-card');
+  const [dl] = await Promise.all([page.waitForEvent('download', { timeout: 8000 }).catch(() => null), page.click('.rp-save')]);
+  if (dl) { const fp = path.join(OUT, 'study-report-image.png'); await dl.saveAs(fp); check(fs.statSync(fp).size > 20000, `画像で保存できる（${Math.round(fs.statSync(fp).size / 1024)}KB）`); }
+  else check(false, '画像で保存できる');
+  await page.click('.rp-unit .rp-go').catch(() => {}); await page.waitForSelector('.fcard', { timeout: 15000 }).catch(() => {});
+  check(await page.locator('.fcard').count() > 0, '「解く」でその単元の問題が始まる');
   check(!errors.length, `画面のエラーなし（${errors.join(' / ').slice(0, 120)}）`);
   await browser.close(); srv.close();
   console.log(fails.length ? `\nだめな所：${fails.length} 件` : '\nぜんぶ OK');
