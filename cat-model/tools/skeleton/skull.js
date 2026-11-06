@@ -1,7 +1,7 @@
 // 頭：頭骨、下顎骨（左右）、歯30本、舌骨装置、耳小骨（ツチ骨・キヌタ骨・アブミ骨）
 // 猫の歯式：上 I3 C1 P3 M1 ／ 下 I3 C1 P2 M1（片側15本 × 2 = 30本）
 import { add, sub, mul, norm, cross, cone, ellipsoid, sphere, plate, tube, torus, smoothUnion, smoothSubtract, spline, union } from './sdf.js';
-import { buildCranium } from './skull_core.js';
+import { buildCranium, buildJaw } from './skull_core.js';
 
 export function buildSkull(api, lm) {
   const O = lm.occiput.p;                          // 後頭顆のあいだ（頭の回転の中心）
@@ -23,73 +23,16 @@ export function buildSkull(api, lm) {
       rom: { joint: '環椎後頭関節（うなずく動き）', flexion: 0, extension: 0 } });
   }
 
-  // ---- 下顎骨（左右） ----
-  const condyle = (s) => Q(21.5, -2.2, s * 18);
-  {
-    const s = 1;
-    const parts = [
-      tube(spline([Q(83, -9.5, 3.4), Q(74, -11, 8), Q(60, -11.2, 12), Q(46, -10.4, 14.8), Q(33, -9.0, 16.5)], 3), [3.6, 4.4, 4.6, 4.2, 3.8], { dir: w, ratio: 0.42 }, 1.0), // 下顎体
-      plate(Q(0, 0, 16.6), u, v, [[47, -8], [36, -8.5], [27.5, -6], [25.5, 7], [28.5, 17.5], [33, 19.5], [38.5, 13], [44, 1]], 1.7, 0.7), // 筋突起（側頭筋がつく）
-      tube([Q(32, -7, 17), Q(25.5, -4.5, 17.6), Q(22.5, -2.4, 18)], [2.6, 2.4, 2.4], { dir: w, ratio: 0.6 }, 0.8), // 関節突起の首
-      cone(Q(21.5, -2.2, 13.8), Q(21.5, -2.2, 22.2), 2.35, 2.35),                                // 下顎頭（横長の円柱）
-      tube([Q(30, -10, 16.6), Q(24, -10.6, 16.8), Q(20.5, -10.2, 16.9)], [2.4, 1.8, 1.3], { dir: w, ratio: 0.6 }, 0.6), // 角突起
-      E(82.5, -8, 1.8, [3.2, 4.0, 1.6]),                                                     // 下顎結合
-    ];
-    let mand = smoothUnion(1.2, ...parts);
-    mand = smoothSubtract(0.6, mand,
-      E(36, 0, 19.0, [8, 8, 1.1]),                                                           // 咬筋窩
-      cone(Q(74, -8.6, 10.6), Q(73, -8.8, 7.6), 0.7, 0.7),                                   // オトガイ孔
-      cone(Q(66, -8.6, 13.2), Q(65, -8.8, 10.4), 0.55, 0.55),
-      cone(Q(31, -1, 13), Q(31, -1, 20), 1.0, 1.0),                                          // 下顎孔（内側）
-    );
-    api.bone({ id: 'Mandible', pair: true, ja: '下顎骨', la: 'Mandibula', region: 'skull', parent: 'Skull', joint: condyle(s), shape: mand, h: 0.32,
-      rom: { joint: '顎関節', flexion: 0, extension: 0 } });
+  // ---- 下顎骨（左右）と歯：解剖書の図 36・40 から（skull_core.js の buildJaw） ----
+  const jaw = buildJaw(Q, AX);
+  const condyle = jaw.condyle;
+  api.bone({ id: 'Mandible', pair: true, ja: '下顎骨', la: 'Mandibula', region: 'skull', parent: 'Skull', joint: condyle(1), shape: jaw.mandible, h: 0.3,
+    rom: { joint: '顎関節', flexion: 0, extension: 0 } });
+  for (const [list, jw] of [[jaw.upper, 'U'], [jaw.lower, 'L']]) for (const t of list) {
+    api.bone({ id: t.id, pair: true, ja: t.ja, la: 'Dens', region: 'skull', parent: jw === 'U' ? 'Skull' : 'Mandible', joint: jw === 'U' ? O : condyle(1),
+      shape: t.shape, mat: 'tooth', h: 0.14 });
   }
-
-  // ---- 歯 ----
-  // 歯をひとつ作る：base=歯ぐきの位置、tip=先、r=根元の太さ、root=根の長さ
-  const tooth = (base, tip, r, root, flatDir = w, ratio = 0.75) => {
-    const dir = norm(sub(tip, base));
-    const rootEnd = sub(base, mul(dir, root));
-    return smoothUnion(0.5,
-      cone(rootEnd, base, r * 0.55, r, { dir: flatDir, ratio }),
-      cone(base, tip, r, 0.18, { dir: flatDir, ratio }),
-    );
-  };
-  // 刃のような臼歯：いくつかのとがり（咬頭）をもつ
-  const blade = (center, len, height, cusps, down = -1, rootDepth = 5, width = 1.8) => {
-    const parts = [E(center[0], center[1], center[2], [len / 2, 1.6, width])];
-    for (const [da, h, r] of cusps) parts.push(cone(Q(center[0] + da, center[1], center[2]), Q(center[0] + da * 1.05, center[1] + down * h, center[2]), r, 0.25, { dir: w, ratio: 0.55 }));
-    // 根（2本）
-    for (const da of [-len * 0.3, len * 0.3]) parts.push(cone(Q(center[0] + da, center[1], center[2]), Q(center[0] + da * 1.1, center[1] - down * rootDepth, center[2]), 1.3, 0.6));
-    return smoothUnion(0.7, ...parts);
-  };
-  const teeth = [];
-  // 上顎（片側）
-  teeth.push(
-    { id: 'UI1', ja: '上顎第1切歯', jaw: 'U', shape: (s) => tooth(Q(86.4, -1.6, s * 1.3), Q(86.8, -5.0, s * 1.3), 0.75, 4) },
-    { id: 'UI2', ja: '上顎第2切歯', jaw: 'U', shape: (s) => tooth(Q(86.0, -1.6, s * 3.2), Q(86.4, -5.2, s * 3.3), 0.85, 4) },
-    { id: 'UI3', ja: '上顎第3切歯', jaw: 'U', shape: (s) => tooth(Q(84.8, -1.6, s * 5.6), Q(85.0, -6.4, s * 5.8), 1.15, 5) },
-    { id: 'UC', ja: '上顎犬歯', jaw: 'U', shape: (s) => smoothUnion(0.6, tooth(Q(78.6, -1.6, s * 9.0), Q(78.0, -7.0, s * 9.2), 2.3, 12), cone(Q(78.0, -7.0, s * 9.2), Q(76.8, -12.5, s * 9.3), 1.75, 0.2, { dir: w, ratio: 0.75 })) },
-    { id: 'UP2', ja: '上顎第2前臼歯', jaw: 'U', shape: (s) => tooth(Q(73.2, -2.4, s * 11.2), Q(73.2, -4.6, s * 11.2), 0.9, 3) },
-    { id: 'UP3', ja: '上顎第3前臼歯', jaw: 'U', shape: (s) => blade([68.2, -3.4, s * 13.4], 7.2, 0, [[-2.6, 2.4, 1.0], [0, 5.4, 1.7], [2.6, 2.6, 1.0]]) },
-    { id: 'UP4', ja: '上顎第4前臼歯（裂肉歯）', jaw: 'U', shape: (s) => smoothUnion(0.6, blade([59.2, -3.8, s * 16.0], 11, 0, [[3.8, 3.4, 1.2], [1.0, 6.2, 2.0], [-3.4, 4.6, 1.7]], -1, 6, 2.2), cone(Q(61.8, -3.6, s * 13.0), Q(62, -6.0, s * 13.2), 1.5, 0.4)) },
-    { id: 'UM1', ja: '上顎第1後臼歯', jaw: 'U', shape: (s) => smoothUnion(0.5, E(53.6, -4.2, s * 13.2, [1.1, 1.2, 2.6]), cone(Q(53.6, -4.2, s * 13.2), Q(53.6, -0.5, s * 13.2), 0.9, 0.5)) },
-  );
-  // 下顎（片側）
-  teeth.push(
-    { id: 'LI1', ja: '下顎第1切歯', jaw: 'L', shape: (s) => tooth(Q(84.4, -6.0, s * 1.1), Q(84.9, -2.8, s * 1.1), 0.65, 4) },
-    { id: 'LI2', ja: '下顎第2切歯', jaw: 'L', shape: (s) => tooth(Q(84.1, -6.0, s * 2.7), Q(84.6, -2.6, s * 2.8), 0.7, 4) },
-    { id: 'LI3', ja: '下顎第3切歯', jaw: 'L', shape: (s) => tooth(Q(83.6, -6.0, s * 4.4), Q(84.1, -2.4, s * 4.5), 0.8, 4) },
-    { id: 'LC', ja: '下顎犬歯', jaw: 'L', shape: (s) => smoothUnion(0.6, tooth(Q(81.0, -6.2, s * 7.3), Q(81.6, -1.0, s * 7.4), 2.1, 11), cone(Q(81.6, -1.0, s * 7.4), Q(81.0, 3.8, s * 7.6), 1.6, 0.2, { dir: w, ratio: 0.75 })) },
-    { id: 'LP3', ja: '下顎第3前臼歯', jaw: 'L', shape: (s) => blade([66.6, -6.8, s * 11.2], 7, 0, [[-2.5, 2.2, 1.0], [0.2, 4.6, 1.6], [2.6, 2.0, 0.9]], 1) },
-    { id: 'LP4', ja: '下顎第4前臼歯', jaw: 'L', shape: (s) => blade([59.2, -7.0, s * 12.8], 8, 0, [[-2.8, 2.6, 1.1], [0.2, 5.2, 1.8], [2.9, 2.4, 1.0]], 1) },
-    { id: 'LM1', ja: '下顎第1後臼歯（裂肉歯）', jaw: 'L', shape: (s) => blade([50.6, -7.0, s * 14.2], 9.5, 0, [[2.8, 5.0, 1.8], [-2.4, 5.6, 1.9]], 1, 6, 2.0) },
-  );
-  for (const t of teeth) {
-    api.bone({ id: t.id, pair: true, ja: t.ja, la: 'Dens', region: 'skull', parent: t.jaw === 'U' ? 'Skull' : 'Mandible', joint: t.jaw === 'U' ? O : condyle(1),
-      shape: t.shape(1), mat: 'tooth', h: 0.14 });
-  }
+  lm.F.jaw = jaw;
 
   // ---- 舌骨装置 ----
   {

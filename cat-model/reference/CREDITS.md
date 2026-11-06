@@ -184,7 +184,7 @@
 - 保存サイズ: 1920x1201 px
 - 内容: 【1a/1c 側面】シャム（細身の品種）。胴・頭とも真横（頭は左）。屋外、猫は画面の中で小さい。1920px。
 
-## photos/front_face_tabby_closeup.jpg
+## photos/head/front_face_tabby_closeup.jpg
 - 出典ページ: https://commons.wikimedia.org/wiki/File:Felis_Silvestris_Catus_face_closeup.jpg
 - 元ファイル: https://upload.wikimedia.org/wikipedia/commons/6/63/Felis_Silvestris_Catus_face_closeup.jpg
 - 作者: MarioCRO
@@ -192,7 +192,7 @@
 - 保存サイズ: 1920x1440 px
 - 内容: 【1b 正面の顔】成猫の短毛キジトラ。ほぼ正面・目の高さもほぼ水平（頭がわずかに傾き・少し下向き）。耳まで入る。少し望遠気味で歪み小。1920px。
 
-## photos/front_face_young_tabbywhite.jpg
+## photos/head/front_face_young_tabbywhite.jpg
 - 出典ページ: https://commons.wikimedia.org/wiki/File:Felis_catus,_Gra%C4%8Dac_(HR)_--_2022_--_0034.jpg
 - 元ファイル: https://upload.wikimedia.org/wikipedia/commons/7/79/Felis_catus%2C_Gra%C4%8Dac_%28HR%29_--_2022_--_0034.jpg
 - 作者: Anil Öztas
@@ -200,7 +200,7 @@
 - 保存サイズ: 1920x1280 px
 - 内容: 【1b 正面の顔】若い猫（白キジ）。真正面・目は水平・左右対称に近い。耳全体が見える。望遠でパース小。ただし子猫寄りで成猫より目・耳が相対的に大きい点に注意。1920px。
 
-## photos/front_face_tortie_eyes_closeup.jpg
+## photos/head/front_face_tortie_eyes_closeup.jpg
 - 出典ページ: https://commons.wikimedia.org/wiki/File:Cat_eyes_2007-1.jpg
 - 元ファイル: https://upload.wikimedia.org/wikipedia/commons/2/27/Cat_eyes_2007-1.jpg
 - 作者: Alvesgaspar
@@ -208,7 +208,7 @@
 - 保存サイズ: 1920x1420 px
 - 内容: 【1b 正面の顔】成猫（サビ・トラ）の顔の大写し。ほぼ正面、目は水平。耳の上が切れている。近距離なので鼻がやや大きく写る（パースあり）。目の形・瞳孔の参考に。1920px。
 
-## photos/head_profile_dark_tabby.jpg
+## photos/head/head_profile_dark_tabby.jpg
 - 出典ページ: https://commons.wikimedia.org/wiki/File:Cat_profile_(9543688428).jpg
 - 元ファイル: https://upload.wikimedia.org/wikipedia/commons/d/dd/Cat_profile_%289543688428%29.jpg
 - 作者: Heath Cajandig
@@ -216,7 +216,7 @@
 - 保存サイズ: 1920x1691 px
 - 内容: 【1c 頭の真横】黒っぽいキジトラ成猫の頭部左側面（顔は左向き）。ほぼ真横（わずかに手前向き）。耳・鼻先・あごの輪郭が見える。逆光気味で暗い。1920px。
 
-## photos/head_front_and_profile_korat.jpg
+## photos/head/head_front_and_profile_korat.jpg
 - 出典ページ: https://commons.wikimedia.org/wiki/File:Face_et_profil_du_korat.JPG
 - 元ファイル: https://upload.wikimedia.org/wikipedia/commons/e/eb/Face_et_profil_du_korat.JPG
 - 作者: Yog-Hurt's_Atlach-Nacha_at_Turok_Cat_Show
@@ -224,7 +224,7 @@
 - 保存サイズ: 500x230 px
 - 内容: 【1b/1c】コラット（短毛）の顔の正面（左）と横顔（右）を並べた画像。横顔は右向きのほぼ真横、耳まで入る。正面は目の高さ水平。小さい（500px）。
 
-## photos/head_profile_grey_closeup.jpg
+## photos/head/head_profile_grey_closeup.jpg
 - 出典ページ: https://commons.wikimedia.org/wiki/File:Profile_(3379329655).jpg
 - 元ファイル: https://upload.wikimedia.org/wikipedia/commons/3/33/Profile_%283379329655%29.jpg
 - 作者: xlibber
@@ -375,4 +375,36 @@
 - ライセンス: CC BY-SA 3.0
 - 保存サイズ: 500x646 px
 - 内容: 【3 頭骨・側面】側面3枚（下あご付き／頭骨のみ／下あごのみ）を並べた資料。小さい(500px)。
+
+## photos/head/head_profile_left_brown_tabby_adult.jpg
+- 出典ページ: https://commons.wikimedia.org/wiki/File:Oslo,_brown_tabby_female_cat,_11_years_(5).jpg
+- 元ファイル: https://upload.wikimedia.org/wikipedia/commons/3/39/Oslo%2C_brown_tabby_female_cat%2C_11_years_%285%29.jpg
+- 作者: Tsaag Valren
+- ライセンス: CC BY-SA 4.0
+- 保存サイズ: 1280x960 px
+- 内容: 【1c 頭の真横・最有力】11歳メスの短毛キジトラ。頭部左側面（顔は左）。ほぼ真横・目の高さ。耳・鼻先・あご・首まで入る。背景は緑のぼかしで輪郭が取りやすい。1280px。
+
+## photos/head/head_profile_left_tabby_darkbg.jpg
+- 出典ページ: https://commons.wikimedia.org/wiki/File:Headshot_of_cat.jpg
+- 元ファイル: https://upload.wikimedia.org/wikipedia/commons/d/d8/Headshot_of_cat.jpg
+- 作者: Pavelsirotin
+- ライセンス: CC BY-SA 3.0
+- 保存サイズ: 1280x1280 px
+- 内容: 【1c 頭の真横】成猫の短毛キジトラ、頭部左側面（顔は左）。ほぼ真横、わずかに見下ろし。両耳が見える（奥の耳が少し見える＝完全な真横から数度ずれ）。暗い背景。1280px。
+
+## photos/head/detail_eye_eyelid_closeup.jpg
+- 出典ページ: https://commons.wikimedia.org/wiki/File:Eye_Cat.JPG
+- 元ファイル: https://upload.wikimedia.org/wikipedia/commons/c/c9/Eye_Cat.JPG
+- 作者: Elberth 00001939
+- ライセンス: CC BY-SA 4.0
+- 保存サイズ: 1280x960 px
+- 内容: 【3 目のまわりの細部】目の大写し（斜め横から）。まぶたの縁・目頭（瞬膜のあたり）・目のまわりの毛流れがわかる。1280px。
+
+## photos/head/detail_eye_muzzle_profile_closeup.jpg
+- 出典ページ: https://commons.wikimedia.org/wiki/File:Brown_tabby_shorthair_-_6.jpg
+- 元ファイル: https://upload.wikimedia.org/wikipedia/commons/a/a3/Brown_tabby_shorthair_-_6.jpg
+- 作者: Treekangaroosandlions 2
+- ライセンス: CC BY-SA 4.0
+- 保存サイズ: 1280x960 px
+- 内容: 【3 目・鼻・ひげの細部】短毛キジトラの横顔大写し（右向き）。目の形、鼻先（鼻鏡）、ひげの生え際（ウィスカーパッド）がわかる。耳は切れている。1280px。
 

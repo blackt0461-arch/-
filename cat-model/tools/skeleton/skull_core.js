@@ -120,3 +120,88 @@ export function buildCranium(Q, AX) {
   );
   return { skull, wCore, wOut, top, base, archMid };
 }
+
+// ---- 下あごと歯（解剖書の図 36 と 40 から） ----
+function polyDist(px, py, V) {
+  let d = (px - V[0][0]) ** 2 + (py - V[0][1]) ** 2, s = 1;
+  for (let i = 0, j = V.length - 1; i < V.length; j = i, i++) {
+    const ex = V[j][0] - V[i][0], ey = V[j][1] - V[i][1], wx = px - V[i][0], wy = py - V[i][1];
+    const t = Math.max(0, Math.min(1, (wx * ex + wy * ey) / (ex * ex + ey * ey || 1)));
+    d = Math.min(d, (wx - ex * t) ** 2 + (wy - ey * t) ** 2);
+    const c1 = py >= V[i][1], c2 = py < V[j][1], c3 = ex * wy > ey * wx;
+    if ((c1 && c2 && c3) || (!c1 && !c2 && !c3)) s = -s;
+  }
+  return s * Math.sqrt(d);
+}
+
+export function buildJaw(Q, AX) {
+  const M = SKULL_DATA.mandible, T = Object.fromEntries(Object.entries(M.teeth).map(([k, v]) => [k, rot(v)]));
+  const poly = M.poly.map(rot);
+  const [u, v, w] = AX, O = Q(0, 0, 0);
+  const cond = T.condyle;
+  // 下あごの左半分がのる面：枝（後ろ）は外側、体（前）は前へ行くほど内側へ寄る
+  const C_RAMUS = 16.8, C_SYM = 2.6, A_BEND = 40, A_SYM = T.LI_base[0];
+  const c0 = (a) => (a <= A_BEND ? C_RAMUS : C_RAMUS + (C_SYM - C_RAMUS) * Math.pow((a - A_BEND) / (A_SYM - A_BEND), 0.9));
+  // 厚み（半分）：体は太く、筋突起はうすい板
+  const half = (a, b) => (a > 34 ? 2.3 - Math.max(0, b - 0) * 0.15 : b > 1 ? 0.8 : 1.4);
+  const plateShape = {
+    f: (x, y, z) => {
+      const px = x - O[0], py = y - O[1], pz = z - O[2];
+      const a = px * u[0] + py * u[1] + pz * u[2], b = px * v[0] + py * v[1] + pz * v[2], c = px * w[0] + py * w[1] + pz * w[2];
+      const t = Math.max(0.6, half(a, b));
+      const r = Math.min(t * 0.9, 1.0);
+      const dx = polyDist(a, b, poly) + r, dy = Math.abs(c - c0(a)) - t + r;
+      return Math.min(Math.max(dx, dy), 0) + Math.hypot(Math.max(dx, 0), Math.max(dy, 0)) - r;
+    },
+    lo: [O[0] - 30, O[1] - 30, O[2] - 10], hi: [O[0] + 30, O[1] + 30, O[2] + 100],
+  };
+  const condC = c0(cond[0]);
+  const mand = smoothUnion(1.0,
+    plateShape,
+    cone(Q(cond[0], cond[1], condC - 4.2), Q(cond[0], cond[1], condC + 4.4), 2.3, 2.3),                     // 下顎頭（横長の円柱）
+    ellipsoid(Q(A_SYM - 1.5, T.LI_base[1] - 4, C_SYM - 0.8), [3, 4.2, 1.4], AX),                             // 下顎結合
+  );
+  const mandible = smoothSubtract(0.6, mand,
+    ellipsoid(Q(31, -2, C_RAMUS + 2.6), [7, 6, 1.4], AX),                                                    // 咬筋窩
+    cone(Q(70, T.LC_base[1] - 5, c0(70) + 3), Q(70, T.LC_base[1] - 5, c0(70) - 3), 0.6, 0.6),               // オトガイ孔
+  );
+
+  // 歯の形
+  const tooth = (base, tip, r, root, ratio = 0.75) => {
+    const dir = norm3(sub3(tip, base)), rootEnd = sub3(base, mul3(dir, root));
+    return smoothUnion(0.5, cone(rootEnd, base, r * 0.55, r, { dir: w, ratio }), cone(base, tip, r, 0.18, { dir: w, ratio }));
+  };
+  const blade = (a0, a1, bBase, tips, c, up, width = 1.7) => {
+    const parts = [ellipsoid(Q((a0 + a1) / 2, bBase + up * 0.6, c), [(a1 - a0) / 2, 1.4, width], AX)];
+    for (const [ta, tb, r] of tips) parts.push(cone(Q(ta, bBase + up * 0.6, c), Q(ta, tb, c), r, 0.25, { dir: w, ratio: 0.55 }));
+    for (const ra of [a0 + (a1 - a0) * 0.25, a0 + (a1 - a0) * 0.75]) parts.push(cone(Q(ra, bBase, c), Q(ra, bBase - up * 5, c), 1.2, 0.5));
+    return smoothUnion(0.7, ...parts);
+  };
+  const Ld = L;
+  const it = Ld.incisor_tip, cr = Ld.canine_root, ct = Ld.canine_tip;
+  const baseU = (a) => sampler(SKULL_DATA.base.map(rot))(a);   // 上の歯ぐきの線
+  const upper = [
+    { id: 'UI1', ja: '上顎第1切歯', shape: tooth(Q(it[0] - 0.5, baseU(it[0] - 0.5), 1.2), Q(it[0], it[1], 1.2), 0.75, 4) },
+    { id: 'UI2', ja: '上顎第2切歯', shape: tooth(Q(it[0] - 1.0, baseU(it[0] - 1), 3.0), Q(it[0] - 0.6, it[1] - 0.2, 3.1), 0.85, 4) },
+    { id: 'UI3', ja: '上顎第3切歯', shape: tooth(Q(it[0] - 2.2, baseU(it[0] - 2.2), 5.2), Q(it[0] - 2.0, it[1] - 1.2, 5.4), 1.15, 5) },
+    { id: 'UC', ja: '上顎犬歯', shape: smoothUnion(0.6, tooth(Q(cr[0], cr[1], 8.6), Q((cr[0] + ct[0]) / 2, (cr[1] + ct[1]) / 2, 8.9), 2.3, 9), cone(Q((cr[0] + ct[0]) / 2, (cr[1] + ct[1]) / 2, 8.9), Q(ct[0], ct[1], 9.1), 1.8, 0.2, { dir: w, ratio: 0.75 })) },
+    { id: 'UP2', ja: '上顎第2前臼歯', shape: tooth(Q(Ld.p2[0], baseU(Ld.p2[0]), 11), Q(Ld.p2[0], Ld.p2[1] - 1.2, 11), 0.9, 3) },
+    { id: 'UP3', ja: '上顎第3前臼歯', shape: blade(Ld.p3_tip[0] - 3.4, Ld.p3_tip[0] + 3.2, baseU(Ld.p3_tip[0]), [[Ld.p3_tip[0] - 2.4, baseU(Ld.p3_tip[0]) - 2.2, 1.0], [Ld.p3_tip[0], Ld.p3_tip[1], 1.7], [Ld.p3_tip[0] + 2.4, baseU(Ld.p3_tip[0]) - 2.2, 1.0]], 13.0, -1) },
+    { id: 'UP4', ja: '上顎第4前臼歯（裂肉歯）', shape: smoothUnion(0.6, blade(Ld.p4_back[0], Ld.p4_front[0], baseU(Ld.p4_tip[0]), [[Ld.p4_front[0] - 1, baseU(Ld.p4_front[0]) - 3, 1.2], [Ld.p4_tip[0], Ld.p4_tip[1], 2.0], [Ld.p4_back[0] + 2, Ld.p4_tip[1] + 1.4, 1.7]], 15.5, -1, 2.2), cone(Q(Ld.p4_front[0] - 2, baseU(Ld.p4_front[0]), 12.5), Q(Ld.p4_front[0] - 2, baseU(Ld.p4_front[0]) - 2.4, 12.6), 1.5, 0.4)) },
+    { id: 'UM1', ja: '上顎第1後臼歯', shape: smoothUnion(0.5, ellipsoid(Q(Ld.m1[0], baseU(Ld.m1[0]) - 0.6, 12.8), [1.1, 1.2, 2.6], AX), cone(Q(Ld.m1[0], baseU(Ld.m1[0]) - 0.6, 12.8), Q(Ld.m1[0], baseU(Ld.m1[0]) + 3, 12.8), 0.9, 0.5)) },
+  ];
+  const lc = (a) => c0(a) - 0.3;
+  const lower = [
+    { id: 'LI1', ja: '下顎第1切歯', shape: tooth(Q(T.LI_base[0], T.LI_base[1], 1.1), Q(T.LI1_tip[0], T.LI1_tip[1], 1.1), 0.65, 4) },
+    { id: 'LI2', ja: '下顎第2切歯', shape: tooth(Q(T.LI_base[0] - 0.4, T.LI_base[1], 2.6), Q(T.LI2_tip[0], T.LI2_tip[1], 2.7), 0.7, 4) },
+    { id: 'LI3', ja: '下顎第3切歯', shape: tooth(Q(T.LI_base[0] - 1.0, T.LI_base[1], 4.1), Q(T.LI3_tip[0], T.LI3_tip[1], 4.2), 0.8, 4) },
+    { id: 'LC', ja: '下顎犬歯', shape: smoothUnion(0.6, tooth(Q(T.LC_base[0], T.LC_base[1], 6.6), Q((T.LC_base[0] + T.LC_tip[0]) / 2, (T.LC_base[1] + T.LC_tip[1]) / 2, 6.8), 2.1, 9), cone(Q((T.LC_base[0] + T.LC_tip[0]) / 2, (T.LC_base[1] + T.LC_tip[1]) / 2, 6.8), Q(T.LC_tip[0], T.LC_tip[1], 7.0), 1.6, 0.2, { dir: w, ratio: 0.75 })) },
+    { id: 'LP3', ja: '下顎第3前臼歯', shape: blade(T.LP3_base[0] - 3.2, T.LP3_base[0] + 3.2, T.LP3_base[1], [[T.LP3_tip[0] - 2.3, T.LP3_base[1] + 1.8, 1.0], [T.LP3_tip[0], T.LP3_tip[1], 1.6], [T.LP3_tip[0] + 2.4, T.LP3_base[1] + 1.6, 0.9]], lc(T.LP3_base[0]), 1) },
+    { id: 'LP4', ja: '下顎第4前臼歯', shape: blade(T.LP4_base[0] - 3.8, T.LP4_base[0] + 3.8, T.LP4_base[1], [[T.LP4_tip[0] - 2.7, T.LP4_base[1] + 2.0, 1.1], [T.LP4_tip[0], T.LP4_tip[1], 1.8], [T.LP4_tip[0] + 2.8, T.LP4_base[1] + 1.8, 1.0]], lc(T.LP4_base[0]), 1) },
+    { id: 'LM1', ja: '下顎第1後臼歯（裂肉歯）', shape: blade(T.LM1_tip_a[0] - 1.8, T.LM1_tip_b[0] + 1.6, T.LM1_base[1], [[T.LM1_tip_a[0], T.LM1_tip_a[1], 1.8], [T.LM1_tip_b[0], T.LM1_tip_b[1], 1.9]], lc(T.LM1_base[0]), 1, 2.0) },
+  ];
+  return { mandible, condyle: (s) => Q(cond[0], cond[1], s * condC), upper, lower, c0 };
+}
+const sub3 = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+const mul3 = (a, k) => [a[0] * k, a[1] * k, a[2] * k];
+const norm3 = (a) => { const l = Math.hypot(...a) || 1; return [a[0] / l, a[1] / l, a[2] / l]; };
