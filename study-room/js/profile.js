@@ -48,7 +48,7 @@ export function radarSVG(axes, { size = 240, color = '#f2b84b' } = {}) {
   const labels = axes.map((a, i) => {
     const [x, y] = pt(i, R + size * 0.12);
     return `<text x="${x.toFixed(1)}" y="${(y - 4).toFixed(1)}" text-anchor="middle" font-size="${size * 0.055}" font-weight="700" fill="currentColor">${a.label}</text>
-      <text x="${x.toFixed(1)}" y="${(y + size * 0.055).toFixed(1)}" text-anchor="middle" font-size="${size * 0.05}" fill="currentColor" fill-opacity=".75">${a.rank} ${a.value}</text>`;
+      <text x="${x.toFixed(1)}" y="${(y + size * 0.055).toFixed(1)}" text-anchor="middle" font-size="${size * 0.05}" fill="currentColor" fill-opacity=".75">${a.rank}${a.hideValue ? '' : ' ' + a.value}</text>`;
   }).join('');
   return `<svg class="radar" viewBox="0 0 ${size} ${size}" role="img" aria-label="${axes.map(a => `${a.label} ${a.value}`).join('、')}">${grid}${spokes}
     <polygon points="${val}" fill="${color}" fill-opacity=".35" stroke="${color}" stroke-width="2.5" stroke-linejoin="round"/>

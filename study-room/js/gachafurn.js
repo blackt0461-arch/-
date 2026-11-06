@@ -3688,6 +3688,64 @@ function bubbleChair(s) {
   return g;
 }
 
+// ---------------- 期間限定イベント：ウィンターフェス（1.12.0）。ガチャには出ず、イベントのごほうびでもらう ----------------
+const NEEDLE = () => cm('xneedle', () => std({ color: '#1d5a34', roughness: 0.85 }));
+const SNOW = () => cm('xsnow', () => std({ color: '#f3f6fa', roughness: 0.92 }));
+const CONE = (r, h, seg = 18) => cg(`xcone${r4(r)},${r4(h)},${seg}`, () => new THREE.ConeGeometry(r, h, seg, 1));
+// クリスマスツリー（オーナメントがまたたく）
+function xmasTree(s) {
+  const g = new THREE.Group();
+  mk(g, LA(smooth([[0.001, 0], [0.2, 0], [0.24, 0.05], [0.24, 0.28], [0.26, 0.3], [0.001, 0.3]], 10), 24), cm('xpot', () => std({ color: '#8e1f24', roughness: 0.5 })), 0, 0, 0);
+  rod(g, V3(0, 0.28, 0), V3(0, 0.5, 0), 0.05, cm('xtrunk', () => std({ color: '#5b3a22', roughness: 0.9 })));
+  const tiers = [[0.62, 0.62, 0.45], [0.5, 0.56, 0.82], [0.38, 0.5, 1.15], [0.24, 0.42, 1.45]];
+  for (const [r, h, y] of tiers) mk(g, CONE(r, h), NEEDLE(), 0, y + h / 2, 0);
+  // オーナメント（らせん）
+  const cols = ['#e23b3b', '#f2c66d', '#3b7be2', '#f5f5f5', '#e27b3b'], mats = [];
+  for (let i = 0; i < 34; i++) {
+    const t = i / 34, y = 0.55 + t * 1.25, rad = (0.6 - t * 0.48) * 0.92, a = t * TAU * 4.2;
+    const c = cols[i % cols.length], m = phys({ color: c, emissive: c, emissiveIntensity: 0.4, metalness: 0.5, roughness: 0.2 });
+    m.userData.ph = i * 1.37; mats.push(m);
+    mk(g, S(0.032, 12, 8), m, Math.cos(a) * rad, y, Math.sin(a) * rad).castShadow = false;
+  }
+  const star = mk(g, EX('xstar', starShape(0.11, 0.045), 0.03, 0.006, 4), cm('xstarm', () => phys({ color: '#ffd76a', emissive: '#ffbb33', emissiveIntensity: 1.2, metalness: 0.8, roughness: 0.2 })), 0, 1.95, 0);
+  star.castShadow = false;
+  addTick(g, t => { for (const m of mats) m.emissiveIntensity = 0.25 + 1.1 * Math.max(0, Math.sin(t * 1.6 + m.userData.ph)); star.rotation.y = Math.sin(t * 0.5) * 0.4; });
+  setLight(g, 1.3, 0.9, '#ffcf8a');
+  return g;
+}
+// 雪だるま（マフラーとバケツの帽子）
+function snowman(s) {
+  const g = new THREE.Group();
+  mk(g, S(0.28, 24, 16), SNOW(), 0, 0.26, 0).scale.y = 0.92;
+  mk(g, S(0.2, 24, 16), SNOW(), 0, 0.66, 0);
+  mk(g, S(0.145, 24, 16), SNOW(), 0, 0.95, 0);
+  const coal = cm('xcoal', () => std({ color: '#151515', roughness: 0.6 }));
+  for (const sx of [-1, 1]) mk(g, S(0.018, 10, 8), coal, sx * 0.05, 0.99, 0.13);
+  for (const y of [0.58, 0.68, 0.78]) mk(g, S(0.02, 10, 8), coal, 0, y, 0.19 - Math.abs(y - 0.68) * 0.4);
+  mk(g, CONE(0.022, 0.13, 10), cm('xcarrot', () => std({ color: '#f07a1c', roughness: 0.6 })), 0, 0.95, 0.19, PI / 2, 0, 0);
+  const red = cm('xscarf', () => std({ color: '#c8262c', roughness: 0.85 }));
+  mk(g, T(0.15, 0.035, 8, 28), red, 0, 0.82, 0, PI / 2, 0, 0);
+  mk(g, B(0.07, 0.2, 0.025, 0.008), red, 0.09, 0.72, 0.13, 0, 0, 0.25);
+  mk(g, C(0.1, 0.12, 0.14, 20), cm('xbucket', () => std({ color: '#2f3b55', roughness: 0.4, metalness: 0.4 })), 0, 1.12, 0, -0.12, 0, 0.1);
+  for (const sx of [-1, 1]) rod(g, V3(sx * 0.17, 0.7, 0), V3(sx * 0.42, 0.88, 0.04), 0.012, cm('xtwig', () => std({ color: '#4a2f1c', roughness: 0.9 })), 0.006);
+  return g;
+}
+// プレゼントの山（リボンつき）
+function giftPile(s) {
+  const g = new THREE.Group();
+  const boxes = [[-0.18, 0, 0.34, 0.3, 0.3, '#c8262c', '#f2c66d', 0.2], [0.2, 0, 0.3, 0.22, 0.26, '#1f6b45', '#f5f5f5', -0.3], [0.0, 0.3, 0.24, 0.2, 0.22, '#2f5fb8', '#f2c66d', 0.5], [0.05, 0, 0.2, 0.16, 0.2, '#f2c66d', '#c8262c', 0.1]];
+  boxes.forEach(([x, y0, w, h, d, c, rc, ry], i) => {
+    const z = i === 3 ? 0.24 : 0;
+    const box = new THREE.Group(); box.position.set(x, y0, z); box.rotation.y = ry; g.add(box);
+    const bm = cm('xbox' + c, () => std({ color: c, roughness: 0.55 })), rm = cm('xrib' + rc, () => phys({ color: rc, roughness: 0.3, metalness: 0.3, sheen: 0.5 }));
+    mk(box, B(w, h, d, 0.006), bm, 0, h / 2, 0);
+    mk(box, B(w + 0.004, h + 0.004, 0.04, 0.002), rm, 0, h / 2, 0);
+    mk(box, B(0.04, h + 0.004, d + 0.004, 0.002), rm, 0, h / 2, 0);
+    for (const sx of [-1, 1]) mk(box, T(0.035, 0.01, 6, 16), rm, sx * 0.03, h + 0.025, 0, 0, PI / 2, sx * 0.5);
+  });
+  return g;
+}
+
 // =====================================================================
 // 一覧と入口
 // =====================================================================
@@ -3718,6 +3776,8 @@ const BUILDERS = {
   // ★5 限定：ゴシック
   gothChandelier: [gothChandelier, 'ceiling'], roseWindow: [roseWindow, 'wall'], gothThrone: [gothThrone, 'floor'], candleTree: [candleTree, 'floor'], gothCabinet: [gothCabinet, 'floor'],
   // ★5 限定：和の雅
+  // 期間限定イベント（ウィンターフェス）
+  xmasTree: [xmasTree, 'floor'], snowman: [snowman, 'floor'], giftPile: [giftPile, 'floor'],
   sakuraTree: [sakuraTree, 'floor'], byobu: [byobu, 'floor'], andon: [andon, 'floor'], tsukubai: [tsukubai, 'floor'], lacquerTable: [lacquerTable, 'floor'],
 };
 // 種類 → 置き方

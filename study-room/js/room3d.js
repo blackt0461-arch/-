@@ -14,7 +14,7 @@ import { itemById, STARTER } from './items.js';
 import { buildProc } from './procfurn.js';
 import { buildGacha } from './gachafurn.js';
 import { gachaSpec } from './gacha.js';
-import { loadTex, texturedMaterial, loadModel, fitMaterial, shadowAll } from './loaders.js';
+import { loadTex, texturedMaterial, loadModel, fitMaterial, shadowAll, isLite } from './loaders.js';
 import { buildExterior } from './exterior.js';
 
 // 部屋の大きさ・形は部屋ごとにちがう（rooms.js の roomShape）。this.sh に入れて使う
@@ -72,11 +72,32 @@ export function moodNow(d = new Date()) {
 }
 const MAX_LIGHTS = 4;
 
+// 部屋を出る・作りなおす時に、前の物のメモリ（形・材質・絵）を返す（1.12.0）。
+// 前は返していなかったため、部屋を行き来するたびにメモリがたまり、スマホでアプリが強制終了されることがあった。
+// three.js は、返した物をまた使うと自動で作りなおすので、同じ家具が次の部屋にあっても大丈夫。
+function freeTree(root) {
+  if (!root) return;
+  const mats = new Set(), geos = new Set();
+  root.traverse(o => {
+    if (o.geometry) geos.add(o.geometry);
+    const m = o.material; if (m) (Array.isArray(m) ? m : [m]).forEach(x => mats.add(x));
+  });
+  for (const g of geos) g.dispose?.();
+  for (const m of mats) {
+    for (const k of Object.keys(m)) { const v = m[k]; if (v && v.isTexture) v.dispose(); }
+    m.uniforms && Object.values(m.uniforms).forEach(u => { if (u?.value?.isTexture) u.value.dispose(); });
+    m.dispose?.();
+  }
+}
+function clearFree(group) { const kids = [...group.children]; group.clear(); for (const k of kids) freeTree(k); }
 export class Room3D {
   constructor(canvas) {
     this.canvas = canvas;
     const r = this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
-    r.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    // 画質「かるい」では、画面のきめを少し落としてメモリを減らす（1.12.0）
+    r.setPixelRatio(Math.min(window.devicePixelRatio || 1, isLite() ? 1.5 : 2));
+    // 絵を描くしくみ（WebGL）がこわれた時（メモリが足りない時など）は、記録を保存して読みこみなおす
+    canvas.addEventListener('webglcontextlost', (e) => { e.preventDefault(); this.onContextLost && this.onContextLost(); });
     r.outputColorSpace = THREE.SRGBColorSpace;
     r.toneMapping = THREE.ACESFilmicToneMapping;
     r.shadowMap.enabled = true;
@@ -103,7 +124,7 @@ export class Room3D {
     this.sun.castShadow = true;
     const sc = this.sun.shadow.camera;
     sc.left = -15; sc.right = 15; sc.top = 15; sc.bottom = -15; sc.near = 0.5; sc.far = 80;
-    this.sun.shadow.mapSize.set(2048, 2048);
+    this.sun.shadow.mapSize.set(isLite() ? 1024 : 2048, isLite() ? 1024 : 2048);
     this.sun.shadow.bias = -0.0004;
     this.sun.shadow.normalBias = 0.03;
     this.sun.shadow.radius = 5;
@@ -172,9 +193,11 @@ export class Room3D {
       this.itemDrag = null;
       if (this.editMode && pts.size === 1 && this.selected) {
         const hit = this.pickItem(e.clientX, e.clientY);
-        if (hit && hit.userData.uid === this.selected) {
-          this.itemDrag = { moved: false };
-          this.lastValid = { ...(this.lastValid || {}), [hit.userData.uid]: { ...hit.userData.p } };
+        // 選んでいる家具の上、または画面でそのまわり（指1本ぶん）なら、つかむ。小さい物・遠い物もつかみやすく（1.12.0）
+        if ((hit && hit.userData.uid === this.selected) || (!hit && this.nearSelected(e.clientX, e.clientY))) {
+          const so = this.objByUid?.[this.selected];
+          this.itemDrag = { moved: false, grab: this.grabOffset(e.clientX, e.clientY) };
+          if (so) this.lastValid = { ...(this.lastValid || {}), [so.userData.uid]: { ...so.userData.p } };
         }
       }
       if (pts.size === 2) {
@@ -387,14 +410,19 @@ export class Room3D {
     }
     if (this.exterior?.update) this.exterior.update(t);
     // 何も動いていない時は、描きかえを1秒に30回に減らす（スマホが熱くならない・電池が長もち）
+    let appearing = false;
     const busy = this.dragging || this.targetLook || this.walk || this.itemDrag || this.preview ||
       Math.abs(this.vyaw) + Math.abs(this.vpitch) > 1e-5 ||
       (this.marker && this.marker.userData.life > 0) || this.rain?.visible ||
-      this.items.children.some(o => o.userData.appear !== undefined && o.userData.appear < 1);
+      (appearing = this.items.children.some(o => o.userData.appear !== undefined && o.userData.appear < 1));
     this._idleAcc = (this._idleAcc || 0) + dt;
     if (!busy && this._idleAcc < 1 / 30 - 0.002) return;
     const frameDt = this._idleAcc; this._idleAcc = 0;
-    this.renderer.shadowMap.needsUpdate = true;
+    // 影は、家具が動いた・増えた時だけ描きなおす（向きを変えるだけなら同じ影でよい。1.12.0 で軽く）。念のため1秒ごとにも
+    const sk = `${this.items.children.length}|${this.shell?.uuid}|${this.lightsOff ? 1 : 0}`;
+    if (this.itemDrag || this.preview || appearing || sk !== this._shadowKey || t - (this._shadowAt || 0) > 1) {
+      this.renderer.shadowMap.needsUpdate = true; this._shadowKey = sk; this._shadowAt = t;
+    }
     if (this.composer && this.effectsOn !== false) {
       this.grade.uniforms.uTime.value = t;
       this.composer.render(frameDt);
@@ -531,8 +559,8 @@ export class Room3D {
     return id ? itemById(id) : null;
   }
   async placeAll(token = this.token) {
-    this.items.clear();
-    this.blobs?.clear();
+    clearFree(this.items);
+    if (this.blobs) clearFree(this.blobs);
     this.lamps = [];
     this.objByUid = {};
     const placed = this.st.placed || [];
@@ -1285,6 +1313,69 @@ export class Room3D {
     this.onSelect && this.onSelect(this.selected);
   }
   selectedPlacement() { return this.selected ? this.objByUid?.[this.selected]?.userData.p : null; }
+  // 画面の上での、家具の四角い範囲（指1本ぶん広げる）に入っているか
+  screenRect(o) {
+    const bb = this.boxOf(o), r = this.canvas.getBoundingClientRect();
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity, front = false;
+    for (const x of [bb.min.x, bb.max.x]) for (const y of [bb.min.y, bb.max.y]) for (const z of [bb.min.z, bb.max.z]) {
+      const v = new THREE.Vector3(x, y, z).project(this.camera);
+      if (v.z < 1) front = true;
+      const sx = r.left + (v.x + 1) / 2 * r.width, sy = r.top + (1 - v.y) / 2 * r.height;
+      x0 = Math.min(x0, sx); x1 = Math.max(x1, sx); y0 = Math.min(y0, sy); y1 = Math.max(y1, sy);
+    }
+    return front ? { x0, y0, x1, y1 } : null;
+  }
+  nearSelected(cx, cy, pad = 28) {
+    const o = this.selected && this.objByUid?.[this.selected];
+    const q = o && this.screenRect(o);
+    return !!q && cx > q.x0 - pad && cx < q.x1 + pad && cy > q.y0 - pad && cy < q.y1 + pad;
+  }
+  // つかんだ所と家具の中心のずれ（床・天井の物）。指の下に家具がついてくるように
+  grabOffset(cx, cy) {
+    const o = this.selected && this.objByUid?.[this.selected], p = o?.userData.p, item = o?.userData.item;
+    if (!o || !item || item.place === 'wall' || p.on != null) return null;
+    const planeY = item.place === 'ceiling' ? this.boxOf(o).max.y : 0;
+    const hit = this.ray(cx, cy).ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), -planeY), new THREE.Vector3());
+    if (!hit || hit.distanceTo(this.camera.position) > 30) return null;
+    const dx = hit.x - (p.x || 0), dz = hit.z - (p.z || 0);
+    return Math.hypot(dx, dz) < 1.5 ? { dx, dz } : null;
+  }
+  // 矢印ボタンで少しずつ動かす（1.12.0）。right / up は画面の向き（右・奥（壁の物は上））。step はメートル
+  nudgeSelected(right, up, step = 0.05) {
+    const o = this.selected && this.objByUid?.[this.selected];
+    if (!o) return false;
+    const p = o.userData.p, item = o.userData.item, before = { ...p };
+    if (item.place === 'wall') {
+      const seg = this.sh.walls.find(w => w.id === p.wall);
+      // 壁の右向き：カメラから見て右が、壁の a の増える向きか
+      const camRight = new THREE.Vector3(1, 0, 0).applyQuaternion(this.camera.quaternion);
+      const along = seg?.axis === 'z' ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 0, 1);
+      const sgn = camRight.dot(along) >= 0 ? 1 : -1;
+      p.a = (p.a || 0) + right * step * sgn;
+      p.y = (p.y || 1.5) + up * step;
+    } else {
+      const f = new THREE.Vector3(0, 0, -1).applyQuaternion(this.camera.quaternion); f.y = 0;
+      if (f.lengthSq() < 1e-6) f.set(0, 0, -1); f.normalize();
+      const rt = new THREE.Vector3(-f.z, 0, f.x);
+      p.x = (p.x || 0) + (rt.x * right + f.x * up) * step;
+      p.z = (p.z || 0) + (rt.z * right + f.z * up) * step;
+      // 棚・テーブルの上の物は、その上からはみ出さない
+      const sup = p.on != null && this.objByUid?.[p.on];
+      if (sup) { const sb = this.boxOf(sup); if (p.x < sb.min.x + 0.03 || p.x > sb.max.x - 0.03 || p.z < sb.min.z + 0.03 || p.z > sb.max.z - 0.03) { Object.assign(p, before); return false; } }
+    }
+    this.mountPlaced(o, p);
+    if (!this.checkPlacement(o)) { Object.assign(p, before); if (before.on == null) { delete p.on; } this.mountPlaced(o, p); this.selBox && this.selBox.update(); return false; }
+    if (item.place !== 'wall') this.moveRiders(p.uid, p.x - before.x, p.z - before.z);
+    this.updateBlob(o);
+    this.selBox && this.selBox.update();
+    return true;
+  }
+  // 選んだ家具のほうを向く（一覧からえらんだ時）
+  focusSelected() {
+    const o = this.selected && this.objByUid?.[this.selected];
+    if (!o || this.topView) return;
+    this.lookAt(this.boxOf(o).getCenter(new THREE.Vector3()));
+  }
   // 指の位置まで、選んでいる家具を動かす
   dragSelectedTo(cx, cy) {
     const o = this.objByUid?.[this.selected];
@@ -1333,9 +1424,12 @@ export class Room3D {
         // 棚にのっている物を、棚の段と段の間（前の板など）の上で動かしているあいだは、床に落とさずその場で待つ
         return;
       } else {
-        const hit = ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), new THREE.Vector3());
-        if (!hit) return;
-        p.x = hit.x; p.z = hit.z;
+        // 天井の物は天井の高さ、ほかは床の高さで、指の光線と交わる所（1.12.0：天井の物は前は床で計算していて、見上げると動かなかった）
+        const planeY = item.place === 'ceiling' ? this.boxOf(o).max.y : 0;
+        const hit = ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), -planeY), new THREE.Vector3());
+        if (!hit || hit.distanceTo(ray.origin) > 30) return;
+        const g = this.itemDrag?.grab;
+        p.x = hit.x - (g?.dx || 0); p.z = hit.z - (g?.dz || 0);
       }
     }
     this.mountPlaced(o, p);
@@ -1391,9 +1485,9 @@ export class Room3D {
   }
   removeObject(uid) {
     const o = this.objByUid?.[uid];
-    if (o) this.items.remove(o);
+    if (o) { this.items.remove(o); freeTree(o); }
     const b = this.blobs?.children.find(x => x.userData.uid === uid);
-    if (b) this.blobs.remove(b);
+    if (b) { this.blobs.remove(b); freeTree(b); }
     delete this.objByUid[uid];
     if (this.selected === uid) this.select(null);
     this.updateLights();
@@ -1608,7 +1702,7 @@ export class Room3D {
     const wallV = { name: darkWall ? '黒' : '' };
 
     const g = this.shell;
-    g.clear();
+    clearFree(g);
     const box = (w, h, d, x, y, z, mat, fw, fh) => {
       const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), fitMaterial(mat, fw ?? w, fh ?? h));
       m.position.set(x, y, z);
@@ -1747,7 +1841,7 @@ export class Room3D {
       const mood = this.mood;
       buildExterior(mood, level, home).then((ext) => {
         if (this.extKey !== key) return;
-        if (this.exterior) this.scene.remove(this.exterior.world);
+        if (this.exterior) { this.scene.remove(this.exterior.world); freeTree(this.exterior.world); }
         this.exterior = ext;
         this.scene.add(ext.world);
         placeExt();
@@ -1830,7 +1924,7 @@ export class Room3D {
   }
 
   makeRays() {
-    this.fx.clear();
+    clearFree(this.fx);
     const d = this.sunDir;
     const HD = this.sh.hd;
     const WINDOW = this.sh.windows[0];

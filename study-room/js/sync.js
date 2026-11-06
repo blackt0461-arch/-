@@ -25,7 +25,9 @@ function ahead(a, b) { for (let i = 0; i < a.length; i++) { if (a[i] !== b[i]) r
 export async function adopt(cloudData) {
   const local = S.getState();
   ready = true;
-  if (hasData(cloudData) && !ahead(progress(local), progress(cloudData))) {
+  // 管理者が「元に戻す」をした記録（restoredAt が端末より新しい）は、進み具合にかかわらず使う（1.12.0）
+  const restored = hasData(cloudData) && (cloudData.restoredAt || 0) > (local.restoredAt || 0);
+  if (hasData(cloudData) && (restored || !ahead(progress(local), progress(cloudData)))) {
     // 置きかえる前に、端末の記録を1つとっておく（もしもの時に戻せるように）
     try { if (local.savedAt) localStorage.setItem('studyroom.backup.' + (Auth.currentUser()?.id || 'x'), JSON.stringify(local)); } catch (e) { /* 入りきらない時は、とっておかない */ }
     const changed = (local.savedAt || 0) !== (cloudData.savedAt || 0);
@@ -74,6 +76,7 @@ export async function push(keepalive = false) {
   } catch (e) {
     dirty = true;
     if (e.code === 'bad_token') onExpired && onExpired();
+    else if (e.code === 'restored') { dirty = false; sending = false; await pull(); return; } // 元に戻された記録を読みなおす
     else status('offline');
   } finally {
     sending = false;

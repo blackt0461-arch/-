@@ -122,12 +122,23 @@ export function weekKey(d = new Date()) {
   const back = (t.getDay() + 6) % 7; // 月曜=0
   return addDays(dayKey(d), -back);
 }
-function addDays(key, n) {
+export function addDays(key, n) {
   const [y, m, d] = key.split('-').map(Number);
   const t = new Date(y, m - 1, d + n);
   return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
 }
 
+// --- 毎日の記録（勉強レポート用。1.12.0）---
+// log['YYYY-MM-DD'] = { n: 解いた数, c: 正解, pz: パズルのクリア, u: { '科目|単元': [解いた, 正解] } }。400日より古い日は消す
+export function logDay({ sid = null, unit = '', ok = false, pz = false } = {}) {
+  const log = state.log || (state.log = {}), d = dayKey();
+  const e = log[d] || (log[d] = { n: 0, c: 0, pz: 0, u: {} });
+  if (pz) e.pz++;
+  if (sid) { e.n++; if (ok) e.c++; const k = `${sid}|${unit || ''}`, a = e.u[k] || (e.u[k] = [0, 0]); a[0]++; if (ok) a[1]++; }
+  const keys = Object.keys(log);
+  if (keys.length > 400) { const cut = addDays(d, -400); for (const k of keys) if (k < cut) delete log[k]; }
+}
+export function dayLog() { return state.log || {}; }
 // 連続日数：1問以上解いた日を数える
 export function markPlayedToday() {
   const today = dayKey();
@@ -171,6 +182,10 @@ export function stats(sub, problems) {
   return { waiting, mastered, seen, total: problems.length, due: reviewDue(sub, problems).length };
 }
 
+// まちがえた問題（まだ克服していない）。3回続けて正解すると克服になり、外れる（1.12.0）
+export function wrongList(sub, problems) {
+  return problems.filter(p => { const r = sub.srs[p.id]; return r && r.wrongs > 0 && !r.mastered; });
+}
 // 1セット：期限の来た復習を優先、残りを新しい問題、それでも足りなければ解いたことのある問題
 export function buildSet(sub, problems) {
   const due = shuffle(reviewDue(sub, problems));
@@ -344,6 +359,7 @@ export function addPuzzleClear(id, star, mistakes) {
   p.xp += gained;
   p.puzzleClears = (p.puzzleClears || 0) + 1;
   countToday();
+  logDay({ pz: true });
   ps.clears++; if (!mistakes) ps.perfect++;
   const openBefore = puzzleOpen(id);
   if (star > ps.best) ps.best = star;
