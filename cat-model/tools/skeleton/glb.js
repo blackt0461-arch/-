@@ -2,7 +2,7 @@
 // nodes: [{ name, parent(index|-1), translation:[m], mesh?:{positions,normals,indices}, material?, extras? }]
 // materials: [{ name, color:[r,g,b,a], roughness, metallic }]
 
-export function writeGLB(nodes, materials, sceneExtras = {}) {
+export function writeGLB(nodes, materials, sceneExtras = {}, skin = null) {
   const chunks = [];
   let byteLength = 0;
   const bufferViews = [];
@@ -42,11 +42,26 @@ export function writeGLB(nodes, materials, sceneExtras = {}) {
       bufferViews[nv].byteStride = 4;
       accessors.push({ bufferView: nv, componentType: 5120, normalized: true, count, type: 'VEC3' });
       const na = accessors.length - 1;
+      const attributes = { POSITION: pa, NORMAL: na };
+      if (m.colors) {
+        const cv = pushView(m.colors, 34962);
+        accessors.push({ bufferView: cv, componentType: 5121, normalized: true, count, type: 'VEC4' });
+        attributes.COLOR_0 = accessors.length - 1;
+      }
+      if (m.joints) {
+        const jv = pushView(m.joints, 34962);
+        accessors.push({ bufferView: jv, componentType: 5123, count, type: 'VEC4' });
+        attributes.JOINTS_0 = accessors.length - 1;
+        const wv = pushView(m.weights, 34962);
+        accessors.push({ bufferView: wv, componentType: 5126, count, type: 'VEC4' });
+        attributes.WEIGHTS_0 = accessors.length - 1;
+      }
       const ind = count < 65536 ? new Uint16Array(m.indices) : m.indices;
       const iv = pushView(ind, 34963);
       accessors.push({ bufferView: iv, componentType: count < 65536 ? 5123 : 5125, count: ind.length, type: 'SCALAR' });
-      meshes.push({ name: n.name, primitives: [{ attributes: { POSITION: pa, NORMAL: na }, indices: accessors.length - 1, material: n.material ?? 0 }] });
+      meshes.push({ name: n.name, primitives: [{ attributes, indices: accessors.length - 1, material: n.material ?? 0 }] });
       out.mesh = meshes.length - 1;
+      if (m.joints) out.skin = 0;
     }
     return out;
   });
@@ -55,6 +70,12 @@ export function writeGLB(nodes, materials, sceneExtras = {}) {
   });
   const roots = nodes.map((n, i) => (n.parent < 0 ? i : -1)).filter((i) => i >= 0);
 
+  let skins;
+  if (skin) {
+    const iv = pushView(skin.ibm, null);
+    accessors.push({ bufferView: iv, componentType: 5126, count: skin.joints.length, type: 'MAT4' });
+    skins = [{ name: 'skeleton', joints: skin.joints, inverseBindMatrices: accessors.length - 1, ...(skin.skeleton != null ? { skeleton: skin.skeleton } : {}) }];
+  }
   const json = {
     asset: { version: '2.0', generator: 'cat-model skeleton builder' },
     extensionsUsed: ['KHR_mesh_quantization'],
@@ -63,10 +84,12 @@ export function writeGLB(nodes, materials, sceneExtras = {}) {
     scenes: [{ name: 'cat', nodes: roots, extras: sceneExtras }],
     nodes: gltfNodes,
     meshes,
+    ...(skins ? { skins } : {}),
     materials: materials.map((m) => ({
       name: m.name,
       pbrMetallicRoughness: { baseColorFactor: m.color, metallicFactor: m.metallic ?? 0, roughnessFactor: m.roughness ?? 0.7 },
       ...(m.color[3] < 1 ? { alphaMode: 'BLEND' } : {}),
+      ...(m.extras ? { extras: m.extras } : {}),
       doubleSided: false,
     })),
     accessors,

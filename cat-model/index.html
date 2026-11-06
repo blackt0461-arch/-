@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>猫の骨格 確認画面</title>
+<title>猫の体 確認画面</title>
 <meta name="robots" content="noindex">
 <style>
   :root {
@@ -49,21 +49,21 @@
 </head>
 <body>
 <div id="view"></div>
-<div id="loading">骨格を読みこんでいます…</div>
+<div id="loading">体のモデルを読みこんでいます…</div>
 <div id="top" class="panel">
-  <h1>猫の骨格 確認画面</h1>
+  <h1>猫の体 確認画面</h1>
   <span class="stat" id="stat"></span>
   <button id="toggle">設定</button>
 </div>
-<div id="info" class="panel"><div class="sub">骨をタップすると名前が出ます。ドラッグで回転、ピンチ・ホイールで拡大。</div></div>
+<div id="info" class="panel"><div class="sub">骨や筋肉をタップすると名前が出ます。ドラッグで回転、ピンチ・ホイールで拡大。</div></div>
 <div id="side" class="panel">
   <h2>見る向き</h2>
   <div class="btns">
     <button data-view="side">横</button><button data-view="front">前</button><button data-view="top">上</button><button data-view="back">後ろ</button><button data-view="persp">ななめ</button>
   </div>
-  <h2>骨を名前でさがす</h2>
-  <select id="bonelist" style="width:100%;background:#2a2f36;color:var(--text);border:1px solid var(--line);border-radius:8px;padding:6px;font-size:13px"><option value="">— 骨をえらぶ —</option></select>
-  <label class="row"><input type="checkbox" id="onlysel"> えらんだ骨だけ表示</label>
+  <h2>名前でさがす</h2>
+  <select id="bonelist" style="width:100%;background:#2a2f36;color:var(--text);border:1px solid var(--line);border-radius:8px;padding:6px;font-size:13px"><option value="">— 骨・筋肉をえらぶ —</option></select>
+  <label class="row"><input type="checkbox" id="onlysel"> えらんだものだけ表示</label>
   <h2>表示する部分</h2>
   <div id="regions"></div>
   <h2>ポーズを試す</h2>
@@ -76,10 +76,15 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 const params = new URLSearchParams(location.search);
-const modelUrl = 'models/' + (params.get('model') || 'cat-skeleton.glb');
+const modelUrl = 'models/' + (params.get('model') || 'cat-anatomy.glb');
 
 const REGIONS = { skull: '頭の骨・歯', spine: '背骨', tail: 'しっぽ', thorax: '肋骨・胸骨', forelimb: '前足', hindlimb: '後ろ足' };
-const KINDS = { bone: '骨', tooth: '歯', cartilage: '軟骨', disc: '椎間板', claw: '爪' };
+const KINDS = { bone: '骨', tooth: '歯', cartilage: '軟骨', disc: '椎間板', claw: '爪', muscle: '筋肉', tendon: '腱・靱帯' };
+const LAYERS = { 1: '表層（いちばん外）', 2: '中間層', 3: '深層（骨のすぐそば）' };
+const GROUPS = { head: '頭', neck: '首', trunk: '胴', forelimb: '肩・前足', hindlimb: '腰・後ろ足', tail: 'しっぽ' };
+// 骨のノードは、筋肉の骨組み（ボーン）にもなっているので、形はその子にある
+const ownMesh = (o) => (o.isMesh ? o : o.children.find((c) => c.isMesh && !c.userData.ja));
+const nodeOf = (m) => (m.userData.ja ? m : m.parent);
 
 const view = document.getElementById('view');
 const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
@@ -164,9 +169,9 @@ function solo(ids) {
   for (const [n, o] of nodes) setOwnVisible(o, keep.has(n));
   const box = new THREE.Box3();
   for (const id of ids) {
-    const o = nodes.get(id); if (!o || !o.isMesh) continue;
-    o.geometry.computeBoundingBox();
-    box.union(o.geometry.boundingBox.clone().applyMatrix4(o.matrixWorld));
+    const o = nodes.get(id); const m = o && ownMesh(o); if (!m) continue;
+    m.geometry.computeBoundingBox();
+    box.union(m.geometry.boundingBox.clone().applyMatrix4(m.isSkinnedMesh ? new THREE.Matrix4() : m.matrixWorld));
   }
   if (box.isEmpty()) return;
   const c = box.getCenter(new THREE.Vector3()); const r = box.getSize(new THREE.Vector3()).length() * 0.5;
@@ -178,12 +183,18 @@ function solo(ids) {
   controls.update();
 }
 
+function setMuscleOpacity(a) {
+  for (const o of nodes.values()) if (o.userData.region === 'muscle') {
+    const m = ownMesh(o); m.material.transparent = a < 1; m.material.opacity = a; m.material.depthWrite = a >= 1; m.castShadow = a >= 1;
+  }
+}
+
 // 骨の一覧
 function buildList() {
   const sel = document.getElementById('bonelist');
   const groups = {};
-  for (const [n, o] of nodes) { if (!o.isMesh) continue; (groups[o.userData.region] ||= []).push([n, o]); }
-  for (const [k, label] of Object.entries(REGIONS)) {
+  for (const [n, o] of nodes) { if (!ownMesh(o)) continue; (groups[o.userData.region] ||= []).push([n, o]); }
+  for (const [k, label] of Object.entries({ muscle: '筋肉', ...REGIONS })) {
     if (!groups[k]) continue;
     const g = document.createElement('optgroup'); g.label = label;
     for (const [n, o] of groups[k]) {
@@ -207,6 +218,20 @@ function buildList() {
 function buildRegions() {
   const box = document.getElementById('regions');
   const present = new Set([...nodes.values()].map((o) => o.userData.region));
+  if (present.has('muscle')) {
+    const head = document.createElement('div'); head.className = 'sub'; head.style.cssText = 'color:var(--sub);font-size:12px;margin:2px 0'; head.textContent = '筋肉'; box.appendChild(head);
+    for (const [k, label] of Object.entries(LAYERS)) {
+      const row = document.createElement('label'); row.className = 'row';
+      row.innerHTML = `<input type="checkbox" checked> ${label}`;
+      row.querySelector('input').onchange = (e) => { for (const o of nodes.values()) if (o.userData.region === 'muscle' && String(o.userData.layer) === k) setOwnVisible(o, e.target.checked); };
+      box.appendChild(row);
+    }
+    const sl = document.createElement('div'); sl.className = 'slider';
+    sl.innerHTML = '<span>筋肉の濃さ（うすくすると骨が透けて見える）</span><input type="range" id="musop" min="0.15" max="1" step="0.05" value="1">';
+    sl.querySelector('input').oninput = (e) => setMuscleOpacity(+e.target.value);
+    box.appendChild(sl);
+    const head2 = document.createElement('div'); head2.className = 'sub'; head2.style.cssText = 'color:var(--sub);font-size:12px;margin:8px 0 2px'; head2.textContent = '骨'; box.appendChild(head2);
+  }
   for (const [k, label] of Object.entries(REGIONS)) {
     if (!present.has(k)) continue;
     const row = document.createElement('label'); row.className = 'row';
@@ -222,7 +247,7 @@ function buildRegions() {
   }
 }
 // 子の骨は残して、その骨の形だけ消す
-function setOwnVisible(o, v) { if (o.isMesh) o.material.visible = v; }
+function setOwnVisible(o, v) { const m = ownMesh(o); if (m) m.material.visible = v; }
 
 // ポーズ（関節を曲げる）。角度はすべて「横から見た曲げ」
 // 回転は、横軸（x）まわりの角度。プラスで「前が下がる」向き。
@@ -263,7 +288,10 @@ document.getElementById('reset').onclick = () => { document.querySelectorAll('#p
 
 // 分解（骨をばらす）
 let exploded = 0, explodeTarget = 0;
-document.getElementById('explode').onclick = (e) => { explodeTarget = explodeTarget ? 0 : 1; e.target.textContent = explodeTarget ? '元に戻す' : '分解する'; };
+document.getElementById('explode').onclick = (e) => {
+  explodeTarget = explodeTarget ? 0 : 1; e.target.textContent = explodeTarget ? '元に戻す' : '分解する';
+  for (const o of nodes.values()) if (o.userData.region === 'muscle') { const m = ownMesh(o); if (m) m.visible = !explodeTarget; }
+};
 function applyExplode(t) {
   for (const [n, r] of rest) {
     const o = nodes.get(n);
@@ -284,15 +312,21 @@ renderer.domElement.addEventListener('pointerup', (e) => {
   ray.setFromCamera(m, camera);
   const hit = ray.intersectObject(root, true).find((h) => h.object.material.visible !== false);
   if (!hit) { select(null); return; }
-  select(hit.object);
+  select(nodeOf(hit.object));
 });
 function select(o) {
   if (highlighted) { highlighted.material.emissive.setHex(0x000000); highlighted = null; }
   if (!o) return;
-  highlighted = o;
-  o.material.emissive.setHex(0x7a4a10);
+  const mesh = ownMesh(o);
+  if (mesh) { highlighted = mesh; mesh.material.emissive.setHex(0x7a4a10); }
   const u = o.userData;
   const side = u.side === 'L' ? '（左）' : u.side === 'R' ? '（右）' : '';
+  if (u.region === 'muscle') {
+    info.innerHTML = `<div class="ja">${u.ja}${side}</div><div class="la">${u.la || ''}</div>` +
+      `<div class="sub">${KINDS[u.kind] || '筋肉'}・${GROUPS[u.group] || ''}・${LAYERS[u.layer] || ''}</div>` +
+      `<div style="margin-top:6px"><b>起始（はじまる所）</b>：${u.origin}<br><b>停止（付く所）</b>：${u.insertion}<br><b>働き</b>：${u.action}</div>`;
+    return;
+  }
   const rom = u.rom && u.rom.flexion ? `<div class="sub">${u.rom.joint}の動く範囲：曲げて ${u.rom.flexion}° 〜 のばして ${u.rom.extension}°</div>` : '';
   info.innerHTML = `<div class="ja">${u.ja}${side}</div><div class="la">${u.la || ''}</div><div class="sub">${REGIONS[u.region] || ''}・${KINDS[u.kind] || ''}・${o.name}</div>${rom}`;
 }

@@ -41,12 +41,15 @@ export function buildHindlimb(api, lm) {
       sphere(add(H, [4.5, -6.5, -1]), 2.8),                                               // 寛骨臼切痕
       ellipsoid(obt, [5.5, 4.8, 9.0], [norm(cross(e1, e2)), e2, e1]),                     // 閉鎖孔
     );
+    lm.F ||= {};
+    Object.assign(lm.F, { ilium: fi, Li, W, I, P1, P2 });
     reg({ id: 'OsCoxae', ja: '寛骨（腸骨・坐骨・恥骨）', la: 'Os coxae', parent: 'S', joint: W, shape: cox, h: 0.42 });
   }
 
   // ---- 大腿骨 ----
   const Lf = len(sub(K, H));
   const ff = frame(H, sub(K, H), [0, 0, 1], 1);
+  Object.assign(lm.F, { fem: ff, Lf });
   {
     const { L } = ff;
     const parts = [
@@ -80,6 +83,7 @@ export function buildHindlimb(api, lm) {
   // ---- 脛骨・腓骨・半月板 ----
   const Lt = len(sub(T, K));
   const ft = frame(K, sub(T, K), [0, 0, 1], 1);
+  Object.assign(lm.F, { tib: ft, Lt });
   {
     const { L } = ft;
     const parts = [
@@ -115,6 +119,7 @@ export function buildHindlimb(api, lm) {
   const Ltar = len(sub(MTP, T));
   const pf = frame(T, sub(MTP, T), [0, 0, 1], 1);
   const { L } = pf;
+  Object.assign(lm.F, { pes: pf, Ltar });
   {
     const talus = smoothSubtract(0.4, smoothUnion(0.8,
       ellipsoid(L(1.4, 1.0, 0), [3.2, 4.6, 4.4], pf.axes),                                 // 距骨滑車

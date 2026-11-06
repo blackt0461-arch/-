@@ -10,6 +10,8 @@ export function buildSkull(api, lm) {
   const AX = [u, v, w];
   const Q = (a, b, c = 0) => add(O, add(mul(u, a), add(mul(v, b), mul(w, c))));
   const E = (a, b, c, r) => ellipsoid(Q(a, b, c), r, AX);
+  lm.F ||= {};
+  lm.F.Q = Q; lm.F.skullAxes = AX;
   const both = (fn) => [1, -1].flatMap((s) => [].concat(fn(s)));
 
   // ---- 頭骨（成長すると癒合する多くの骨をひとつにまとめる） ----

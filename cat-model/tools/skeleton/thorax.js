@@ -89,6 +89,8 @@ export function buildThorax(api, lm) {
     return lerp(junction(7), sternebrae[7].a, 0.5);
   };
   const cartPaths = {};
+  lm.F ||= {};
+  lm.F.ribs = {}; lm.F.carts = cartPaths; lm.F.sternebrae = sternebrae;
   for (let i = 1; i <= 13; i++) {
     const v = V['T' + i];
     const k = (i - 1) / 12;
@@ -120,6 +122,7 @@ export function buildThorax(api, lm) {
       const t = q / (n - 1);
       return t < 0.1 ? 1.4 : mix(1.75, 1.35, t) * (i === 1 ? 1.25 : 1);
     });
+    lm.F.ribs[i] = ribPts;
     const rib = smoothUnion(0.7,
       tube(ribPts, radii, null, 0.5),
       sphere(head, 1.85),           // 肋骨頭

@@ -77,6 +77,14 @@ export function buildForelimb(api, lm) {
   const F = lm.fore;
   const S = F.shoulder, D = F.scapDorsal, E = F.elbow, R = F.carpus, MCP = F.mcp;
   const reg = (d) => api.bone({ region: 'forelimb', pair: true, ...d });
+  // 筋肉づくりで使う骨ごとの座標（左）
+  lm.F ||= {};
+  Object.assign(lm.F, {
+    scap: frame(S, sub(D, S), [0, 0, 1], 1),
+    hum: frame(S, sub(E, S), [0, 0, 1], 1), Lh: len(sub(E, S)),
+    fa: frame(E, sub(R, E), [0, 0, 1], 1), Lr: len(sub(R, E)),
+    paw: frame(R, sub(MCP, R), [0, 0, 1], 1), Lp: len(sub(MCP, R)),
+  });
 
   // ---- 肩甲骨 ----
   {
