@@ -22,6 +22,8 @@ const serve = () => new Promise(res => { const srv = http.createServer((req, rsp
   await page.waitForTimeout(2000); await page.evaluate(() => document.querySelector('.lb-screen .ok')?.click()); await page.waitForTimeout(600);
   await page.evaluate(() => { document.querySelector('.style-sheet .stylecard')?.click(); document.querySelector('.style-sheet .ok')?.click(); });
   await page.waitForTimeout(800);
+  // いまは本物のイベントがないので、テスト用のイベントを入れて確かめる（しくみの確かめ）
+  await page.evaluate(async () => { const EV = await import('/js/events.js'); if (!EV.EVENTS.length) EV.EVENTS.push({ id: 'test-ev', name: 'テストフェス', unit: '雪の結晶', desc: 'テスト用', start: '2099-12-01', end: '2099-12-25', rewards: [{ at: 10, kind: 'ticket', amount: 2 }, { at: 30, kind: 'item', item: 'ev-gift-pile' }, { at: 60, kind: 'ticket4', amount: 1 }, { at: 100, kind: 'item', item: 'ev-snowman' }, { at: 150, kind: 'ticket', amount: 5 }, { at: 200, kind: 'item', item: 'ev-xmas-tree' }] }); });
   console.log('1. 期間の前は出ない → 管理者が「ためす」');
   check(await page.locator('.home .evbtn').count() === 0, '期間の前は部屋にイベントのボタンが出ない');
   await page.evaluate(() => document.querySelector('[data-t=menu]')?.click()); await page.waitForTimeout(400);

@@ -168,3 +168,9 @@
 .uinext .nx-menu-quick .nx-photo { flex: 1; justify-content: center; padding: 12px 14px; }
 /* 下のメニュー：4つ＋右端の「解く」。せまい画面では少し小さく */
 @media (max-width: 370px) { .uinext .nx-bar .sl { width: 48px; } .uinext .nx-bar .slots { gap: 5px; } }
+
+/* 下のメニュー：部屋・家具・ガチャ・みんな・メニュー（5つ）＋右下の端に「解く」（1.12.1） */
+.uinext .nx-bar .sl { width: 50px; height: 52px; }
+.uinext .nx-bar .slots { gap: 6px; }
+.uinext .nx-bar .solve-ring { width: 72px; height: 72px; }
+@media (max-width: 370px) { .uinext .nx-bar .sl { width: 44px; } .uinext .nx-bar .slots { gap: 4px; } .uinext .nx-bar .sl-t { font-size: 10px; } .uinext .nx-bar .solve-ring { width: 66px; height: 66px; } }

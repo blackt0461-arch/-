@@ -389,14 +389,14 @@ function tabbar(active) {
 }
 // 新しいデザインの下のメニュー：いつも同じ5つ（部屋・家具・解く・ガチャ・みんな）。メニューは右上の自分のアイコンから
 function tabbarNext(active, { resume, due, pct, buy }) {
-  const dot = (k) => (k === 'social' && friendBadge) || (k === 'gacha' && ticketCount());
+  const dot = (k) => (k === 'menu' && newsBadge) || (k === 'social' && friendBadge) || (k === 'gacha' && ticketCount());
   const slot = ([k, ic, n]) => `<button data-t="${k}" class="sl ${k === active ? 'on' : ''}" aria-label="${n}">${icon(ic)}<span class="sl-t">${n}</span>${dot(k) ? '<i class="dot"></i>' : ''}</button>`;
   const ring = isPuzzle()
     ? `<button data-t="play" class="solve-ring ${buy ? 'full' : ''}" style="--p:${pct}" aria-label="パズル"><span class="sr-in">${icon('grid')}<b>パズル</b></span>${!S.playedToday() ? '<i class="dot"></i>' : ''}</button>`
     : `<button data-t="play" class="solve-ring ${buy ? 'full' : ''}" style="--p:${pct}" aria-label="解く"><span class="sr-in">${icon(resume ? 'refresh' : 'pencil')}<b>${resume ? '続きから' : '解く'}</b></span>${resume || due || !S.playedToday() ? '<i class="dot"></i>' : ''}</button>`;
   // 「解く」は右下の端（スマホを片手で持った時に、親指がいちばん届く場所）。「勉強｜パズル」の切りかえはその上に見える形で
   const el = h(`<nav class="tabbar hotbar nx-bar ${active === 'room' ? 'on-room' : ''}">
-    <div class="slots">${[['room', 'home', '部屋'], ['furn', 'sofa', '家具'], ['gacha', 'star', 'ガチャ'], ['social', 'users', 'みんな']].map(slot).join('')}</div>
+    <div class="slots">${[['room', 'home', '部屋'], ['furn', 'sofa', '家具'], ['gacha', 'star', 'ガチャ'], ['social', 'users', 'みんな'], ['menu', 'menu', 'メニュー']].map(slot).join('')}</div>
     <div class="solve-wrap">
       ${active === 'room' ? `<div class="mode-toggle" role="group" aria-label="勉強とパズルの切りかえ"><button data-mode="study" class="${isPuzzle() ? '' : 'on'}">${icon('pencil')}勉強</button><button data-mode="puzzle" class="${isPuzzle() ? 'on' : ''}">${icon('grid')}パズル${!freePuzzle() ? `<i class="mt-n">${S.puzzleTickets()}</i>` : ''}</button></div>` : ''}
       ${ring}
@@ -949,7 +949,7 @@ function showHome() {
           <span class="lv">Lv<b>${rk.rank}</b></span>
           <span class="xpbar"><i style="width:${Math.round(rk.into / rk.need * 100)}%"></i></span>
         </button>
-        ${UINEXT ? `<button class="round nx-me" aria-label="メニュー（プロフィール・記録・設定）">${avatarHTML(S.profile(), 'avatar')}${newsBadge ? '<i class="gb-n dot-only"></i>' : ''}</button>` : ''}
+        ${UINEXT ? `<button class="round nx-me" aria-label="プロフィール">${avatarHTML(S.profile(), 'avatar')}</button>` : ''}
       </header>
       ${UINEXT && canBuyNow() ? `<button class="nx-buy">${icon('gift')}<span>家具が買える</span><b>${buyCount() > 1 ? '×' + buyCount() : ''}</b></button>` : ''}
       <div class="side-tools">
@@ -959,7 +959,7 @@ function showHome() {
       </div>
     </div>`);
   el.querySelector('.photo')?.addEventListener('click', photoMode);
-  el.querySelector('.nx-me')?.addEventListener('click', showMenu);
+  el.querySelector('.nx-me')?.addEventListener('click', () => showProfile(null, showHome));
   el.querySelector('.nx-buy')?.addEventListener('click', buyFlow);
   el.querySelector('.giftbox')?.addEventListener('click', () => showGiftBox());
   refreshGifts();
@@ -1683,7 +1683,7 @@ function photoMode() {
 
 // =========================== 更新のお知らせ ===========================
 // このプログラムの版（version.json と同じにする。公開のたびに上げる）
-const APP_VERSION = '1.12.0';
+const APP_VERSION = '1.12.1';
 ERR.setVersion(APP_VERSION);
 // 新しい版が出たら、みんな同じタイミングでそろうように強制で再起動する。
 // 開いた時・画面に戻った時・1分ごとに version.json を見る
@@ -2804,7 +2804,7 @@ async function showVisit() {
   if (v.sample) el.querySelector('.rn-ic').innerHTML = icon('star');
   el.querySelector('.back').onclick = () => leaveVisit(true);
   el.querySelector('.photo')?.addEventListener('click', photoMode);
-  el.querySelector('.nx-me')?.addEventListener('click', showMenu);
+  el.querySelector('.nx-me')?.addEventListener('click', () => showProfile(null, showHome));
   el.querySelector('.nx-buy')?.addEventListener('click', buyFlow);
   el.querySelectorAll('.rooms button').forEach(b => b.onclick = () => { v.current = +b.dataset.i; showVisit(); });
   app.append(el);
@@ -2821,13 +2821,13 @@ async function leaveVisit(goBack) {
 // =========================== 管理者 ===========================
 async function showAdmin() {
   if (!isAdmin()) return showMenu();
-  const el = screenWithTabs('admin', `<button class="icon back">${icon('back')}</button><h2>管理者</h2><span></span>`, 'menu', `<div class="row2 admin-btns"><button class="btn primary compose">${icon('bell')}お知らせを書く</button><button class="btn ghost inbox">${icon('chat')}要望・バグを見る</button></div><button class="btn ghost big sendgift">${icon('gift')}みんなにプレゼントを送る</button><button class="btn ghost big errlog">${icon('info')}エラーの記録を見る</button><button class="btn ghost big evpreview">${icon('snow')}${EV.previewing() ? 'イベントのためしをやめる' : `イベントをためす（${esc(EV.EVENTS.at(-1).name)}）`}</button><div class="alist"><p class="empty">読み込み中…</p></div>`);
+  const el = screenWithTabs('admin', `<button class="icon back">${icon('back')}</button><h2>管理者</h2><span></span>`, 'menu', `<div class="row2 admin-btns"><button class="btn primary compose">${icon('bell')}お知らせを書く</button><button class="btn ghost inbox">${icon('chat')}要望・バグを見る</button></div><button class="btn ghost big sendgift">${icon('gift')}みんなにプレゼントを送る</button><button class="btn ghost big errlog">${icon('info')}エラーの記録を見る</button>${EV.EVENTS.length ? `<button class="btn ghost big evpreview">${icon('snow')}${EV.previewing() ? 'イベントのためしをやめる' : `イベントをためす（${esc(EV.EVENTS.at(-1).name)}）`}</button>` : ''}<div class="alist"><p class="empty">読み込み中…</p></div>`);
   el.querySelector('.back').onclick = showMenu;
   el.querySelector('.compose').onclick = () => composeNews(showNews);
   el.querySelector('.inbox').onclick = showFeedbackInbox;
   el.querySelector('.sendgift').onclick = () => composeGift();
   el.querySelector('.errlog').onclick = showErrors;
-  el.querySelector('.evpreview').onclick = () => { EV.setPreview(EV.previewing() ? null : EV.EVENTS.at(-1).id); toast(EV.previewing() ? 'この端末だけ、イベントを期間の前でもためせます' : 'イベントのためしをやめました'); showAdmin(); };
+  if (el.querySelector('.evpreview')) el.querySelector('.evpreview').onclick = () => { EV.setPreview(EV.previewing() ? null : EV.EVENTS.at(-1).id); toast(EV.previewing() ? 'この端末だけ、イベントを期間の前でもためせます' : 'イベントのためしをやめました'); showAdmin(); };
   const u = Auth.currentUser();
   let list = [];
   try { list = await rpc('sr_admin_users', { p_token: u?.token }); } catch (e) { el.querySelector('.alist').innerHTML = `<p class="empty">${esc(e.message)}</p>`; return; }

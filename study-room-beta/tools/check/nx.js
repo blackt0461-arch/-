@@ -26,10 +26,10 @@ const serve = () => new Promise(res => { const srv = http.createServer((req, rsp
   await page.screenshot({ path: path.join(OUT, 'nx-1-welcome.png') });
   await page.click('.nx-welcome .go'); await page.waitForSelector('.subj-sheet', { timeout: 8000 });
   check(true, '「さっそく1問解く」で教科えらびが開く');
-  console.log('2. 下のメニュー：4つ＋右端の「解く」、勉強｜パズルが見える');
+  console.log('2. 下のメニュー：5つ＋右端の「解く」、勉強｜パズルが見える');
   await page.evaluate(() => window.__app.showHome()); await page.waitForTimeout(500);
   const slots = await page.evaluate(() => [...document.querySelectorAll('.nx-bar .sl')].map(b => b.dataset.t).join(','));
-  check(slots === 'room,furn,gacha,social', `下のボタンは いつも同じ4つ（${slots}）`);
+  check(slots === 'room,furn,gacha,social,menu', `下のボタンは いつも同じ5つ（${slots}）`);
   const ring = await page.locator('.nx-bar .solve-ring').boundingBox(), vw = 390;
   check(ring && ring.x + ring.width > vw - 30, `「解く」は右下の端（右から ${Math.round(vw - ring.x - ring.width)}px）`);
   check(await vis('.nx-bar .mode-toggle'), '「勉強｜パズル」の切りかえが部屋の画面に見える');
@@ -68,8 +68,8 @@ const serve = () => new Promise(res => { const srv = http.createServer((req, rsp
   await page.click('.cand-sheet .ok'); await page.waitForTimeout(1500);
   console.log('5. メニュー・設定・ガチャ・閉じ方');
   await page.evaluate(() => window.__app.showHome()); await page.waitForTimeout(400);
-  await page.click('.nx-me'); await page.waitForSelector('.menu-list');
-  check(await page.locator('.nx-photo').count() === 1, 'メニューは右上のアイコンから（写真もここ）');
+  await page.click('.nx-bar [data-t=menu]'); await page.waitForSelector('.menu-list');
+  check(await page.locator('.nx-photo').count() === 1, 'メニューは下の「メニュー」から（写真もここ）');
   await page.click('.menu-list [data-m=settings]'); await page.waitForSelector('.nx-gh');
   check((await page.locator('.nx-gh').allTextContents()).join(',').startsWith('アカウント,画面と音,学習'), `設定は見出しつきのまとまり（${(await page.locator('.nx-gh').allTextContents()).join('・')}）`);
   await page.evaluate(() => window.__app.showHome()); await page.waitForTimeout(400);
