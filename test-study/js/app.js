@@ -982,13 +982,17 @@ function md(s) {
 }
 function slideHTML(c, s) {
   const fig = s.fig ? `<figure class="fig"><img src="data/${c.id}/${s.fig}" alt="図"></figure>` : '';
+  const html = slideInner(s, fig);
+  return s.fig && !html.includes('<figure') ? html.replace(/<\/div>$/, fig + '</div>') : html;
+}
+function slideInner(s, fig) {
   switch (s.type) {
     case 'cover': return `<div class="sl cover"><div class="kicker">授業</div><h2>${esc(s.title)}</h2>${s.sub ? `<p>${esc(s.sub)}</p>` : ''}</div>`;
     case 'analogy': return `<div class="sl analogy"><div class="kicker">${icon('spark')}たとえるなら</div><h3>${esc(s.title || '')}</h3>${md(s.body)}${fig}</div>`;
     case 'formula': return `<div class="sl formula"><div class="kicker">大事な式</div><h3>${esc(s.title || '')}</h3><div class="tex">$$${esc(s.tex)}$$</div>${md(s.body)}</div>`;
     case 'point': return `<div class="sl point"><div class="kicker">${icon('check')}ここを覚える</div><h3>${esc(s.title || '')}</h3><ul class="pts">${(s.items || []).map((x) => `<li>${md(x)}</li>`).join('')}</ul></div>`;
     case 'flow': return `<div class="sl flow"><h3>${esc(s.title || '')}</h3><div class="fl">${(s.items || []).map((x) => `<div class="fb">${md(x)}</div>`).join('<div class="fa">↓</div>')}</div>${md(s.body)}</div>`;
-    case 'steps': return `<div class="sl steps"><h3>${esc(s.title || '')}</h3><ol class="st">${(s.items || []).map((x) => `<li>${md(x)}</li>`).join('')}</ol>${md(s.body)}</div>`;
+    case 'steps': return `<div class="sl stp"><h3>${esc(s.title || '')}</h3><ol class="st">${(s.items || []).map((x) => `<li>${md(x)}</li>`).join('')}</ol>${md(s.body)}</div>`;
     case 'table': return `<div class="sl"><h3>${esc(s.title || '')}</h3><div class="tw"><table><thead><tr>${(s.head || []).map((h) => `<th>${md(h)}</th>`).join('')}</tr></thead><tbody>${(s.rows || []).map((r) => `<tr>${r.map((x) => `<td>${md(String(x))}</td>`).join('')}</tr>`).join('')}</tbody></table></div>${md(s.body)}</div>`;
     case 'quiz': return `<div class="sl quiz"><div class="kicker">${icon('quiz')}確認クイズ</div><h3>${md(s.q)}</h3><div class="choices">${(s.choices || []).map((x, k) => `<button class="choice" data-qk="${k}"><span class="k">${KEYS[k]}</span><span>${md(x)}</span></button>`).join('')}</div><div data-qres></div></div>`;
     case 'summary': return `<div class="sl summary"><div class="kicker">${icon('check')}まとめ</div><h3>${esc(s.title || 'この回のまとめ')}</h3><ul class="pts">${(s.items || []).map((x) => `<li>${md(x)}</li>`).join('')}</ul></div>`;
@@ -1005,7 +1009,7 @@ async function playLesson(c, t, d, L, start = 0, opt = {}) {
   const show = () => {
     store.setLesson(key, i, i === slides.length - 1);
     const s = slides[i];
-    const w = screen(`${L.lecture || ''} ${L.title}`, { back: () => lessonList(c, t, d) });
+    const w = screen(L.title, { back: () => lessonList(c, t, d) });
     w.innerHTML = `<div class="qtop"><span class="p">${i + 1}<small> / ${slides.length}</small></span><span class="lec">${esc(L.lecture || '')}</span></div>
       <div class="meter"><i style="width:${((i + 1) / slides.length) * 100}%"></i></div>
       <div class="card slide" data-slide>${slideHTML(c, s)}</div>

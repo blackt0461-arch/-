@@ -452,6 +452,220 @@ def pinch():
     f.save('pinch')
 
 
-for fn in [id_vds, id_vgs, body, cs_res, transfer, nfb, inv_amp, ss_model, cs_cur, cs_pmos, sf, cg, rconv, cascode, jrot, fourier, pinch]:
+# ===== 18. 増幅器の記号（1本線の図と、GND を書いた図） =====
+def amp_gnd():
+    f = Fig(460, 230)
+    for ox, title, gnd in [(20, '回路図ではこう書く', False), (250, 'ほんとうは2本ずつ', True)]:
+        f.text(ox + 95, 24, title, 'middle', 13, SUB)
+        f.add(f'<polygon points="{ox + 70},60 {ox + 70},140 {ox + 140},100" fill="#fff" stroke="{INK}" stroke-width="2"/>')
+        f.text(ox + 92, 106, 'A', 'middle', 16)
+        f.line((ox + 10, 100), (ox + 70, 100)); f.line((ox + 140, 100), (ox + 200, 100))
+        f.text(ox + 10, 90, 'v_{in}'); f.text(ox + 200, 90, 'v_{out}', 'end')
+        if gnd:
+            f.line((ox + 10, 170), (ox + 200, 170), color=RED)
+            f.line((ox + 105, 130), (ox + 105, 170), color=RED)
+            f.ground(ox + 105, 170)
+            f.text(ox + 105, 214, 'GND（0 V）の線', 'middle', 12, RED)
+    f.save('amp-gnd')
+
+
+# ===== 19. OPアンプの記号 =====
+def opamp():
+    f = Fig(470, 220)
+    f.add(f'<polygon points="190,40 190,180 320,110" fill="#fff" stroke="{INK}" stroke-width="2"/>')
+    f.text(202, 80, '−', 'start', 20); f.text(202, 152, '+', 'start', 18)
+    f.line((150, 75), (190, 75)); f.line((150, 145), (190, 145)); f.line((320, 110), (370, 110))
+    f.text(144, 80, '反転入力（−）', 'end', 13, ACC)
+    f.text(144, 150, '非反転入力（＋）', 'end', 13, ACC)
+    f.text(376, 115, '出力', 'start', 13)
+    f.text(235, 210, 'v_{out} = A_{d} ×（＋の電圧 − −の電圧）', 'middle', 14, RED)
+    f.save('opamp')
+
+
+# ===== 20. MOSFET の断面（ON のとき） =====
+def mos_on():
+    f = Fig(440, 260)
+    f.add(f'<rect x="20" y="100" width="400" height="130" fill="#eef0f8" stroke="{INK}" stroke-width="1.5"/>')
+    f.text(30, 222, 'P 型基板（0 V）', 'start', 12, SUB)
+    for x, lab in [(40, 'N⁺ ソース'), (300, 'N⁺ ドレイン')]:
+        f.add(f'<rect x="{x}" y="100" width="100" height="44" rx="6" fill="#dfe3ff" stroke="{INK}" stroke-width="1.5"/>')
+        f.text(x + 50, 127, lab, 'middle', 12)
+    f.add(f'<rect x="140" y="88" width="160" height="12" fill="#fff" stroke="{INK}" stroke-width="1.5"/>')
+    f.text(310, 97, '絶縁膜', 'start', 11, SUB)
+    f.add(f'<rect x="140" y="58" width="160" height="30" rx="4" fill="#c9cdf2" stroke="{INK}" stroke-width="1.5"/>')
+    f.text(220, 78, 'ゲート', 'middle', 12)
+    f.add(f'<rect x="140" y="100" width="160" height="10" fill="{ACC}" opacity=".85"/>')
+    f.arrow(220, 160, 220, 114, color=ACC)
+    f.text(220, 176, '反転層（チャネル）＝電子の通り道', 'middle', 12, ACC)
+    for x, lab in [(90, 'ソース'), (220, 'ゲート V_{GS}>V_{T}'), (350, 'ドレイン')]:
+        f.line((x, 58 if x == 220 else 100), (x, 30)); f.text(x, 22, lab, 'middle', 12)
+    f.arrow(170, 200, 270, 200, color=RED); f.text(282, 205, '電流 I_{D}', 'start', 12, RED)
+    f.save('mos-on')
+
+
+# ===== 21. 基板バイアス：空乏層の負電荷がふえる =====
+def body_x():
+    f = Fig(460, 230)
+    for ox, title, n in [(20, 'V_{B}=0（ふつう）', 4), (245, 'V_{B}<0（基板を下げる）', 9)]:
+        f.text(ox + 98, 22, title, 'middle', 13)
+        f.add(f'<rect x="{ox}" y="70" width="195" height="120" fill="#eef0f8" stroke="{INK}" stroke-width="1.5"/>')
+        f.add(f'<rect x="{ox + 50}" y="40" width="95" height="22" rx="4" fill="#c9cdf2" stroke="{INK}" stroke-width="1.5"/>')
+        f.add(f'<rect x="{ox + 50}" y="62" width="95" height="8" fill="#fff" stroke="{INK}" stroke-width="1"/>')
+        f.add(f'<rect x="{ox + 50}" y="70" width="95" height="6" fill="{ACC}" opacity=".85"/>')
+        depth = 30 if n == 4 else 70
+        f.add(f'<rect x="{ox + 40}" y="76" width="115" height="{depth}" fill="#ffe1e1" stroke="{RED}" stroke-width="1" stroke-dasharray="3 3"/>')
+        for k in range(n):
+            f.text(ox + 55 + (k % 5) * 22, 92 + (k // 5) * 26, '⊖', 'start', 13, RED)
+        f.text(ox + 98, 210, '空乏層の負電荷：' + ('少ない' if n == 4 else '多い → 電子が減る → V_{T} ↑'), 'middle', 11, RED if n > 4 else SUB)
+    f.save('body-x')
+
+
+# ===== 22. 水道のたとえ（電圧・電流・抵抗） =====
+def water():
+    f = Fig(460, 230)
+    f.add(f'<rect x="30" y="40" width="80" height="120" fill="#fff" stroke="{INK}" stroke-width="2"/>')
+    f.add(f'<rect x="32" y="70" width="76" height="88" fill="#bfe3ff"/>')
+    f.text(70, 30, 'タンク（高さ＝電圧 V）', 'middle', 12)
+    f.add(f'<path d="M108 140 H250 V128 H330 V140 H420 V160 H330 V172 H250 V160 H108 Z" fill="#bfe3ff" stroke="{INK}" stroke-width="2"/>')
+    f.text(290, 118, '細い所＝抵抗 R', 'middle', 12, RED)
+    for x in (150, 210, 370):
+        f.arrow(x - 18, 150, x + 18, 150, color=ACC)
+    f.text(180, 196, '流れる水の量＝電流 I', 'middle', 12, ACC)
+    f.text(230, 222, '高いほど・管が太いほど、たくさん流れる → V = R × I', 'middle', 13)
+    f.save('water')
+
+
+# ===== 23. 正弦波（振幅・周期・位相のずれ） =====
+def sine():
+    f = Fig(460, 230)
+    x0, y0, W, A = 40, 110, 400, 70
+    f.arrow(x0, y0, x0 + W + 10, y0, color=SUB, w=1.5); f.text(x0 + W + 10, y0 + 20, '時間 t', 'end', 12, SUB)
+    pts = [(x0 + W * k / 200, y0 - A * math.cos(4 * math.pi * k / 200)) for k in range(201)]
+    f.line(*pts, color=ACC, w=2.5)
+    pts = [(x0 + W * k / 200, y0 - A * math.cos(4 * math.pi * k / 200 + math.pi / 2)) for k in range(201)]
+    f.line(*pts, color=RED, w=2.5)
+    f.arrow(x0 + 4, y0, x0 + 4, y0 - A + 2, color=INK, w=1.5); f.text(x0 + 10, y0 - A / 2, '振幅', 'start', 12)
+    f.line((x0, 196), (x0 + W / 2, 196), color=INK, w=1.5); f.line((x0, 190), (x0, 202)); f.line((x0 + W / 2, 190), (x0 + W / 2, 202))
+    f.text(x0 + W / 4, 216, '1周期 T（ω = 2π/T）', 'middle', 12)
+    f.text(x0 + W - 4, 24, '— 電圧 v（cos）', 'end', 12, ACC)
+    f.text(x0 + W - 4, 42, '— 電流 i（π/2 先に進む）', 'end', 12, RED)
+    f.save('sine')
+
+
+# ===== 24. 微分＝接線の傾き =====
+def tangent():
+    f = Fig(420, 260)
+    x0, y0 = 50, 220
+    axes(f, x0, y0, 400, 20, 'x', 'y')
+    fx = lambda x: x * x / 450
+    pts = [(x0 + x, y0 - fx(x)) for x in range(0, 300, 3)]
+    f.line(*pts, color=ACC, w=2.5)
+    a = 170; ya = fx(a); m = 2 * a / 450
+    f.line((x0 + a - 90, y0 - (ya - m * 90)), (x0 + a + 110, y0 - (ya + m * 110)), color=RED, w=2)
+    f.dot(x0 + a, y0 - ya, 5, RED)
+    f.line((x0 + a, y0 - ya), (x0 + a + 60, y0 - ya), color=INK, w=1.5, dash='4 4')
+    f.line((x0 + a + 60, y0 - ya), (x0 + a + 60, y0 - ya - m * 60), color=INK, w=1.5, dash='4 4')
+    f.text(x0 + a + 30, y0 - ya + 16, 'Δx', 'middle', 13); f.text(x0 + a + 66, y0 - ya - m * 30, 'Δy', 'start', 13)
+    f.text(x0 + 10, 40, '点での接線の傾き ＝ Δy/Δx ＝ 微分', 'start', 13, RED)
+    f.save('tangent')
+
+
+# ===== 25. 直列と並列 =====
+def series_parallel():
+    f = Fig(460, 220)
+    f.text(110, 24, '直列：R_{1}+R_{2}', 'middle', 14)
+    f.line((20, 80), (40, 80)); f.resistor_h(40, 110, 80, 'R_{1}'); f.resistor_h(110, 180, 80, 'R_{2}'); f.line((180, 80), (200, 80))
+    f.text(110, 140, '電流は同じ道を通る', 'middle', 12, SUB)
+    f.text(340, 24, '並列：R_{1}//R_{2}', 'middle', 14)
+    f.line((250, 110), (270, 110)); f.line((270, 70), (270, 150)); f.line((410, 70), (410, 150)); f.line((410, 110), (430, 110))
+    f.resistor_h(270, 410, 70, 'R_{1}'); f.resistor_h(270, 410, 150, 'R_{2}')
+    f.text(340, 196, '= 1 ÷ (1/R_{1} + 1/R_{2})　道が2本で流れやすい', 'middle', 12, SUB)
+    f.save('series-parallel')
+
+
+# ===== 26. 単位円（cos = x、sin = y） =====
+def unitc():
+    f = Fig(300, 290)
+    cx, cy, r = 150, 150, 105
+    f.arrow(20, cy, 285, cy, color=SUB, w=1.5); f.arrow(cx, 280, cx, 15, color=SUB, w=1.5)
+    f.add(f'<circle cx="{cx}" cy="{cy}" r="{r}" fill="none" stroke="{INK}" stroke-width="1.5"/>')
+    a = math.radians(40); px, py = cx + r * math.cos(a), cy - r * math.sin(a)
+    f.line((cx, cy), (px, py), color=ACC, w=2.5); f.dot(px, py, 5, ACC)
+    f.line((px, py), (px, cy), color=RED, w=2, dash='4 4'); f.line((px, py), (cx, py), color=GRN, w=2, dash='4 4')
+    f.text(px + 6, (py + cy) / 2, 'sin θ', 'start', 13, RED); f.text((cx + px) / 2, py - 8, 'cos θ', 'middle', 13, GRN)
+    f.path(f'M {cx + 30} {cy} A 30 30 0 0 0 {cx + 30 * math.cos(a):.1f} {cy - 30 * math.sin(a):.1f}', color=INK, w=1.5)
+    f.text(cx + 36, cy - 8, 'θ', 'start', 13)
+    f.text(cx, 284, '半径1の円の上の点 (cos θ, sin θ)', 'middle', 12, SUB)
+    f.save('unitc')
+
+
+# ===== 27. 負荷線（抵抗負荷） =====
+def loadline():
+    f = Fig(420, 290)
+    x0, y0 = 80, 240
+    axes(f, x0, y0, 400, 30, 'V_{out}', 'I_{D}')
+    sx = 300 / 5.0
+    vdd, rl = 4.6, 2.3
+    f.line((x0, y0 - vdd / rl * 95), (x0 + vdd * sx, y0), color=RED, w=2.2)
+    f.text(x0 - 6, y0 - vdd / rl * 95 + 5, 'V_{DD}/R_{L}', 'end', 11, RED); f.text(x0 + vdd * sx, y0 + 36, 'V_{DD}', 'middle', 12, RED)
+    pts_lab = []
+    for vov in [0.6, 1.0, 1.4, 2.0]:
+        pts = []
+        for k in range(101):
+            v = 5.0 * k / 100
+            i = (vov - v / 2) * v if v < vov else vov * vov / 2
+            pts.append((x0 + v * sx, y0 - i * 95))
+        f.line(*pts, color=SUB, w=1.5)
+        # 負荷線との交点
+        best = min(range(101), key=lambda k: abs((5.0 * k / 100) - (vdd - rl * ((vov - 5.0 * k / 200) * 5.0 * k / 100 if 5.0 * k / 100 < vov else vov * vov / 2))))
+        v = 5.0 * best / 100; i = (vov - v / 2) * v if v < vov else vov * vov / 2
+        pts_lab.append((x0 + v * sx, y0 - i * 95))
+    for (x, y), lab in zip(pts_lab, 'ABCD'):
+        f.dot(x, y, 5, ACC); f.text(x + 6, y - 6, lab, 'start', 13, ACC)
+    pts = [(x0 + v * sx, y0 - v * v / 2 * 95) for v in [k * 2.2 / 40 for k in range(41)]]
+    f.line(*pts, color=GRN, w=1.6, dash='5 5'); f.text(x0 + 2.2 * sx + 4, y0 - 2.42 * 95 + 14, '線形｜飽和の境目', 'start', 11, GRN)
+    f.text(390, 60, 'V_{in} を上げると A→B→C→D', 'end', 12, ACC)
+    f.save('loadline')
+
+
+# ===== 28. 定電流負荷：特性線と電流源の交点が大きく横に動く =====
+def curload():
+    f = Fig(420, 290)
+    x0, y0 = 50, 250
+    axes(f, x0, y0, 400, 30, 'V_{DS}', 'I_{D}')
+    i0 = 120
+    f.line((x0, y0 - i0), (395, y0 - i0), color=RED, w=2); f.text(392, y0 - i0 + 18, '電流源 I_{0}（一定）', 'end', 12, RED)
+    xs = {}
+    for off, c, lab in [(0, INK, 'V_{IN} のとき'), (14, ACC, 'V_{IN}+v_{in} のとき')]:
+        f.line((x0, y0), (x0 + 40, y0 - 100 - off), (395, y0 - 130 - off), color=c, w=2.4)
+        f.text(392, y0 - 136 - off - (6 if off else -4), lab, 'end', 12, c)
+        xs[off] = x0 + 40 + (i0 - 100 - off) * 355 / 30
+    f.dot(xs[0], y0 - i0, 5, INK); f.dot(xs[14], y0 - i0, 5, ACC)
+    f.arrow(xs[0] - 4, y0 - i0 + 34, xs[14] + 4, y0 - i0 + 34, color=ACC)
+    f.text((xs[0] + xs[14]) / 2, y0 - i0 + 54, 'V_{OUT} が大きく下がる（逆相）', 'middle', 12, ACC)
+    f.text(x0 + 200, 40, '特性線が寝ている（r_{0} が大きい）ので', 'middle', 12, SUB)
+    f.text(x0 + 200, 58, '少し上にずれるだけで交点が大きく横へ動く', 'middle', 12, SUB)
+    f.save('curload')
+
+
+# ===== 29. 負荷抵抗 R_L が大きいほど伝達特性が急 =====
+def rl_curves():
+    f = Fig(420, 280)
+    x0, y0 = 60, 240
+    axes(f, x0, y0, 400, 30, 'V_{in}', 'V_{out}')
+    sx, sy = 320 / 2.0, 190 / 3.3
+    for k_, lab, c in [(60, '10MΩ', RED), (14, '1MΩ', ACC), (4, '100kΩ', GRN), (1.2, '10kΩ', SUB)]:
+        pts = []
+        for j in range(161):
+            vi = 2.0 * j / 160
+            vo = 3.3 if vi < 0.5 else max(0.05, 3.3 - k_ * (vi - 0.5) ** 2)
+            pts.append((x0 + vi * sx, y0 - vo * sy))
+        f.line(*pts, color=c, w=2.2)
+    for n, (lab, c) in enumerate([('R_{L}=10MΩ（急・利得大）', RED), ('1MΩ', ACC), ('100kΩ', GRN), ('10kΩ（なだらか）', SUB)]):
+        f.text(395, 40 + n * 18, lab, 'end', 12, c)
+    f.save('rl-curves')
+
+
+for fn in [water, sine, tangent, series_parallel, unitc, loadline, curload, rl_curves, mos_on, body_x, amp_gnd, opamp, id_vds, id_vgs, body, cs_res, transfer, nfb, inv_amp, ss_model, cs_cur, cs_pmos, sf, cg, rconv, cascode, jrot, fourier, pinch]:
     fn()
 print('ok', len(os.listdir(OUT)))
