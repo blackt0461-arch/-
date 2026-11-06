@@ -18,6 +18,7 @@ import * as Auth from './auth.js';
 import * as DL from './download.js';
 import * as Sync from './sync.js';
 import * as R from './report.js';
+import * as EV from './events.js';
 import { rpc } from './cloud.js';
 import { PUZZLES, puzzleById, levelInfo, mountPuzzle, livesOf } from './puzzles.js';
 import { openPuzzleHelp } from './puzzlehelp.js';
@@ -826,12 +827,14 @@ function showHome() {
       </header>
       <div class="side-tools">
         <button class="round photo" aria-label="写真をとる">${icon('camera')}</button>
+        ${EV.activeEvent() ? `<button class="round evbtn" aria-label="${esc(EV.activeEvent().name)}">${icon('snow')}${EV.readyCount(EV.activeEvent()) ? `<i class="gb-n">${EV.readyCount(EV.activeEvent())}</i>` : ''}</button>` : ''}
         <button class="round giftbox" aria-label="プレゼントBOX">${icon('gift')}${S.gifts().length ? `<i class="gb-n">${S.gifts().length > 99 ? '99+' : S.gifts().length}</i>` : ''}</button>
       </div>
     </div>`);
   el.querySelector('.photo').onclick = photoMode;
   el.querySelector('.giftbox')?.addEventListener('click', () => showGiftBox());
   refreshGifts();
+  el.querySelector('.evbtn')?.addEventListener('click', () => showEvent());
   el.querySelector('.rankchip').onclick = showRankRoad;
   el.querySelector('.room-name').onclick = () => showRoomPicker({ hs, r, here, locked, home });
   app.append(el, tabbar('room'));
@@ -1709,6 +1712,7 @@ function puzzleResult(id, star, won, r, secs) {
     hs.gauge += pts;
     S.addPoints(pts); // ランキングのポイント
     xp = S.addPuzzleClear(id, star, r.mistakes || 0);
+    evToast(EV.addPoints(star));
     const first = S.markPlayedToday();
     if (first) setTimeout(() => toast(`連続 ${S.currentStreak()}日目！`), 600);
     S.save(); Sync.push?.();
@@ -1991,6 +1995,38 @@ function showRankRoad() {
     if (road && nx) road.scrollTop = nx.offsetTop - road.clientHeight * 0.55;
   }, 30);
 }
+// 期間限定イベント（1.12.0）
+function evToast(r) {
+  if (!r) return;
+  if (r.ready > 0) setTimeout(() => toast(`${r.ev.name}：ごほうびが受け取れます！`, 2600), 1500);
+}
+function evRewardArt(r) {
+  if (r.kind === 'item') { const it = itemById(r.item); return it ? `<span class="thumb">${thumbHTML(it)}</span>` : icon('gift'); }
+  if (r.kind.startsWith('ticket')) return `<span class="gb-ic ev-tk">${ticketSVG(r.kind, 'mini')}</span>`;
+  return `<span class="gb-ic">${icon('gift')}</span>`;
+}
+const evRewardName = (r) => r.kind === 'item' ? (itemById(r.item)?.name || '家具') : `${GIFT_LABEL[r.kind] || 'プレゼント'} ×${r.amount || 1}`;
+function showEvent() {
+  const ev = EV.activeEvent();
+  if (!ev) return toast('いまはイベントの期間ではありません');
+  const st = EV.stateOf(ev), next = ev.rewards.find(r => st.pts < r.at), last = ev.rewards.at(-1).at;
+  const el = sheet(`
+    <div class="sh-head ev-head"><span class="sh-ic ev-ic">${icon('snow')}</span><div><h3>${esc(ev.name)}${EV.previewing() === ev.id ? '<small class="ev-pv">ためし中</small>' : ''}</h3><p>${md(ev.start)}〜${md(ev.end)} ・ のこり ${EV.daysLeft(ev)}日</p></div><button class="sh-x close" aria-label="とじる">${icon('x')}</button></div>
+    <p class="ev-desc">${esc(ev.desc)}</p>
+    <div class="ev-meter"><div class="ev-num"><b>${st.pts}</b><span>${esc(ev.unit)}</span></div>
+      <div class="ev-bar"><i style="width:${Math.min(100, st.pts / last * 100)}%"></i>${ev.rewards.map(r => `<span class="ev-tick ${st.pts >= r.at ? 'on' : ''}" style="left:${r.at / last * 100}%"></span>`).join('')}</div>
+      <small>${next ? `次のごほうびまで あと ${next.at - st.pts}${esc(ev.unit)}` : 'ぜんぶのごほうびを集めました！'}・問題は正解${EV.POINTS.right}・まちがい${EV.POINTS.wrong}、パズルは★の数</small></div>
+    <div class="ev-list">${ev.rewards.map((r, i) => { const got = st.claimed.includes(i), can = st.pts >= r.at && !got; return `
+      <div class="ev-row ${got ? 'got' : can ? 'can' : ''}"><span class="ev-at">${r.at}</span>${evRewardArt(r)}<span class="ev-nm"><b>${esc(evRewardName(r))}</b>${r.kind === 'item' ? '<small>イベント限定</small>' : ''}</span>
+        ${got ? `<span class="ev-st">${icon('check')}受け取りずみ</span>` : can ? `<button class="btn gold sm ev-claim" data-i="${i}">受け取る</button>` : `<span class="ev-st">あと${r.at - st.pts}</span>`}</div>`; }).join('')}</div>
+    <p class="note">受け取ったごほうびはプレゼントBOXに届きます。イベントの家具はガチャからは出ません</p>`, 'ev-sheet');
+  hydrateThumbs(el);
+  el.querySelector('.close').onclick = () => { el.remove(); showHome(); };
+  el.querySelectorAll('.ev-claim').forEach(b => b.onclick = () => {
+    if (EV.claim(ev, +b.dataset.i)) { vibrate([20, 30, 20]); toast('プレゼントBOXに届きました'); showEvent(); }
+  });
+}
+const md = (k) => `${+k.slice(5, 7)}/${+k.slice(8, 10)}`;
 // 勉強レポート（1.12.0）：週・月ごとのまとめ。画像で保存できる
 function showReport(kind = 'week', offset = 0) {
   const log = S.dayLog(), p = R.period(kind, offset), pv = R.period(kind, offset - 1);
@@ -2511,11 +2547,12 @@ async function leaveVisit(goBack) {
 // =========================== 管理者 ===========================
 async function showAdmin() {
   if (!isAdmin()) return showMenu();
-  const el = screenWithTabs('admin', `<button class="icon back">${icon('back')}</button><h2>管理者</h2><span></span>`, 'menu', `<div class="row2 admin-btns"><button class="btn primary compose">${icon('bell')}お知らせを書く</button><button class="btn ghost inbox">${icon('chat')}要望・バグを見る</button></div><button class="btn ghost big sendgift">${icon('gift')}みんなにプレゼントを送る</button><div class="alist"><p class="empty">読み込み中…</p></div>`);
+  const el = screenWithTabs('admin', `<button class="icon back">${icon('back')}</button><h2>管理者</h2><span></span>`, 'menu', `<div class="row2 admin-btns"><button class="btn primary compose">${icon('bell')}お知らせを書く</button><button class="btn ghost inbox">${icon('chat')}要望・バグを見る</button></div><button class="btn ghost big sendgift">${icon('gift')}みんなにプレゼントを送る</button><button class="btn ghost big evpreview">${icon('snow')}${EV.previewing() ? 'イベントのためしをやめる' : `イベントをためす（${esc(EV.EVENTS.at(-1).name)}）`}</button><div class="alist"><p class="empty">読み込み中…</p></div>`);
   el.querySelector('.back').onclick = showMenu;
   el.querySelector('.compose').onclick = () => composeNews(showNews);
   el.querySelector('.inbox').onclick = showFeedbackInbox;
   el.querySelector('.sendgift').onclick = () => composeGift();
+  el.querySelector('.evpreview').onclick = () => { EV.setPreview(EV.previewing() ? null : EV.EVENTS.at(-1).id); toast(EV.previewing() ? 'この端末だけ、イベントを期間の前でもためせます' : 'イベントのためしをやめました'); showAdmin(); };
   const u = Auth.currentUser();
   let list = [];
   try { list = await rpc('sr_admin_users', { p_token: u?.token }); } catch (e) { el.querySelector('.alist').innerHTML = `<p class="empty">${esc(e.message)}</p>`; return; }
@@ -3008,6 +3045,7 @@ function awardResult(st, ss, p, perfect, ok, isReview, secs) {
       if (mastered) HS().pendingSpecials++;
       xp = S.addAnswer(st, p.unit, perfect ? 'perfect' : ok ? 'ok' : 'wrong');
       S.logDay({ sid: subjectId, unit: p.unit, ok });
+      evToast(EV.addPoints(ok ? EV.POINTS.right : EV.POINTS.wrong));
       if (S.countStudyForPuzzle()) setTimeout(() => toast('パズルが1回できるようになりました', 2400), 1200);
       const firstPlay = S.markPlayedToday();
       // 50問ごと・連続7日ごと・克服でたまにレアチケット

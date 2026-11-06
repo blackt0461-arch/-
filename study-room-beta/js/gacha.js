@@ -190,6 +190,15 @@ add(4, GACHA_AVATARS.filter(a => a.r === 4 && a.series === 'band').map(avRow), {
 add(5, GACHA_AVATARS.filter(a => a.r === 5 && a.series === 'band').map(avRow), { series: 'band' });
 add(4, GACHA_AVATARS.filter(a => a.r === 4 && !a.series).map(avRow));
 add(5, GACHA_AVATARS.filter(a => a.r === 5 && !a.series).map(avRow));
+// ───────── 期間限定イベントのごほうび（ガチャからは出ない。1.12.0） ─────────
+add(5, [
+  ['ev-xmas-tree', 'きらめくクリスマスツリー', 'decor', 'nmr', { gacha: 'xmasTree' }, 2.0, { light: '#ffcf8a', series: 'event' }],
+], {});
+add(4, [
+  ['ev-snowman', 'マフラーの雪だるま', 'decor', 'nmr', { gacha: 'snowman' }, 1.2, { series: 'event' }],
+  ['ev-gift-pile', 'プレゼントの山', 'decor', 'nmr', { gacha: 'giftPile' }, 0.7, { series: 'event' }],
+], {});
+for (const it of GACHA_ITEMS) if (it.series === 'event') it.reward = true;
 for (const it of GACHA_ITEMS) if (it.place === 'avatar') it.reward = true; // 引いた回数のごほうび。ガチャからランダムには出ない
 
 export const GACHA_BY_ID = Object.fromEntries(GACHA_ITEMS.map((it) => [it.id, it]));
