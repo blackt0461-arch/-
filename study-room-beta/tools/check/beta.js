@@ -15,7 +15,7 @@ const serve = () => new Promise(res => { const srv = http.createServer((req, rsp
   async function open(url, name) {
     const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } }); await mock(ctx);
     const page = await ctx.newPage(); page.on('dialog', d => d.accept());
-    await page.addInitScript(() => { localStorage.setItem('studyroom.download', 'later'); localStorage.setItem('studyroom.notour', '1'); localStorage.setItem('studyroom.quality', 'low'); });
+    await page.addInitScript(() => { localStorage.setItem('studyroom.download', 'later'); localStorage.setItem('studyroom.notour', '1'); localStorage.setItem('studyroom.uinext', '0'); localStorage.setItem('studyroom.quality', 'low'); });
     await page.goto(base + url); await page.waitForSelector('.title-screen'); await page.click('.title-screen');
     if (!/登録/.test(await page.locator('button[type=submit]').textContent())) await page.click('.swap');
     await page.fill('input[name=name]', name); await page.fill('input[name=pw]', 'test1234'); await page.click('button[type=submit]');

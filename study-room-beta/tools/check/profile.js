@@ -19,7 +19,7 @@ const serve = () => new Promise(res => { const srv = http.createServer((req, rsp
   page.on('console', m => { if (m.type() === 'error') errors.push('console: ' + m.text().slice(0, 200)); });
   page.on('dialog', d => d.accept());
   const check = (ok, msg) => { console.log((ok ? '  ○ ' : '  × ') + msg); if (!ok) fails.push(msg); };
-  await page.addInitScript(() => { localStorage.setItem('studyroom.download', 'later'); localStorage.setItem('studyroom.notour', '1'); localStorage.setItem('studyroom.quality', 'low'); });
+  await page.addInitScript(() => { localStorage.setItem('studyroom.download', 'later'); localStorage.setItem('studyroom.notour', '1'); localStorage.setItem('studyroom.uinext', '0'); localStorage.setItem('studyroom.quality', 'low'); });
   await page.goto(base); await page.waitForSelector('.title-screen'); await page.click('.title-screen');
   if (!/登録/.test(await page.locator('button[type=submit]').textContent())) await page.click('.swap');
   await page.fill('input[name=name]', 'proftest'); await page.fill('input[name=pw]', 'test1234'); await page.click('button[type=submit]');

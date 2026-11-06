@@ -17,7 +17,7 @@ const Q = BANK.find(p => p.detail && /重心/.test(p.text));
   const page = await ctx.newPage(), fails = [], errors = [];
   page.on('pageerror', e => errors.push(String(e))); page.on('dialog', d => d.accept());
   const check = (ok, msg) => { console.log((ok ? '  ○ ' : '  × ') + msg); if (!ok) fails.push(msg); };
-  await page.addInitScript(() => { localStorage.setItem('studyroom.download', 'later'); localStorage.setItem('studyroom.notour', '1'); localStorage.setItem('studyroom.quality', 'low'); });
+  await page.addInitScript(() => { localStorage.setItem('studyroom.download', 'later'); localStorage.setItem('studyroom.notour', '1'); localStorage.setItem('studyroom.uinext', '0'); localStorage.setItem('studyroom.quality', 'low'); });
   await page.goto(base); await page.waitForSelector('.title-screen'); await page.click('.title-screen');
   await page.waitForSelector('button[type=submit]');
   if (!/登録/.test(await page.locator('button[type=submit]').textContent())) await page.click('.swap');

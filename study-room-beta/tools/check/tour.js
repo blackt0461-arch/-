@@ -13,7 +13,7 @@ const serve = () => new Promise(res => { const srv = http.createServer((req, rsp
   const page = await ctx.newPage(), fails = [], errors = [];
   page.on('pageerror', e => errors.push(String(e))); page.on('dialog', d => d.accept());
   const check = (ok, msg) => { console.log((ok ? '  ○ ' : '  × ') + msg); if (!ok) fails.push(msg); };
-  await page.addInitScript(() => { localStorage.setItem('studyroom.download', 'later'); localStorage.setItem('studyroom.quality', 'low'); });
+  await page.addInitScript(() => { localStorage.setItem('studyroom.download', 'later'); localStorage.setItem('studyroom.quality', 'low'); localStorage.setItem('studyroom.uinext', '0'); });
   console.log('1. 新しく登録すると案内が出る');
   await page.goto(base); await page.waitForSelector('.title-screen'); await page.click('.title-screen');
   await page.waitForSelector('button[type=submit]');
