@@ -1307,3 +1307,11 @@ body.calc-on .problem .num-tap { font: inherit; }
 /* 山小屋 */
 .rp-home + .rp-home { margin-top: 6px; }
 .rp-home.cabin { background: linear-gradient(180deg, rgba(120,92,70,.9), rgba(70,52,40,.9)); color: #fff; border-color: rgba(255,255,255,.35); }
+/* メニューの整理（1.15）：記録・レポートの切りかえ／イベントとミッションのタブ */
+.rec-switch, .evms-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; border-radius: 12px; background: rgba(255,255,255,.07); margin: 0 0 12px; }
+.rec-switch button, .evms-tabs button { position: relative; border: 0; background: none; padding: 8px 4px; border-radius: 9px; font-size: 13px; color: var(--sk-muted, var(--muted)); display: flex; align-items: center; justify-content: center; gap: 6px; }
+.rec-switch button svg, .evms-tabs button svg { width: 16px; height: 16px; }
+.rec-switch button.on, .evms-tabs button.on { background: var(--sk-accent, var(--accent)); color: #2a1706; font-weight: 700; }
+.evms-tabs .gb-n { position: static; margin-left: 2px; }
+.screen .news-fb { margin: 14px 0 6px; width: 100%; justify-content: center; }
+.screen .betasw { width: 100%; justify-content: center; margin-bottom: 10px; }

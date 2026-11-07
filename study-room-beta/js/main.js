@@ -973,8 +973,8 @@ function showHome() {
       ${UINEXT && canBuyNow() ? `<button class="nx-buy">${icon('gift')}<span>家具が買える</span><b>${buyCount() > 1 ? '×' + buyCount() : ''}</b></button>` : ''}
       <div class="side-tools">
         ${UINEXT ? `<button class="round nx-menubtn" aria-label="メニュー" aria-expanded="false">${icon('menu')}${newsBadge ? '<i class="gb-n dot-only"></i>' : ''}</button>` : `<button class="round photo" aria-label="写真をとる">${icon('camera')}</button>`}
-        ${EV.activeEvent() ? `<button class="round evbtn" aria-label="${esc(EV.activeEvent().name)}">${icon(EV.activeEvent().icon || 'snow')}${EV.readyCount(EV.activeEvent()) ? `<i class="gb-n">${EV.readyCount(EV.activeEvent())}</i>` : ''}</button>` : ''}
-        <button class="round msbtn" aria-label="ミッション">${icon('mission')}${M.readyCount() ? `<i class="gb-n">${M.readyCount()}</i>` : ''}</button>
+        ${EV.activeEvent() ? `<button class="round evbtn" aria-label="${esc(EV.activeEvent().name)}・ミッション">${icon(EV.activeEvent().icon || 'snow')}${EV.readyCount(EV.activeEvent()) + M.readyCount() ? `<i class="gb-n">${EV.readyCount(EV.activeEvent()) + M.readyCount()}</i>` : ''}</button>`
+          : `<button class="round msbtn" aria-label="ミッション">${icon('mission')}${M.readyCount() ? `<i class="gb-n">${M.readyCount()}</i>` : ''}</button>`}
         <button class="round giftbox" aria-label="プレゼントBOX">${icon('gift')}${S.gifts().length ? `<i class="gb-n">${S.gifts().length > 99 ? '99+' : S.gifts().length}</i>` : ''}</button>
       </div>
     </div>`);
@@ -2256,13 +2256,11 @@ function screenWithTabs(cls, title, active, body) {
 // 新しいデザイン：メニューは右上の丸ボタン。押すと、その下に項目が縦にのびる（1.12.1）
 const NX_MENU = () => [
   ['skins', 'palette', '着せ替え', () => showSkins()],
-  ['report', 'calendar', '勉強レポート', () => showReport()],
-  ['records', 'chart', '記録', () => showRecords()],
-  ['news', 'bell', 'お知らせ', () => showNews(), newsBadge],
-  ['feedback', 'chat', '要望・バグ報告', () => showFeedback()],
+  ['records', 'chart', '記録・レポート', () => showReport()],
+  ['news', 'bell', 'お知らせ・要望', () => showNews(), newsBadge],
   ['photo', 'camera', '部屋の写真', () => photoMode()],
   ['settings', 'gear', '設定', () => showSettings()],
-  ...(isAdmin() ? [['beta', BETA ? 'home' : 'flask', BETA ? 'いつもの版へ' : 'テスト版', () => { location.href = BETA ? '../study-room/' : '../study-room-beta/'; }], ['admin', 'shield', '管理者', () => showAdmin()]] : []),
+  ...(isAdmin() ? [['admin', 'shield', '管理者', () => showAdmin()]] : []), // テスト版への切りかえは管理者画面の中（1.15）
 ];
 function toggleNxMenu(open) {
   const btn = app.querySelector('.nx-menubtn'); if (!btn) return;
@@ -2531,13 +2529,17 @@ function evRewardArt(r) {
   return `<span class="gb-ic">${icon('gift')}</span>`;
 }
 const evRewardName = (r) => r.kind === 'item' ? (itemById(r.item)?.name || '家具') : `${GIFT_LABEL[r.kind] || 'プレゼント'} ×${r.amount || 1}`;
+// イベント中は、イベントとミッションを上のタブで行き来する（部屋の丸ボタンは1つにまとめた。1.15）
+const evMsTabs = (on) => { const ev = EV.activeEvent(); if (!ev) return ''; const n1 = EV.readyCount(ev), n2 = M.readyCount();
+  return `<div class="seg evms-tabs"><button data-v="ev" class="${on === 'ev' ? 'on' : ''}">${icon(ev.icon || 'snow')}${esc(ev.name)}${n1 ? `<i class="gb-n">${n1}</i>` : ''}</button><button data-v="ms" class="${on === 'ms' ? 'on' : ''}">${icon('mission')}ミッション${n2 ? `<i class="gb-n">${n2}</i>` : ''}</button></div>`; };
+const bindEvMsTabs = (el) => el.querySelectorAll('.evms-tabs button').forEach(b => b.onclick = () => { if (b.classList.contains('on')) return; el.remove(); b.dataset.v === 'ev' ? showEvent() : showMissions(); });
 function showEvent() {
   const ev = EV.activeEvent();
   if (!ev) return toast('いまはイベントの期間ではありません');
   const st = EV.stateOf(ev), next = ev.rewards.find(r => st.pts < r.at), last = ev.rewards.at(-1).at;
   const el = sheet(`
     <div class="sh-head ev-head"><span class="sh-ic ev-ic">${icon(ev.icon || 'snow')}</span><div><h3>${esc(ev.name)}${EV.previewing() === ev.id ? '<small class="ev-pv">ためし中</small>' : ''}</h3><p>${md(ev.start)}〜${md(ev.end)} ・ のこり ${EV.daysLeft(ev)}日</p></div><button class="sh-x close" aria-label="とじる">${icon('x')}</button></div>
-    <p class="ev-desc">${esc(ev.desc)}</p>
+    ${evMsTabs('ev')}<p class="ev-desc">${esc(ev.desc)}</p>
     <div class="ev-meter"><div class="ev-num"><b>${st.pts}</b><span>${esc(ev.unit)}</span></div>
       <div class="ev-bar"><i style="width:${Math.min(100, st.pts / last * 100)}%"></i>${ev.rewards.map(r => `<span class="ev-tick ${st.pts >= r.at ? 'on' : ''}" style="left:${r.at / last * 100}%"></span>`).join('')}</div>
       <small>${next ? `次のごほうびまで あと ${next.at - st.pts}${esc(ev.unit)}` : 'ぜんぶのごほうびを集めました！'}・問題は正解${EV.POINTS.right}・まちがい${EV.POINTS.wrong}、パズルは★の数</small></div>
@@ -2547,6 +2549,7 @@ function showEvent() {
     <p class="note">受け取ったごほうびはプレゼントBOXに届きます。イベントの家具はガチャからは出ません</p>`, 'ev-sheet');
   hydrateThumbs(el);
   el.querySelector('.close').onclick = () => { el.remove(); showHome(); };
+  bindEvMsTabs(el);
   el.querySelectorAll('.ev-claim').forEach(b => b.onclick = () => {
     if (EV.claim(ev, +b.dataset.i)) { vibrate([20, 30, 20]); toast('プレゼントBOXに届きました'); showEvent(); }
   });
@@ -2576,6 +2579,7 @@ function showMissions() {
   };
   const el = sheet(`
     <div class="sh-head"><span class="sh-ic ms-ic">${icon('mission')}</span><div><h3>ミッション</h3><p>${M.sideKey() === 'puzzle' ? 'パズルサイド' : 'スタディサイド'}のミッション</p></div><button class="sh-x close" aria-label="とじる">${icon('x')}</button></div>
+    ${evMsTabs('ms')}
     <div class="ms-wallet">${medalIcon()}<b>${M.medals()}</b><span>メダル</span><button class="btn ghost sm ms-shop">${icon('gift')}メダル交換所</button></div>
     ${ready > 1 ? `<button class="btn primary big ms-every">${icon('gift')}まとめて受け取る（${ready}）</button>` : ''}
     <h4 class="ms-h">毎日のミッション<small>のこり ${M.timeLeft('daily')}</small></h4>
@@ -2585,6 +2589,7 @@ function showMissions() {
     <p class="note">毎日は朝6時、毎週は月曜の朝6時に新しくなります。メダルは交換所で家具などと交換できます</p>`, 'ms-sheet');
   const done = (r) => { if (!r) return; S.save(); vibrate([20, 30, 20]); toast(`メダル ${r.medals}枚${r.ticket ? `・レアチケット ${r.ticket}枚` : ''}を受け取りました`); showMissions(); };
   el.querySelector('.close').onclick = () => { el.remove(); showHome(); };
+  bindEvMsTabs(el);
   el.querySelectorAll('.ms-claim').forEach(b => b.onclick = () => done(M.claim(b.dataset.k, b.dataset.id)));
   el.querySelectorAll('.ms-all').forEach(b => b.onclick = () => done(M.claimAll(b.dataset.k)));
   el.querySelector('.ms-every')?.addEventListener('click', () => done(M.claimEverything()));
@@ -2627,6 +2632,9 @@ function showMedalShop() {
   });
 }
 // 勉強レポート（1.12.0）：週・月ごとのまとめ。画像で保存できる
+// 「記録・レポート」：勉強レポートと記録（成績）を上のタブで行き来する（1.15）
+const recSwitch = (on) => `<div class="seg rec-switch"><button data-v="rep" class="${on === 'rep' ? 'on' : ''}">${icon('calendar')}レポート</button><button data-v="rec" class="${on === 'rec' ? 'on' : ''}">${icon('chart')}成績</button></div>`;
+const bindRecSwitch = (el) => el.querySelectorAll('.rec-switch button').forEach(b => b.onclick = () => { if (b.classList.contains('on')) return; b.dataset.v === 'rep' ? showReport() : showRecords(); });
 function showReport(kind = 'week', offset = 0) {
   const log = S.dayLog(), p = R.period(kind, offset), pv = R.period(kind, offset - 1);
   const cur = R.summarize(log, p), prev = R.summarize(log, pv);
@@ -2638,7 +2646,7 @@ function showReport(kind = 'week', offset = 0) {
     <div class="rp-days">${cur.days.map((d, i) => `<span>${kind === 'week' ? '月火水木金土日'[i] : (i % 5 === 0 || i === cur.days.length - 1) ? +d.key.slice(8) : ''}</span>`).join('')}</div>`;
   const subjRows = Object.entries(cur.bySid).sort((a, b) => b[1][0] - a[1][0]).map(([sid, [n, c]]) => `<div class="rp-row"><span class="ic2">${icon(SUBJECT_ICON[sid] || 'book')}</span><b>${esc(names[sid] || sid)}</b><span class="rp-bar"><i style="width:${n / Math.max(1, cur.n) * 100}%"></i></span><span class="rp-n">${n}問<small>${Math.round(c / n * 100)}%</small></span></div>`).join('');
   const unitRows = (list, weak) => list.length ? list.map((u, i) => `<div class="rp-row rp-unit"><span class="rp-rank ${weak ? 'weak' : 'strong'}">${i + 1}</span><span class="rp-ut"><b>${esc(u.unit)}</b><small>${esc(names[u.sid] || '')}・${u.n}問・正解率 ${Math.round(u.rate * 100)}%</small></span>${weak ? `<button class="btn ghost sm rp-go" data-s="${u.sid}" data-u="${esc(u.unit)}">${icon('pencil')}解く</button>` : ''}</div>`).join('') : `<p class="empty sm">3問以上解いた単元が出ます</p>`;
-  const el = screenWithTabs('report', `<button class="icon back">${icon('back')}</button><h2>勉強レポート</h2><span></span>`, 'menu', `
+  const el = screenWithTabs('report', `<button class="icon back">${icon('back')}</button><h2>記録・レポート</h2><span></span>`, 'menu', `${recSwitch('rep')}
     <div class="rp-tabs" role="tablist"><button data-k="week" class="${kind === 'week' ? 'on' : ''}">週</button><button data-k="month" class="${kind === 'month' ? 'on' : ''}">月</button></div>
     <div class="rp-nav"><button class="icon rp-prev" aria-label="前へ">${icon('back')}</button><div><b>${p.name}</b><small>${p.label}</small></div><button class="icon rp-next" aria-label="次へ" ${offset >= 0 ? 'disabled' : ''}>${icon('chevronRight')}</button></div>
     <p class="rp-comment">${icon('sparkle')}${esc(R.comment(cur, prev, p))}</p>
@@ -2655,6 +2663,7 @@ function showReport(kind = 'week', offset = 0) {
     <button class="btn gold big rp-save">${icon('download')}画像で保存</button>
     <p class="note">保存した画像は、写真やファイル（Google ドライブなど）に入れられます。記録は 1.12.0 から集まり始めます</p>`);
   el.querySelector('.back').onclick = showMenu;
+  bindRecSwitch(el);
   el.querySelectorAll('.rp-tabs button').forEach(b => b.onclick = () => showReport(b.dataset.k, 0));
   el.querySelector('.rp-prev').onclick = () => showReport(kind, offset - 1);
   el.querySelector('.rp-next').onclick = () => showReport(kind, Math.min(0, offset + 1));
@@ -2689,7 +2698,7 @@ function showRecords(subj = subjectId) {
   const units = unitNames.map(u => ({ u, ...(st.units?.[u] || { solved: 0, correct: 0, perfect: 0 }), total: list.filter(p => p.unit === u).length }));
   const maxSolved = Math.max(1, ...units.map(x => x.solved));
   const subjName = SUBJECTS.find(x => x.id === subj)?.name || '';
-  const el = screenWithTabs('records', `<button class="icon back">${icon('back')}</button><h2>記録</h2><span></span>`, 'menu', `
+  const el = screenWithTabs('records', `<button class="icon back">${icon('back')}</button><h2>記録・レポート</h2><span></span>`, 'menu', `${recSwitch('rec')}
     <section class="profile-card">
       <div class="pc-lv"><span>Lv</span><b>${rk.rank}</b></div>
       <div class="pc-main"><b>経験値 ${pf.xp} XP</b>
@@ -2723,6 +2732,7 @@ function showRecords(subj = subjectId) {
       return `<li><span class="unit">${esc(p.unit)}</span><span class="tx">${esc(p.text.replace(/\n/g, ' '))}</span>${badge}</li>`;
     }).join('')}</ul>`);
   el.querySelector('.back').onclick = showMenu;
+  bindRecSwitch(el);
   el.querySelectorAll('.rec-subj button').forEach(b => b.onclick = () => showRecords(b.dataset.s));
 }
 
@@ -2973,8 +2983,10 @@ async function refreshNewsBadge() {
   } catch (e) { /* オフライン */ }
 }
 async function showNews() {
-  const el = screenWithTabs('news', `<button class="icon back">${icon('back')}</button><h2>お知らせ</h2><span></span>`, 'menu', `<div class="nlist"><p class="empty">読み込み中…</p></div>`);
+  const el = screenWithTabs('news', `<button class="icon back">${icon('back')}</button><h2>お知らせ・要望</h2><span></span>`, 'menu', `<div class="nlist"><p class="empty">読み込み中…</p></div>
+    <button class="btn ghost big news-fb">${icon('chat')}要望・バグを管理者に送る</button>`);
   el.querySelector('.back').onclick = showMenu;
+  el.querySelector('.news-fb').onclick = () => showFeedback(); // 要望・バグ報告はお知らせの中から（1.15）
   let list = [];
   try { list = await rpc('sr_news_list', { p_token: Auth.currentUser()?.token }); }
   catch (e) { el.querySelector('.nlist').innerHTML = `<p class="empty">${esc(e.message)}</p>`; return; }
@@ -3159,8 +3171,9 @@ async function leaveVisit(goBack) {
 // =========================== 管理者 ===========================
 async function showAdmin() {
   if (!isAdmin()) return showMenu();
-  const el = screenWithTabs('admin', `<button class="icon back">${icon('back')}</button><h2>管理者</h2><span></span>`, 'menu', `<div class="row2 admin-btns"><button class="btn primary compose">${icon('bell')}お知らせを書く</button><button class="btn ghost inbox">${icon('chat')}要望・バグを見る</button></div><button class="btn ghost big sendgift">${icon('gift')}みんなにプレゼントを送る</button><button class="btn ghost big errlog">${icon('info')}エラーの記録を見る</button><div class="row2 admin-btns"><button class="btn ghost msdone">${icon('mission')}ミッションを全部達成に</button><button class="btn ghost msreset">${icon('refresh')}ミッションを最初から</button></div>${EV.EVENTS.length ? `<button class="btn ghost big evpreview">${icon('snow')}${EV.previewing() ? 'イベントのためしをやめる' : `イベントをためす（${esc(EV.EVENTS.at(-1).name)}）`}</button>` : ''}<div class="alist"><p class="empty">読み込み中…</p></div>`);
+  const el = screenWithTabs('admin', `<button class="icon back">${icon('back')}</button><h2>管理者</h2><span></span>`, 'menu', `<button class="btn ghost big betasw">${icon(BETA ? 'home' : 'flask')}${BETA ? 'いつもの版にもどる' : 'テスト版を開く'}</button><div class="row2 admin-btns"><button class="btn primary compose">${icon('bell')}お知らせを書く</button><button class="btn ghost inbox">${icon('chat')}要望・バグを見る</button></div><button class="btn ghost big sendgift">${icon('gift')}みんなにプレゼントを送る</button><button class="btn ghost big errlog">${icon('info')}エラーの記録を見る</button><div class="row2 admin-btns"><button class="btn ghost msdone">${icon('mission')}ミッションを全部達成に</button><button class="btn ghost msreset">${icon('refresh')}ミッションを最初から</button></div>${EV.EVENTS.length ? `<button class="btn ghost big evpreview">${icon('snow')}${EV.previewing() ? 'イベントのためしをやめる' : `イベントをためす（${esc(EV.EVENTS.at(-1).name)}）`}</button>` : ''}<div class="alist"><p class="empty">読み込み中…</p></div>`);
   el.querySelector('.back').onclick = showMenu;
+  el.querySelector('.betasw').onclick = () => { location.href = BETA ? '../study-room/' : '../study-room-beta/'; };
   el.querySelector('.compose').onclick = () => composeNews(showNews);
   el.querySelector('.inbox').onclick = showFeedbackInbox;
   el.querySelector('.sendgift').onclick = () => composeGift();
