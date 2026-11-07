@@ -348,7 +348,18 @@ function startAs(u) {
   S.useUser(u.id);
   visiting = null;
   if (room3d) room3d.roomDef = null; // 別の人の家を出しっぱなしにしない
-  if (DL.canDownload() && !DL.downloadState()) showDownload(); else enterHouse();
+  if (DL.canDownload() && !DL.downloadState()) return showDownload();
+  askExtraData().then(mb => mb ? showDownload({ extra: mb }) : enterHouse(), () => enterHouse());
+}
+// アップデートで家具などのデータが増えた時：前にまとめて保存した人には「追加データ（約○MB）をダウンロードしますか？」（1.16.3）。
+// 「あとで」なら、次のアップデートまでたずねない（使う分はその場で読み込む）
+const DL_SKIP = 'studyroom.dlskip';
+async function askExtraData() {
+  if (!DL.canDownload() || !['done', 'partial'].includes(DL.downloadState())) return 0;
+  try { if (localStorage.getItem(DL_SKIP) === APP_VERSION) return 0; } catch (e) { /* なし */ }
+  const m = await Promise.race([DL.missing(), new Promise(r => setTimeout(() => r(null), 2500))]);
+  if (!m || m.bytes < 5e5) return 0; // 0.5MB より少なければ、その場で読み込めば十分
+  return Math.max(1, Math.round(m.bytes / 1e6));
 }
 
 // =========================== 下のスロット（ゲーム風HUD） ===========================
@@ -1770,7 +1781,7 @@ function photoMode() {
 
 // =========================== 更新のお知らせ ===========================
 // このプログラムの版（version.json と同じにする。公開のたびに上げる）
-const APP_VERSION = '1.16.2';
+const APP_VERSION = '1.16.3';
 ERR.setVersion(APP_VERSION);
 // 新しい版が出たら、みんな同じタイミングでそろうように強制で再起動する。
 // 開いた時・画面に戻った時・1分ごとに version.json を見る
@@ -1814,41 +1825,9 @@ function forceRestart(info, waited = 0) {
     setTimeout(() => location.reload(), 400);
   }, 2600);
 }
-// 新しい版が出たら「アップデートしますか？」とたずねる（1.16.1〜 本人の決定）。
-// 「あとで」を押したら30分たつか、次にアプリを開いた時にまたたずねる。記録は保存されているので、あとでも安全
-const UP_SNOOZE = 'studyroom.upSnooze';
-function askUpdate(info, waited = 0) {
-  if (restarting || document.querySelector('.up-ask')) return;
-  try { const z = JSON.parse(sessionStorage.getItem(UP_SNOOZE) || 'null'); if (z && z.v === info.version && Date.now() < z.until) return; } catch (e) { /* なし */ }
-  // ガチャの演出・問題のとちゅう・ログボ・写真の時は、終わるまで待ってからたずねる
-  if (document.querySelector('.pfx, .quiz, .lb-screen, .photo-ui, .title-screen')) {
-    clearTimeout(askUpdate.t);
-    askUpdate.t = setTimeout(() => askUpdate(info, waited + 3000), 3000);
-    return;
-  }
-  const el = h(`
-    <div class="up-ask" role="dialog" aria-modal="true">
-      <div class="up-card">
-        <span class="up-ic">${icon('sparkle')}</span>
-        <h3>アップデートがあります</h3>
-        <p class="up-v">ver ${esc(APP_VERSION)} → <b>ver ${esc(info.version)}</b></p>
-        ${info.notes?.length ? `<ul class="up-list">${info.notes.map(t => `<li>${icon('check')}${esc(t)}</li>`).join('')}</ul>` : ''}
-        <p class="up-s">記録は保存されています。すぐに終わります</p>
-        <button class="btn primary big up-go">今すぐアップデート</button>
-        <button class="btn ghost up-later">あとで</button>
-      </div>
-    </div>`);
-  document.body.append(el);
-  requestAnimationFrame(() => el.classList.add('show'));
-  el.querySelector('.up-go').onclick = () => { el.remove(); forceRestart(info); };
-  el.querySelector('.up-later').onclick = () => {
-    try { sessionStorage.setItem(UP_SNOOZE, JSON.stringify({ v: info.version, until: Date.now() + 30 * 60000 })); } catch (e) { /* なし */ }
-    el.remove();
-  };
-}
 async function watchVersion() {
   const v = await latestVersion();
-  if (v?.version && v.version !== APP_VERSION) askUpdate(v);
+  if (v?.version && v.version !== APP_VERSION) forceRestart(v);
 }
 setInterval(watchVersion, 60000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) watchVersion(); });
@@ -1858,7 +1837,7 @@ async function checkUpdateNotes() {
   try {
     const v = await (await fetch('version.json', { cache: 'no-store' })).json();
     // 手元のプログラムが古いまま（スマホが前の版を覚えている）なら、1回だけ読みこみ直す
-    if (v.version !== APP_VERSION) { try { sessionStorage.removeItem(UP_SNOOZE); } catch (e) { /* なし */ } return askUpdate(v); } // 開いた時は「あとで」をわすれて、もう一度たずねる
+    if (v.version !== APP_VERSION) return forceRestart(v);
     const seen = localStorage.getItem('studyroom.version');
     localStorage.setItem('studyroom.version', v.version);
     if (!seen || seen === v.version || !v.notes?.length) return;
@@ -1871,17 +1850,18 @@ async function checkUpdateNotes() {
 }
 
 // =========================== 一括ダウンロード ===========================
-function showDownload() {
+function showDownload(opt = {}) {
   room3d?.setActive(false);
   canvas.classList.add('dim');
   app.innerHTML = '';
-  const mb = DL.totalMB();
+  const mb = opt.extra || DL.totalMB();
   const el = h(`
     <div class="screen center">
       <div class="card dl">
         <div class="logo">${icon('download')}</div>
-        <h2>家具のデータをまとめて保存</h2>
-        <p>家具・壁・床などのデータ（約${mb}MB）を先にダウンロードしておくと、あとは待たずに遊べます。<br><b>Wi-Fi のときがおすすめです。</b></p>
+        ${opt.extra ? `<h2>追加データのダウンロード</h2>
+        <p>アップデートで、新しい家具などのデータ（約${mb}MB）が増えました。ダウンロードしますか？<br><b>Wi-Fi のときがおすすめです。</b></p>` : `<h2>家具のデータをまとめて保存</h2>
+        <p>家具・壁・床などのデータ（約${mb}MB）を先にダウンロードしておくと、あとは待たずに遊べます。<br><b>Wi-Fi のときがおすすめです。</b></p>`}
         <div class="gauge big hide"><div class="fill" style="width:0%"></div><span>0%</span></div>
         <p class="dlnote"></p>
         <button class="btn primary big go">ダウンロードする</button>
@@ -1892,7 +1872,7 @@ function showDownload() {
   const go = el.querySelector('.go'), later = el.querySelector('.later');
   const bar = el.querySelector('.gauge'), fill = bar.querySelector('.fill'), label = bar.querySelector('span');
   let job = null;
-  later.onclick = () => { if (job) job.stop(); if (!DL.downloadState()) DL.setDownloadState('later'); enterHouse(); };
+  later.onclick = () => { if (job) job.stop(); if (!DL.downloadState()) DL.setDownloadState('later'); if (opt.extra) { try { localStorage.setItem(DL_SKIP, APP_VERSION); } catch (e) { /* なし */ } } enterHouse(); };
   go.onclick = async () => {
     go.classList.add('hide'); bar.classList.remove('hide');
     later.textContent = '中断する（続きはあとで）';
@@ -3518,7 +3498,11 @@ function showSettings() {
     room3d?.setQuality(b.dataset.q);
     el.querySelectorAll('.seg button[data-q]').forEach(x => x.classList.toggle('on', x === b));
   });
-  el.querySelector('.dl')?.addEventListener('click', () => { if (DL.downloadState() !== 'done') showDownload(); });
+  el.querySelector('.dl')?.addEventListener('click', async () => {
+    if (!['done', 'partial'].includes(DL.downloadState())) return showDownload();
+    const m = await DL.missing().catch(() => null); // 保存したあとに増えた分（1.16.3）
+    if (m && m.bytes > 0) showDownload({ extra: Math.max(1, Math.round(m.bytes / 1e6)) }); else toast('家具のデータは、ぜんぶ保存してあります');
+  });
   // テスト勉強のコード
   el.querySelector('.code-form').onsubmit = async (e) => {
     e.preventDefault();
