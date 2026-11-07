@@ -75,11 +75,11 @@ const serve = () => new Promise(res => { const srv = http.createServer((req, rsp
   // 1.15：買ったら、その場で置く場所を決める
   check(await page.locator('.editbar.place-new').count() === 1, '買うと「置く場所を決める」になる');
   check(await page.locator('.float-bar .rot, .float-bar .fb-name').count() >= 1 && await page.locator('.nudge').count() === 1, '買った家具が選ばれていて、回す・矢印が出る');
-  const before = await page.evaluate(() => { const r = window.__app.curRoom(); const p = r.placed[r.placed.length - 1]; return JSON.stringify([p.x, p.z]); });
+  const before = await page.evaluate(() => { const r = window.__app.curRoom(); const p = r.placed[r.placed.length - 1]; return JSON.stringify(p); });
   await page.evaluate(() => document.querySelector('.nudge [data-d="1,0"]')?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })));
   await page.waitForTimeout(120);
   await page.evaluate(() => document.querySelector('.nudge [data-d="1,0"]')?.dispatchEvent(new PointerEvent('pointerup', { bubbles: true })));
-  const after = await page.evaluate(() => { const r = window.__app.curRoom(); const p = r.placed[r.placed.length - 1]; return JSON.stringify([p.x, p.z]); });
+  const after = await page.evaluate(() => { const r = window.__app.curRoom(); const p = r.placed[r.placed.length - 1]; return JSON.stringify(p); });
   check(before !== after, `矢印で動かせる（${before} → ${after}）`);
   await page.screenshot({ path: path.join(OUT, 'nx-4b-place.png') });
   await page.click('.place-new .done'); await page.waitForTimeout(800);

@@ -1,7 +1,9 @@
 // パズルモードの確かめ。使い方（study-room フォルダで）：node tools/check/puzzle.js
 //   1. 新しく登録 → はじめに「パズル」を選ぶ → 右下が「パズル」になる
 //   2. 4種のパズルを開いて、まちがえるとハートが減る・解くとクリア → ゲージ・経験値・レベルが上がる
-//   3. おひっこしは手数の上限で失敗になる
+//   3. おひっこしは失敗がなく、「1手戻る」「最初から」で何回でもやり直せる。手数でポイントが決まる
+//   3b. 家具あぶりだしの絵（25枚）が、どれも数字だけで解ける（コンピューターで確かめる）
+//   3c. 終わりのないパズル2つ（おしいれパッキング・インテリア・マージ）：区切りでゲージ・ベスト・ランキング
 //   4. 管理者がモードを「勉強」に変えると、その人のアプリで切りかわる
 //   5. 画面のエラーが出ない
 const http = require('http'), fs = require('fs'), path = require('path');
@@ -57,6 +59,7 @@ const serve = () => new Promise(res => { const srv = http.createServer((req, rsp
     await page.screenshot({ path: path.join(OUT, `puzzle-2-${id}.png`) });
     check(!(await page.locator('.ph-sheet').count()) && (await page.locator('.pz-ibtn').count()) === 1, `${id}：とじると、右上に「i」が残る`);
     const before = await page.evaluate(() => ({ g: window.__app.HS().gauge, xp: window.__app.S.profile().xp }));
+    if (id === 'hikkoshi') check(await page.locator('.pz-life').count() === 0, 'hikkoshi：ハート（まちがいの回数）が出ない');
     // わざとまちがえる（おひっこしは無し）
     if (id !== 'hikkoshi') {
       await page.evaluate((id) => {
@@ -96,22 +99,114 @@ const serve = () => new Promise(res => { const srv = http.createServer((req, rsp
     check(await page.locator('.pz-life i').count() === 2 && await page.locator('.pz-akari .pz-cell').count() === 81, '★5 は 9×9・まちがい2回まで');
     await page.screenshot({ path: path.join(OUT, 'puzzle-2-akari5.png') });
   }
-  console.log('4. おひっこしの手数の上限');
+  console.log('4. おひっこし：失敗なし・1手戻る・最初から');
   await page.evaluate(() => window.__app.showHome()); await page.waitForTimeout(300);
   await page.evaluate(() => document.querySelector('.solve-ring').click()); await page.waitForSelector('.pz-hub');
   await page.click('.pz-star[data-p=hikkoshi][data-s="2"]'); await page.waitForSelector('.pz-blk'); await page.waitForTimeout(300);
-  const limit = +(await page.locator('.pz-moves').textContent()).split('/')[1];
-  // 小さい植物を行ったり来たりさせる
-  for (let k = 0; k < limit + 2 && !(await page.locator('.pz-res-sheet').count()); k++) {
+  check(!/\//.test(await page.locator('.pz-moves').textContent()) && /最短/.test(await page.locator('.pz-moves').textContent()), `手数の上限がなく、最短の手数が出る（${(await page.locator('.pz-moves').textContent()).trim()}）`);
+  // 植物を行ったり来たりさせて、40手うごかしても失敗にならない
+  for (let k = 0; k < 40; k++) {
     await page.evaluate(() => {
       const bl = [...document.querySelectorAll('.pz-blk')]; const arrows = [...document.querySelectorAll('.pz-arrows button')];
       for (const b of bl) { b.click(); const before = document.querySelector('.pz-moves b').textContent; for (const a of arrows) { a.click(); if (document.querySelector('.pz-moves b')?.textContent !== before) return; } }
     });
-    await page.waitForTimeout(60);
   }
-  await page.waitForTimeout(700);
-  check(/手数の上限/.test(await page.locator('.pz-res-sheet').textContent().catch(() => '')), `上限（${limit}手）をこえると失敗になる`);
-  await page.screenshot({ path: path.join(OUT, 'puzzle-4-lose.png') });
+  await page.waitForTimeout(400);
+  const mv40 = +(await page.locator('.pz-moves b').textContent());
+  check(!(await page.locator('.pz-res-sheet').count()) && mv40 >= 40, `40手うごかしても失敗にならない（${mv40}手）`);
+  await page.click('.pz-back'); await page.waitForTimeout(150);
+  check(+(await page.locator('.pz-moves b').textContent()) === mv40 - 1, '「1手戻る」で手数が1つもどる');
+  await page.click('.pz-reset'); await page.waitForTimeout(150);
+  check(+(await page.locator('.pz-moves b').textContent()) === 0 && await page.locator('.pz-back').isDisabled(), '「最初から」で手数が0にもどる');
+  await page.screenshot({ path: path.join(OUT, 'puzzle-4-slide-undo.png') });
+  { const g0 = await page.evaluate(() => window.__app.HS().gauge);
+    await page.evaluate(() => document.querySelector('.pz-host')._solve()); await page.waitForSelector('.pz-res-sheet', { timeout: 8000 }); await page.waitForTimeout(300);
+    const g1 = await page.evaluate(() => window.__app.HS().gauge), t = await page.locator('.pz-res-sheet').textContent();
+    check(/最短！/.test(t) && g1 - g0 >= 30, `最短で解くと「最短！」・★2 のゲージ満額（+${g1 - g0}）`); }
+  { const r = await page.evaluate(async () => { const m = await import('/js/puzzles.js'); return [m.slideRate(16, 16), m.slideRate(24, 16), m.slideRate(32, 16), m.slideRate(99, 16)]; });
+    check(r[0] === 1 && r[1] === 0.75 && r[2] === 0.5 && r[3] === 0.5, `ポイントの割合：最短 100%・1.5倍 75%・2倍以上 50%（${r.join(' / ')}）`); }
+  await page.screenshot({ path: path.join(OUT, 'puzzle-4-slide-clear.png') });
+
+  console.log('4a. 家具あぶりだしの絵');
+  { const r = await page.evaluate(async () => { const m = await import('/js/puzzles.js'), n = await import('/js/nonosolve.js'); const sym = (p) => p.m.every(r => r === [...r].reverse().join('')); return m.PICS.map(p => ({ n: p.n, s: p.s, ok: n.picSolvable(p.m).solved, size: p.m.length === m.ABURI_SIZE[p.s - 1] && p.m.every(r => r.length === m.ABURI_SIZE[p.s - 1]), sym: sym(p) })); });
+    check(r.length >= 20, `絵が20枚以上ある（${r.length}枚）`);
+    const ng = r.filter(x => !x.ok || !x.size);
+    check(!ng.length, ng.length ? `数字だけで解けない・大きさがちがう絵：${ng.map(x => x.n).join('、')}` : 'どの絵も、行と列の数字だけで最後まで解ける（大きさも★どおり）');
+    check(!r.some(x => x.sym), '左右対称の絵がない');
+    check([1, 2, 3, 4, 5].every(s => r.filter(x => x.s === s).length >= 4), '★ごとに4枚以上ある'); }
+  await page.evaluate(() => window.__app.showHome()); await page.waitForTimeout(300);
+  await page.evaluate(() => { window.__app.S.puzzleState('aburi').best = 4; });
+  await page.evaluate(() => document.querySelector('.solve-ring').click()); await page.waitForSelector('.pz-hub');
+  await page.click('.pz-star[data-p=aburi][data-s="5"]'); await page.waitForSelector('.pz-nono .pz-cell'); await page.waitForTimeout(300);
+  { const r = await page.evaluate(() => ({ n: document.querySelectorAll('.pz-nono .pz-cell').length, pre: [...document.querySelectorAll('.pz-nono .pz-cell')].filter(b => b.style.background && b.style.background !== 'rgb(255, 255, 255)').length, w: document.querySelector('.pz-nono .pz-cell').getBoundingClientRect().width, right: document.querySelector('.pz-nono').getBoundingClientRect().right }));
+    check(r.n === 225 && r.pre === 0, `★5 は 15×15・はじめからぬってあるマスなし（${r.n}マス・${r.pre}）`);
+    check(r.w >= 18 && r.right <= 390, `15×15 でも画面におさまる（1マス ${r.w.toFixed(1)}px）`); }
+  await page.screenshot({ path: path.join(OUT, 'puzzle-4a-aburi5.png') });
+  // 指でなぞると、まとめてぬれる：横に3マス以上つづく「ぬるマス」をなぞる
+  { const seg = await page.evaluate(() => { const G = document.querySelector('.pz-host')._G; for (let y = 0; y < G.length; y++) for (let x = 0; x + 2 < G[y].length; x++) if (G[y][x] && G[y][x + 1] && G[y][x + 2]) { const c = (xx) => { const r = document.querySelectorAll('.pz-nono .pz-cell')[y * G.length + xx].getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; }; let e = x + 2; while (e + 1 < G[y].length && G[y][e + 1]) e++; return { y, x, e, a: c(x), b: c(e) }; } return null; });
+    await page.mouse.move(seg.a[0], seg.a[1]); await page.mouse.down();
+    for (let k = 1; k <= 8; k++) await page.mouse.move(seg.a[0] + (seg.b[0] - seg.a[0]) * k / 8, seg.a[1], { steps: 2 });
+    await page.mouse.up(); await page.waitForTimeout(200);
+    const n = await page.evaluate((seg) => { const cs = document.querySelectorAll('.pz-nono .pz-cell'), N = Math.sqrt(cs.length); let k = 0; for (let x = seg.x; x <= seg.e; x++) if (cs[seg.y * N + x].style.background === 'rgb(43, 42, 51)') k++; return k; }, seg);
+    check(n === seg.e - seg.x + 1 && await page.locator('.pz-life i.on').count() === 2, `指でなぞると、まとめてぬれる（${n}マス・まちがいなし）`); }
+  await page.evaluate(() => document.querySelector('.pz-host')._solve()); await page.waitForSelector('.pz-res-sheet', { timeout: 8000 }); await page.waitForTimeout(500);
+  check(/あらわれたのは/.test(await page.locator('.pz-res-sheet').textContent()), '★5 の絵をクリアすると、絵の名前が出る');
+  await page.evaluate(() => document.querySelector('.pz-res-sheet')?.remove()); await page.waitForTimeout(200);
+  await page.screenshot({ path: path.join(OUT, 'puzzle-4a-aburi5-clear.png') });
+
+  console.log('4c. 終わりのないパズル');
+  for (const id of ['pack', 'merge']) {
+    await page.evaluate(() => window.__app.showHome()); await page.waitForTimeout(300);
+    await page.evaluate(() => document.querySelector('.solve-ring').click()); await page.waitForSelector('.pz-hub');
+    if (id === 'pack') { await page.waitForTimeout(800); await page.evaluate(() => document.querySelector('.ed-pick')?.scrollIntoView()); await page.waitForTimeout(300); await page.screenshot({ path: path.join(OUT, 'puzzle-5-hub-endless.png') }); }
+    await page.click(`.ed-go[data-e=${id}]`); await page.waitForSelector('.endless-screen .pz-host > *');
+    await page.waitForSelector('.ph-sheet', { timeout: 3000 }).catch(() => {}); await page.waitForTimeout(2600);
+    const cap = await page.evaluate(() => document.querySelector('.ph-cap')?.textContent || '');
+    check(/(ます|です|に)/.test(cap), `${id}：はじめは遊び方のカードが出る（${cap.slice(0, 20)}…）`);
+    await page.evaluate(() => document.querySelector('.ph-close')?.click()); await page.waitForTimeout(300);
+    await page.screenshot({ path: path.join(OUT, `puzzle-5-${id}.png`) });
+    if (id === 'pack') { // 指で箱を運んで置く
+      const bb = await page.locator('.pk-board').boundingBox(), sb = await page.locator('.pk-slot').first().boundingBox();
+      await page.mouse.move(sb.x + sb.width / 2, sb.y + sb.height / 2); await page.mouse.down();
+      for (let k = 1; k <= 10; k++) await page.mouse.move(sb.x + sb.width / 2 + (bb.x + bb.width / 2 - sb.x - sb.width / 2) * k / 10, sb.y + sb.height / 2 + (bb.y + bb.height - 8 - sb.y - sb.height / 2) * k / 10);
+      await page.screenshot({ path: path.join(OUT, 'puzzle-5-pack-drag.png') });
+      await page.mouse.up(); await page.waitForTimeout(300);
+      const st = await page.evaluate(() => document.querySelector('.pz-host')._state());
+      check(st.moves === 1 && st.score > 0, `pack：箱を指で運んで置ける（スコア ${st.score}）`);
+    }
+    const g0 = await page.evaluate(() => window.__app.HS().gauge);
+    // コンピューターが遊ぶ：区切りを2つ越えるまで
+    const target = id === 'pack' ? 250 : 800;
+    for (let k = 0; k < 1500; k++) {
+      const st = await page.evaluate(async (id) => { const h = document.querySelector('.pz-host'); if (id === 'pack') { h._auto(); } else { for (const d of ['down', 'left', 'down', 'right']) { if (h._move(d)) break; } await new Promise(r => setTimeout(r, 150)); } return h._state(); }, id);
+      if (st.over || st.score >= target) break;
+    }
+    const mid = await page.evaluate(() => ({ g: window.__app.HS().gauge, got: document.querySelector('.ed-got')?.textContent, s: +document.querySelector('.ed-now').textContent }));
+    check(mid.g > g0 && /\+\d+/.test(mid.got), `${id}：スコアが区切りを越えるとゲージがたまる（スコア ${mid.s}・ゲージ ${g0}→${mid.g}・${mid.got}）`);
+    await page.screenshot({ path: path.join(OUT, `puzzle-5-${id}-play.png`) });
+    await page.evaluate(() => document.querySelector('.pz-host')._end());
+    await page.waitForSelector('.pz-res-sheet', { timeout: 6000 }); await page.waitForTimeout(300);
+    const t = await page.locator('.pz-res-sheet').textContent();
+    const best = await page.evaluate((id) => window.__app.S.endlessState(id).best, id);
+    check(/スコア/.test(t) && best === mid.s, `${id}：終わるとスコアとベストが出る（ベスト ${best}）`);
+    await page.screenshot({ path: path.join(OUT, `puzzle-5-${id}-end.png`) });
+    await page.click('.pz-res-sheet .rank'); await page.waitForSelector('.ed-rank-sheet .rk-row', { timeout: 6000 }).catch(() => {});
+    check(await page.locator('.ed-rank-sheet .rk-row.me').count() === 1, `${id}：ランキングに自分の記録が出る`);
+    await page.click('.ed-tabs [data-s=all]'); await page.waitForTimeout(500);
+    check(await page.locator('.ed-rank-sheet .rk-row.me').count() === 1, `${id}：「歴代」にも出る`);
+    if (id === 'merge') await page.screenshot({ path: path.join(OUT, 'puzzle-5-ranking.png') });
+  }
+  { // 1回の上限は ★5 と同じ（72）。同じ日にたくさん遊ぶと減る
+    const r = await page.evaluate(async () => { const e = await import('/js/endless.js'); const S = window.__app.S; const a = e.MILESTONES.pack.length * e.MILESTONE_GAUGE; const pf = S.profile(); pf.endlessDay = { day: S.dayKey(), pack: 450 }; const rate = S.endlessRate('pack'); return { a, rate, capOk: e.scoreCap('pack', 10) === 3190 }; });
+    check(r.a === 72 && r.rate === 0.4 && r.capOk, `1回のゲージの上限は 72・同じ日にたくさん遊ぶと減る（倍率 ${r.rate}）`); }
+  { const n0 = errors.length;
+    const r = await page.evaluate(async () => { const { rpc } = await import('/js/cloud.js'); try { await rpc('sr_endless_submit', { p_token: 't-puzzler', p_game: 'pack', p_score: 999999, p_moves: 3, p_secs: 60 }); return 'ok'; } catch (e) { return e.code || e.message; } });
+    await page.waitForTimeout(200); errors.splice(n0); // はじかれた時の「400」はわざと（エラーに数えない）
+    check(r !== 'ok', 'ありえない高得点は、ランキングに入らない'); }
+  { await page.evaluate(() => window.__app.showHome()); await page.waitForTimeout(300); await page.evaluate(() => document.querySelector('.solve-ring').click()); await page.waitForSelector('.pz-hub');
+    const t = await page.locator('.ed-pick').first().textContent();
+    check(/ベスト\s*[1-9]/.test(t), `パズルえらびに自分のベストが出る（${t.replace(/\s+/g, ' ').trim().slice(0, 40)}）`);
+    await page.click('.puzzle-sheet .sh-x'); await page.waitForTimeout(200); }
 
   console.log('4b. パズルサイドは、勉強とパズルを自由に行き来できる');
   await page.evaluate(() => window.__app.showHome()); await page.waitForTimeout(400);

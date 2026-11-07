@@ -361,12 +361,14 @@ export function puzzleState(id) {
 }
 export const puzzleOpen = (id) => Math.min(5, puzzleState(id).best + 1); // 選べるいちばん高い★
 // ゲージ：★が高いほど多い。まちがうと少し減る（半分より下にはならない）
-export function puzzleGauge(star, mistakes) { const b = PUZZLE_REWARD.gauge[star - 1]; return Math.max(Math.round(b / 2), b - mistakes * 6); }
+// rate：おひっこしの手数の割合（最短 1 〜 0.5。1.15.0）
+export function puzzleGauge(star, mistakes, rate = 1) { const b = PUZZLE_REWARD.gauge[star - 1]; return Math.max(Math.round(b / 2), Math.round(b * rate) - mistakes * 6); }
 // クリアの記録。戻り値は addAnswer と同じ形に { unlocked: 新しく選べるようになった★ } を足したもの
-export function addPuzzleClear(id, star, mistakes) {
+export function addPuzzleClear(id, star, mistakes, rate = 1) {
   const p = profile(), ps = puzzleState(id);
   const before = rankInfo(p.xp).rank;
-  const gained = Math.max(2, PUZZLE_REWARD.xp[star - 1] - mistakes * 2);
+  const gained = Math.max(2, Math.round(PUZZLE_REWARD.xp[star - 1] * rate) - mistakes * 2);
+  if (rate < 1) mistakes = 1; // おひっこしは、最短の手数の時だけ「ノーミス」
   p.xp += gained;
   p.puzzleClears = (p.puzzleClears || 0) + 1;
   countToday();
@@ -382,6 +384,51 @@ export function addPuzzleClear(id, star, mistakes) {
   const after = rankInfo(p.xp).rank;
   const rewards = after > before ? giveRankRewards(before, after) : null;
   return { gained, rankUp: after > before, rank: after, rewards, unlocked };
+}
+
+// --- 終わりのないパズル（1.15.0：おしいれパッキング・インテリア・マージ）---
+// profile.endless[id] = { best, plays, maxLv, bestAt, week: { key, best } }
+export function endlessState(id) {
+  const p = profile(); const all = p.endless || (p.endless = {});
+  return all[id] || (all[id] = { best: 0, plays: 0, maxLv: 0 });
+}
+export const endlessWeekBest = (id) => { const w = endlessState(id).week; return w && w.key === weekKey() ? w.best || 0 : 0; };
+// 同じ日に同じパズルでたくさんもらうほど、少しずつ減る（勉強の「同じ教科を続けると減る」と同じ考え方）
+// その日にそのパズルでもらったゲージ：200 まで100%・400 まで70%・それより上は40%
+export const ENDLESS_STEPS = [[200, 1], [400, 0.7], [Infinity, 0.4]];
+function endlessDay() { const p = profile(), d = dayKey(); if (!p.endlessDay || p.endlessDay.day !== d) p.endlessDay = { day: d }; return p.endlessDay; }
+export const endlessRate = (id) => { const got = endlessDay()[id] || 0; return ENDLESS_STEPS.find(([lim]) => got < lim)[1]; };
+// 区切りを1つ越えた時のゲージ（その日の最初の5回の1.5倍もここで）
+export function endlessGauge(id, base) {
+  const rate = endlessRate(id);
+  let pts = Math.max(1, Math.round(base * rate));
+  if (solvedToday() < BONUS_PER_DAY) pts = Math.round(pts * 1.5);
+  const e = endlessDay(); e[id] = (e[id] || 0) + pts;
+  return { pts, rate };
+}
+// 1回のプレイが終わった時。gauge＝このプレイでもらったゲージの合計（0 なら回数やXPには数えない）
+export function addEndlessPlay(id, { score = 0, maxLv = 0, gauge = 0 } = {}) {
+  const p = profile(), es = endlessState(id), wk = weekKey();
+  const before = rankInfo(p.xp).rank;
+  const newBest = score > es.best;
+  if (newBest) { es.best = score; es.bestAt = Date.now(); }
+  if (maxLv > (es.maxLv || 0)) es.maxLv = maxLv;
+  es.plays = (es.plays || 0) + 1;
+  if (!es.week || es.week.key !== wk) es.week = { key: wk, best: 0 };
+  const weekBest = score > es.week.best; if (weekBest) es.week.best = score;
+  let gained = 0;
+  if (gauge > 0) {
+    gained = Math.max(2, Math.round(PUZZLE_REWARD.xp[4] * Math.min(1, gauge / 72)));
+    p.xp += gained;
+    p.puzzleClears = (p.puzzleClears || 0) + 1;
+    countToday();
+    logDay({ pz: true });
+    if (!p.week || p.week.key !== wk) p.week = { key: wk, solved: 0, correct: 0 };
+    p.week.puzzle = (p.week.puzzle || 0) + 1;
+  }
+  const after = rankInfo(p.xp).rank;
+  const rewards = after > before ? giveRankRewards(before, after) : null;
+  return { gained, rankUp: after > before, rank: after, rewards, newBest, weekBest, best: es.best };
 }
 
 // --- ログインボーナス（30日で1周。5日ごとにレアチケット、30日目は★4以上確定チケット） ---
