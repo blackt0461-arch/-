@@ -15,7 +15,9 @@ ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 WORK=${TMPDIR:-/tmp}/kotetsu-gitlab; DST=$WORK/site.git; mkdir -p "$WORK"
 rm -rf "$DST"; cp -a "$ROOT/.git" "$DST"; cd "$DST"; git config core.bare true
 git for-each-ref --format='%(refname)' refs/remotes/origin | grep -v HEAD | while read r; do
-  b=${r#refs/remotes/origin/}; git show-ref -q --verify refs/heads/$b || git update-ref refs/heads/$b $r; done
+  b=${r#refs/remotes/origin/}
+  # 手元に同じ名前が無い・手元の方が古い時は、GitHub から取ってあった方を使う
+  if ! git show-ref -q --verify refs/heads/$b || git merge-base --is-ancestor refs/heads/$b $r; then git update-ref refs/heads/$b $r; fi; done
 [ -f shallow ] && for c in $(sort -u shallow); do git replace --graft $c; done
 export FILTER_BRANCH_SQUELCH_WARNING=1
 git filter-branch -f --index-filter "git rm -r -q --cached --ignore-unmatch cat-model/reference" --prune-empty -- --branches --tags >/dev/null 2>&1
