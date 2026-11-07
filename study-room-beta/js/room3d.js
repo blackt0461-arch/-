@@ -12,6 +12,7 @@ import { buildFixture, buildAircon, segRot, segPoint, putOnWall } from './roomfi
 import { layoutSpots } from './layouts.js';
 import { itemById, STARTER } from './items.js';
 import { buildProc } from './procfurn.js';
+import { partsOf, buildParts } from './compose.js';
 import { buildGacha } from './gachafurn.js';
 import { gachaSpec } from './gacha.js';
 import { loadTex, texturedMaterial, loadModel, fitMaterial, shadowAll, isLite } from './loaders.js';
@@ -585,7 +586,11 @@ export class Room3D {
   async buildItem(item) {
     const src = item.src || {};
     let obj = null;
-    if (src.proc) {
+    const parts = partsOf(item);
+    if (parts) {
+      // いくつかの部品（Poly Haven のモデル・自作の形）を並べた家具（js/compose.js）
+      try { obj = await buildParts(parts); } catch (e) { console.warn('parts', item.id, e); }
+    } else if (src.proc) {
       try { obj = buildProc(src.proc); } catch (e) { console.warn('proc', item.id, e); }
     } else if (src.gacha) {
       try { obj = buildGacha(gachaSpec(item)); } catch (e) { console.warn('gacha', item.id, e); }
@@ -598,7 +603,7 @@ export class Room3D {
     if (!obj) return null;
     shadowAll(obj);
     // 大きすぎるモデルは目安の大きさに縮める
-    if (item.size && !src.proc && !src.gacha) {
+    if (item.size && !src.proc && !src.gacha && !parts) {
       const sz = new THREE.Box3().setFromObject(obj).getSize(new THREE.Vector3());
       const big = Math.max(sz.x, sz.y, sz.z);
       if (big > item.size * 1.3) obj.scale.multiplyScalar(item.size / big);

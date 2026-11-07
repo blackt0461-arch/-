@@ -56,6 +56,35 @@ function aburiDesk(s, g) {
   const pen = cy(0.004, 0.004, 0.14, P('#1d1d1d', 0.4), 0, 0, 0, 8); pen.rotation.set(0, 0.3, PI / 2); pen.position.set(-0.05, 0.765, 0.2);
 }
 
+// 机の上の物だけ（PARTS で Poly Haven の机にのせる。y=0 が天板）
+function aburiTop(s, g) {
+  const inner = new THREE.Group(); const back0 = pushGroup(inner);
+  // 設計図（青い紙に白い線）
+  const bp = faceMat('blueprint', (x, w, h) => {
+    x.fillStyle = '#21497a'; x.fillRect(0, 0, w, h);
+    x.strokeStyle = 'rgba(255,255,255,0.18)'; x.lineWidth = 1; for (let i = 0; i < w; i += 16) { x.beginPath(); x.moveTo(i, 0); x.lineTo(i, h); x.stroke(); x.beginPath(); x.moveTo(0, i); x.lineTo(w, i); x.stroke(); }
+    x.strokeStyle = '#e8f1ff'; x.lineWidth = 3; x.strokeRect(30, 30, 190, 120); x.beginPath(); x.moveTo(110, 30); x.lineTo(110, 150); x.moveTo(30, 90); x.lineTo(110, 90); x.moveTo(160, 30); x.lineTo(160, 100); x.lineTo(220, 100); x.stroke();
+    x.lineWidth = 1.5; x.beginPath(); x.arc(110, 90, 22, 0, PI / 2); x.stroke(); x.beginPath(); x.arc(160, 100, 18, PI, PI * 1.5); x.stroke();
+    x.fillStyle = '#e8f1ff'; x.font = '12px "Courier New"'; x.fillText('PLAN  1:50', 30, 172); x.fillText('6.0m', 110, 24);
+  }, 256, 192);
+  const sheet = pl(0.62, 0.46, bp, -0.12, 0.761, 0.0); sheet.rotation.y = 0.06;
+  // 丸めた設計図
+  for (let i = 0; i < 3; i++) { const r = cy(0.025, 0.025, 0.5, P(['#d8cba8', '#e6dcc0', '#21497a'][i], 0.85), 0, 0, 0, 14); r.rotation.set(0, 0.2 + i * 0.1, PI / 2); r.position.set(0.32, 0.785 + (i === 2 ? 0.045 : 0), -0.2 + i * 0.05 - (i === 2 ? 0.025 : 0)); }
+  if (!s.noLens) {
+  // 真ちゅうの虫めがね（スタンドつき）
+  cy(0.06, 0.07, 0.02, BRASS(), -0.42, 0.74, -0.15, 20);
+  const arm = cy(0.008, 0.008, 0.26, BRASS(), -0.42, 0.76, -0.15, 8); arm.rotation.z = 0.5; arm.position.set(-0.36, 0.87, -0.15);
+  const lens = new THREE.Group(); const back = pushGroup(lens);
+  to(0.08, 0.009, BRASS(), 0, 0, 0, TAU, 8, 40).rotation.x = PI / 2.6;
+  sp(0.078, GL('#eaf5ff', 0.25), 0, 0, 0, 1, 0.12, 1, 24, 8).rotation.x = PI / 2.6 - PI / 2;
+  back(); lens.position.set(-0.26, 0.96, -0.08); lens.rotation.y = 0.3;
+  }
+  // 製図の道具
+  const tri = bx(0.16, 0.003, 0.1, GL('#d4e8f0', 0.5), 0.1, 0.762, 0.17, 0); tri.rotation.y = -0.4;
+  const pen = cy(0.004, 0.004, 0.14, P('#1d1d1d', 0.4), 0, 0, 0, 8); pen.rotation.set(0, 0.3, PI / 2); pen.position.set(-0.05, 0.765, 0.2);
+  back0(); inner.position.y = -0.74;
+}
+
 // たたみ六畳のミニチュア棚：低い木の棚の上に、ガラスのケースに入った六畳間の模型
 function rokujoBoard(s, g) {
   const wd = W('oak');
@@ -198,8 +227,11 @@ function legendLaurel(s, g) {
 
 // 回る地球儀ランプ（図鑑25%）：内側から光る地球儀がゆっくり回る
 function zukan25(s, g) {
-  la([[0.001, 0], [0.08, 0], [0.085, 0.012], [0.03, 0.03], [0.015, 0.05]], BRASS(), 0, 0, 0, 24);
-  cy(0.008, 0.008, 0.07, BRASS(), 0, 0.04, 0, 8);
+  // 本物の地球儀：かたむいた半円の輪（子午線）が北と南の軸をはさみ、輪の下の端が台の軸につながる
+  const R0 = 0.15, RR = 0.168, TILT = 0.41, CY = 0.27;
+  const bxp = RR * Math.sin(TILT), byp = CY - RR * Math.cos(TILT); // 輪の下の端（南の軸受け）
+  la([[0.001, 0], [0.08, 0], [0.085, 0.012], [0.03, 0.03], [0.015, 0.05]], BRASS(), bxp, 0, 0, 24);
+  cy(0.008, 0.008, byp - 0.04, BRASS(), bxp, 0.04, 0, 8);
   const map = faceMat('globemap', (x, w, h) => {
     x.fillStyle = '#2f6fa0'; x.fillRect(0, 0, w, h);
     x.fillStyle = '#e8d9a8';
@@ -209,8 +241,10 @@ function zukan25(s, g) {
   }, 256, 128);
   map.emissive = new THREE.Color('#ffffff'); map.emissiveMap = map.map; map.emissiveIntensity = 0.55;
   const globe = new THREE.Mesh(new THREE.SphereGeometry(0.15, 32, 20), map);
-  const tilt = new THREE.Group(); tilt.rotation.z = 0.41; tilt.position.y = 0.27; g.add(tilt); tilt.add(globe);
-  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.168, 0.006, 6, 48, PI * 1.2), BRASS()); ring.rotation.set(0, PI / 2, -PI * 0.6); tilt.add(ring);
+  const tilt = new THREE.Group(); tilt.rotation.z = TILT; tilt.position.y = CY; g.add(tilt); tilt.add(globe);
+  // 半円の輪（北の端から南の端まで、地球儀のうしろ側をまわる）と、南北の軸
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(RR, 0.006, 6, 48, PI), BRASS()); ring.rotation.set(0, PI / 2, -PI / 2); tilt.add(ring);
+  for (const sy of [-1, 1]) { const ax = new THREE.Mesh(new THREE.CylinderGeometry(0.004, 0.004, RR - R0 + 0.01, 8), BRASS()); ax.position.y = sy * (R0 + (RR - R0) / 2); tilt.add(ax); }
   g.userData.light = { color: '#cfe4ff', intensity: 0.6, y: 0.27 };
   g.userData.tick = (t) => { globe.rotation.y = t * 0.3; };
 }
@@ -229,7 +263,8 @@ function zukan50(s, g) {
     bx(0.66, 0.01, 0.38, shelfM, 0, y, 0, 0);
     const lamp = bx(0.6, 0.006, 0.02, GLOW('#fff1d6', 1.4), 0, y + 0.37, 0.15, 0); lamp.castShadow = false;
   }
-  // 中の飾り（つぼ・石・模型・メダル）
+  // 中の飾り（つぼ・石・模型・メダル）。PARTS で Poly Haven の物を並べる時は空にする
+  if (s.empty) { g.userData.light = { color: '#fff1d6', intensity: 0.6, y: 1.2 }; return; }
   las([[0.001, 0], [0.05, 0], [0.07, 0.08], [0.04, 0.18], [0.03, 0.2]], P('#2f6a8a', 0.2), -0.18, 0.13, 0, 20);
   sp(0.06, P('#9a7ab8', 0.25), 0.12, 0.18, 0, 1, 0.8, 1, 10, 6);
   sp(0.05, GOLD(), 0.0, 0.56, 0, 1, 1, 1, 6, 4);
@@ -247,12 +282,14 @@ function zukan75(s, g) {
   cy(0.28, 0.3, 0.06, st, 0, 0, 0, 40);
   cy(0.22, 0.24, 0.72, st, 0, 0.06, 0, 40);
   cy(0.27, 0.27, 0.03, MET('#2a2a2a', 0.3), 0, 0.78, 0, 40);
-  const top = new THREE.Group(); top.position.y = 0.81; g.add(top);
+  const top = new THREE.Group(); top.name = 'top'; top.position.y = 0.81; g.add(top);
   const back = pushGroup(top);
   cy(0.25, 0.25, 0.02, P('#1d1d1f', 0.25), 0, 0, 0, 40);
   // 金のオブジェ（ねじれた輪と球）
-  const knot = new THREE.Mesh(new THREE.TorusKnotGeometry(0.09, 0.025, 96, 12, 2, 3), GOLD()); knot.position.y = 0.17; knot.castShadow = true; top.add(knot);
-  cy(0.05, 0.06, 0.05, MET('#2a2a2a', 0.3), 0, 0.02, 0, 20);
+  if (!s.empty) {
+    const knot = new THREE.Mesh(new THREE.TorusKnotGeometry(0.09, 0.025, 96, 12, 2, 3), GOLD()); knot.position.y = 0.17; knot.castShadow = true; top.add(knot);
+    cy(0.05, 0.06, 0.05, MET('#2a2a2a', 0.3), 0, 0.02, 0, 20);
+  }
   back();
   // 足もとの明かり（下から照らす）
   const ring = to(0.29, 0.006, GLOW('#ffe6b0', 1.6), 0, 0.065, 0, TAU, 6, 48); ring.rotation.x = PI / 2; ring.castShadow = false;
@@ -301,6 +338,154 @@ function zukan100(s, g) {
   g.userData.light = { color: '#fff1d6', intensity: 0.5, y: 0 };
 }
 
+// ===================== 12月のイベント「冬のカフェ」 =====================
+// ホットチョコのカウンター：小さな木のカウンター（左半分は小物を置ける）に、銅のポット・マグ・マシュマロのびん・メニュー
+function cocoaCounter(s, g) {
+  const wd = W('oak'), cream = P('#efe4cf', 0.6);
+  // 本体（クリーム色の縦板の前板）
+  bx(1.2, 0.08, 0.5, P('#5a4434', 0.8), 0, 0, 0, 0.004);
+  bx(1.16, 0.82, 0.46, cream, 0, 0.08, 0, 0.006);
+  for (let i = 0; i < 11; i++) bx(0.004, 0.76, 0.006, P('#d9ccb2', 0.6), -0.5 + i * 0.1, 0.11, 0.232, 0);
+  bx(1.24, 0.045, 0.54, wd, 0, 0.9, 0, 0.008);
+  bx(1.18, 0.03, 0.02, P('#a8323a', 0.6), 0, 0.84, 0.235, 0.004); // 赤い帯（少しだけ）
+  // 銅のポット（湯気）
+  const cu = MET('#c97e57', 0.28);
+  las([[0.001, 0], [0.08, 0], [0.09, 0.05], [0.085, 0.13], [0.06, 0.16], [0.05, 0.17]], cu, 0.38, 0.945, -0.05, 24);
+  las([[0.052, 0], [0.03, 0.02], [0.001, 0.03]], cu, 0.38, 1.115, -0.05, 18); sp(0.012, W('walnut'), 0.38, 1.15, -0.05);
+  const spt = cy(0.008, 0.016, 0.08, cu, 0, 0, 0, 10); spt.rotation.z = -0.9; spt.position.set(0.48, 1.04, -0.05);
+  tb([[0.3, 1.08, -0.05], [0.26, 1.06, -0.05], [0.26, 0.99, -0.05], [0.3, 0.97, -0.05]], 0.008, W('walnut'));
+  const steam = [];
+  const stM = new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.12, depthWrite: false });
+  for (let i = 0; i < 3; i++) { const m = sp(0.02 + i * 0.01, stM, 0.5, 1.12 + i * 0.05, -0.05, 0.6, 1.4, 0.6, 8, 6); m.castShadow = false; steam.push(m); }
+  // マグ3つ（ココアと、マシュマロ）
+  [[0.18, 0.08, '#f2ece2'], [0.08, 0.12, '#a8323a'], [0.22, 0.16, '#efe4cf']].forEach(([x, z, c], i) => {
+    const m = P(c, 0.25);
+    las([[0.001, 0], [0.035, 0], [0.037, 0.01], [0.037, 0.08], [0.033, 0.08], [0.033, 0.01], [0.001, 0.01]], m, x, 0.945, z, 22);
+    const h = to(0.022, 0.005, m, x + 0.04, 0.985, z, PI, 6, 12); h.rotation.z = -PI / 2;
+    cy(0.032, 0.032, 0.002, P('#5a3018', 0.15), x, 1.012, z, 18);
+    if (i !== 1) for (let k = 0; k < 3; k++) bx(0.012, 0.01, 0.012, P('#fbf8f1', 0.9), x - 0.01 + k * 0.01, 1.012, z + (k % 2) * 0.01, 0.003);
+  });
+  // マシュマロのびん
+  cy(0.05, 0.05, 0.16, GL('#f2f6f5', 0.3), 0.0, 0.945, -0.1, 20, true);
+  cy(0.052, 0.052, 0.025, W('walnut'), 0.0, 1.105, -0.1, 20);
+  const r = rnd(31);
+  for (let i = 0; i < 16; i++) bx(0.022, 0.02, 0.022, P(i % 5 ? '#fbf8f1' : '#f3cfd4', 0.9), (r() - 0.5) * 0.06, 0.95 + (i % 5) * 0.022, -0.1 + (r() - 0.5) * 0.06, 0.006);
+  // メニューの小さな黒板
+  const menu = faceMat('cocoamenu', (x, w, h) => { x.fillStyle = '#2b2f2b'; x.fillRect(0, 0, w, h); x.fillStyle = '#f2ece2'; x.textAlign = 'center'; x.font = 'bold 22px Georgia'; x.fillText('HOT', w / 2, 34); x.fillText('COCOA', w / 2, 60); x.font = '14px Georgia'; x.fillText('with marshmallow', w / 2, 86); x.strokeStyle = '#f2ece2'; x.beginPath(); x.moveTo(30, 98); x.lineTo(98, 98); x.stroke(); x.fillStyle = '#e6b8a0'; x.font = 'bold 18px Georgia'; x.fillText('♥', w / 2, 120); }, 128, 128);
+  const board = new THREE.Group(); const back = pushGroup(board);
+  bx(0.2, 0.22, 0.015, W('walnut'), 0, 0, 0, 0.004); faced(0.17, 0.19, 0.003, P('#2b2f2b'), menu, 0, 0.015, 0.009);
+  back(); board.position.set(0.5, 0.945, 0.12); board.rotation.set(-0.2, -0.4, 0);
+  g.userData.tick = (t) => { steam.forEach((m, i) => { const k = (t * 0.4 + i / 3) % 1; m.position.y = 1.1 + k * 0.18; m.material.opacity = 0.14 * (1 - k); m.scale.setScalar(0.6 + k * 0.8); }); };
+}
+
+// ジンジャークッキーの家（テーブルの上に置ける大きさ）
+function gingerHouse(s, g) {
+  const cookie = faceMat('gingerwall', (x, w, h) => {
+    x.fillStyle = '#b8743c'; x.fillRect(0, 0, w, h);
+    for (let i = 0; i < 120; i++) { x.fillStyle = `rgba(90,45,15,${Math.random() * 0.15})`; x.fillRect(Math.random() * w, Math.random() * h, 2, 2); }
+    x.strokeStyle = '#fbf8f1'; x.lineWidth = 5; x.lineCap = 'round';
+    x.strokeRect(40, 40, 48, 44); x.beginPath(); x.moveTo(64, 40); x.lineTo(64, 84); x.moveTo(40, 62); x.lineTo(88, 62); x.stroke();
+    x.beginPath(); for (let i = 0; i <= 8; i++) { x.arc(8 + i * 14, 120, 7, Math.PI, 0); } x.stroke();
+  });
+  const iceM = P('#fbf8f1', 0.6), dough = P('#b8743c', 0.75);
+  // 土台（雪のお皿）
+  cy(0.16, 0.17, 0.015, P('#f4f1ea', 0.3), 0, 0, 0, 32);
+  cy(0.15, 0.15, 0.008, P('#fbfbff', 0.9), 0, 0.015, 0, 28);
+  // かべ
+  const geo = new THREE.BoxGeometry(0.18, 0.12, 0.14);
+  const house = new THREE.Mesh(geo, [dough, dough, dough, dough, cookie, cookie]); house.position.set(0, 0.083, 0); house.castShadow = true; g.add(house);
+  // 屋根（2枚の板と、つららのアイシング）
+  for (const sd of [-1, 1]) {
+    const rf = bx(0.2, 0.012, 0.13, dough, 0, 0, 0, 0.004); rf.rotation.x = sd * 0.75; rf.position.set(0, 0.185, sd * 0.045);
+    const ic = bx(0.21, 0.014, 0.02, iceM, 0, 0, 0, 0.006); ic.rotation.x = sd * 0.75; ic.position.set(0, 0.148, sd * 0.093);
+    for (let i = 0; i < 6; i++) { const ca = sp(0.009, P(['#a8323a', '#3f6a4a', '#f2c84b'][i % 3], 0.3), -0.075 + i * 0.03, 0.2, sd * 0.045, 1, 1, 1, 8, 6); ca.position.y = 0.19 + (sd > 0 ? 0 : 0); ca.position.z = sd * 0.04; ca.position.y += 0.012; }
+  }
+  bx(0.2, 0.018, 0.02, iceM, 0, 0.232, 0, 0.008);
+  // ドアと、えんとつ・キャンディの杖
+  bx(0.04, 0.06, 0.004, P('#7a4a22', 0.7), 0.0, 0.023, 0.071, 0.004);
+  bx(0.03, 0.06, 0.03, dough, 0.05, 0.2, -0.02, 0.003); bx(0.034, 0.012, 0.034, iceM, 0.05, 0.26, -0.02, 0.004);
+  for (const sx of [-1, 1]) {
+    const st = cy(0.006, 0.006, 0.1, P('#fbf8f1', 0.4), sx * 0.11, 0.02, 0.08, 8);
+    to(0.015, 0.006, P('#fbf8f1', 0.4), sx * 0.11 - sx * 0.015, 0.12, 0.08, PI, 6, 10).rotation.z = sx > 0 ? 0 : PI;
+    for (let k = 0; k < 4; k++) to(0.0062, 0.0015, P('#a8323a', 0.4), sx * 0.11, 0.035 + k * 0.022, 0.08, TAU, 4, 10).rotation.x = PI / 2;
+  }
+  // 雪の木（小さな円すい）
+  for (const [x, z, h] of [[-0.12, -0.06, 0.08], [0.12, -0.08, 0.06]]) { cy(0.001, 0.025, h, P('#4f7a5a', 0.7), x, 0.023, z, 8); cy(0.001, 0.012, h * 0.4, iceM, x, 0.023 + h * 0.6, z, 8); }
+}
+
+// ランタンの冬のカフェ看板（壁かけ・光る）：木の看板、上に雪、横の腕木につるしたランタン
+function cafeSign(s, g) {
+  const wd = W('walnut');
+  const face = faceMat('cafesign', (x, w, h) => {
+    x.fillStyle = '#6b4a30'; x.fillRect(0, 0, w, h);
+    for (let i = 0; i < 40; i++) { x.strokeStyle = `rgba(40,25,10,${0.1 + Math.random() * 0.15})`; x.beginPath(); const y = Math.random() * h; x.moveTo(0, y); x.bezierCurveTo(w / 3, y + 4, 2 * w / 3, y - 4, w, y); x.stroke(); }
+    x.strokeStyle = '#efe4cf'; x.lineWidth = 3; x.strokeRect(10, 10, w - 20, h - 20);
+    x.fillStyle = '#efe4cf'; x.textAlign = 'center'; x.font = 'bold 44px Georgia'; x.fillText('WINTER', w / 2, 66); x.font = 'bold 30px Georgia'; x.fillText('~ CAFE ~', w / 2, 106);
+    x.fillStyle = '#e8b4a0'; x.font = '18px Georgia'; x.fillText('hot cocoa · cookies', w / 2, 132);
+  }, 320, 150);
+  // 壁の金具と腕木
+  const iron = P('#2a2928', 0.5, 0.5);
+  bx(0.06, 0.18, 0.02, iron, 0, 0.12, 0.01, 0.004);
+  bx(0.5, 0.025, 0.025, iron, 0.22, 0.2, 0.02, 0.004);
+  tb([[0.02, 0.07, 0.02], [0.2, 0.12, 0.02], [0.4, 0.19, 0.02]], 0.006, iron);
+  // 看板（鎖でつるす）
+  for (const x of [0.04, 0.4]) cy(0.003, 0.003, 0.08, iron, x, 0.12, 0.02, 4);
+  const sign = new THREE.Group(); const back = pushGroup(sign);
+  faced(0.5, 0.24, 0.03, wd, face, 0, 0, 0);
+  // 雪がのる
+  bx(0.52, 0.025, 0.04, P('#f6f9fd', 0.9), 0, 0.24, 0, 0.012);
+  for (let i = 0; i < 5; i++) sp(0.018, P('#f6f9fd', 0.9), -0.22 + i * 0.11, 0.262, 0, 1.4, 0.6, 1, 8, 6);
+  back(); sign.position.set(0.22, -0.2, 0.025);
+  // ランタン（腕木の先）。PARTS で Poly Haven のランタンを付ける時は、つるす所（hook）だけ
+  const lan = new THREE.Group(); lan.name = 'hook'; const back2 = pushGroup(lan);
+  const glow = GLOW('#ffc27a', 2.2);
+  if (!s.noLantern) {
+  cy(0.002, 0.002, 0.06, iron, 0, -0.06, 0, 4);
+  bx(0.09, 0.012, 0.09, iron, 0, -0.072, 0, 0.003);
+  bx(0.07, 0.11, 0.07, GL('#fff2dc', 0.35), 0, -0.185, 0, 0);
+  sp(0.016, glow, 0, -0.14, 0, 1, 1.6, 1, 10, 8).castShadow = false;
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) bx(0.006, 0.11, 0.006, iron, sx * 0.035, -0.185, sz * 0.035, 0);
+  bx(0.085, 0.012, 0.085, iron, 0, -0.197, 0, 0.003);
+  const cap = cy(0.01, 0.055, 0.035, iron, 0, -0.07 - 0.0, 0, 4); cap.rotation.y = PI / 4; cap.position.y = -0.055;
+  bx(0.03, 0.014, 0.03, P('#f6f9fd', 0.9), 0, -0.032, 0, 0.007);
+  } else { cy(0.002, 0.002, 0.05, iron, 0, -0.05, 0, 4); sp(0.012, glow, 0, -0.17, 0, 1, 1.4, 1, 8, 6).castShadow = false; }
+  back2(); lan.position.set(0.46, 0.2, 0.02);
+  g.userData.light = { color: '#ffc27a', intensity: 0.9, y: 0.06 };
+  g.userData.tick = (t) => { lan.rotation.z = Math.sin(t * 0.9) * 0.05; glow.emissiveIntensity = 2.0 + 0.3 * Math.sin(t * 6.1) * Math.sin(t * 2.3); };
+}
+
+// 雪の結晶のガーランド（壁かけ・横長。ゆっくり揺れて、ほのかに光る）
+function snowGarland(s, g) {
+  const W0 = 1.6, sag = 0.14;
+  const cord = P('#8a6a4c', 0.8);
+  const pts = []; for (let i = 0; i <= 16; i++) { const u = i / 16; pts.push([-W0 / 2 + W0 * u, -Math.sin(u * PI) * sag, 0.03]); }
+  tb(pts, 0.004, cord, 40, 5);
+  for (const sx of [-1, 1]) sp(0.012, W('walnut'), sx * W0 / 2, 0, 0.02, 1, 1, 0.6, 8, 6);
+  const flakeM = P('#d6e2f0', 0.3, 0.2); flakeM.emissive = new THREE.Color('#bcd2ff'); flakeM.emissiveIntensity = 0.35;
+  const bulbM = GLOW('#ffd6a0', 1.8);
+  const hangs = [];
+  for (let i = 1; i < 12; i++) {
+    const u = i / 12, x = -W0 / 2 + W0 * u, y = -Math.sin(u * PI) * sag;
+    const h = new THREE.Group(); const back = pushGroup(h);
+    if (i % 2) {
+      const L = 0.06 + (i % 3) * 0.02;
+      cy(0.0012, 0.0012, L, cord, 0, -L, 0.03, 4);
+      const fl = new THREE.Group(); const back2 = pushGroup(fl);
+      const r = 0.065 + (i % 3) * 0.01;
+      for (let k = 0; k < 3; k++) { const a = bx(r * 2, r * 0.16, 0.008, flakeM, 0, -r * 0.08, 0, 0); a.rotation.z = k * PI / 3; a.position.y = 0; }
+      for (let k = 0; k < 6; k++) { const a = k * PI / 3; for (const sd of [-1, 1]) { const b = bx(r * 0.45, r * 0.12, 0.008, flakeM, 0, 0, 0, 0); b.position.set(Math.cos(a) * r * 0.62, Math.sin(a) * r * 0.62, 0); b.rotation.z = a + sd * 0.8; } }
+      sp(r * 0.14, flakeM, 0, 0, 0, 1, 1, 0.3, 8, 6);
+      back2(); fl.position.set(0, -L - r, 0.03);
+    } else {
+      cy(0.004, 0.004, 0.012, P('#5a4434', 0.6), 0, -0.012, 0.03, 6);
+      sp(0.018, bulbM, 0, -0.03, 0.03, 1, 1.3, 1, 10, 8).castShadow = false;
+    }
+    back(); h.position.set(x, y, 0); hangs.push([h, i]);
+  }
+  g.userData.light = { color: '#ffd6a0', intensity: 0.35, y: -0.1 };
+  g.userData.tick = (t) => { for (const [h, i] of hangs) h.rotation.z = Math.sin(t * 0.8 + i * 0.7) * 0.08; };
+}
+
 // gachafurn.js の BUILDERS に入れる（名前: [作る関数, 置き方]）
 export const REWARD_BUILDERS = {
   akariLamp: [make(akariLamp), 'floor'],
@@ -315,4 +500,43 @@ export const REWARD_BUILDERS = {
   zukan50: [make(zukan50), 'floor'],
   zukan75: [make(zukan75), 'floor'],
   zukan100: [make(zukan100), 'wall'],
+  aburiTop: [make(aburiTop), 'floor'],
+  // 12月のイベント「冬のカフェ」
+  cocoaCounter: [make(cocoaCounter), 'floor'],
+  gingerHouse: [make(gingerHouse), 'floor'],
+  cafeSign: [make(cafeSign), 'wall'],
+  snowGarland: [make(snowGarland), 'wall'],
+};
+
+// Poly Haven（CC0）のモデルと自作の形を組み合わせて作る家具（js/compose.js）。gacha.js の src: { gacha: '名前' } のままでよい
+export const PARTS = {
+  // 虫めがねと古い設計図の机：Poly Haven の木の机 ＋ 虫めがね ＋ 自作の設計図・丸めた図面・製図の道具
+  aburiDesk: [
+    { model: 'wooden_table_02', size: 1.15 }, // 高さ約80cmの木の机
+    { gacha: 'aburiTop', noLens: true, stackOn: 0 },
+    { model: 'magnifying_glass_01', size: 0.22, pos: [-0.38, 0, 0.06], rx: -Math.PI / 2, ry: 0.7, stackOn: 0 },
+  ],
+  // 積み上げた木箱の棚（おひっこし）：Poly Haven の木箱 ＋ 段ボール
+  hikkoshiCrates: [
+    { model: 'wooden_crate_02', size: 0.85 },
+    { model: 'cardboard_box_01', size: 0.42, pos: [-0.12, 0, 0.02], ry: 0.25, stackOn: 0 },
+  ],
+  // ガラスの陳列ケース（図鑑50%）：自作のケース ＋ Poly Haven のつぼ・花瓶・馬の置物
+  zukan50: [
+    { gacha: 'zukan50', empty: true },
+    { model: 'antique_ceramic_vase_01', size: 0.24, pos: [-0.14, 0.125, 0.02] },
+    { model: 'horse_statue_01', size: 0.22, pos: [0.08, 0.505, 0.02], ry: -0.5 },
+    { model: 'ceramic_vase_04', size: 0.2, pos: [-0.12, 0.905, 0.02] },
+    { model: 'brass_vase_03', size: 0.18, pos: [0.12, 1.305, 0.02] },
+  ],
+  // 回転する展示台（図鑑75%）：自作の台 ＋ Poly Haven の大理石の胸像（台といっしょに回る）
+  zukan75: [
+    { gacha: 'zukan75', empty: true },
+    { model: 'marble_bust_01', size: 0.46, attach: 'top', pos: [0, 0.02, 0] },
+  ],
+  // ランタンの冬のカフェ看板：自作の看板 ＋ Poly Haven のランタン（腕木につるす）
+  cafeSign: [
+    { gacha: 'cafeSign', noLantern: true },
+    { model: 'Lantern_01', size: 0.26, attach: 'hook', pos: [0, -0.32, 0] },
+  ],
 };

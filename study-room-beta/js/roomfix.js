@@ -577,15 +577,16 @@ export const SHAPES = {
       const g = new THREE.Group();
       const tl = tileM('#9fcfc0', '#f4f2ee', 10), ce = M.ceramic();
       tubShell(g, b.w, b.d, 0.55, 0.1, tl, std({ color: '#f2f4f2', roughness: 0.2 }), 0.42);
-      for (const s of [-1, 1]) box(g, b.w, 0.03, 0.1, ce, 0, 0.55, s * (b.d / 2 - 0.05));
-      for (const s of [-1, 1]) box(g, 0.1, 0.03, b.d, ce, s * (b.w / 2 - 0.05), 0.55, 0);
-      box(g, b.w - 0.2, 0.04, 0.08, ce, 0, 0.53, -b.d / 2 + 0.13);
+      // ふち（前後は全長、左右は前後のふちの間だけ。上の面が重ならないように）
+      for (const s of [-1, 1]) box(g, b.w + 0.004, 0.03, 0.104, ce, 0, 0.56, s * (b.d / 2 - 0.05));
+      for (const s of [-1, 1]) box(g, 0.104, 0.03, b.d - 0.204, ce, s * (b.w / 2 - 0.05), 0.56, 0);
+      box(g, b.w - 0.21, 0.04, 0.08, ce, 0, 0.555, -b.d / 2 + 0.143);
       // 2つハンドルの水栓
       const ch = M.chrome(), sp = new THREE.Group();
       tube(sp, [[0, 0.72, -b.d / 2 - 0.02], [0, 0.74, -b.d / 2 + 0.08], [0, 0.68, -b.d / 2 + 0.14]], 0.016, ch);
       for (const s of [-1, 1]) { cyl(sp, 0.012, 0.012, 0.06, ch, s * 0.1, 0.76, -b.d / 2 + 0.02, 10).rotation.x = Math.PI / 2; const k = new THREE.Mesh(new THREE.TorusGeometry(0.022, 0.006, 6, 4), ch); k.position.set(s * 0.1, 0.76, -b.d / 2 + 0.06); sp.add(k); }
       sp.position.x = b.w / 2 - 0.3; g.add(sp);
-      g.userData.tops = [{ x0: -b.w / 2 + 0.06, x1: b.w / 2 - 0.46, z0: -b.d / 2 + 0.005, z1: -b.d / 2 + 0.17, y: 0.565 }];
+      g.userData.tops = [{ x0: -b.w / 2 + 0.06, x1: b.w / 2 - 0.46, z0: -b.d / 2 + 0.005, z1: -b.d / 2 + 0.18, y: 0.575 }];
       g.position.set(b.x, 0, b.z);
       return g;
     },
@@ -716,8 +717,8 @@ export const SHAPES = {
       const g = new THREE.Group();
       const body = std({ color: '#a8d0d8', roughness: 0.35 });
       box(g, 0.62, 0.86, 0.5, body, 0, 0.43, 0.05);
-      box(g, 0.6, 0.02, 0.44, M.white(), 0, 0.87, 0.06);
-      for (const s of [-1, 1]) box(g, 0.27, 0.02, 0.32, std({ color: '#f4f2ee', roughness: 0.3 }), s * 0.15, 0.885, 0.1);
+      box(g, 0.6, 0.02, 0.44, M.white(), 0, 0.8705, 0.06);
+      for (const s of [-1, 1]) box(g, 0.27, 0.02, 0.32, std({ color: '#f4f2ee', roughness: 0.3 }), s * 0.15, 0.8915, 0.1); // ふたは上の板の上に
       box(g, 0.62, 0.12, 0.1, body, 0, 0.92, -0.17);
       for (let i = 0; i < 3; i++) { const k = cyl(g, 0.025, 0.025, 0.03, std({ color: '#f4f2ee', roughness: 0.3 }), -0.18 + i * 0.18, 0.95, -0.115, 14); k.rotation.x = Math.PI / 2; }
       box(g, 0.5, 0.05, 0.01, std({ color: '#e9e4da', roughness: 0.5 }), 0, 0.15, 0.305);
@@ -791,7 +792,7 @@ export const FIX_SHAPE_NAMES = {
 };
 // 一覧の見本・ガチャの演出用：備え付けの形を、部屋の外で1つだけ作る（壁の面が z=0、部屋の中が +z）
 export async function fixturePreview(kind, shape) {
-  if (kind === 'aircon') { const g = buildAircon(shape); g.position.y = 0.2; return g; }
+  if (kind === 'aircon') { const g = new THREE.Group(); const ac = buildAircon(shape); ac.position.y = 0.2; ac.rotation.y = -0.45; g.add(ac); return g; } // 横長なので、見本では少し正面向きに
   const seg = { axis: 'z', n: 1, c: 0, id: 'pv' };
   const sh = { h: 2.4, walls: [seg], windows: [] };
   const dims = { kitchen: { len: 2.4, a0: -1.2 }, bathtub: { w: 1.6, d: 0.8, x: 0, z: 0.4 }, washer: { x: 0, z: 0.31 }, fridge: { a: 0 }, vanity: { a: 0 } }[kind] || {};

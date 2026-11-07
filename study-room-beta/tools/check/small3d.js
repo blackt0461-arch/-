@@ -12,14 +12,14 @@ const serve = () => new Promise(res => { const srv = http.createServer((req, rsp
 
 // 部屋ごとに置く物：[家具…], [小物…], 見る向き（備え付けの種類 or 家具）
 const PLAN = {
-  living: { furn: ['table-round-wood', 'storage-painted-shelves-white', 'sofa-modern-sage'], small: ['sm-aromacandle', 'sm-tripleframe', 'sm-teddy', 'sm-remote', 'sm-tissue', 'sm-succulent', 'sm-magazines', 'sm-mug'] },
-  kitchen: { furn: ['table-rect-oak'], small: ['sm-tetsubin', 'sm-fryingpan', 'sm-toaster', 'sm-plates', 'sm-canisters', 'sm-oliveoil', 'sm-fruitbasket', 'sm-microwave', 'sm-kyusu'], fix: { kitchen: 'fx-kitchen-country', fridge: 'fx-fridge-retro' }, look: 'kitchen' },
+  living: { furn: ['table-round-wood', 'test-hikkoshiCrates', 'sofa-modern-sage', 'test-zukan75'], small: ['sm-aromacandle', 'sm-tripleframe', 'sm-teddy', 'sm-remote', 'sm-shelljar', 'sm-woodtray', 'sm-watchstand', 'sm-sunglasses', 'sm-boardgame'] },
+  kitchen: { furn: ['table-rect-oak'], small: ['sm-tetsubin', 'sm-fryingpan', 'sm-donabe', 'sm-plates', 'sm-cuttingboard', 'sm-wine', 'sm-fruitbasket', 'sm-microwave', 'sm-kyusu'], fix: { kitchen: 'fx-kitchen-country', fridge: 'fx-fridge-retro' }, look: 'kitchen' },
   bath: { furn: [], small: ['sm-shampoo', 'sm-bodysoap', 'sm-duck'], fix: { bathtub: 'g4-fx-bathtub-claw' }, look: 'bathtub' },
   washroom: { furn: [], small: ['sm-toothbrush', 'sm-handsoap', 'sm-lotion', 'sm-detergent', 'sm-towels'], fix: { vanity: 'fx-vanity-woodbowl', washer: 'fx-washer-top' }, look: 'vanity' },
   'c-living': { furn: ['sofa-chester-brown', 'table-trunk-pine'], small: ['sm-aromacandle', 'sm-tripleframe', 'sm-mug', 'sm-teddy'], look: 'fireplace' },
   'c-loft': { furn: ['bed-platform-oak', 'table-side-oak'], small: ['sm-bunko', 'sm-digiclock'], look: 'furn' },
   'c-study': { furn: ['table-farm-desk'], small: ['sm-kettle', 'sm-refbooks', 'sm-penstand'], look: 'woodstove' },
-  study: { furn: ['table-metal-desk', 'storage-steel-shelves'], small: ['sm-laptop', 'sm-monitor', 'sm-penstand', 'sm-headphones', 'sm-refbooks', 'sm-digiclock', 'sm-cube', 'sm-deskfan'], fix: { aircon: 'fx-aircon-wood' }, look: 'furn' },
+  study: { furn: ['test-aburiDesk', 'storage-steel-shelves', 'test-zukan50', 'test-cafeSign'], small: ['sm-laptop', 'sm-monitor', 'sm-notebooks', 'sm-pencils', 'sm-refbooks', 'sm-digiclock', 'sm-cube', 'sm-deskfan'], fix: { aircon: 'fx-aircon-wood' }, look: 'furn' },
 };
 
 (async () => {
@@ -45,7 +45,7 @@ const PLAN = {
   const shot = async (name) => {
     await page.evaluate(() => document.body.classList.add('photo-mode'));
     await page.waitForTimeout(1800);
-    await page.screenshot({ path: path.join(OUT, `small3d-${name}.png`) });
+    await page.screenshot({ path: path.join(OUT, `small3d-${name}.png`), timeout: 180000 });
     await page.evaluate(() => document.body.classList.remove('photo-mode'));
   };
 
@@ -66,6 +66,9 @@ const PLAN = {
     await page.waitForTimeout(1200);
     const res = await page.evaluate(async ({ furn, small }) => {
       const a = window.__app, { itemById } = await import('/js/items.js');
+      // 組み合わせ家具（rewardfurn.js の PARTS）を、ためしに置ける家具として足す（テストの中だけ）
+      const G = await import('/js/gacha.js');
+      for (const [id, genre, place] of [['test-aburiDesk', 'table', 'floor'], ['test-hikkoshiCrates', 'storage', 'floor'], ['test-zukan50', 'storage', 'floor'], ['test-zukan75', 'decor', 'floor'], ['test-cafeSign', 'wallart', 'wall']]) if (!G.GACHA_BY_ID[id]) { const it = { id, name: id, genre, styles: ['natural'], place, src: { gacha: id.slice(5) }, size: 1, rare: true, rarity: 4 }; G.GACHA_ITEMS.push(it); G.GACHA_BY_ID[id] = it; }
       const out = [];
       for (const id of [...furn, ...small]) { const ok = await a.putIntoRoom(itemById(id)); const p = a.curRoom().placed.at(-1); out.push({ id, ok, on: p?.item === id ? p.on ?? null : 'none', y: p?.y }); for (const o of a.room3d.items.children) if (o.userData.appear !== undefined && o.userData.appear < 1) { o.userData.appear = 1; o.scale.setScalar(o.userData.baseScale); o.position.y = o.userData.baseY; } } // 置いた時のアニメーション（この遅い画面では長くかかる）をすぐ終わらせる
       a.S.save();
@@ -74,7 +77,7 @@ const PLAN = {
     await page.waitForTimeout(2500);
     for (const r of res.filter(r => r.id.startsWith('sm-'))) check(r.ok && r.on != null && r.on !== 'none', `${r.id} が物をのせられる面の上に（${r.on}${r.y ? ' / 高さ ' + r.y : ''}）`);
     // 重なっていないか（置いた後に全部の置き方をもう一度確かめる）
-    const bad = await page.evaluate(() => { const r = window.__app.room3d; return Object.values(r.objByUid).filter(o => o.userData.item.id.startsWith('sm-') && !r.checkPlacement(o)).map(o => o.userData.item.id); });
+    const bad = await page.evaluate(() => { const r = window.__app.room3d; return Object.values(r.objByUid).filter(o => (o.userData.item.id.startsWith('sm-') || (o.userData.item.id.startsWith('test-') && !Object.values(r.objByUid).some(x => x.userData.p.on === o.userData.uid))) && !r.checkPlacement(o)).map(o => o.userData.item.id); });
     check(!bad.length, `重なり・めりこみなし${bad.length ? '（' + bad.join(', ') + '）' : ''}`);
     if (bad.length && process.env.DEBUG) console.log(await page.evaluate((ids) => { const r = window.__app.room3d; return JSON.stringify(ids.map(id => { const o = Object.values(r.objByUid).find(o => o.userData.item.id === id); const b = r.boxOf(o); const p = o.userData.p; return { id, p, bb: [b.min.x, b.min.y, b.min.z, b.max.x, b.max.y, b.max.z].map(v => +v.toFixed(3)), top: r.fixTopAt(b.clone().expandByScalar(-0.01))?.id, tops: r.fixTops.map(t => [t.id, +t.x0.toFixed(2), +t.x1.toFixed(2), +t.z0.toFixed(2), +t.z1.toFixed(2)]), others: Object.values(r.objByUid).filter(x => x !== o && b.clone().expandByScalar(-0.01).intersectsBox(r.boxOf(x))).map(x => x.userData.item.id), shell: r.solids.filter(s => b.clone().expandByScalar(-0.01).intersectsBox(s.box)).map(s => s.kind) }; })); }, bad));
     // 見る向き

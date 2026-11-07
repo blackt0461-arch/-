@@ -384,7 +384,14 @@ export async function itemObject(item) {
   let obj = null, kind = 'object', own = []; // own: あとで捨てる材質
   let disposeGeo = true;
 
-  if (src.proc) {
+  const { partsOf, buildParts } = await import('./compose.js');
+  const parts = partsOf(item);
+  if (parts) {
+    // いくつかの部品を並べた家具（形は部屋やほかの家具と共有なので捨てない）
+    obj = await buildParts(parts);
+    obj.userData.tick?.(1.5, 0.016);
+    disposeGeo = false;
+  } else if (src.proc) {
     obj = await buildProcObj(src.proc);
   } else if (src.gacha) {
     const [{ buildGacha }, { gachaSpec }] = await Promise.all([import('./gachafurn.js'), import('./gacha.js')]);

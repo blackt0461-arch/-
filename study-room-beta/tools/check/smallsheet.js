@@ -11,14 +11,14 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.json': 'applic
     if (!fs.existsSync(f) || fs.statSync(f).isDirectory()) { rsp.writeHead(404); return rsp.end(); }
     rsp.writeHead(200, { 'Content-Type': TYPES[path.extname(f)] || 'application/octet-stream' }); fs.createReadStream(f).pipe(rsp);
   }).listen(0);
-  const pre = process.argv[2] || 'sm-';
+  const pre = process.argv[2] || 'sm-', zone = process.argv[3] || '', ids = process.argv[4] || '';
   const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
   const page = await browser.newPage({ viewport: { width: 1400, height: 900 }, deviceScaleFactor: 1 });
   const errs = [];
   page.on('pageerror', e => errs.push(e.message)); page.on('console', m => { if (m.type() === 'error') errs.push(m.text().slice(0, 200)); });
-  await page.goto(`http://localhost:${srv.address().port}/tools/check/smallsheet.html?pre=${pre}`);
+  await page.goto(`http://localhost:${srv.address().port}/tools/check/smallsheet.html?pre=${pre}${zone ? '&zone=' + zone + '&cols=5' : ''}${ids ? '&ids=' + ids + '&cols=5' : ''}`);
   await page.waitForFunction(() => window.DONE !== undefined, null, { timeout: 600000 });
-  const file = path.join(OUT, `small-sheet-${pre.replace(/\W/g, '')}.png`);
+  const file = path.join(OUT, `small-sheet-${pre.replace(/\W/g, '')}${zone ? '-' + zone : ''}${ids ? '-ids' : ''}.png`);
   await page.screenshot({ path: file, fullPage: true });
   console.log('items:', await page.evaluate(() => window.DONE), '→', file);
   if (errs.length) console.log('errors:\n' + errs.join('\n'));

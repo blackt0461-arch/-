@@ -1,8 +1,10 @@
 // 山小屋（home = 'cabin'）の外：雪のつもったデッキ → 雪の原っぱと針葉樹の森 → 遠くの雪山。雪がちらつく。
 // exterior.js の buildExterior から呼ぶ。room3d.js が { world, update } を受けとり、2階（level=1）は 3m 下げて置く。
-// 形はすべて自作（外の素材なし）。重くならないように、木はまとめて描く（InstancedMesh）。
+// 木は Poly Haven（CC0）の fir_tree_01・pine_tree_01 の公式画像から1本ずつ切り出した絵（img/tree-fir-*.webp・tree-pine-*.webp）を板に貼る（モデルは1本数百MBで重すぎるため）。
+// 山・雪・デッキは自作。
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { loadTex } from './loaders.js';
 
 function rng(seed) { let s = seed; return () => (s = (s * 16807) % 2147483647) / 2147483647; }
 
@@ -17,23 +19,6 @@ function snowTexture() {
   for (let i = 0; i < 260; i++) { x.fillStyle = `rgba(${150 + R() * 40},${170 + R() * 40},${210 + R() * 30},${0.05 + R() * 0.08})`; x.beginPath(); x.arc(R() * 128, R() * 128, 2 + R() * 9, 0, Math.PI * 2); x.fill(); }
   snowTex = new THREE.CanvasTexture(c); snowTex.colorSpace = THREE.SRGBColorSpace; snowTex.wrapS = snowTex.wrapT = THREE.RepeatWrapping;
   return snowTex;
-}
-
-// 針葉樹1本ぶんの形（幹＋3段の円すい＋雪のかさ）。色は頂点の色で入れて、まとめて1回で描く
-let treeGeo = null;
-function coniferGeometry() {
-  if (treeGeo) return treeGeo;
-  const parts = [];
-  const paint = (g, hex) => { const c = new THREE.Color(hex); const n = g.attributes.position.count; const a = new Float32Array(n * 3); for (let i = 0; i < n; i++) { a[i * 3] = c.r; a[i * 3 + 1] = c.g; a[i * 3 + 2] = c.b; } g.setAttribute('color', new THREE.BufferAttribute(a, 3)); g.deleteAttribute('uv'); return g; };
-  parts.push(paint(new THREE.CylinderGeometry(0.12, 0.18, 1.2, 6).translate(0, 0.6, 0), '#4a3424'));
-  const tiers = [[1.6, 2.6, 0.9], [1.25, 2.2, 2.1], [0.85, 1.9, 3.2]];
-  for (const [r, h, y] of tiers) {
-    parts.push(paint(new THREE.ConeGeometry(r, h, 8).translate(0, y + h / 2, 0), '#1f3d2c'));
-    parts.push(paint(new THREE.ConeGeometry(r * 0.72, h * 0.42, 8).translate(0, y + h * 0.79, 0), '#eef3f8'));
-  }
-  treeGeo = mergeGeometries(parts);
-  treeGeo.computeVertexNormals();
-  return treeGeo;
 }
 
 // 雪山1つ（地面の格子を持ち上げた山。高い所は白、低い所は岩と森の色）
@@ -97,16 +82,25 @@ export async function buildMountain(mood) {
   fieldGeo.computeVertexNormals();
   const field = new THREE.Mesh(fieldGeo, snowM); field.rotation.x = -Math.PI / 2; field.position.set(0, -0.5, -55); field.receiveShadow = true; g.add(field);
   plane(120, 60, 0, -0.52, 25);
-  // 針葉樹の森（近くの木・遠くの木）
-  const treeM = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, flatShading: true });
-  if (night) treeM.color.set('#8c9ab8');
+  // 針葉樹の森（Poly Haven の木の絵を、家のほうへ向けた板に貼る）
+  const TREE_IMG = [['fir-0', 0.34], ['fir-1', 0.42], ['fir-2', 0.43], ['pine-0', 0.38], ['pine-1', 0.46], ['pine-2', 0.43]]; // [名前, 幅/高さ]
+  const texs = await Promise.all(TREE_IMG.map(([n]) => loadTex(`img/tree-${n}.webp`, true)));
+  // 板は逆光で黒くつぶれやすいので、絵そのものの明るさを少し足す（夜は弱く）
+  const treeMats = texs.map(t => { if (t) t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping; return new THREE.MeshStandardMaterial({ map: t, alphaTest: 0.45, roughness: 0.9, side: THREE.DoubleSide, color: night ? '#7d8aa8' : dusk ? '#e8c8b8' : '#ffffff', emissive: '#ffffff', emissiveMap: t, emissiveIntensity: night ? 0.08 : dusk ? 0.35 : 0.55 }); });
   const spots = [];
   for (const [x, z, s] of [[-6.5, -9, 1.0], [-9, -12, 1.25], [7.5, -10, 1.15], [10, -13.5, 0.9], [-12, -7, 0.95], [12.5, -8, 1.05]]) spots.push([x, z, s]);
-  for (let i = 0; i < 140; i++) { const z = -18 - R() * 24, x = (R() - 0.5) * (50 + (-z) * 1.6); if (Math.abs(x) < 6 && z > -26) continue; /* 窓の正面は、遠くの山が見えるようにあけておく */ spots.push([x, z, 0.8 + R() * 0.9]); }
-  const trees = new THREE.InstancedMesh(coniferGeometry(), treeM, spots.length);
-  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion();
-  spots.forEach(([x, z, s], i) => { q.setFromEuler(new THREE.Euler(0, R() * 6, 0)); m4.compose(new THREE.Vector3(x, -0.5, z), q, new THREE.Vector3(s, s * (0.9 + R() * 0.3), s)); trees.setMatrixAt(i, m4); });
-  trees.castShadow = true; trees.receiveShadow = true; g.add(trees);
+  for (let i = 0; i < 70; i++) { const z = -16 - R() * 26, x = (R() - 0.5) * (50 + (-z) * 1.6); if (Math.abs(x) < 6 && z > -26) continue; spots.push([x, z, 0.8 + R() * 0.7]); }
+  spots.sort((a, b) => a[1] - b[1]); // 遠い木から描く（すけた所の重なりがきれいに）
+  for (const [x, z, sc] of spots) {
+    const k = Math.floor(R() * TREE_IMG.length), [, asp] = TREE_IMG[k];
+    const h = (7 + R() * 5) * sc, w = h * asp;
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), treeMats[k]);
+    m.position.set(x, -0.5 + h / 2 - 0.05, z); // 根もとの土は絵から切ってあるので、幹がそのまま雪に立つ
+    m.lookAt(0, m.position.y, 0); m.castShadow = Math.abs(z) < 16; g.add(m);
+    // 根もとの雪のくぼみ（青い影）
+    const sh = new THREE.Mesh(new THREE.CircleGeometry(w * 0.35, 16), new THREE.MeshBasicMaterial({ color: '#9fb4d0', transparent: true, opacity: 0.35, depthWrite: false }));
+    sh.rotation.x = -Math.PI / 2; sh.position.set(x, -0.49, z); g.add(sh);
+  }
   // 遠くの雪山
   const mtnM = new THREE.MeshBasicMaterial({ vertexColors: true, fog: true });
   if (night) mtnM.color.set('#5a6684'); else if (dusk) mtnM.color.set('#f2c6b0'); else mtnM.color.set('#dfe6f0'); // 遠くはうっすら空の色に

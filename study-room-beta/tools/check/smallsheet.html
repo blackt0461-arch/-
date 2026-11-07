@@ -7,8 +7,8 @@ import { ITEMS } from './js/items.js';
 import { GACHA_ITEMS } from './js/gacha.js';
 import { renderThumb } from './js/thumbs.js';
 const q = new URLSearchParams(location.search);
-const pre = q.get('pre') || 'sm-';
-const list = [...ITEMS, ...GACHA_ITEMS].filter((it, i, a) => a.indexOf(it) === i && (it.id.startsWith(pre) || (pre === 'sm-' && /^g4-band-(picks|sticks|tuner|setlist)/.test(it.id)) || (pre === 'fx' && it.src?.fixshape)));
+const pre = q.get('pre') || 'sm-'; const zone = q.get('zone'); const cols = q.get('cols'); if (cols) document.getElementById('g').style.gridTemplateColumns = `repeat(${cols},1fr)`;
+const list = [...ITEMS, ...GACHA_ITEMS].filter((it, i, a) => a.indexOf(it) === i && (it.id.startsWith(pre) || (pre === 'sm-' && /^g4-band-(picks|sticks|tuner|setlist)/.test(it.id)) || (pre === 'fx' && it.src?.fixshape))).filter(it => !zone || it.zone === zone).filter(it => !q.get('ids') || q.get('ids').split(',').includes(it.id.replace(/^sm-/, '')));
 const g = document.getElementById('g');
 let n = 0;
 for (const it of list) {

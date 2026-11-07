@@ -85,7 +85,8 @@ function la(pts, mat, x = 0, y = 0, z = 0, seg = 24) {
 }
 // なめらかな回転体
 function las(pts, mat, x = 0, y = 0, z = 0, seg = 24, n = 20) {
-  const s = new THREE.SplineCurve(pts.map(p => new THREE.Vector2(p[0], p[1]))).getPoints(n).map(v => [v.x, v.y]);
+  const y0 = Math.min(...pts.map(p => p[1]));
+  const s = new THREE.SplineCurve(pts.map(p => new THREE.Vector2(p[0], p[1]))).getPoints(n).map(v => [Math.max(0, v.x), Math.max(y0, v.y)]);
   return la(s, mat, x, y, z, seg);
 }
 // 球（中心）
@@ -125,10 +126,16 @@ function rnd(seed) { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) | 0
 // ---------- よく使う部品 ----------
 // ポンプボトル
 function pumpBottle(x, z, h, r, body, lab, pumpC = '#f2f2f2') {
-  labeled(r, r, h, lab, body, x, 0, z);
-  cy(r * 0.45, r * 0.55, 0.02, P(pumpC, 0.35), x, h, z, 14);
-  cy(0.006, 0.006, 0.035, P(pumpC, 0.35), x, h + 0.02, z, 8);
-  bx(0.016, 0.012, 0.04, P(pumpC, 0.35), x, h + 0.05, z + 0.012, 0.004);
+  const pm = P(pumpC, 0.35);
+  const hb = h * 0.86; // まっすぐな胴（ラベル）
+  labeled(r, r, hb, lab, body, x, 0, z);
+  las([[r, 0], [r * 0.97, h * 0.06], [r * 0.75, h * 0.11], [r * 0.42, h * 0.14]], body, x, hb, z, 28);
+  cy(r * 0.42, r * 0.42, 0.016, pm, x, hb + h * 0.14, z, 16); // ねじのキャップ
+  const ty = hb + h * 0.14 + 0.016;
+  cy(0.0055, 0.0055, 0.03, pm, x, ty, z, 10); // 首
+  // ポンプの頭（四角くて角の丸い頭と、手前に出た注ぎ口）
+  bx(0.024, 0.016, 0.024, pm, x, ty + 0.03, z, 0.006);
+  const sp1 = cy(0.0045, 0.0055, 0.034, pm, 0, 0, 0, 10); sp1.rotation.x = PI / 2 - 0.12; sp1.position.set(x, ty + 0.038, z + 0.026);
 }
 // ふた付きのびん
 function jar(x, z, r, h, glass, lid, fill, fillH) {
@@ -164,6 +171,40 @@ function flame(x, y, z, s = 1) {
   // 本物の光は入れない（照明の数をとらない・大きな影を作らない）。光る芯だけ
 }
 
+// 画面の中身（デスクトップ・ホーム画面・ロック画面・ゲーム）。少し光る
+function screenTex(kind) {
+  const m = canvasMat('scr' + kind, kind === 'phone' ? 128 : 256, kind === 'phone' ? 256 : 160, (x, w, h) => {
+    const sky = (a, b, c) => { const gr = x.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, a); gr.addColorStop(0.6, b); gr.addColorStop(1, c); x.fillStyle = gr; x.fillRect(0, 0, w, h); };
+    if (kind === 'desktop') {
+      sky('#2b4a7a', '#8a6a9a', '#e8a07a');
+      x.fillStyle = '#3a3048'; x.beginPath(); x.moveTo(0, h * 0.8); x.lineTo(w * 0.3, h * 0.55); x.lineTo(w * 0.55, h * 0.75); x.lineTo(w * 0.8, h * 0.5); x.lineTo(w, h * 0.7); x.lineTo(w, h); x.lineTo(0, h); x.fill();
+      x.fillStyle = '#f4f4f6'; x.fillRect(w * 0.12, h * 0.12, w * 0.5, h * 0.55); x.fillStyle = '#d9dce2'; x.fillRect(w * 0.12, h * 0.12, w * 0.5, 10);
+      x.fillStyle = '#9aa3b0'; for (let i = 0; i < 6; i++) x.fillRect(w * 0.15, h * 0.12 + 18 + i * 10, w * (0.3 + (i % 3) * 0.05), 4);
+      x.fillStyle = 'rgba(20,20,30,0.75)'; x.fillRect(0, h - 12, w, 12);
+      ['#e86a5a', '#5ab4c9', '#f2c84b', '#8cc46a'].forEach((c, i) => { x.fillStyle = c; x.fillRect(w / 2 - 30 + i * 16, h - 10, 10, 8); });
+    } else if (kind === 'home') {
+      sky('#6a8ac9', '#a88ac0', '#f0b8a0');
+      const cols = ['#e86a5a', '#5ab4c9', '#f2c84b', '#8cc46a', '#f2a0c0', '#7a6ad8', '#ffffff', '#3aa58a'];
+      for (let r = 0; r < 3; r++) for (let c = 0; c < 6; c++) { x.fillStyle = cols[(r * 6 + c) % 8]; x.beginPath(); (x.roundRect ? x.roundRect(22 + c * 38, 18 + r * 40, 26, 26, 7) : x.rect(22 + c * 38, 18 + r * 40, 26, 26)); x.fill(); }
+      x.fillStyle = 'rgba(255,255,255,0.3)'; x.fillRect(16, h - 30, w - 32, 24);
+    } else if (kind === 'phone') {
+      sky('#2b4a7a', '#c27a8a', '#f2c08a');
+      x.fillStyle = 'rgba(255,255,255,0.92)'; x.textAlign = 'center'; x.font = 'bold 40px Arial'; x.fillText('7:30', w / 2, 70); x.font = '13px Arial'; x.fillText('Saturday', w / 2, 90);
+      x.fillStyle = 'rgba(255,255,255,0.25)'; x.fillRect(14, 170, w - 28, 34); x.fillStyle = 'rgba(255,255,255,0.8)'; x.fillRect(w / 2 - 20, h - 12, 40, 3);
+    } else if (kind === 'game') {
+      sky('#7ec8f0', '#bfe6f6', '#bfe6f6');
+      x.fillStyle = '#6ab04c'; x.beginPath(); x.ellipse(w * 0.3, h, w * 0.4, h * 0.35, 0, 0, TAU); x.fill(); x.beginPath(); x.ellipse(w * 0.8, h, w * 0.35, h * 0.28, 0, 0, TAU); x.fill();
+      x.fillStyle = '#c47a3a'; for (let i = 0; i < 4; i++) x.fillRect(w * 0.45 + i * 14, h * 0.45, 12, 12);
+      x.fillStyle = '#e8362a'; x.fillRect(w * 0.25, h * 0.6, 12, 16); x.fillStyle = '#f6d03a'; x.beginPath(); x.arc(w * 0.62, h * 0.32, 6, 0, TAU); x.fill();
+      x.fillStyle = '#fff'; x.font = 'bold 12px monospace'; x.fillText('SCORE 0120', 8, 16);
+    }
+  }, { rough: 0.08 });
+  m.emissive = new THREE.Color('#ffffff'); m.emissiveMap = m.map; m.emissiveIntensity = 0.4;
+  return m;
+}
+// 画面の板（前に絵、ほかは黒）
+function screen(w, h, kind, x, y, z) { return faced(w, h, 0.001, P('#0c0e10', 0.2), screenTex(kind), x, y, z); }
+
 // =====================================================================
 // それぞれの小物
 // =====================================================================
@@ -183,42 +224,71 @@ K.soapdish = () => {
 };
 K.toothbrush = () => {
   las([[0.001, 0], [0.034, 0], [0.036, 0.05], [0.038, 0.1], [0.034, 0.1], [0.032, 0.012], [0.001, 0.012]], CER('#cfdcd6'), 0, 0, 0, 24);
-  const cols = ['#f2f2f2', '#e7a8a0'];
-  [-1, 1].forEach((sg, i) => {
-    const h = cy(0.005, 0.005, 0.17, P(cols[i], 0.35), sg * 0.012, 0.03, 0, 8); h.rotation.z = sg * 0.18;
-    const head = bx(0.012, 0.03, 0.01, P('#ffffff', 0.9), sg * 0.012 + sg * 0.031, 0.18, 0.004, 0.003); head.rotation.z = sg * 0.18;
+  // 歯ブラシ2本：柄と、柄の先にくっついた毛（コップから斜めに出る）
+  [['#f2f2f2', -1], ['#e7a8a0', 1]].forEach(([col, sg]) => {
+    const b = new THREE.Group(); const prev = G; G.add(b); G = b;
+    cy(0.0045, 0.0055, 0.17, P(col, 0.35), 0, 0, 0, 8);
+    bx(0.007, 0.022, 0.006, P(col, 0.35), 0, 0.165, 0.002, 0.002);
+    bx(0.009, 0.02, 0.012, P('#ffffff', 0.9), 0, 0.167, 0.01, 0.003);
+    bx(0.002, 0.016, 0.006, P('#7fc3e0', 0.8), 0, 0.169, 0.017, 0.001);
+    G = prev; b.position.set(sg * 0.01, 0.02, 0); b.rotation.z = -sg * 0.2; b.rotation.y = sg * 0.4;
   });
 };
 K.etoothbrush = () => {
-  cy(0.035, 0.038, 0.035, P('#f4f4f2', 0.3), 0, 0, 0, 24);
-  cy(0.013, 0.015, 0.18, P('#f4f4f2', 0.3), 0, 0.035, 0, 16);
-  bx(0.01, 0.025, 0.008, P('#dfe7ef', 0.3), 0, 0.12, 0.015, 0.002);
-  cy(0.0035, 0.004, 0.05, P('#f4f4f2', 0.3), 0, 0.215, 0, 8);
-  bx(0.012, 0.018, 0.012, P('#ffffff', 0.9), 0, 0.25, 0.006, 0.003);
-  sp(0.003, GLOW('#66c7ff', 1.5), 0, 0.08, 0.015, 1, 1, 0.5, 8, 6);
+  // 本物：太さ約2.8cmの持ち手（下が少し太い）、前に電源ボタン、細い首と小さな丸い毛の頭。充電台に立つ
+  const w = P('#f4f4f2', 0.28), acc = P('#7fb8d8', 0.35);
+  la([[0.001, 0], [0.034, 0], [0.036, 0.008], [0.034, 0.024], [0.024, 0.026], [0.001, 0.026]], w, 0, 0, 0, 28);
+  las([[0.014, 0], [0.0155, 0.06], [0.0145, 0.13], [0.011, 0.165], [0.006, 0.18]], w, 0, 0.0262, 0, 24);
+  bx(0.01, 0.022, 0.004, acc, 0, 0.11, 0.0145, 0.003); // ボタン
+  sp(0.0018, GLOW('#66c7ff', 1.4), 0, 0.09, 0.0148, 1, 1, 0.4, 8, 6);
+  cy(0.003, 0.0045, 0.06, w, 0, 0.2, 0, 10); // 首
+  const head = new THREE.Group(); const prev = G; G.add(head); G = head;
+  cy(0.0065, 0.0065, 0.008, w, 0, 0, 0, 16).rotation.x = PI / 2;
+  cy(0.0058, 0.0058, 0.008, P('#ffffff', 0.9), 0, 0, 0.007, 16).rotation.x = PI / 2;
+  cy(0.003, 0.003, 0.0085, acc, 0, 0, 0.0075, 10).rotation.x = PI / 2;
+  G = prev; head.position.set(0, 0.262, 0.004);
 };
 K.toothpaste = () => {
-  const lab = label('paste', { bg: '#ffffff', text: 'MINT', band: '#2e7fc1', fg: '#2e7fc1', area: [0.1, 0.9], font: 34 });
-  // 横に寝かせたチューブ（つぶれて平たい）
-  const t = cy(0.018, 0.024, 0.16, [lab, P('#fff'), P('#fff')], 0, 0.02, 0, 16); t.rotation.set(0, 0, PI / 2); t.position.y = 0.016; t.scale.set(1, 1, 0.6);
-  const c = cy(0.012, 0.012, 0.018, P('#2e7fc1', 0.35), -0.089, 0.004, 0, 12); c.rotation.z = PI / 2; c.position.y = 0.016;
+  // 本物：うしろは平たくつぶして閉じた（ギザギザの）口、前へ行くほど丸くふくらみ、肩とキャップ
+  const geo = cg('pastetube', () => {
+    const L = 0.15, g = new THREE.CylinderGeometry(1, 1, L, 28, 24, true);
+    const p = g.attributes.position;
+    for (let i = 0; i < p.count; i++) {
+      const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
+      const t = Math.min(1, Math.max(0, (y + L / 2) / L)); // 0=平たい口 1=肩
+      const e = Math.pow(t, 0.55);
+      const wide = 0.027 * (1 - e) + 0.0185 * e, thin = 0.0012 * (1 - e) + 0.0185 * e;
+      p.setXYZ(i, x * thin, y, z * wide); // 横にねかせた時、平たい口が水平になるように
+    }
+    g.computeVertexNormals();
+    g.rotateZ(-PI / 2); // 横にねかせる（口が -x、肩が +x）
+    return g;
+  });
+  const band = canvasMat('pasteband2', 256, 64, (x, w, h) => { x.fillStyle = '#ffffff'; x.fillRect(0, 0, w, h); x.fillStyle = '#2e7fc1'; x.fillRect(w * 0.35, 0, w * 0.5, h); x.fillStyle = '#ffffff'; x.font = 'bold 26px Arial'; x.textAlign = 'center'; x.fillText('MINT', w * 0.6, h / 2 + 9); x.fillStyle = '#7fc3e0'; x.fillRect(w * 0.88, 0, w * 0.03, h); });
+  const tube = add(geo, band, 0, 0.019, 0); tube.material.side = THREE.DoubleSide;
+  bx(0.012, 0.0028, 0.056, P('#f0f0f0', 0.4), -0.081, 0.0175, 0, 0.0005); // 口のつぶし
+  las([[0.0185, 0], [0.016, 0.006], [0.009, 0.01]], P('#ffffff', 0.35), 0, 0, 0, 20); G.children.at(-1).rotation.z = -PI / 2; G.children.at(-1).position.set(0.075, 0.019, 0);
+  const c = cy(0.0095, 0.0105, 0.016, P('#2e7fc1', 0.35), 0, 0, 0, 14); c.rotation.z = -PI / 2; c.position.set(0.093, 0.019, 0);
 };
 K.towels = (s) => {
   const cols = s.colors || ['#e9e4da', '#c9d6cf', '#e9e4da'];
   cols.forEach((c, i) => {
     bx(0.3, 0.045, 0.2, CLOTH(c), 0, i * 0.043, 0, 0.02);
-    bx(0.3, 0.004, 0.012, CLOTH(i % 2 ? '#ffffff' : '#bfb6a6'), 0, i * 0.043 + 0.012, 0.101, 0);
+    bx(0.29, 0.004, 0.012, CLOTH(i % 2 ? '#ffffff' : '#bfb6a6'), 0, i * 0.043 + 0.012, 0.101, 0);
   });
 };
 K.towelbasket = () => {
   const w = wicker('#b58a56');
   cy(0.13, 0.11, 0.13, w, 0, 0, 0, 20, true); cy(0.11, 0.11, 0.004, w, 0, 0, 0, 20);
   to(0.13, 0.008, w, 0, 0.13, 0, TAU, 6, 24).rotation.x = PI / 2;
-  const cols = ['#ece7dc', '#c9d6cf', '#ece7dc', '#e8d6c8', '#d8d2c6'];
-  cols.forEach((c, i) => {
-    const a = i / cols.length * TAU;
-    const r = cy(0.035, 0.035, 0.2, CLOTH(c), Math.cos(a) * 0.055, 0.1, Math.sin(a) * 0.055, 14);
-    r.rotation.set(PI / 2, 0, a + PI / 2); r.position.y = 0.13 + (i % 2) * 0.02;
+  // 丸めたタオルを立てて詰める（うずまきの見えるふた付きの筒）
+  const cols = ['#ece7dc', '#c9d6cf', '#e8d6c8', '#ece7dc', '#d8d2c6', '#c9d6cf', '#ece7dc'];
+  const spots = [[0, 0], [0.06, 0.02], [-0.055, 0.03], [0.02, -0.06], [-0.04, -0.05], [0.065, -0.045], [-0.02, 0.07]];
+  spots.forEach(([x, z], i) => {
+    const h = 0.16 + (i % 3) * 0.015;
+    cy(0.032, 0.032, h, CLOTH(cols[i]), x, 0.0, z, 16);
+    const top = faceMat('roll' + cols[i], (c, W, H) => { c.fillStyle = cols[i]; c.fillRect(0, 0, W, H); c.strokeStyle = 'rgba(0,0,0,0.18)'; c.lineWidth = 2; c.beginPath(); for (let a = 0; a < 18; a += 0.2) c.lineTo(32 + Math.cos(a) * a * 1.6, 32 + Math.sin(a) * a * 1.6); c.stroke(); }, 64, 64);
+    const d = add(cg('rolltop', () => new THREE.CircleGeometry(0.032, 16).rotateX(-PI / 2)), top, x, h + 0.001, z); d.castShadow = false;
   });
 };
 K.handsoap = () => {
@@ -235,7 +305,7 @@ K.dryer = () => {
   const body = cy(0.04, 0.045, 0.2, b, 0, 0.03, 0, 20); body.rotation.z = PI / 2;
   const noz = cy(0.03, 0.04, 0.05, P('#4a4a4a', 0.5), 0.12, 0.105, 0, 16); noz.rotation.z = PI / 2;
   cy(0.042, 0.042, 0.006, P('#3a3a3a', 0.6), -0.1, 0.127, 0, 20).rotation.z = PI / 2;
-  const hd = bx(0.035, 0.11, 0.03, b, -0.02, 0.0, 0, 0.012); hd.rotation.z = -0.25;
+  const hd = bx(0.035, 0.11, 0.03, b, -0.02, 0.005, 0, 0.012); hd.rotation.z = -0.25;
   tb([[-0.035, 0.005, 0], [-0.08, 0.004, 0.04], [-0.06, 0.004, 0.1], [0.02, 0.004, 0.09]], 0.004, P('#222', 0.6));
 };
 K.hairbrush = () => {
@@ -249,39 +319,57 @@ K.hairbrush = () => {
   G.add(pins);
 };
 K.razor = () => {
-  bx(0.06, 0.008, 0.06, CHROME(), 0, 0, 0, 0.004);
-  cy(0.004, 0.004, 0.1, CHROME(), 0, 0.008, -0.015, 8);
-  to(0.018, 0.003, CHROME(), 0, 0.105, -0.015, PI, 6, 16);
-  cy(0.008, 0.007, 0.1, P('#2c3e50', 0.4), 0.0, 0.03, 0.012, 12);
-  const hd = bx(0.045, 0.014, 0.012, P('#2c3e50', 0.4), 0, 0.128, 0.012, 0.004);
-  bx(0.04, 0.008, 0.004, CHROME(), 0, 0.131, 0.019, 0.001);
+  // 本物：すべり止めのついた持ち手と、刃の並んだ頭。小さなトレイにねかせて置く
+  la([[0.001, 0], [0.05, 0], [0.058, 0.008], [0.055, 0.01], [0.048, 0.003], [0.001, 0.003]], CER('#e9e4da'), 0, 0, 0, 28).scale.set(1.6, 1, 0.9);
+  const g = new THREE.Group(); const prev = G; G.add(g); G = g;
+  const body = P('#2c3e50', 0.35), grip = P('#5a6e80', 0.8);
+  bx(0.11, 0.012, 0.014, body, 0, 0, 0, 0.006);
+  bx(0.05, 0.013, 0.015, grip, -0.02, 0, 0, 0.006);
+  bx(0.012, 0.01, 0.01, CHROME(), 0.06, 0.002, 0, 0.003);
+  bx(0.014, 0.012, 0.044, P('#2c3e50', 0.3), 0.072, 0.002, 0, 0.003);
+  for (let i = 0; i < 4; i++) bx(0.0015, 0.0015, 0.04, CHROME(), 0.0675 + i * 0.003, 0.0135, 0, 0);
+  bx(0.003, 0.002, 0.04, P('#5ab4c9', 0.5), 0.078, 0.0135, 0, 0.0008);
+  G = prev; g.position.set(-0.01, 0.004, 0); g.rotation.y = 0.3;
 };
 K.cottonswab = () => {
-  jar(0, 0, 0.035, 0.1, GL('#eef4f2', 0.3), P('#d8d2c6', 0.3, 0.5));
-  const st = new THREE.InstancedMesh(cg('swab', () => new THREE.CylinderGeometry(0.0015, 0.0015, 0.075, 5)), P('#f4f2ee', 0.8), 40);
-  const tip = new THREE.InstancedMesh(cg('swabt', () => new THREE.SphereGeometry(0.004, 6, 5)), P('#ffffff', 0.95), 80);
-  const r = rnd(3), m4 = new THREE.Matrix4(), q = new THREE.Quaternion();
-  for (let i = 0; i < 40; i++) {
-    const a = r() * TAU, d = r() * 0.026, y = 0.01 + (i % 5) * 0.015;
-    q.setFromEuler(new THREE.Euler(PI / 2, 0, a));
-    m4.compose(V3(Math.cos(a) * d * 0.3, y, Math.sin(a) * d * 0.3), q, V3(1, 1, 1)); st.setMatrixAt(i, m4);
-    const dir = V3(-Math.sin(a), 0, Math.cos(a)).multiplyScalar(0.037);
-    m4.makeTranslation(Math.cos(a) * d * 0.3 + dir.x, y, Math.sin(a) * d * 0.3 + dir.z); tip.setMatrixAt(i * 2, m4);
-    m4.makeTranslation(Math.cos(a) * d * 0.3 - dir.x, y, Math.sin(a) * d * 0.3 - dir.z); tip.setMatrixAt(i * 2 + 1, m4);
+  // 本物：透明な丸いケースに、白い紙の軸がまっすぐ立って並び、上の白い綿の頭がそろって見える。ふたは白
+  const R0 = 0.034, H = 0.085;
+  cy(R0, R0, 0.006, P('#f4f4f2', 0.4), 0, 0, 0, 32); // 底（白）
+  cy(R0, R0, H, GL('#f2f8f8', 0.22), 0, 0.006, 0, 32, true); // 透明なケース
+  const N = 70, L = 0.075;
+  const st = new THREE.InstancedMesh(cg('swab2', () => new THREE.CylinderGeometry(0.0013, 0.0013, L - 0.016, 5)), P('#f7f6f2', 0.7), N);
+  const tip = new THREE.InstancedMesh(cg('swabt2', () => new THREE.SphereGeometry(0.0036, 8, 6).scale(1, 1.9, 1)), P('#ffffff', 1), N * 2);
+  const r = rnd(3), m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0);
+  let k = 0;
+  for (let i = 0; i < N; i++) {
+    // ひまわりの種のならび（すきまなく円に詰める）
+    const a = i * 2.39996, d = Math.sqrt((i + 0.5) / N) * (R0 - 0.005);
+    const x = Math.cos(a) * d, z = Math.sin(a) * d;
+    const tilt = new THREE.Euler((r() - 0.5) * 0.08 + z * 1.2, 0, -(r() - 0.5) * 0.08 - x * 1.2);
+    q.setFromEuler(tilt);
+    const yc = 0.008 + L / 2;
+    m4.compose(new THREE.Vector3(x, yc, z), q, new THREE.Vector3(1, 1, 1)); st.setMatrixAt(i, m4);
+    const dir = up.clone().applyQuaternion(q).multiplyScalar(L / 2 - 0.005);
+    m4.compose(new THREE.Vector3(x + dir.x, yc + dir.y, z + dir.z), q, new THREE.Vector3(1, 1, 1)); tip.setMatrixAt(k++, m4);
+    m4.compose(new THREE.Vector3(x - dir.x, yc - dir.y, z - dir.z), q, new THREE.Vector3(1, 1, 1)); tip.setMatrixAt(k++, m4);
   }
-  G.add(st, tip);
+  st.castShadow = tip.castShadow = true; G.add(st, tip);
+  // ふた（白・少しすりガラス）を、ななめに立てかけて中が見えるように
+  const lid = new THREE.Group(); const prev = G; G.add(lid); G = lid;
+  cy(R0 + 0.002, R0 + 0.002, 0.014, P('#f4f4f2', 0.35), 0, 0, 0, 32);
+  cy(R0 - 0.004, R0 - 0.004, 0.003, P('#e9ecec', 0.3), 0, 0.014, 0, 32);
+  G = prev; lid.position.set(0.05, 0.0, 0.02); lid.rotation.set(0, 0, 0);
 };
 K.handmirror = () => {
-  const fr = P('#e8d6c3', 0.35);
-  // 立てた丸い鏡（うしろの脚で支える）
-  const g = new THREE.Group(); G.add(g);
-  const prev = G; G = g;
-  cy(0.07, 0.07, 0.012, fr, 0, -0.006, 0, 32).rotation.x = PI / 2;
-  const mir = cy(0.062, 0.062, 0.002, MET('#e8eef0', 0.04), 0, 0.001, 0, 32); mir.rotation.x = PI / 2;
-  bx(0.02, 0.09, 0.012, fr, 0, -0.16, 0, 0.005);
-  G = prev;
-  g.rotation.x = -0.25; g.position.set(0, 0.16, 0.02);
-  bx(0.01, 0.14, 0.01, fr, 0, 0, -0.04, 0.003).rotation.x = 0.35;
+  const fr = P('#d9c3a5', 0.35), gold = BRASS();
+  // 立てた丸い鏡：真ちゅうの枠と脚。鏡は手前を向く
+  cy(0.05, 0.055, 0.012, gold, 0, 0, 0, 24);
+  cy(0.005, 0.005, 0.09, gold, 0, 0.012, 0, 8);
+  const head = new THREE.Group(); const prev = G; G.add(head); G = head;
+  to(0.075, 0.007, gold, 0, 0, 0, TAU, 8, 40);
+  const back = cy(0.074, 0.074, 0.008, fr, 0, -0.004, 0, 32); back.rotation.x = PI / 2; back.position.set(0, 0, -0.004);
+  const mir = add(cg('mirdisc', () => new THREE.CircleGeometry(0.07, 32)), MET('#eef3f6', 0.03), 0, 0, 0.001); mir.material.emissive = new THREE.Color('#6a737a'); mir.material.emissiveIntensity = 0.35;
+  G = prev; head.position.set(0, 0.18, 0); head.rotation.x = -0.12;
 };
 K.bathsalt = () => {
   jar(0, 0, 0.045, 0.11, GL('#f2f6f5', 0.25), WOOD('oak'), P('#e9b3b8', 0.8), 0.08);
@@ -329,37 +417,58 @@ K.mouthwash = () => {
   cy(0.018, 0.018, 0.03, P('#ffffff', 0.35), 0, 0.235, 0, 16);
 };
 K.detergent = () => {
-  const lab = faceMat('det', (x, w, h) => {
-    x.fillStyle = '#e8eef3'; x.fillRect(0, 0, w, h);
-    x.fillStyle = '#2e6db4'; x.beginPath(); x.arc(64, 54, 30, 0, TAU); x.fill();
-    x.fillStyle = '#ffffff'; x.font = 'bold 18px Arial'; x.textAlign = 'center'; x.fillText('CLEAN', 64, 60);
-    x.fillStyle = '#2e6db4'; x.font = 'bold 15px Arial'; x.fillText('LAUNDRY', 64, 110);
-  });
-  faced(0.13, 0.22, 0.08, P('#e8eef3', 0.3), lab, 0, 0, 0);
-  bx(0.03, 0.06, 0.03, P('#e8eef3', 0.3), 0.04, 0.22, 0, 0.008);
-  cy(0.022, 0.022, 0.035, P('#2e6db4', 0.35), -0.03, 0.22, 0, 16);
-  to(0.025, 0.008, P('#e8eef3', 0.3), 0.04, 0.24, 0, PI, 8, 12).rotation.y = PI / 2;
+  // 本物の洗たく洗剤：持ち手の穴があいた大きなボトル（取っ手は上のうしろ）と、計量キャップを兼ねた大きなふた
+  const body = P('#e8eef3', 0.3);
+  const sh = new THREE.Shape();
+  sh.moveTo(-0.065, 0); sh.lineTo(0.065, 0); sh.lineTo(0.065, 0.2); sh.quadraticCurveTo(0.065, 0.24, 0.03, 0.245); sh.lineTo(-0.045, 0.245); sh.quadraticCurveTo(-0.065, 0.245, -0.065, 0.22); sh.closePath();
+  const hole = new THREE.Path(); hole.moveTo(-0.05, 0.17); hole.lineTo(-0.01, 0.17); hole.quadraticCurveTo(0.0, 0.17, 0.0, 0.18); hole.lineTo(0.0, 0.215); hole.lineTo(-0.05, 0.215); hole.closePath(); sh.holes.push(hole);
+  const geo = cg('detjug', () => { const g = new THREE.ExtrudeGeometry(sh, { depth: 0.085, bevelEnabled: true, bevelThickness: 0.008, bevelSize: 0.008, bevelSegments: 3, curveSegments: 10 }); g.translate(0, 0, -0.0425); return g; });
+  const m = add(geo, body, 0, 0.008, 0); m.rotation.y = -PI / 2;
+  const lab = faceMat('det2', (x, w, h) => { x.fillStyle = '#e8eef3'; x.fillRect(0, 0, w, h); x.fillStyle = '#2e6db4'; x.beginPath(); x.arc(64, 50, 34, 0, TAU); x.fill(); x.fillStyle = '#fff'; x.font = 'bold 20px Arial'; x.textAlign = 'center'; x.fillText('CLEAN', 64, 57); x.fillStyle = '#2e6db4'; x.font = 'bold 15px Arial'; x.fillText('LAUNDRY', 64, 106); x.fillStyle = '#7fc3e0'; x.fillRect(0, 118, w, 10); });
+  faced(0.002, 0.13, 0.11, body, body, 0.0515, 0.02, 0.0, null).material = [body, lab, body, body, body, body];
+  G.children.at(-1).material = [lab, body, body, body, body, body];
+  cy(0.024, 0.026, 0.03, P('#2e6db4', 0.35), 0.0, 0.25, 0.035, 20); // ふた（計量キャップ）
 };
 K.softener = () => {
-  const lab = faceMat('soft', (x, w, h) => {
-    x.fillStyle = '#f6dfe6'; x.fillRect(0, 0, w, h);
-    x.fillStyle = '#e8a5b9'; for (let i = 0; i < 5; i++) { x.beginPath(); x.arc(64 + Math.cos(i * 1.26) * 16, 56 + Math.sin(i * 1.26) * 16, 10, 0, TAU); x.fill(); }
-    x.fillStyle = '#9a4f66'; x.font = 'bold 16px Arial'; x.textAlign = 'center'; x.fillText('SOFT', 64, 108);
+  // 本物の詰めかえパウチ：下が広く立つ袋で、上へ行くほどうすくなる。上のかどに注ぎ口のキャップ
+  const geo = cg('pouch', () => {
+    const g = new THREE.BoxGeometry(0.12, 0.2, 0.05, 8, 12, 4);
+    const p = g.attributes.position;
+    for (let i = 0; i < p.count; i++) { const y = p.getY(i), t = (y + 0.1) / 0.2; const k = 1 - t * 0.88; p.setZ(i, p.getZ(i) * (0.35 + 0.65 * Math.sin(Math.max(0.15, k) * PI / 2))); }
+    g.computeVertexNormals(); return g;
   });
-  // 詰めかえのパウチ（下が広い）
-  const g = faced(0.12, 0.2, 0.05, P('#f6dfe6', 0.4), lab, 0, 0, 0); g.scale.set(1, 1, 1);
-  const tp = bx(0.12, 0.03, 0.01, P('#f6dfe6', 0.4), 0, 0.2, 0, 0.002);
-  cy(0.012, 0.012, 0.02, P('#ffffff', 0.4), 0.035, 0.22, 0, 12);
+  const lab = faceMat('soft2', (x, w, h) => {
+    x.fillStyle = '#f6dfe6'; x.fillRect(0, 0, w, h);
+    x.fillStyle = '#e8a5b9'; for (let i = 0; i < 5; i++) { x.beginPath(); x.arc(64 + Math.cos(i * 1.26) * 16, 66 + Math.sin(i * 1.26) * 16, 10, 0, TAU); x.fill(); }
+    x.fillStyle = '#9a4f66'; x.font = 'bold 18px Arial'; x.textAlign = 'center'; x.fillText('SOFT', 64, 116); x.font = '10px Arial'; x.fillText('refill', 64, 30);
+  });
+  const body = P('#f6dfe6', 0.4);
+  add(geo, [body, body, body, body, lab, body], 0, 0.1, 0);
+  bx(0.12, 0.012, 0.008, body, 0, 0.198, 0, 0.003);
+  cy(0.011, 0.011, 0.018, P('#ffffff', 0.4), 0.035, 0.19, 0, 12);
 };
 K.pinbasket = () => {
-  const w = wicker('#d9c3a0');
-  bx(0.18, 0.07, 0.12, w, 0, 0, 0, 0.01);
-  bx(0.17, 0.004, 0.11, P('#cdb48c', 0.9), 0, 0.03, 0, 0);
-  const cols = ['#e86a5a', '#f2c84b', '#5ab4c9', '#8cc46a', '#f2f2f2'];
+  // 本物の洗たくばさみ：2本の細長いはさみ（先が平たい）を、真ん中の金属のばねでとめる。カラフルなプラスチック
+  const basket = P('#f4f2ee', 0.5);
+  // 白いプラスチックのかご（すかしの格子）
+  const grid = canvasMat('pinbasketgrid', 64, 64, (x, w, h) => { x.fillStyle = '#f4f2ee'; x.fillRect(0, 0, w, h); x.fillStyle = 'rgba(80,80,80,0.55)'; for (let i = 0; i < 4; i++) for (let j = 0; j < 3; j++) x.fillRect(4 + i * 15, 8 + j * 18, 10, 12); }, { rough: 0.5 });
+  bx(0.2, 0.006, 0.13, basket, 0, 0, 0, 0.003);
+  for (const sz of [-1, 1]) faced(0.2, 0.05, 0.004, basket, grid, 0, 0.006, sz * 0.063);
+  for (const sx of [-1, 1]) { const m = faced(0.13, 0.05, 0.004, basket, grid, sx * 0.098, 0.006, 0); m.rotation.y = PI / 2; }
+  const cols = ['#e86a5a', '#f2c84b', '#5ab4c9', '#8cc46a', '#f2a0c0'];
+  const pin = (col, x, y, z, ry, rz = 0) => {
+    const g = new THREE.Group(); const prev = G; G.add(g); G = g;
+    const pm = P(col, 0.35);
+    for (const sd of [-1, 1]) { const a = bx(0.065, 0.006, 0.01, pm, 0.004, 0, 0, 0.002); a.position.y = sd * 0.0045 + 0.003; a.rotation.z = sd * 0.06; }
+    to(0.0055, 0.0012, MET('#c9c9c9', 0.25), 0.006, 0.003, 0, TAU, 5, 12).rotation.x = PI / 2;
+    G = prev; g.position.set(x, y, z); g.rotation.set(0, ry, rz);
+  };
   const r = rnd(11);
-  for (let i = 0; i < 16; i++) { const pin = bx(0.01, 0.055, 0.008, P(cols[i % 5], 0.4), -0.07 + r() * 0.14, 0.04, -0.045 + r() * 0.09, 0.002); pin.rotation.set(r() - 0.5, r() * PI, r() * 1.5 + 0.5); }
+  // かごの中に入っている物
+  for (let i = 0; i < 12; i++) pin(cols[i % 5], -0.06 + r() * 0.12, 0.015 + (i % 3) * 0.008, -0.035 + r() * 0.07, r() * PI, (r() - 0.5) * 0.3);
+  // ふちにはさんだ物
+  for (let i = 0; i < 3; i++) pin(cols[(i + 2) % 5], -0.06 + i * 0.06, 0.035, 0.063, PI / 2, -PI / 2);
 };
-
 // ───────── 台所・食器 ─────────
 K.plates = (s) => {
   const c = CER(s.color || '#f4f1ea');
@@ -445,7 +554,7 @@ K.saltpepper = () => {
 };
 K.soysauce = () => {
   las([[0.001, 0], [0.03, 0], [0.034, 0.03], [0.03, 0.07], [0.02, 0.085]], GL('#e8e4dc', 0.35), 0, 0, 0, 20);
-  las([[0.001, 0], [0.028, 0], [0.032, 0.03], [0.028, 0.055]], LIQ('#2a120a', 0.9), 0, 0.003, 0, 18);
+  las([[0.001, 0], [0.028, 0], [0.032, 0.03], [0.028, 0.055]], P('#1a0a05', 0.12), 0, 0.003, 0, 18);
   las([[0.022, 0], [0.024, 0.02], [0.015, 0.035], [0.001, 0.04]], P('#c0392b', 0.35), 0, 0.083, 0, 18);
   const sp2 = cy(0.003, 0.005, 0.03, P('#c0392b', 0.35), 0.015, 0.1, 0, 8); sp2.rotation.z = -0.9; sp2.position.set(0.022, 0.11, 0);
 };
@@ -476,9 +585,13 @@ K.breadbasket = () => {
   const w = wicker('#b58a56');
   bx(0.3, 0.07, 0.18, w, 0, 0, 0, 0.03);
   bx(0.28, 0.004, 0.16, CLOTH('#e9e1d2'), 0, 0.05, 0, 0);
-  const crust = P('#b9773b', 0.75);
-  const bg = cy(0.03, 0.03, 0.32, crust, 0, 0, 0, 14); bg.rotation.set(0, 0.3, PI / 2 - 0.25); bg.position.set(-0.02, 0.12, -0.02);
-  sp(0.04, crust, 0.07, 0.08, 0.04, 1.2, 0.75, 1); sp(0.04, P('#c88b48', 0.75), -0.07, 0.08, 0.04, 1.2, 0.75, 1);
+  // 布をふちにかける
+  const cl = bx(0.08, 0.004, 0.14, CLOTH('#e9e1d2'), 0.15, 0.04, 0, 0.002); cl.rotation.z = -0.9;
+  const crust = P('#b9773b', 0.75), dark = P('#8a5228', 0.75);
+  // バゲット：かごの中に横たえて、クープ（切れ目）を入れる
+  const bag = cy(0.028, 0.028, 0.34, crust, 0, 0, 0, 14); bag.rotation.set(0, 0.15, PI / 2); bag.scale.set(1, 1, 0.8); bag.position.set(-0.02, 0.085, -0.035);
+  for (let i = 0; i < 4; i++) { const c = bx(0.045, 0.004, 0.012, P('#e2b878', 0.8), -0.13 + i * 0.075, 0.106, -0.035 - 0.15 * (-0.13 + i * 0.075), 0.002); c.rotation.y = 0.15 + 0.5; }
+  sp(0.038, crust, 0.07, 0.085, 0.045, 1.25, 0.7, 1); sp(0.036, dark, -0.06, 0.083, 0.05, 1.2, 0.7, 1);
 };
 K.coffeemill = () => {
   const wd = WOOD('walnut');
@@ -499,18 +612,22 @@ K.drippot = () => {
 };
 K.toaster = (s) => {
   const b = P(s.color || '#d9d3c8', 0.3, s.metal ? 0.8 : 0);
-  bx(0.26, 0.17, 0.14, b, 0, 0, 0, 0.03);
-  for (const z of [-0.025, 0.025]) bx(0.18, 0.004, 0.025, P('#1d1d1d', 0.5), 0, 0.169, z, 0.002);
+  bx(0.26, 0.17, 0.14, b, 0, 0.012, 0, 0.03);
+  for (const z of [-0.025, 0.025]) bx(0.18, 0.004, 0.025, P('#1d1d1d', 0.5), 0, 0.181, z, 0.002);
   bx(0.02, 0.012, 0.02, P('#2a2a2a', 0.5), 0.12, 0.12, 0.07, 0.004);
   cy(0.012, 0.012, 0.01, CHROME(), 0.08, 0.05, 0.07, 14).rotation.x = PI / 2;
-  bx(0.24, 0.012, 0.12, P('#2a2a2a', 0.5), 0, 0, 0, 0.004);
+  bx(0.24, 0.0125, 0.12, P('#2a2a2a', 0.5), 0, 0, 0, 0.004);
 };
 K.ricecooker = () => {
   const b = P('#f2f0ec', 0.3);
   las([[0.001, 0], [0.12, 0], [0.13, 0.02], [0.13, 0.15], [0.125, 0.16]], b, 0, 0, 0, 28);
   las([[0.126, 0], [0.11, 0.04], [0.06, 0.055], [0.001, 0.058]], b, 0, 0.16, 0, 28);
-  bx(0.09, 0.05, 0.02, SCREEN('#1c2228', '#7fd0ff', 0.4), 0, 0.07, 0.125, 0.005).rotation.x = -0.15;
-  bx(0.06, 0.02, 0.04, P('#c9c4bb', 0.4), 0, 0.2, -0.08, 0.008);
+  // 操作パネル（表示と2つのボタン）
+  const pnl = faceMat('ricepanel2', (x, w, h) => { x.fillStyle = '#d9d6d0'; x.fillRect(0, 0, w, h); x.fillStyle = '#1c2228'; x.fillRect(8, 8, w - 16, 26); x.fillStyle = '#7fd0ff'; x.font = 'bold 20px monospace'; x.fillText('炊飯  6:30', 14, 28); for (let i = 0; i < 4; i++) { x.fillStyle = i === 3 ? '#e86a3a' : '#9a9a9a'; x.fillRect(10 + i * 29, 44, 22, 10); } }, 128, 64);
+  const p = faced(0.11, 0.055, 0.008, P('#d9d6d0', 0.3), pnl, 0, 0.07, 0.126); p.rotation.x = -0.1;
+  // 持ち手（ふたの上で、たおしてある）とふたのボタン
+  tb([[-0.09, 0.19, -0.02], [-0.09, 0.215, -0.02], [0.09, 0.215, -0.02], [0.09, 0.19, -0.02]], 0.006, P('#c9c4bb', 0.4));
+  bx(0.04, 0.014, 0.025, P('#c9c4bb', 0.4), 0, 0.196, 0.09, 0.006);
 };
 K.microwave = () => {
   const b = P('#e9e7e2', 0.35);
@@ -528,17 +645,22 @@ K.canisters = () => {
 K.honey = () => {
   las([[0.001, 0], [0.04, 0], [0.046, 0.04], [0.04, 0.085], [0.03, 0.09]], GL('#f6e9c8', 0.35), 0, 0, 0, 22);
   las([[0.001, 0], [0.038, 0], [0.043, 0.04], [0.037, 0.07]], LIQ('#d9921c', 0.85), 0, 0.003, 0, 20);
-  cy(0.035, 0.035, 0.008, CLOTH('#c94a3a'), 0, 0.09, 0, 20);
-  const dp = cy(0.004, 0.004, 0.13, WOOD('oak'), 0, 0, 0, 8); dp.rotation.z = -0.5; dp.position.set(0.03, 0.12, 0);
-  for (let i = 0; i < 3; i++) to(0.009, 0.003, WOOD('oak'), -0.002 + i * 0.006, 0.07 + i * 0.009, 0, TAU, 5, 10).rotation.set(PI / 2, 0.5, 0);
+  cy(0.034, 0.034, 0.012, BRASS(), 0.07, 0, 0.03, 20); // ふた（となりに置く）
+  // ハニーディッパー：木の棒の先に、みぞのある丸い頭（はちみつにひたす）
+  const dp = new THREE.Group(); const prev = G; G.add(dp); G = dp;
+  cy(0.0035, 0.004, 0.14, WOOD('oak'), 0, 0, 0, 8);
+  for (let i = 0; i < 5; i++) cy(0.009 - Math.abs(i - 2) * 0.0015, 0.009 - Math.abs(i - 2) * 0.0015, 0.004, WOOD('oak'), 0, -0.024 + i * 0.006, 0, 12);
+  G = prev; dp.position.set(0.01, 0.05, 0); dp.rotation.z = -0.35;
 };
 K.kyusu = () => {
+  // 本物の急須：丸い胴、注ぎ口と90度の向きに、まっすぐな横手（持ち手）が出る
   const c = CER('#6b7f5e');
   las([[0.001, 0], [0.04, 0], [0.058, 0.03], [0.055, 0.06], [0.035, 0.07]], c, 0, 0, 0, 24);
   las([[0.036, 0], [0.02, 0.012], [0.001, 0.016]], c, 0, 0.07, 0, 18); sp(0.007, c, 0, 0.088, 0);
   const sp2 = cy(0.006, 0.012, 0.05, c, 0, 0, 0, 10); sp2.rotation.z = -0.9; sp2.position.set(0.07, 0.045, 0);
-  const hd = cy(0.01, 0.012, 0.08, c, 0, 0, 0, 10); hd.rotation.set(0, 0, PI / 2); hd.position.set(0, 0.04, 0); hd.rotation.y = PI / 2; hd.position.set(0, 0.04, -0.09);
-  for (const x of [-0.07, 0.08]) { las([[0.001, 0], [0.028, 0], [0.032, 0.07], [0.029, 0.07], [0.026, 0.006], [0.001, 0.006]], CER('#e6dccb'), x, 0, 0.07, 20); cy(0.026, 0.026, 0.002, LIQ('#a8a03a', 0.8), x, 0.05, 0.07, 16); }
+  const hd = cy(0.011, 0.014, 0.055, c, 0, 0, 0, 12); hd.rotation.x = PI / 2 - 0.3; hd.position.set(0, 0.05, 0.075);
+  cy(0.012, 0.012, 0.004, CER('#5a6e4e'), 0, 0, 0, 12).rotation.x = PI / 2 - 0.3; G.children.at(-1).position.set(0, 0.058, 0.103);
+  for (const x of [-0.08, 0.06]) { las([[0.001, 0], [0.028, 0], [0.032, 0.07], [0.029, 0.07], [0.026, 0.006], [0.001, 0.006]], CER('#e6dccb'), x, 0, -0.06, 20); cy(0.026, 0.026, 0.002, LIQ('#a8a03a', 0.8), x, 0.05, -0.06, 16); }
 };
 K.wine = () => {
   const lab = label('wine', { bg: '#2b1018', lbg: '#efe6d4', text: 'Vin Rouge', sub: '2019', fg: '#5a1a28', font: 26 });
@@ -575,15 +697,21 @@ K.penstand = (s) => {
 K.handheld = (s) => {
   const b = P(s.color || '#d9d5ce', 0.35);
   bx(0.2, 0.022, 0.09, b, 0, 0, 0, 0.02);
-  bx(0.1, 0.002, 0.062, SCREEN('#0e1216', '#24456a', 0.25), 0, 0.022, 0, 0);
+  pl(0.1, 0.062, screenTex('game'), 0, 0.0225, 0);
   bx(0.024, 0.004, 0.008, P('#2a2a2a', 0.4), -0.075, 0.022, 0.01, 0.002); bx(0.008, 0.004, 0.024, P('#2a2a2a', 0.4), -0.075, 0.022, 0.01, 0.002);
   [[0.068, 0.012, '#c0392b'], [0.082, 0.0, '#2e6db4'], [0.068, -0.012, '#f2c84b'], [0.054, 0.0, '#5a8a5a']].forEach(([x, z, c]) => cy(0.0045, 0.0045, 0.004, P(c, 0.35), x, 0.022, z, 10));
   cy(0.007, 0.007, 0.005, P('#2a2a2a', 0.5), -0.075, 0.022, -0.022, 14);
 };
 K.smartphone = (s) => {
   bx(0.075, 0.008, 0.155, P(s.color || '#2a2c30', 0.3, 0.5), 0, 0, 0, 0.008);
-  bx(0.069, 0.001, 0.149, SCREEN('#0b0d10', '#1d3550', 0.35), 0, 0.008, 0, 0);
-  bx(0.02, 0.001, 0.004, P('#111', 0.4), 0, 0.009, -0.07, 0.0005);
+  const lock = faceMat('lockscreen', (x, w, h) => {
+    const gr = x.createLinearGradient(0, 0, w, h); gr.addColorStop(0, '#2b4a7a'); gr.addColorStop(0.6, '#c27a8a'); gr.addColorStop(1, '#f2c08a'); x.fillStyle = gr; x.fillRect(0, 0, w, h);
+    x.fillStyle = 'rgba(255,255,255,0.92)'; x.textAlign = 'center'; x.font = 'bold 40px Arial'; x.fillText('7:30', w / 2, 70); x.font = '13px Arial'; x.fillText('Saturday', w / 2, 90);
+    x.fillStyle = 'rgba(255,255,255,0.25)'; x.beginPath(); x.roundRect ? x.roundRect(14, 170, w - 28, 34, 10) : x.rect(14, 170, w - 28, 34); x.fill();
+    x.fillStyle = 'rgba(255,255,255,0.8)'; x.fillRect(w / 2 - 20, h - 12, 40, 3);
+  }, 128, 256);
+  lock.emissive = new THREE.Color('#ffffff'); lock.emissiveMap = lock.map; lock.emissiveIntensity = 0.35; lock.roughness = 0.1;
+  pl(0.069, 0.149, lock, 0, 0.0085, 0);
 };
 const keyTex = (key, bg, kc) => faceMat('kb' + key, (x, w, h) => {
   x.fillStyle = bg; x.fillRect(0, 0, w, h);
@@ -595,15 +723,46 @@ const keyTex = (key, bg, kc) => faceMat('kb' + key, (x, w, h) => {
   }
 }, 448, 160);
 K.keyboard = (s) => {
+  // 本物：うすい本体に、1つずつ立ったキー（14列×5段、下の段にスペースキー）
   const dark = s.color !== 'light';
-  const top = keyTex(dark ? 'd' : 'l', dark ? '#1b1b1d' : '#d8d5cf', dark ? '#2e2e31' : '#f4f2ee');
-  const body = P(dark ? '#1b1b1d' : '#d8d5cf', 0.4);
-  const k = faced(0.36, 0.02, 0.12, body, body, 0, 0, 0, top); k.rotation.x = 0.04;
+  const body = P(dark ? '#1b1b1d' : '#d8d5cf', 0.4), keyM = P(dark ? '#2e2e32' : '#f6f4f0', 0.45);
+  const k = new THREE.Group(); const prev = G; G.add(k); G = k;
+  bx(0.36, 0.014, 0.12, body, 0, 0, 0, 0.004);
+  const keyGeo = cg('keycap', () => new RoundedBoxGeometry(0.0205, 0.007, 0.0195, 1, 0.002));
+  const inst = new THREE.InstancedMesh(keyGeo, keyM, 70); const m4 = new THREE.Matrix4(); let n = 0;
+  for (let r = 0; r < 5; r++) for (let c = 0; c < 14; c++) { if (r === 4 && c > 3 && c < 10) continue; m4.makeTranslation(-0.165 + c * 0.0254, 0.0165, -0.046 + r * 0.023); inst.setMatrixAt(n++, m4); }
+  inst.count = n; inst.castShadow = true; G.add(inst);
+  bx(0.15, 0.007, 0.0195, keyM, -0.165 + 6.5 * 0.0254, 0.013, -0.046 + 4 * 0.023, 0.002);
+  G = prev; k.position.y = 0.003; k.rotation.x = 0.04;
 };
 K.mouse = (s) => {
-  const m = sp(0.035, P(s.color || '#efeeea', 0.35), 0, 0.0, 0, 0.9, 0.55, 1.5, 18, 12); m.position.y = 0.002;
-  bx(0.002, 0.012, 0.03, P('#9a9a9a', 0.4), 0, 0.012, 0.025, 0.001);
-  cy(0.003, 0.003, 0.008, P('#555', 0.4), 0, 0.016, 0.028, 8).rotation.x = PI / 2;
+  // 本物：長さ11cm・幅6cm・高さ3.6cm。うしろの1/3がいちばん高く、前へなだらかに下がる。左右のボタンの間にホイール
+  const base = new THREE.Color(s.color || '#efeeea');
+  const geo = cg('mouse4' + (s.color || ''), () => {
+    const g = new THREE.SphereGeometry(1, 96, 48);
+    const p = g.attributes.position, col = new Float32Array(p.count * 3), seam = new THREE.Color('#3a3a3c'), c = new THREE.Color();
+    for (let i = 0; i < p.count; i++) {
+      let x = p.getX(i), y = p.getY(i), z = p.getZ(i);
+      const zf = (z + 1) / 2; // 0=うしろ 1=前
+      const prof = Math.max(0, 1 - Math.pow((zf - 0.38) / 0.75, 2)); // 高さのふくらみ（うしろ寄り）
+      const wid = 0.92 - 0.12 * zf; // 前のほうが少し細い
+      p.setXYZ(i, x * 0.031 * wid, Math.max(0, y) * (0.012 + 0.024 * prof) + 0.003, z * 0.055);
+      // 左右のボタンの境目（前半分のまん中の線）と、ボタンのうしろのふち（横の線）
+      const line = y > 0.3 && zf > 0.6 && Math.abs(x) < 0.025;
+      c.copy(line ? seam : base);
+      if (y < 0.08) c.copy(base).multiplyScalar(0.55); // 底のふち（少し暗い）
+      col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b;
+    }
+    g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    g.computeVertexNormals();
+    return g;
+  });
+  const c = std({ vertexColors: true, roughness: 0.32 });
+  add(geo, c, 0, 0, 0);
+  // 左右のボタンのすきま（前半分）
+  const top = (z) => { const zf = (z / 0.055 + 1) / 2, prof = Math.max(0, 1 - Math.pow((zf - 0.38) / 0.75, 2)); return 0.003 + (0.012 + 0.024 * prof); };
+  const wz = 0.018, wy = top(wz) * Math.sqrt(1 - (wz / 0.055) ** 2);
+  const wh = cy(0.0048, 0.0048, 0.005, P('#2a2a2c', 0.6), 0, 0, 0, 16); wh.rotation.z = PI / 2; wh.position.set(0, wy - 0.0015, wz + 0.004);
 };
 K.laptop = (s) => {
   const al = MET(s.color || '#c9cbcd', 0.3);
@@ -612,7 +771,7 @@ K.laptop = (s) => {
   bx(0.1, 0.001, 0.06, P('#bfc1c3', 0.35, 0.6), 0, 0.012, 0.065, 0);
   const lid = new THREE.Group(); G.add(lid); const prev = G; G = lid;
   bx(0.31, 0.205, 0.006, al, 0, 0, 0, 0.005);
-  bx(0.29, 0.18, 0.001, SCREEN('#0d1117', '#2b4b6e', 0.4), 0, 0.012, 0.0035, 0);
+  screen(0.29, 0.18, 'desktop', 0, 0.012, 0.0036);
   G = prev;
   lid.position.set(0, 0.012, -0.105); lid.rotation.x = -0.32;
 };
@@ -621,7 +780,7 @@ K.monitor = () => {
   bx(0.2, 0.008, 0.15, blk, 0, 0, 0, 0.004);
   bx(0.03, 0.22, 0.02, blk, 0, 0.008, -0.04, 0.006);
   bx(0.55, 0.33, 0.025, blk, 0, 0.11, -0.02, 0.006);
-  bx(0.535, 0.305, 0.001, SCREEN('#0c1218', '#3a5f86', 0.45), 0, 0.122, -0.007, 0);
+  screen(0.535, 0.305, 'desktop', 0, 0.122, -0.0072);
 };
 K.digiclock = () => {
   const disp = faceMat('clock', (x, w, h) => {
@@ -652,7 +811,11 @@ K.memo = () => {
   bx(0.09, 0.03, 0.09, P('#f7f3e8', 0.9), -0.05, 0, 0, 0.002);
   const cols = ['#f9e27a', '#f6a8b6', '#9ed3e8', '#b8e09a'];
   cols.forEach((c, i) => { const n = bx(0.075, 0.012, 0.075, P(c, 0.85), 0.06, i * 0.012, 0.0, 0.001); n.rotation.y = i * 0.12 - 0.2; });
-  const pen = cy(0.004, 0.004, 0.14, P('#1d1d1d', 0.35), -0.05, 0.03, 0.06, 8); pen.rotation.set(0, 0.4, PI / 2); pen.position.y = 0.034;
+  // ボールペン（メモ帳の上に、ななめにのせる。クリップつき）
+  const pen = new THREE.Group(); const prev = G; G.add(pen); G = pen;
+  cy(0.0045, 0.0045, 0.12, P('#1d3a6a', 0.35), 0, 0, 0, 10); cy(0.0045, 0.001, 0.016, CHROME(), 0, 0.12, 0, 10);
+  bx(0.002, 0.03, 0.003, CHROME(), 0.0045, 0.085, 0, 0.001);
+  G = prev; pen.rotation.set(0, 0.5, -PI / 2); pen.position.set(-0.05, 0.0345, 0.0);
 };
 K.refbooks = () => {
   const data = [['#1f3c5a', 0.045, 0.26], ['#e9e4da', 0.03, 0.24], ['#8a2a2a', 0.04, 0.25], ['#3d5a45', 0.035, 0.22], ['#c9a04a', 0.025, 0.21]];
@@ -660,43 +823,57 @@ K.refbooks = () => {
   data.forEach(([c, t, w], i) => { book(w, t, 0.18, c, (i % 2 ? 0.01 : -0.008), y, 0, (i - 2) * 0.05); y += t; });
 };
 K.pencase = (s) => {
-  const c = CLOTH(s.color || '#5a6a7a');
-  const p = cy(0.035, 0.035, 0.2, c, 0, 0, 0, 18); p.rotation.z = PI / 2; p.position.y = 0.033; p.scale.set(1, 1, 1.25);
-  const zp = bx(0.19, 0.004, 0.006, MET('#c9c9c9', 0.3), 0, 0.064, 0, 0.002);
-  bx(0.018, 0.004, 0.01, MET('#c9c9c9', 0.3), 0.07, 0.066, 0.006, 0.002);
+  const col = s.color || '#5a6a7a', c = CLOTH(col);
+  const p = add(cg('pencaseb', () => new RoundedBoxGeometry(0.2, 0.05, 0.07, 3, 0.022)), c, 0, 0.025, 0);
+  const zp = bx(0.17, 0.004, 0.005, MET('#c9c9c9', 0.3), 0, 0.049, 0.0, 0.0015);
+  const tab = bx(0.008, 0.003, 0.022, MET('#c9c9c9', 0.3), 0.07, 0.05, 0.012, 0.001);
+  bx(0.014, 0.002, 0.012, CLOTH('#c94a3a'), 0.07, 0.05, 0.028, 0.001);
+  // ステッチ
+  for (const z of [-0.012, 0.012]) bx(0.18, 0.0015, 0.0015, P('#e9e4da', 0.8), 0, 0.0495, z, 0);
 };
 K.pencils = () => {
-  const cols = ['#f2c84b', '#2f6f4f', '#c0392b'];
-  cols.forEach((c, i) => {
-    const p = cy(0.0038, 0.0038, 0.17, P(c, 0.5), 0, 0, 0, 6); p.rotation.set(0, (i - 1) * 0.15, PI / 2); p.position.set(0, 0.004, (i - 1) * 0.015);
-    const t = cy(0.0038, 0.0005, 0.016, WOOD('pine'), 0, 0, 0, 6); t.rotation.copy(p.rotation); t.position.set(0.093 * Math.cos((i - 1) * 0.15), 0.004, (i - 1) * 0.015 - 0.093 * Math.sin((i - 1) * 0.15));
-  });
-  bx(0.045, 0.012, 0.022, P('#f4f2ee', 0.8), -0.04, 0, 0.05, 0.002); bx(0.034, 0.0125, 0.0225, P('#2e6db4', 0.5), -0.032, 0, 0.05, 0).scale.set(0.5, 1, 1.01);
+  // 本物の鉛筆：六角形の黄色などの軸、けずった木の円すい、先に黒い芯。おしりに金具と消しゴム
+  const pencil = (col, x, z, ry, eraser) => {
+    const g = new THREE.Group(); const prev = G; G.add(g); G = g;
+    const L = 0.16;
+    cy(0.0038, 0.0038, L, P(col, 0.45), 0, 0, 0, 6);
+    cy(0.0005, 0.0038, 0.018, WOOD('pine'), 0, L, 0, 6);
+    cy(0.0001, 0.0011, 0.005, P('#222', 0.4), 0, L + 0.013, 0, 6);
+    if (eraser) { cy(0.0039, 0.0039, 0.008, MET('#c9b26a', 0.3), 0, -0.008, 0, 10); cy(0.0036, 0.0036, 0.008, P('#e88a9a', 0.7), 0, -0.016, 0, 10); }
+    G = prev; g.rotation.set(0, ry, -PI / 2); g.position.set(x, 0.004, z);
+  };
+  pencil('#f2c84b', -0.06, -0.01, 0.1, true); pencil('#2f6f4f', -0.06, 0.008, -0.05, false); pencil('#c0392b', -0.06, 0.026, 0.02, true);
+  // 消しゴム（白い本体に紙のスリーブ）
+  bx(0.045, 0.012, 0.022, P('#f4f2ee', 0.8), -0.03, 0, 0.065, 0.002);
+  const sl = faceMat('eraser', (x, w, h) => { x.fillStyle = '#2e6db4'; x.fillRect(0, 0, w, h); x.fillStyle = '#fff'; x.fillRect(0, h * 0.4, w, h * 0.2); x.fillStyle = '#1d1d1d'; x.fillRect(0, h * 0.62, w, h * 0.08); }, 64, 32);
+  faced(0.026, 0.0125, 0.0225, P('#2e6db4'), sl, -0.022, 0, 0.065, sl);
 };
 K.rulers = () => {
-  bx(0.3, 0.003, 0.035, GL('#e8f0ee', 0.55), 0, 0, -0.04, 0);
+  const ruler = faceMat('ruler2', (x, w, h) => { x.fillStyle = '#f4f1e6'; x.fillRect(0, 0, w, h); x.fillStyle = '#333'; for (let i = 0; i <= 60; i++) x.fillRect(i * (w / 60), 0, 1, i % 10 ? h * 0.22 : h * 0.45); x.font = '9px Arial'; for (let i = 0; i <= 30; i += 5) x.fillText(String(i), i * (w / 30) + 2, h - 4); }, 512, 32);
+  faced(0.3, 0.003, 0.035, P('#f4f1e6', 0.4), P('#f4f1e6'), 0, 0, -0.045, ruler);
   const tri = new THREE.Shape([new THREE.Vector2(0, 0), new THREE.Vector2(0.15, 0), new THREE.Vector2(0, 0.09)]);
-  tri.holes.push(new THREE.Path([new THREE.Vector2(0.025, 0.02), new THREE.Vector2(0.08, 0.02), new THREE.Vector2(0.025, 0.053)]));
+  tri.holes.push(new THREE.Path([new THREE.Vector2(0.025, 0.018), new THREE.Vector2(0.085, 0.018), new THREE.Vector2(0.025, 0.054)]));
   const g = new THREE.ExtrudeGeometry(tri, { depth: 0.003, bevelEnabled: false });
-  const m = add(g, GL('#cfe6f2', 0.6), -0.1, 0.003, 0.06); m.rotation.x = -PI / 2;
-  const m2 = add(g, GL('#f2d6cf', 0.6), 0.02, 0.006, 0.07); m2.rotation.set(-PI / 2, 0, 0.4);
-  const ruler = faceMat('ruler', (x, w, h) => { x.fillStyle = 'rgba(0,0,0,0)'; x.clearRect(0, 0, w, h); x.fillStyle = '#333'; for (let i = 0; i <= 30; i++) x.fillRect(i * (w / 30), 0, 1, i % 5 ? h * 0.25 : h * 0.5); }, 256, 32);
-  ruler.transparent = true; const rl = pl(0.3, 0.035, ruler, 0, 0.0032, -0.04); rl.renderOrder = 3;
+  const m = add(g, LIQ('#3f8fc8', 0.9), -0.11, 0.003, 0.07); m.rotation.x = -PI / 2;
+  const m2 = add(g, LIQ('#d8604e', 0.9), 0.0, 0.006, 0.075); m2.rotation.set(-PI / 2, 0, 0.35);
+  const pro = add(cg('protractor', () => new THREE.CylinderGeometry(0.05, 0.05, 0.002, 24, 1, false, -PI / 2, PI)), LIQ('#e8b030', 0.9), 0.1, 0.003, 0.02);
 };
 K.filebox = (s) => {
   const c = P(s.color || '#2b2b2d', 0.6);
-  // 斜めに切った箱
+  // 斜めに切った箱。切り口（低い側）が手前、中のファイルが見える
   const sh = new THREE.Shape([new THREE.Vector2(0, 0), new THREE.Vector2(0.25, 0), new THREE.Vector2(0.25, 0.3), new THREE.Vector2(0.1, 0.3), new THREE.Vector2(0, 0.14)]);
-  const g = new THREE.ExtrudeGeometry(sh, { depth: 0.1, bevelEnabled: false }); g.translate(-0.125, 0, -0.05);
-  const m = add(g, c, 0, 0, 0); m.rotation.y = -PI / 2;
-  const cols = ['#e86a5a', '#f2c84b', '#5ab4c9', '#e9e4da'];
-  cols.forEach((col, i) => bx(0.004, 0.25 - i * 0.02, 0.22, P(col, 0.7), -0.03 + i * 0.018, 0.01, 0, 0));
+  const side = new THREE.ExtrudeGeometry(sh, { depth: 0.006, bevelEnabled: false });
+  for (const x of [-0.05, 0.044]) { const m = add(side, c, x, 0, 0.125); m.rotation.y = PI / 2; }
+  bx(0.1, 0.3, 0.006, c, 0, 0, -0.122, 0); bx(0.1, 0.006, 0.25, c, 0, 0, 0, 0); bx(0.1, 0.14, 0.006, c, 0, 0, 0.122, 0);
+  const cols = ['#e86a5a', '#f2c84b', '#5ab4c9', '#e9e4da', '#8cc46a'];
+  cols.forEach((col, i) => { const f = bx(0.006, 0.24 - i * 0.012, 0.22, P(col, 0.7), -0.034 + i * 0.016, 0.006, -0.005, 0.001); f.rotation.x = -0.06; });
+  bx(0.05, 0.03, 0.002, P('#f4f1ea', 0.8), 0, 0.06, 0.126, 0);
 };
 K.tablet = () => {
   bx(0.12, 0.012, 0.09, P('#e9e6e1', 0.4), 0, 0, -0.03, 0.006);
   const t = new THREE.Group(); G.add(t); const prev = G; G = t;
   bx(0.25, 0.175, 0.007, MET('#bfc1c4', 0.3), 0, 0, 0, 0.008);
-  bx(0.235, 0.16, 0.001, SCREEN('#0e1318', '#4a6f8e', 0.4), 0, 0.0075, 0.004, 0);
+  screen(0.235, 0.16, 'home', 0, 0.0075, 0.0041);
   G = prev;
   t.rotation.x = -0.35; t.position.set(0, 0.012, 0.0);
 };
@@ -706,7 +883,7 @@ K.phonestand = () => {
   const b = bx(0.07, 0.12, 0.006, al, 0, 0.0, -0.01, 0.003); b.rotation.x = -0.35; b.position.set(0, 0.06, -0.02);
   const ph = new THREE.Group(); G.add(ph); const prev = G; G = ph;
   bx(0.075, 0.155, 0.008, P('#2a2c30', 0.3, 0.5), 0, 0, 0, 0.008);
-  bx(0.069, 0.149, 0.001, SCREEN('#0b0d10', '#3d6a8a', 0.5), 0, 0.003, 0.0045, 0);
+  screen(0.069, 0.149, 'phone', 0, 0.003, 0.0046);
   G = prev;
   ph.rotation.x = -0.35; ph.position.set(0, 0.012, 0.01);
   bx(0.075, 0.012, 0.012, al, 0, 0.008, 0.03, 0.003);
@@ -725,9 +902,10 @@ K.deskcal = () => {
   for (const x of [-0.05, 0, 0.05]) to(0.006, 0.0012, MET('#bbb', 0.3), x, 0.106, -0.015, TAU, 4, 10).rotation.y = PI / 2;
 };
 K.cube = () => {
-  const cols = ['#ffffff', '#f2c84b', '#e8362a', '#f08a24', '#2e6db4', '#3aa55a'];
-  const face = (c) => faceMat('cube' + c, (x, w, h) => { x.fillStyle = '#111'; x.fillRect(0, 0, w, h); x.fillStyle = c; for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) x.fillRect(4 + i * 41, 4 + j * 41, 37, 37); });
-  const m = add(cg('cube', () => new THREE.BoxGeometry(0.057, 0.057, 0.057)), [face(cols[4]), face(cols[5]), face(cols[0]), face(cols[1]), face(cols[2]), face(cols[3])], 0, 0.0285, 0);
+  // 本物：黒い本体に、角の丸いシールが3×3。6面それぞれちがう色（白・黄・赤・オレンジ・青・緑）
+  const cols = ['#1f6fe0', '#2fa85a', '#ffffff', '#f6d03a', '#e8362a', '#f08a24'];
+  const face = (c) => faceMat('cube2' + c, (x, w, h) => { x.fillStyle = '#111'; x.fillRect(0, 0, w, h); x.fillStyle = c; for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) { x.beginPath(); x.roundRect ? x.roundRect(5 + i * 41, 5 + j * 41, 36, 36, 6) : x.rect(5 + i * 41, 5 + j * 41, 36, 36); x.fill(); } });
+  const m = add(cg('cube2', () => new RoundedBoxGeometry(0.057, 0.057, 0.057, 2, 0.004)), [face(cols[0]), face(cols[1]), face(cols[2]), face(cols[3]), face(cols[4]), face(cols[5])], 0, 0.0285, 0);
   m.rotation.y = 0.5;
 };
 K.hourglass = () => {
@@ -782,7 +960,7 @@ K.tripleframe = () => {
     bx(0.11, 0.14, 0.012, fr, 0, 0, 0, 0.003);
     bx(0.085, 0.11, 0.001, photoMat(img), 0, 0.015, 0.0065, 0);
     G = prev;
-    g.position.set((i - 1) * 0.112, 0, 0); g.rotation.set(-0.12, (i - 1) * -0.35, 0); g.position.z = Math.abs(i - 1) * 0.02;
+    g.position.set((i - 1) * 0.112, 0.008, 0); g.rotation.set(-0.12, (i - 1) * -0.35, 0); g.position.z = Math.abs(i - 1) * 0.02;
   });
   for (const x of [-0.056, 0.056]) cy(0.003, 0.003, 0.13, BRASS(), x, 0, 0.012, 6);
 };
@@ -827,17 +1005,37 @@ K.tissue = () => {
   const t2 = bx(0.05, 0.04, 0.002, P('#ffffff', 1), 0.01, 0.075, 0.003, 0.001); t2.rotation.set(-0.15, 0.3, -0.25);
 };
 K.succulent = (s) => {
-  las([[0.001, 0], [0.04, 0], [0.05, 0.06], [0.052, 0.07], [0.047, 0.07], [0.045, 0.06], [0.001, 0.055]], P(s.pot || '#d9d3c8', 0.85), 0, 0, 0, 22);
-  cy(0.046, 0.046, 0.004, P('#5a4434', 1), 0, 0.058, 0, 18);
-  const leaf = P(s.leaf || '#8fae8a', 0.6);
-  const r = rnd(7);
-  for (const [cx, cz, n, rr] of [[0, 0, 12, 0.03], [0.025, 0.02, 7, 0.016], [-0.025, 0.015, 6, 0.014]]) {
-    for (let i = 0; i < n; i++) {
-      const a = i / n * TAU + r(), ring = i < n / 2 ? 1 : 0.55;
-      const lf = sp(rr * 0.55, leaf, cx + Math.cos(a) * rr * 0.6 * ring, 0.068 + (1 - ring) * rr * 0.6, cz + Math.sin(a) * rr * 0.6 * ring, 0.6, 0.35, 1.1, 8, 6);
-      lf.rotation.set(0, -a + PI / 2, 0.0); lf.rotation.x = ring > 0.9 ? 0.5 : 0.9;
+  // 本物（エケベリア）：ふっくら厚い葉が、先のとがったスプーン形で、らせん状に重なってバラの花のように開く。葉は青みの緑、先がほんのりピンク
+  las([[0.001, 0], [0.036, 0], [0.042, 0.05], [0.046, 0.062], [0.042, 0.062], [0.04, 0.052], [0.001, 0.048]], P(s.pot || '#c9b8a2', 0.85), 0, 0, 0, 24);
+  cy(0.041, 0.041, 0.004, P('#8a7a68', 1), 0, 0.05, 0, 20); // 小石
+  const leafGeo = cg('echeveria', () => {
+    const g = new THREE.SphereGeometry(1, 12, 8);
+    const p = g.attributes.position, col = new Float32Array(p.count * 3);
+    const base = new THREE.Color(s.leaf || '#9ab8a4'), tip = new THREE.Color('#d99aa0'), c = new THREE.Color();
+    for (let i = 0; i < p.count; i++) {
+      let x = p.getX(i), y = p.getY(i), z = p.getZ(i);
+      const t = (z + 1) / 2; // 0=根元 1=先
+      const w = Math.sin(Math.min(1, t * 1.15) * PI * 0.62 + 0.25) * (1 - Math.pow(t, 6) * 0.9); // 先がとがる
+      p.setXYZ(i, x * 0.009 * w, y * 0.0035 * (0.6 + 0.4 * w) + (t * t) * 0.002, z * 0.016 + 0.016);
+      c.copy(base).lerp(tip, Math.pow(Math.max(0, t - 0.75) / 0.25, 1.5) * 0.85);
+      col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b;
     }
-  }
+    g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    g.computeVertexNormals();
+    return g;
+  });
+  const lm = cm('echevM', () => std({ vertexColors: true, roughness: 0.55, color: '#ffffff' }));
+  const rosette = (cx, cz, sc, seed) => {
+    const N = 22;
+    for (let i = 0; i < N; i++) {
+      const t = i / N, a = i * 2.39996 + seed;
+      const lf = add(leafGeo, lm, cx, 0.054 + t * 0.01 * sc, cz);
+      const up = 0.15 + t * 1.05; // 外の葉は寝て、内の葉は立つ
+      lf.rotation.order = 'YXZ'; lf.rotation.set(-up, a, 0);
+      const k = sc * (1.15 - t * 0.55); lf.scale.set(k, k, k);
+    }
+  };
+  rosette(0, 0, 1.45, 0); rosette(0.03, 0.022, 0.7, 1.3);
 };
 K.snowglobe = () => {
   cy(0.05, 0.055, 0.04, WOOD('walnut'), 0, 0, 0, 24);
@@ -849,11 +1047,18 @@ K.snowglobe = () => {
   for (let i = 0; i < 18; i++) sp(0.0018, P('#ffffff', 1), (r() - 0.5) * 0.07, 0.06 + r() * 0.07, (r() - 0.5) * 0.07, 1, 1, 1, 4, 3);
 };
 K.shelljar = () => {
-  jar(0, 0, 0.05, 0.15, GL('#eef4f2', 0.25), P('#b89a6e', 0.8), P('#e9dcc0', 1), 0.04);
+  jar(0, 0, 0.05, 0.15, GL('#eef4f2', 0.25), P('#b89a6e', 0.8), P('#e9dcc0', 1), 0.035);
   const r = rnd(12);
-  const cols = ['#f2e2d0', '#e9c9b4', '#f6efe6', '#d8b090'];
-  for (let i = 0; i < 12; i++) { const sh = sp(0.012, P(cols[i % 4], 0.5), (r() - 0.5) * 0.06, 0.05 + (i % 4) * 0.015, (r() - 0.5) * 0.06, 1, 0.5, 1.3, 8, 6); sh.rotation.set(r() * 3, r() * 3, 0); }
-  cy(0.002, 0.002, 0.18, P('#e8dcc4', 1), 0.03, 0.15, 0, 4).rotation.z = 0.4;
+  const cols = ['#f2e2d0', '#e9c9b4', '#f6efe6', '#d8b090', '#f0d8d0'];
+  // 二枚貝（半球をつぶした形）と、巻き貝（細長い円すい）
+  for (let i = 0; i < 22; i++) {
+    const a = r() * TAU, d = 0.012 + r() * 0.025, y = 0.045 + Math.floor(i / 6) * 0.02;
+    if (i % 3) { const sh = sp(0.014, P(cols[i % 5], 0.55), Math.cos(a) * d, y, Math.sin(a) * d, 1, 0.45, 1.15, 10, 6); sh.rotation.set(r() * 2, r() * 3, r() * 2); }
+    else { const c = cy(0.001, 0.009, 0.028, P(cols[(i + 2) % 5], 0.5), Math.cos(a) * d, y, Math.sin(a) * d, 10); c.rotation.set(r() * 2, 0, r() * 2); }
+  }
+  // 麻ひものリボン（びんの首にぴったり巻く）
+  to(0.0505, 0.0022, P('#c9b08a', 0.9), 0, 0.135, 0, TAU, 5, 32).rotation.x = PI / 2;
+  to(0.0505, 0.0022, P('#c9b08a', 0.9), 0, 0.14, 0, TAU, 5, 32).rotation.x = PI / 2;
 };
 K.woodtray = () => {
   const wd = WOOD('walnut');
@@ -875,7 +1080,7 @@ K.incense = () => {
 K.musicbox = () => {
   const wd = WOOD('walnut');
   bx(0.14, 0.06, 0.1, wd, 0, 0, 0, 0.004);
-  bx(0.12, 0.004, 0.08, CLOTH('#7a2030'), 0, 0.056, 0, 0);
+  bx(0.12, 0.003, 0.08, CLOTH('#7a2030'), 0, 0.0602, 0, 0);
   const lid = new THREE.Group(); G.add(lid); const prev = G; G = lid;
   bx(0.14, 0.012, 0.1, wd, 0, 0, 0.05, 0.004);
   bx(0.1, 0.002, 0.07, MET('#e8eef0', 0.05), 0, -0.001, 0.05, 0);
@@ -905,33 +1110,46 @@ K.boardgame = () => {
 };
 K.keytray = () => {
   la([[0.001, 0], [0.06, 0], [0.075, 0.015], [0.078, 0.02], [0.072, 0.02], [0.058, 0.006], [0.001, 0.006]], BRASS(), 0, 0, 0, 28);
-  const k = (x, z, a) => { to(0.012, 0.0025, MET('#c9c9c9'), x, 0.01, z, TAU, 5, 14).rotation.x = PI / 2; const s2 = bx(0.04, 0.003, 0.009, MET('#c9a35a', 0.3), x + Math.cos(a) * 0.03, 0.009, z - Math.sin(a) * 0.03, 0.001); s2.rotation.y = a; };
-  k(-0.015, 0, 0.3); k(0.02, 0.012, 2.4);
-  bx(0.035, 0.012, 0.022, P('#7a5a3a', 0.6), 0.02, 0.006, -0.03, 0.005);
+  // かぎ：丸い頭（穴あき）と、ギザギザの刃
+  const key = (x, z, a, col) => {
+    const g = new THREE.Group(); const prev = G; G.add(g); G = g;
+    const km = MET(col, 0.28);
+    const head = to(0.011, 0.005, km, 0, 0.003, 0, TAU, 6, 16); head.rotation.x = PI / 2;
+    bx(0.04, 0.0025, 0.007, km, 0.032, 0.002, 0, 0.0008);
+    for (let i = 0; i < 4; i++) bx(0.004, 0.0025, 0.004, km, 0.026 + i * 0.007, 0.002, 0.0045 + (i % 2) * 0.001, 0.0005);
+    G = prev; g.position.set(x, 0.008, z); g.rotation.y = a;
+  };
+  key(-0.03, -0.01, 0.3, '#d0d0d0'); key(0.0, 0.02, 2.6, '#c9a35a');
+  to(0.014, 0.0015, MET('#c9c9c9', 0.2), -0.015, 0.009, 0.004, TAU, 5, 20).rotation.x = PI / 2; // キーリング
+  bx(0.035, 0.012, 0.022, P('#7a5a3a', 0.6), 0.03, 0.006, -0.03, 0.005);
 };
 K.watchstand = () => {
   const wd = WOOD('walnut');
-  bx(0.08, 0.012, 0.06, wd, 0, 0, 0, 0.004);
-  cy(0.006, 0.006, 0.08, wd, 0, 0.012, 0, 8);
-  const pil = cy(0.028, 0.028, 0.05, CLOTH('#3a3a3c'), 0, 0, 0, 18); pil.rotation.z = PI / 2; pil.position.set(0, 0.1, 0); pil.scale.set(1, 1, 0.8);
-  const band = to(0.034, 0.007, P('#6b4228', 0.6), 0, 0.1, 0, TAU, 6, 26); band.rotation.y = PI / 2;
-  const face = cy(0.02, 0.02, 0.01, MET('#d8d8d8', 0.2), 0, 0.136, 0, 22);
-  pl(0.032, 0.032, faceMat('watch', (x, w, h) => { x.fillStyle = '#f4f1ea'; x.beginPath(); x.arc(64, 64, 62, 0, TAU); x.fill(); x.strokeStyle = '#222'; x.lineWidth = 6; x.beginPath(); x.moveTo(64, 64); x.lineTo(64, 22); x.moveTo(64, 64); x.lineTo(94, 72); x.stroke(); for (let i = 0; i < 12; i++) { const a = i / 12 * TAU; x.fillStyle = '#333'; x.fillRect(64 + Math.cos(a) * 50 - 2, 64 + Math.sin(a) * 50 - 2, 4, 4); } }), 0, 0.1465, 0);
+  // 横にねかせたクッションに、腕時計を巻いて立てる
+  bx(0.11, 0.012, 0.07, wd, 0, 0, 0, 0.004);
+  const pil = cy(0.028, 0.028, 0.08, CLOTH('#3a3a3c'), 0, 0, 0, 20); pil.rotation.z = PI / 2; pil.position.set(0, 0.04, 0);
+  const band = to(0.031, 0.007, P('#6b4228', 0.6), 0, 0.04, 0, TAU, 6, 28); band.rotation.y = PI / 2;
+  cy(0.019, 0.019, 0.01, MET('#d8d8d8', 0.2), 0, 0, 0, 24).rotation.x = PI / 2; G.children.at(-1).position.set(0, 0.04, 0.036);
+  const face = pl(0.03, 0.03, faceMat('watch', (x, w, h) => { x.fillStyle = '#f4f1ea'; x.beginPath(); x.arc(64, 64, 62, 0, TAU); x.fill(); x.strokeStyle = '#222'; x.lineWidth = 6; x.beginPath(); x.moveTo(64, 64); x.lineTo(64, 22); x.moveTo(64, 64); x.lineTo(94, 72); x.stroke(); for (let i = 0; i < 12; i++) { const a = i / 12 * TAU; x.fillStyle = '#333'; x.fillRect(64 + Math.cos(a) * 50 - 2, 64 + Math.sin(a) * 50 - 2, 4, 4); } }), 0, 0.04, 0.0415);
+  face.rotation.x = 0; face.geometry = cg('watchface', () => new THREE.CircleGeometry(0.016, 24));
+  cy(0.003, 0.003, 0.004, MET('#d8d8d8', 0.2), 0.021, 0.04, 0.036, 8).rotation.z = PI / 2;
 };
 K.sunglasses = (s) => {
   const fr = P(s.color || '#2a1a12', 0.25);
+  const lensG = cg('sglens', () => { const sh = new THREE.Shape(); sh.moveTo(-0.026, 0.012); sh.quadraticCurveTo(0, 0.02, 0.026, 0.013); sh.quadraticCurveTo(0.03, -0.012, 0.012, -0.019); sh.quadraticCurveTo(-0.02, -0.022, -0.027, -0.006); sh.closePath(); return new THREE.ExtrudeGeometry(sh, { depth: 0.003, bevelEnabled: true, bevelThickness: 0.0015, bevelSize: 0.0018, bevelSegments: 2 }); });
+  const lensM = GL('#2a2a2a', 0.8);
   for (const sx of [-1, 1]) {
-    const l = sp(0.026, GL('#2a2a2a', 0.75), sx * 0.034, 0.025, 0.0, 1, 0.85, 0.15, 18, 10); l.rotation.x = -0.3;
-    const rim = to(0.026, 0.003, fr, sx * 0.034, 0.025, 0, TAU, 5, 24); rim.scale.set(1, 0.85, 1); rim.rotation.x = -0.3;
-    const arm = bx(0.004, 0.006, 0.13, fr, sx * 0.062, 0.006, -0.065, 0.002); arm.rotation.x = 0.0;
+    const f = add(lensG, fr, sx * 0.032, 0.022, 0.0); f.scale.set(sx * 1.08, 1.12, 1); f.rotation.x = -0.25;
+    const l = add(lensG, lensM, sx * 0.032, 0.022, 0.003); l.scale.set(sx, 1, 0.5); l.rotation.x = -0.25;
+    const arm = bx(0.003, 0.004, 0.13, fr, sx * 0.062, 0.03, -0.062, 0.001); arm.rotation.x = 0.04;
   }
-  to(0.01, 0.003, fr, 0, 0.035, 0.004, PI, 5, 10).rotation.x = -0.3;
+  bx(0.012, 0.004, 0.004, fr, 0, 0.032, 0.002, 0.001);
 };
 K.records = () => {
   const sleeves = [['#e86a5a', '#f2e6d0'], ['#1d1d1d', '#f2c84b'], ['#5ab4c9', '#ffffff']];
   sleeves.forEach(([c1, c2], i) => {
     const m = faceMat('rec' + i, (x, w, h) => { x.fillStyle = c1; x.fillRect(0, 0, w, h); x.fillStyle = c2; if (i === 0) { x.beginPath(); x.arc(64, 64, 34, 0, TAU); x.fill(); } else if (i === 1) { for (let k = 0; k < 5; k++) x.fillRect(0, 20 + k * 22, w, 8); } else { x.fillRect(20, 20, 88, 88); x.fillStyle = c1; x.fillRect(40, 40, 48, 48); } });
-    const sl = faced(0.31, 0.31, 0.004, P(c1, 0.6), m, 0, 0, 0); sl.rotation.x = -0.18 - i * 0.04; sl.position.set(0, 0.152, -i * 0.012); sl.rotation.y = (i - 1) * 0.05;
+    const sl = faced(0.31, 0.31, 0.004, P(c1, 0.6), m, 0, 0, 0); sl.rotation.x = -0.18 - i * 0.04; sl.position.set(0, 0.158, -i * 0.012); sl.rotation.y = (i - 1) * 0.05;
   });
   cy(0.15, 0.15, 0.002, P('#111111', 0.25), 0, 0, 0, 40).rotation.x = PI / 2; G.children.at(-1).position.set(0.05, 0.155, -0.04); G.children.at(-1).rotation.x = PI / 2 - 0.25;
 };
@@ -955,13 +1173,15 @@ K.paperweight = () => {
   sp(0.016, LIQ('#3a7ab8', 0.6), 0, 0.022, 0, 1, 0.6, 1, 12, 8); sp(0.012, LIQ('#d94a6a', 0.6), 0.008, 0.026, 0.006, 1, 0.5, 1, 10, 6);
 };
 K.woodbird = () => {
-  const wd = WOOD(s_wood);
-  sp(0.04, wd, 0, 0.045, 0, 1.4, 0.9, 0.8, 16, 12);
-  sp(0.025, wd, 0.05, 0.075, 0, 1, 1, 0.9, 14, 10);
+  const wd = WOOD('oak');
+  sp(0.04, wd, 0, 0.045, 0, 1.4, 0.9, 0.8, 18, 14);
+  sp(0.025, wd, 0.05, 0.075, 0, 1, 1, 0.9, 16, 12);
   const bk = cy(0.001, 0.008, 0.02, P('#4a3a2a', 0.6), 0.078, 0.075, 0, 8); bk.rotation.z = -PI / 2;
-  const tl = bx(0.05, 0.008, 0.03, wd, -0.065, 0.06, 0, 0.004); tl.rotation.z = 0.4;
+  // しっぽ：うしろへ、上向きに平たくのびる
+  const tl = sp(0.03, wd, -0.06, 0.06, 0, 1.2, 0.18, 0.55, 12, 8); tl.rotation.z = 0.45;
   for (const sz of [-1, 1]) sp(0.003, P('#111', 0.2), 0.062, 0.082, sz * 0.018);
-  bx(0.02, 0.012, 0.02, wd, 0, 0, 0, 0.004);
+  cy(0.006, 0.006, 0.018, P('#4a3a2a', 0.6), 0.005, 0, 0, 8);
+  cy(0.025, 0.028, 0.008, WOOD('walnut'), 0.005, 0, 0, 16);
 };
 const s_wood = 'oak';
 K.kokeshi = () => {
@@ -973,15 +1193,29 @@ K.kokeshi = () => {
   sp(0.003, P('#b8322b', 0.4), 0, 0.146, 0.032);
 };
 K.daruma = () => {
-  const red = P('#c0282a', 0.35);
-  sp(0.06, red, 0, 0.058, 0, 1, 1.05, 0.95, 22, 16);
-  const face = sp(0.036, P('#f6efe2', 0.4), 0, 0.075, 0.035, 1, 1, 0.55, 18, 12);
-  sp(0.009, P('#111', 0.3), -0.013, 0.08, 0.055, 1, 1, 0.4); // 片目だけ（願いがかなったら、もう片方）
-  sp(0.01, P('#f6efe2', 0.4), 0.013, 0.08, 0.055, 1, 1, 0.3);
-  bx(0.05, 0.016, 0.004, faceMat('daruma', (x, w, h) => { x.fillStyle = '#c0282a'; x.fillRect(0, 0, w, h); x.fillStyle = '#e9c97a'; x.font = 'bold 80px serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText('福', w / 2, h / 2); }), 0, 0.02, 0.058, 0.002);
-  for (const sx of [-1, 1]) { const m = bx(0.016, 0.004, 0.003, P('#111'), sx * 0.016, 0.1, 0.052, 0.001); m.rotation.z = sx * 0.3; }
+  // 本物：赤い本体、白い顔に太い黒のまゆ・ひげ。目は白で、願いをかけて片方だけ黒くぬる。おなかに金の文字
+  const red = P('#c0282a', 0.32);
+  const body = sp(0.06, red, 0, 0.0632, 0, 1, 1.05, 0.95, 28, 20);
+  const face = canvasMat('darumaface', 256, 256, (x, w, h) => {
+    x.fillStyle = '#c0282a'; x.fillRect(0, 0, w, h);
+    x.fillStyle = '#f6efe2'; x.beginPath(); x.ellipse(128, 120, 92, 82, 0, 0, TAU); x.fill();
+    x.strokeStyle = '#d9a43a'; x.lineWidth = 6; x.beginPath(); x.ellipse(128, 120, 96, 86, 0, 0, TAU); x.stroke();
+    x.strokeStyle = '#111'; x.lineCap = 'round';
+    x.lineWidth = 14; x.beginPath(); x.moveTo(52, 70); x.quadraticCurveTo(80, 44, 112, 66); x.moveTo(204, 70); x.quadraticCurveTo(176, 44, 144, 66); x.stroke(); // まゆ
+    x.fillStyle = '#fff'; x.strokeStyle = '#111'; x.lineWidth = 4;
+    for (const ex of [90, 166]) { x.beginPath(); x.arc(ex, 104, 22, 0, TAU); x.fill(); x.stroke(); }
+    x.fillStyle = '#111'; x.beginPath(); x.arc(90, 104, 13, 0, TAU); x.fill(); // 片目だけ
+    x.lineWidth = 8; x.beginPath(); x.moveTo(84, 160); x.quadraticCurveTo(110, 146, 128, 158); x.quadraticCurveTo(146, 146, 172, 160); x.stroke(); // ひげ
+    x.lineWidth = 4; for (let i = -3; i <= 3; i++) { x.beginPath(); x.moveTo(128 + i * 14, 176); x.lineTo(128 + i * 18, 196); x.stroke(); }
+  });
+  // 顔は、本体の前にぴったり重ねた球の一部（絵を貼る）
+  const fg = cg('darumafacegeo3', () => new THREE.SphereGeometry(0.0616, 40, 30, PI * 0.5 - 0.95, 1.9, PI * 0.08, PI * 0.58));
+  const f = add(fg, face, 0, 0.0632, 0); f.scale.set(1, 1.05, 0.95);
+  // おなかの金の模様
+  const belly = canvasMat('darumabelly', 256, 128, (x, w, h) => { x.fillStyle = '#c0282a'; x.fillRect(0, 0, w, h); x.fillStyle = '#e8c46a'; x.font = 'bold 70px serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText('福', w / 2, h / 2 + 4); x.strokeStyle = '#e8c46a'; x.lineWidth = 4; for (const sx of [-1, 1]) { x.beginPath(); x.arc(w / 2 + sx * 80, h / 2, 26, 0, TAU); x.stroke(); } });
+  const bg = cg('darumabellygeo2', () => new THREE.SphereGeometry(0.0612, 32, 12, PI * 0.5 - 0.7, 1.4, PI * 0.66, PI * 0.2));
+  const b = add(bg, belly, 0, 0.0632, 0); b.scale.set(1, 1.05, 0.95);
 };
-
 // ───────── バンド（OVERDRIVE） ─────────
 K.picks = () => {
   la([[0.001, 0], [0.05, 0], [0.06, 0.012], [0.062, 0.015], [0.057, 0.015], [0.048, 0.005], [0.001, 0.005]], CER('#1d1d1d'), 0, 0, 0, 28);
