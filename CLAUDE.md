@@ -47,8 +47,9 @@ GitHub のアカウント（blackt0461-arch）が止められている。clone�
 - **公開の場所**：Cloudflare Pages のプロジェクト「kotetsuworks」＋ 独自ドメイン **kotetsuworks.com**（Cloudflare で購入）。
   - 入口ページ `index.html`（KOTETSU WORKS）、ROOMIN 本番 `/roomin`（= `/study-room/`）、テスト版 `/roomin-beta`（= `/study-room-beta/`）、ほかのアプリはフォルダ名のまま。`_redirects` で短い URL にしている。
 - **更新のしかた**：
-  - 鍵（api.cloudflare.com 用の API トークン。権限は Cloudflare Pages の Edit だけ）がこの環境に登録してあれば、`node tools/deploy/deploy.js` で Claude が直接公開する（直接アップロードなので、Cloudflare の月500回のビルド回数を使わない）。
-  - 鍵がない時は、`node tools/deploy/build.js --zip` で `_backup/kotetsuworks-site.zip` を作って本人に送り、本人が Cloudflare Pages の「Create deployment」でアップロードする。
+  - ふつうは `bash tools/gitlab/push.sh --deploy`（GitLab に送って「deploy-日時」のタグを付ける → GitLab の自動作業が Cloudflare に直接アップロード。Cloudflare の月500回のビルド回数は使わない）。2026-11-07 に初めて成功。鍵は GitLab の CI 変数 CLOUDFLARE_API_TOKEN（Protect variable はチェックなし。チェックするとタグの時に鍵が渡らない）。公開は本人の OK をとってから。
+  - `node tools/deploy/deploy.js`（この環境から直接）は使えない：この環境の中継が Cloudflare の一時的な通行証を鍵で上書きしてしまい、ファイルを送る所で失敗する。
+  - GitLab も使えない時は、`node tools/deploy/build.js --zip` で `_backup/kotetsuworks-site.zip` を作って本人に送り、本人が Cloudflare Pages の「Create deployment」でアップロードする。
   - どちらも、入れるもの・入れないものは tools/deploy/build.js にまとめてある（cat-model・docs・youtube_highlights・roomin-questions・各アプリの tools などはのぞく）。
 - ROOMIN の「テスト版 → 許可 → 本番」の順番は変わらない。本番に写すのは `node study-room-beta/tools/release/release.js`。
 - 作り手の名前は **KOTETSU WORKS**（こてつワークス）。アイコンは `assets/`。
