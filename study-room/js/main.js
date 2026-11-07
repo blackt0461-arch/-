@@ -1,9 +1,9 @@
 // 画面の流れ：ログイン →（一括ダウンロード）→ 部屋（ホーム）
 // 下のアイコン：部屋／模様がえ／解く／図鑑／メニュー（記録・フレンド・設定・管理者）
 import { Room3D, moodNow, weatherToday } from './room3d.js';
-import { ROOMS, roomDef, roomShape, STYLES, styleDef, homeOf, VILLA_MIN_ITEMS } from './rooms.js';
-import { FIX_VARIANTS, FIX_NAMES } from './roomfix.js';
-import { GENRES, ITEMS, itemById, itemsOf, SPECIAL_IDS, STARTER } from './items.js';
+import { ROOMS, roomDef, roomShape, STYLES, styleDef, homeOf, VILLA_MIN_ITEMS, HOMES } from './rooms.js';
+import { FIX_VARIANTS, FIX_NAMES, fixKindsOf } from './roomfix.js';
+import { GENRES, ITEMS, itemById, itemsOf, SPECIAL_IDS, STARTER, decorZone } from './items.js';
 import { icon, GENRE_ICON, SUBJECT_ICON } from './icons.js';
 import { ticketSVG, TICKET_NAME } from './tickets.js';
 import * as G from './gacha.js';
@@ -20,6 +20,7 @@ import * as Sync from './sync.js';
 import * as R from './report.js';
 import * as EV from './events.js';
 import * as M from './missions.js';
+import * as C from './collection.js';
 import * as ERR from './errlog.js';
 import { rpc } from './cloud.js';
 import { PUZZLES, puzzleById, levelInfo, mountPuzzle, livesOf, slideRate } from './puzzles.js';
@@ -465,7 +466,7 @@ function updateGiftBadge() {
 }
 function showGiftBox() {
   const list = [...S.gifts()].sort((a, b) => (b.at || 0) - (a.at || 0));
-  const from = { rank: 'Lvアップ', play: 'がんばったごほうび', master: '克服', operator: '運営から', gacha: 'ガチャのごほうび' };
+  const from = { rank: 'Lvアップ', play: 'がんばったごほうび', master: '克服', operator: '運営から', gacha: 'ガチャのごほうび', title: '称号のごほうび' };
   const day = (t) => t ? new Date(t).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' }) : '';
   const el = screenWithTabs('gifts', `<button class="icon back">${icon('back')}</button><h2>プレゼントBOX</h2><span class="gb-count"><b>${list.length}</b> 件</span>`, 'room', `
     ${list.length ? `<button class="btn primary big gb-all">${icon('gift')}まとめて受け取る</button>
@@ -826,6 +827,17 @@ function shardExchange(rarity, bannerId) {
 // =========================== 部屋（ホーム） ===========================
 // 別荘が開く条件：家の部屋が全部開いていて、どの部屋にも家具を6個以上置いている
 const MAIN_ROOMS = ROOMS.filter(r => r.home === 'main');
+const CABIN_LV = 25; // 山小屋が開くLv
+const homeName = (k) => HOMES?.[k]?.name || (k === 'villa' ? '別荘' : '家');
+const homeIcon = (k) => k === 'villa' ? 'palm' : k === 'cabin' ? 'snow' : 'home';
+// 部屋えらびの下の「ほかの家へ」のボタン（家・別荘・山小屋）
+function otherHomesHTML(hs, home) {
+  const out = [];
+  if (home !== 'main') out.push(`<button class="rp-home" data-home="main">${icon('home')}家へもどる</button>`);
+  if (home !== 'villa') out.push(hs.villa ? `<button class="rp-home villa" data-home="villa">${icon('palm')}別荘へ行く</button>` : `<button class="rp-home lock" data-lock="villa">${icon('lock')}別荘<small>全部屋に家具${VILLA_MIN_ITEMS}個で開く</small></button>`);
+  if (home !== 'cabin') out.push(hs.cabin ? `<button class="rp-home cabin" data-home="cabin">${icon('snow')}山小屋へ行く</button>` : `<button class="rp-home lock" data-lock="cabin">${icon('lock')}山小屋<small>Lv${CABIN_LV}で開く</small></button>`);
+  return out.join('');
+}
 function villaLack(hs = HS()) {
   return MAIN_ROOMS.map(d => ({ d, n: (hs.rooms.find(x => x.id === d.id)?.placed || []).length, open: hs.rooms.some(x => x.id === d.id) }))
     .filter(x => !x.open || x.n < VILLA_MIN_ITEMS);
@@ -846,6 +858,9 @@ function ensureRooms() {
   for (const r of MAIN_ROOMS) if (r.unlock <= rank && !has(r.id)) addRoom(r);
   if (!hs.villa && !villaLack(hs).length) { hs.villa = true; hs.villaNew = true; }
   if (hs.villa) for (const r of ROOMS) if (r.home === 'villa' && !has(r.id)) addRoom(r);
+  // 山小屋（企画担当）：Lv25 で開く
+  if (!hs.cabin && rank >= CABIN_LV) { hs.cabin = true; hs.cabinNew = true; }
+  if (hs.cabin) for (const r of ROOMS) if (r.home === 'cabin' && !has(r.id)) addRoom(r);
   if (!hs.rooms.length) addRoom(ROOMS[0]);
   for (const r of hs.rooms) {
     r.surf = r.surf || { ...STARTER, ...(roomDef(r.id).surf || {}) };
@@ -958,8 +973,8 @@ function showHome() {
       ${UINEXT && canBuyNow() ? `<button class="nx-buy">${icon('gift')}<span>家具が買える</span><b>${buyCount() > 1 ? '×' + buyCount() : ''}</b></button>` : ''}
       <div class="side-tools">
         ${UINEXT ? `<button class="round nx-menubtn" aria-label="メニュー" aria-expanded="false">${icon('menu')}${newsBadge ? '<i class="gb-n dot-only"></i>' : ''}</button>` : `<button class="round photo" aria-label="写真をとる">${icon('camera')}</button>`}
-        ${EV.activeEvent() ? `<button class="round evbtn" aria-label="${esc(EV.activeEvent().name)}">${icon('snow')}${EV.readyCount(EV.activeEvent()) ? `<i class="gb-n">${EV.readyCount(EV.activeEvent())}</i>` : ''}</button>` : ''}
-        <button class="round msbtn" aria-label="ミッション">${icon('mission')}${M.readyCount() ? `<i class="gb-n">${M.readyCount()}</i>` : ''}</button>
+        ${EV.activeEvent() ? `<button class="round evbtn" aria-label="${esc(EV.activeEvent().name)}・ミッション">${icon(EV.activeEvent().icon || 'snow')}${EV.readyCount(EV.activeEvent()) + M.readyCount() ? `<i class="gb-n">${EV.readyCount(EV.activeEvent()) + M.readyCount()}</i>` : ''}</button>`
+          : `<button class="round msbtn" aria-label="ミッション">${icon('mission')}${M.readyCount() ? `<i class="gb-n">${M.readyCount()}</i>` : ''}</button>`}
         <button class="round giftbox" aria-label="プレゼントBOX">${icon('gift')}${S.gifts().length ? `<i class="gb-n">${S.gifts().length > 99 ? '99+' : S.gifts().length}</i>` : ''}</button>
       </div>
     </div>`);
@@ -977,6 +992,7 @@ function showHome() {
   scrollRoomsNav(el);
   if (!notesChecked) { notesChecked = true; checkUpdateNotes(); }
   if (hs.villaNew) celebrateVilla();
+  else if (hs.cabinNew) celebrateCabin();
   maybeTour();
 }
 // 新しいデザイン：はじめての人には、7枚の案内のかわりに「さっそく1問」の1枚だけ（ボタンの説明は使う時に）（1.12.0）
@@ -1037,20 +1053,17 @@ function showRoomPicker({ hs, r, here, locked, home }) {
     return `<button class="rp-room ${i === hs.current ? 'on' : ''}" data-i="${i}"><span class="rp-ic">${icon(d.icon)}</span><b>${esc(roomLabel(rr))}</b><small>家具 ${rr.placed.length}</small></button>`;
   };
   const next = locked[0];
-  const villaBtn = home === 'villa'
-    ? `<button class="rp-home" data-home="main">${icon('home')}家へもどる</button>`
-    : hs.villa ? `<button class="rp-home villa" data-home="villa">${icon('palm')}別荘へ行く</button>`
-      : `<button class="rp-home lock">${icon('lock')}別荘<small>全部屋に家具${VILLA_MIN_ITEMS}個で開く</small></button>`;
+  const villaBtn = otherHomesHTML(hs, home);
   const pop = h(`
     <div class="room-pop">
-      <div class="rp-head"><b>${home === 'villa' ? '別荘' : '家'}の部屋</b><button class="rp-rename">${icon('pencil')}名前を変える</button></div>
+      <div class="rp-head"><b>${homeName(home)}の部屋</b><button class="rp-rename">${icon('pencil')}名前を変える</button></div>
       <div class="rp-grid">${here.map(card).join('')}${next ? `<button class="rp-room lock"><span class="rp-ic">${icon('lock')}</span><b>${next.name}</b><small>Lv${next.unlock}で開く</small></button>` : ''}</div>
       ${villaBtn}
     </div>`);
   pop.querySelectorAll('.rp-room[data-i]').forEach(b => b.onclick = () => { pop.remove(); if (+b.dataset.i !== hs.current) switchRoom(+b.dataset.i); });
   pop.querySelector('.rp-room.lock')?.addEventListener('click', () => toast(`「${next.name}」は Lv${next.unlock} で開きます`, 2600));
   pop.querySelector('.rp-rename').onclick = () => { pop.remove(); renameRoom(r); };
-  pop.querySelector('.rp-home').onclick = (e) => { const t = e.currentTarget; if (t.classList.contains('lock')) return toast(villaHint(), 4200); pop.remove(); goHome(t.dataset.home); };
+  pop.querySelectorAll('.rp-home').forEach(b => b.onclick = (e) => { const t = e.currentTarget; if (t.dataset.lock === 'cabin') return toast(`山小屋は Lv${CABIN_LV} で開きます。雪山の中の、暖炉のある家です`, 3600); if (t.classList.contains('lock')) return toast(villaHint(), 4200); pop.remove(); goHome(t.dataset.home); });
   app.querySelector('.home').append(pop);
   setTimeout(() => {
     const close = (e) => { if (!pop.contains(e.target) && !e.target.closest('.room-name')) { pop.remove(); document.removeEventListener('pointerdown', close, true); } };
@@ -1081,7 +1094,21 @@ function celebrateVilla() {
   el.querySelector('.go').onclick = () => { el.remove(); goHome('villa'); };
   el.querySelector('.later').onclick = () => el.remove();
 }
-// 家と別荘を行き来する（前にいた部屋へ）
+// 山小屋が開いたお祝い（1回だけ）
+function celebrateCabin() {
+  const hs = HS();
+  hs.cabinNew = false; S.save();
+  vibrate([40, 60, 40, 60, 120]);
+  const cr = ROOMS.filter(r => r.home === 'cabin');
+  const el = sheet(`
+    <div class="sh-head"><span class="sh-ic gold">${icon('snow')}</span><div><h3>山小屋ができました！</h3><p>Lv${CABIN_LV}のごほうびです。雪山の中の、暖炉のある家</p></div></div>
+    <ul class="news-list">${cr.map(r => `<li>${icon(r.icon)}${esc(r.name)}</li>`).join('')}</ul>
+    <button class="btn gold big go">${icon('snow')}山小屋へ行く</button>
+    <button class="btn ghost later">あとで</button>`, 'villa-sheet');
+  el.querySelector('.go').onclick = () => { el.remove(); goHome('cabin'); };
+  el.querySelector('.later').onclick = () => el.remove();
+}
+// 家と別荘・山小屋を行き来する（前にいた部屋へ）
 async function goHome(home) {
   const hs = HS();
   if (room3d?.editMode) return;
@@ -1095,6 +1122,7 @@ async function goHome(home) {
   await switchRoom(i);
   canvas.classList.remove('fade');
   if (home === 'villa') toast('別荘に来ました。ドアで別荘の部屋をめぐれます', 2800);
+  if (home === 'cabin') toast('山小屋に来ました。ドアで山小屋の部屋をめぐれます', 2800);
 }
 
 async function switchRoom(i) {
@@ -1182,7 +1210,13 @@ function matchSurface(kind, src) {
 
 // =========================== 家具を買う ===========================
 function pickCandidates(genre, style) {
-  const pool = itemsOf(genre).filter(i => !i.special && !i.rare && !S.realOwned(i.id)); // レアな物はガチャだけ
+  let pool = itemsOf(genre).filter(i => !i.special && !i.rare && !S.realOwned(i.id)); // レアな物はガチャだけ
+  // 小物：お風呂・洗面所・キッチン・書斎では、その場所の小物を出す（3D担当 2026-11：小物100種類）
+  const zone = genre === 'decor' ? decorZone(curRoom()?.id) : null;
+  if (zone && pool.filter(i => i.zone === zone).length >= 3) pool = pool.filter(i => i.zone === zone);
+  // 備え付けの形は、今の部屋にその備え付けがある時だけ（キッチンの形はキッチンで）
+  const fk = fixKindsOf(roomShape(curDef()));
+  pool = pool.filter(i => !i.src?.fixshape || fk.includes(i.src.fixshape.kind));
   const match = S.shuffle(pool.filter(i => style && i.styles?.includes(style)));
   const other = S.shuffle(pool.filter(i => !(style && i.styles?.includes(style))));
   // 3つのうち2つは部屋の雰囲気に合う物（足りなければほかから）
@@ -1668,18 +1702,30 @@ function showSurfaces(kind = 'wall') {
 }
 
 // 部屋に備え付けの物があれば「備え付け」の切りかえも出す
-function surfKinds() { return roomShape(curDef()).built.some(b => FIX_VARIANTS[b.kind]) ? [...SURFACE_KINDS, ['fix', '備え付け']] : SURFACE_KINDS; }
+function surfKinds() { return fixKindsOf(roomShape(curDef())).length ? [...SURFACE_KINDS, ['fix', '備え付け']] : SURFACE_KINDS; }
 function showFixtures() {
   const r = curRoom();
-  const kinds = [...new Set(roomShape(curDef()).built.map(b => b.kind))].filter(k => FIX_VARIANTS[k]);
+  const kinds = fixKindsOf(roomShape(curDef()));
+  // 形：いつもの（無料）＋ 持っている形（買った物・ガチャの物）（3D担当 2026-11）
+  const allSurf = [...ITEMS, ...G.GACHA_ITEMS.filter(i => !ITEMS.includes(i))];
+  const shapesOf = (k) => allSurf.filter(i => i.place === 'surface' && i.surface === 'fix-' + k && S.owned(i.id));
   const el = sheet(`
-    <div class="sh-head"><span class="sh-ic">${icon('brush')}</span><div><h3>壁・床・ドア・窓</h3><p>備え付けの物は、いつでも色や素材を変えられます</p></div></div>
+    <div class="sh-head"><span class="sh-ic">${icon('brush')}</span><div><h3>壁・床・ドア・窓</h3><p>備え付けの物は、いつでも形や色を変えられます</p></div></div>
     <div class="seg kinds">${surfKinds().map(([k, n]) => `<button data-k="${k}" class="${k === 'fix' ? 'on' : ''}">${n}</button>`).join('')}</div>
-    <div class="fixlist">${kinds.map(k => `<div class="fix-row"><b>${FIX_NAMES[k] || k}</b><div class="fix-vs">${FIX_VARIANTS[k].map(v => `
+    <div class="fixlist">${kinds.map(k => `<div class="fix-row"><b>${FIX_NAMES[k] || k}</b>
+      ${shapesOf(k).length ? `<div class="invgrid fix-shapes"><button class="inv-item fix-s ${!r.surf?.['fix-' + k] ? 'on' : ''}" data-k="${k}" data-id=""><span class="thumb none">${icon('check')}</span><b>いつもの形</b></button>${shapesOf(k).map(it => `<button class="inv-item fix-s ${r.surf?.['fix-' + k] === it.id ? 'on' : ''}" data-k="${k}" data-id="${it.id}"><span class="thumb">${thumbHTML(it)}</span><b>${esc(it.name)}</b></button>`).join('')}</div>` : ''}
+      <div class="fix-vs">${FIX_VARIANTS[k].map(v => `
       <button class="fix-v ${(r.fix?.[k] || 'std') === v.id ? 'on' : ''}" data-k="${k}" data-v="${v.id}"><i style="background:${v.tint || 'linear-gradient(135deg,#f4f1ea,#cfc6b8)'}"></i>${v.name}</button>`).join('')}</div></div>`).join('')}</div>
     <button class="link close">とじる</button>`, 'inv-sheet');
   el.querySelector('.close').onclick = () => el.remove();
   el.querySelectorAll('.kinds button').forEach(b => b.onclick = () => showSurfaces(b.dataset.k));
+  el.querySelectorAll('.fix-s').forEach(b => b.onclick = async () => {
+    r.surf = r.surf || {};
+    if (b.dataset.id) r.surf['fix-' + b.dataset.k] = b.dataset.id; else delete r.surf['fix-' + b.dataset.k];
+    S.save();
+    el.querySelectorAll(`.fix-s[data-k="${b.dataset.k}"]`).forEach(x => x.classList.toggle('on', x === b));
+    await room3d.buildShell();
+  });
   el.querySelectorAll('.fix-v').forEach(b => b.onclick = async () => {
     r.fix = r.fix || {};
     if (b.dataset.v === 'std') delete r.fix[b.dataset.k]; else r.fix[b.dataset.k] = b.dataset.v;
@@ -1724,7 +1770,7 @@ function photoMode() {
 
 // =========================== 更新のお知らせ ===========================
 // このプログラムの版（version.json と同じにする。公開のたびに上げる）
-const APP_VERSION = '1.15.4';
+const APP_VERSION = '1.16.0';
 ERR.setVersion(APP_VERSION);
 // 新しい版が出たら、みんな同じタイミングでそろうように強制で再起動する。
 // 開いた時・画面に戻った時・1分ごとに version.json を見る
@@ -2210,13 +2256,11 @@ function screenWithTabs(cls, title, active, body) {
 // 新しいデザイン：メニューは右上の丸ボタン。押すと、その下に項目が縦にのびる（1.12.1）
 const NX_MENU = () => [
   ['skins', 'palette', '着せ替え', () => showSkins()],
-  ['report', 'calendar', '勉強レポート', () => showReport()],
-  ['records', 'chart', '記録', () => showRecords()],
-  ['news', 'bell', 'お知らせ', () => showNews(), newsBadge],
-  ['feedback', 'chat', '要望・バグ報告', () => showFeedback()],
+  ['records', 'chart', '記録・レポート', () => showReport()],
+  ['news', 'bell', 'お知らせ・要望', () => showNews(), newsBadge],
   ['photo', 'camera', '部屋の写真', () => photoMode()],
   ['settings', 'gear', '設定', () => showSettings()],
-  ...(isAdmin() ? [['beta', BETA ? 'home' : 'flask', BETA ? 'いつもの版へ' : 'テスト版', () => { location.href = BETA ? '../study-room/' : '../study-room-beta/'; }], ['admin', 'shield', '管理者', () => showAdmin()]] : []),
+  ...(isAdmin() ? [['admin', 'shield', '管理者', () => showAdmin()]] : []), // テスト版への切りかえは管理者画面の中（1.15）
 ];
 function toggleNxMenu(open) {
   const btn = app.querySelector('.nx-menubtn'); if (!btn) return;
@@ -2272,7 +2316,8 @@ function profileCtx(v = null) {
     const pf = v.profile || {}, col = new Set(v.collected || []);
     return { solved: pf.solved || 0, acc: pf.solved ? (pf.correct || 0) / pf.solved : 0, streak: S.streakOf(v.streak), rank: S.rankInfo(pf.xp || 0).rank,
       study: studyParams(sid => ({ units: v.units?.[sid] || {} })), puzzle: puzzleParams(id => (pf.puzzle || {})[id] || {}, id => (pf.endless || {})[id] || {}),
-      pzClears: pf.puzzleClears || 0, collected: col.size, star5: G.GACHA_ITEMS.filter(i => i.rarity === 5 && col.has(i.id)).length, admin: !!v.admin };
+      pzClears: pf.puzzleClears || 0, collected: col.size, star5: G.GACHA_ITEMS.filter(i => i.rarity === 5 && col.has(i.id)).length, admin: !!v.admin,
+      zukan: C.zukanPct(id => col.has(id)), series: C.seriesDone(id => col.has(id)), evDone: Object.keys(pf.events || {}).filter(k => pf.events[k]?.done) };
   }
   const pf = S.profile(), hs = HS();
   const study = studyParams(sid => S.subject(sid));
@@ -2280,11 +2325,15 @@ function profileCtx(v = null) {
   const collected = Object.keys(hs.collected || {}).length;
   const star5 = G.GACHA_ITEMS.filter(i => i.rarity === 5 && hs.collected?.[i.id]).length;
   return { solved: pf.solved || 0, acc: pf.solved ? (pf.correct || 0) / pf.solved : 0, streak: S.currentStreak(), rank: rankNow().rank,
-    study, puzzle, pzClears: pf.puzzleClears || 0, collected, star5, admin: isAdmin() };
+    study, puzzle, pzClears: pf.puzzleClears || 0, collected, star5, admin: isAdmin(),
+    zukan: C.zukanPct(id => !!hs.collected?.[id]), series: C.seriesDone(id => !!hs.collected?.[id]), evDone: Object.keys(pf.events || {}).filter(k => pf.events[k]?.done) };
 }
 // 新しく手に入れた称号を知らせる（はじめては、まとめて1回だけ）
 function checkNewTitles() {
   const pf = S.profile(), got = earnedTitles(profileCtx()).map(t => t.id);
+  // むずかしい称号・図鑑の％の称号のごほうび家具（1回だけ。前に手に入れた称号の分も届く）
+  const gave = C.grantTitleRewards(got);
+  if (gave.length) { S.save(); updateGiftBadge(); setTimeout(() => toast(`称号のごほうび「${itemById(gave[0])?.name || '家具'}」${gave.length > 1 ? ` ほか${gave.length - 1}つ` : ''}がプレゼントBOXに届きました`, 3400), 4300); }
   const first = !pf.titlesSeen;
   const seen = new Set(pf.titlesSeen || []);
   const fresh = got.filter(id => !seen.has(id));
@@ -2310,7 +2359,7 @@ function showProfile(view = null, back = null) {
       <div class="pf-radar">${radarSVG(c.puzzle, { color: '#6cbf8a' })}</div>
       <div class="pf-list">${c.puzzle.map(a => `<div class="pf-row"><b>${a.label}<small>${a.sub}</small></b><span class="pf-rank r-${a.rank}">${a.rank}</span><span class="pf-bar g"><i style="width:${a.value}%"></i></span><small>${a.endless ? `ベスト ${a.score}` : a.best ? `★${a.best}` : '—'}・${a.clears}回</small></div>`).join('')}</div>
       <p class="pf-note">クリアした★が高いほど、回数とノーミスが多いほど上がります</p></section>`;
-  const list = TITLES.filter(t => !t.secret || earned.has(t.id));
+  const list = TITLES.filter(t => (!t.secret && !t.event) || earned.has(t.id)); // イベントの記念の称号は、手に入れた人だけに出す
   const el = screenWithTabs('profile', `<button class="icon back">${icon('back')}</button><h2>${mine ? 'プロフィール' : `${esc(name)}さん`}</h2><span></span>`, mine ? 'menu' : 'social', `
     <section class="pf-head">
       ${mine ? `<button class="pf-avbtn" aria-label="アイコンを変える">${avatarHTML(pf, 'avatar pf-av')}<span class="pf-edit">${icon('brush')}</span></button>` : avatarHTML(pf, 'avatar pf-av')}
@@ -2327,7 +2376,7 @@ function showProfile(view = null, back = null) {
     </div>
     ${puzzleMain ? puzzleSec + studySec : studySec + puzzleSec}
     <section class="pf-sec"><h3 class="sec">${icon('trophy')}称号<small>${earned.size} / ${list.length}</small></h3>
-      <div class="pf-titles">${list.map(t => `<button class="pf-t ${earned.has(t.id) ? 'got' : ''} ${pf.title === t.id ? 'on' : ''}" data-t="${t.id}" ${earned.has(t.id) && mine ? '' : 'disabled'}><b>${earned.has(t.id) ? esc(t.name) : '？？？'}</b><small>${esc(t.how)}</small></button>`).join('')}</div>
+      <div class="pf-titles">${list.map(t => `<button class="pf-t ${earned.has(t.id) ? 'got' : ''} ${pf.title === t.id ? 'on' : ''}" data-t="${t.id}" ${earned.has(t.id) && mine ? '' : 'disabled'}><b>${earned.has(t.id) ? esc(t.name) : '？？？'}</b><small>${esc(t.how)}</small>${C.TITLE_REWARD[t.id] ? `<small class="pf-trw">${icon('gift')}${esc(itemById(C.TITLE_REWARD[t.id])?.name || '限定の家具')}</small>` : ''}</button>`).join('')}</div>
       ${mine ? '<p class="pf-note">手に入れた称号を押すと、名前の下に出せます（フレンドにも見えます）</p>' : ''}</section>
     ${!mine ? `<div class="pf-safety"><button class="link pf-report">${icon('info')}通報する</button><button class="link pf-block">${icon('shield')}${blockedNames.has(name) ? 'ブロック中' : 'ブロックする'}</button></div>` : ''}`);
   el.querySelector('.back').onclick = back || showMenu;
@@ -2428,6 +2477,7 @@ function showRankRoad() {
   const toNext = rk.max ? 0 : rk.need - rk.into;
   const roomAt = {};
   for (const d of ROOMS) if (d.home === 'main' && d.unlock > 1) roomAt[d.unlock] = d;
+  roomAt[CABIN_LV] = roomAt[CABIN_LV] || { icon: 'snow', name: '山小屋' };
   const rows = [];
   for (let L = S.MAX_RANK; L >= 2; L--) {
     const r = S.rankRewards(L);
@@ -2479,13 +2529,17 @@ function evRewardArt(r) {
   return `<span class="gb-ic">${icon('gift')}</span>`;
 }
 const evRewardName = (r) => r.kind === 'item' ? (itemById(r.item)?.name || '家具') : `${GIFT_LABEL[r.kind] || 'プレゼント'} ×${r.amount || 1}`;
+// イベント中は、イベントとミッションを上のタブで行き来する（部屋の丸ボタンは1つにまとめた。1.15）
+const evMsTabs = (on) => { const ev = EV.activeEvent(); if (!ev) return ''; const n1 = EV.readyCount(ev), n2 = M.readyCount();
+  return `<div class="seg evms-tabs"><button data-v="ev" class="${on === 'ev' ? 'on' : ''}">${icon(ev.icon || 'snow')}${esc(ev.name)}${n1 ? `<i class="gb-n">${n1}</i>` : ''}</button><button data-v="ms" class="${on === 'ms' ? 'on' : ''}">${icon('mission')}ミッション${n2 ? `<i class="gb-n">${n2}</i>` : ''}</button></div>`; };
+const bindEvMsTabs = (el) => el.querySelectorAll('.evms-tabs button').forEach(b => b.onclick = () => { if (b.classList.contains('on')) return; el.remove(); b.dataset.v === 'ev' ? showEvent() : showMissions(); });
 function showEvent() {
   const ev = EV.activeEvent();
   if (!ev) return toast('いまはイベントの期間ではありません');
   const st = EV.stateOf(ev), next = ev.rewards.find(r => st.pts < r.at), last = ev.rewards.at(-1).at;
   const el = sheet(`
-    <div class="sh-head ev-head"><span class="sh-ic ev-ic">${icon('snow')}</span><div><h3>${esc(ev.name)}${EV.previewing() === ev.id ? '<small class="ev-pv">ためし中</small>' : ''}</h3><p>${md(ev.start)}〜${md(ev.end)} ・ のこり ${EV.daysLeft(ev)}日</p></div><button class="sh-x close" aria-label="とじる">${icon('x')}</button></div>
-    <p class="ev-desc">${esc(ev.desc)}</p>
+    <div class="sh-head ev-head"><span class="sh-ic ev-ic">${icon(ev.icon || 'snow')}</span><div><h3>${esc(ev.name)}${EV.previewing() === ev.id ? '<small class="ev-pv">ためし中</small>' : ''}</h3><p>${md(ev.start)}〜${md(ev.end)} ・ のこり ${EV.daysLeft(ev)}日</p></div><button class="sh-x close" aria-label="とじる">${icon('x')}</button></div>
+    ${evMsTabs('ev')}<p class="ev-desc">${esc(ev.desc)}</p>
     <div class="ev-meter"><div class="ev-num"><b>${st.pts}</b><span>${esc(ev.unit)}</span></div>
       <div class="ev-bar"><i style="width:${Math.min(100, st.pts / last * 100)}%"></i>${ev.rewards.map(r => `<span class="ev-tick ${st.pts >= r.at ? 'on' : ''}" style="left:${r.at / last * 100}%"></span>`).join('')}</div>
       <small>${next ? `次のごほうびまで あと ${next.at - st.pts}${esc(ev.unit)}` : 'ぜんぶのごほうびを集めました！'}・問題は正解${EV.POINTS.right}・まちがい${EV.POINTS.wrong}、パズルは★の数</small></div>
@@ -2495,6 +2549,7 @@ function showEvent() {
     <p class="note">受け取ったごほうびはプレゼントBOXに届きます。イベントの家具はガチャからは出ません</p>`, 'ev-sheet');
   hydrateThumbs(el);
   el.querySelector('.close').onclick = () => { el.remove(); showHome(); };
+  bindEvMsTabs(el);
   el.querySelectorAll('.ev-claim').forEach(b => b.onclick = () => {
     if (EV.claim(ev, +b.dataset.i)) { vibrate([20, 30, 20]); toast('プレゼントBOXに届きました'); showEvent(); }
   });
@@ -2524,6 +2579,7 @@ function showMissions() {
   };
   const el = sheet(`
     <div class="sh-head"><span class="sh-ic ms-ic">${icon('mission')}</span><div><h3>ミッション</h3><p>${M.sideKey() === 'puzzle' ? 'パズルサイド' : 'スタディサイド'}のミッション</p></div><button class="sh-x close" aria-label="とじる">${icon('x')}</button></div>
+    ${evMsTabs('ms')}
     <div class="ms-wallet">${medalIcon()}<b>${M.medals()}</b><span>メダル</span><button class="btn ghost sm ms-shop">${icon('gift')}メダル交換所</button></div>
     ${ready > 1 ? `<button class="btn primary big ms-every">${icon('gift')}まとめて受け取る（${ready}）</button>` : ''}
     <h4 class="ms-h">毎日のミッション<small>のこり ${M.timeLeft('daily')}</small></h4>
@@ -2533,6 +2589,7 @@ function showMissions() {
     <p class="note">毎日は朝6時、毎週は月曜の朝6時に新しくなります。メダルは交換所で家具などと交換できます</p>`, 'ms-sheet');
   const done = (r) => { if (!r) return; S.save(); vibrate([20, 30, 20]); toast(`メダル ${r.medals}枚${r.ticket ? `・レアチケット ${r.ticket}枚` : ''}を受け取りました`); showMissions(); };
   el.querySelector('.close').onclick = () => { el.remove(); showHome(); };
+  bindEvMsTabs(el);
   el.querySelectorAll('.ms-claim').forEach(b => b.onclick = () => done(M.claim(b.dataset.k, b.dataset.id)));
   el.querySelectorAll('.ms-all').forEach(b => b.onclick = () => done(M.claimAll(b.dataset.k)));
   el.querySelector('.ms-every')?.addEventListener('click', () => done(M.claimEverything()));
@@ -2575,6 +2632,9 @@ function showMedalShop() {
   });
 }
 // 勉強レポート（1.12.0）：週・月ごとのまとめ。画像で保存できる
+// 「記録・レポート」：勉強レポートと記録（成績）を上のタブで行き来する（1.15）
+const recSwitch = (on) => `<div class="seg rec-switch"><button data-v="rep" class="${on === 'rep' ? 'on' : ''}">${icon('calendar')}レポート</button><button data-v="rec" class="${on === 'rec' ? 'on' : ''}">${icon('chart')}成績</button></div>`;
+const bindRecSwitch = (el) => el.querySelectorAll('.rec-switch button').forEach(b => b.onclick = () => { if (b.classList.contains('on')) return; b.dataset.v === 'rep' ? showReport() : showRecords(); });
 function showReport(kind = 'week', offset = 0) {
   const log = S.dayLog(), p = R.period(kind, offset), pv = R.period(kind, offset - 1);
   const cur = R.summarize(log, p), prev = R.summarize(log, pv);
@@ -2586,7 +2646,7 @@ function showReport(kind = 'week', offset = 0) {
     <div class="rp-days">${cur.days.map((d, i) => `<span>${kind === 'week' ? '月火水木金土日'[i] : (i % 5 === 0 || i === cur.days.length - 1) ? +d.key.slice(8) : ''}</span>`).join('')}</div>`;
   const subjRows = Object.entries(cur.bySid).sort((a, b) => b[1][0] - a[1][0]).map(([sid, [n, c]]) => `<div class="rp-row"><span class="ic2">${icon(SUBJECT_ICON[sid] || 'book')}</span><b>${esc(names[sid] || sid)}</b><span class="rp-bar"><i style="width:${n / Math.max(1, cur.n) * 100}%"></i></span><span class="rp-n">${n}問<small>${Math.round(c / n * 100)}%</small></span></div>`).join('');
   const unitRows = (list, weak) => list.length ? list.map((u, i) => `<div class="rp-row rp-unit"><span class="rp-rank ${weak ? 'weak' : 'strong'}">${i + 1}</span><span class="rp-ut"><b>${esc(u.unit)}</b><small>${esc(names[u.sid] || '')}・${u.n}問・正解率 ${Math.round(u.rate * 100)}%</small></span>${weak ? `<button class="btn ghost sm rp-go" data-s="${u.sid}" data-u="${esc(u.unit)}">${icon('pencil')}解く</button>` : ''}</div>`).join('') : `<p class="empty sm">3問以上解いた単元が出ます</p>`;
-  const el = screenWithTabs('report', `<button class="icon back">${icon('back')}</button><h2>勉強レポート</h2><span></span>`, 'menu', `
+  const el = screenWithTabs('report', `<button class="icon back">${icon('back')}</button><h2>記録・レポート</h2><span></span>`, 'menu', `${recSwitch('rep')}
     <div class="rp-tabs" role="tablist"><button data-k="week" class="${kind === 'week' ? 'on' : ''}">週</button><button data-k="month" class="${kind === 'month' ? 'on' : ''}">月</button></div>
     <div class="rp-nav"><button class="icon rp-prev" aria-label="前へ">${icon('back')}</button><div><b>${p.name}</b><small>${p.label}</small></div><button class="icon rp-next" aria-label="次へ" ${offset >= 0 ? 'disabled' : ''}>${icon('chevronRight')}</button></div>
     <p class="rp-comment">${icon('sparkle')}${esc(R.comment(cur, prev, p))}</p>
@@ -2603,6 +2663,7 @@ function showReport(kind = 'week', offset = 0) {
     <button class="btn gold big rp-save">${icon('download')}画像で保存</button>
     <p class="note">保存した画像は、写真やファイル（Google ドライブなど）に入れられます。記録は 1.12.0 から集まり始めます</p>`);
   el.querySelector('.back').onclick = showMenu;
+  bindRecSwitch(el);
   el.querySelectorAll('.rp-tabs button').forEach(b => b.onclick = () => showReport(b.dataset.k, 0));
   el.querySelector('.rp-prev').onclick = () => showReport(kind, offset - 1);
   el.querySelector('.rp-next').onclick = () => showReport(kind, Math.min(0, offset + 1));
@@ -2637,7 +2698,7 @@ function showRecords(subj = subjectId) {
   const units = unitNames.map(u => ({ u, ...(st.units?.[u] || { solved: 0, correct: 0, perfect: 0 }), total: list.filter(p => p.unit === u).length }));
   const maxSolved = Math.max(1, ...units.map(x => x.solved));
   const subjName = SUBJECTS.find(x => x.id === subj)?.name || '';
-  const el = screenWithTabs('records', `<button class="icon back">${icon('back')}</button><h2>記録</h2><span></span>`, 'menu', `
+  const el = screenWithTabs('records', `<button class="icon back">${icon('back')}</button><h2>記録・レポート</h2><span></span>`, 'menu', `${recSwitch('rec')}
     <section class="profile-card">
       <div class="pc-lv"><span>Lv</span><b>${rk.rank}</b></div>
       <div class="pc-main"><b>経験値 ${pf.xp} XP</b>
@@ -2671,6 +2732,7 @@ function showRecords(subj = subjectId) {
       return `<li><span class="unit">${esc(p.unit)}</span><span class="tx">${esc(p.text.replace(/\n/g, ' '))}</span>${badge}</li>`;
     }).join('')}</ul>`);
   el.querySelector('.back').onclick = showMenu;
+  bindRecSwitch(el);
   el.querySelectorAll('.rec-subj button').forEach(b => b.onclick = () => showRecords(b.dataset.s));
 }
 
@@ -2850,6 +2912,13 @@ async function showRanking() {
 }
 
 // =========================== 図鑑 ===========================
+// 図鑑の％と、次のごほうび（collection.js）
+function zukanGoal() {
+  const hs = HS(), pct = C.zukanPct(id => !!hs.collected?.[id]);
+  const next = [25, 50, 75, 100].find(p => pct < p);
+  const it = next ? itemById(C.TITLE_REWARD['zukan' + next]) : null;
+  return `<div class="zk-goal">${icon('trophy')}<span>図鑑 <b>${pct}%</b>${next ? ` ・ ${next}%で「${esc(it?.name || '限定の家具')}」` : ' ・ ぜんぶのごほうびを集めました'}</span></div>`;
+}
 function showZukan(genre = null) {
   // ふつうの家具（買える物）と、ガチャの家具（★3〜★5）を分けて数える
   const shop = ITEMS.filter(i => !i.rare && !i.special);
@@ -2877,6 +2946,7 @@ function showZukan(genre = null) {
   }
   const el = screenWithTabs('zukan', `<button class="icon back">${icon('back')}</button><h2>図鑑</h2><span class="zk-total"><b>${have}</b> / ${total}</span>`, 'zukan', `
     <div class="zk-progress"><i style="width:${have / total * 100}%"></i></div>
+    ${zukanGoal()}
     <div class="zk-tabs">
       <button data-g="" class="${!genre ? 'on' : ''}">すべて</button>
       <button data-g="gacha" class="${genre === 'gacha' ? 'on' : ''}">${icon('star')}ガチャ</button>
@@ -2913,10 +2983,12 @@ async function refreshNewsBadge() {
   } catch (e) { /* オフライン */ }
 }
 async function showNews() {
-  const el = screenWithTabs('news', `<button class="icon back">${icon('back')}</button><h2>お知らせ</h2><span></span>`, 'menu', `<div class="nlist"><p class="empty">読み込み中…</p></div>`);
+  const el = screenWithTabs('news', `<button class="icon back">${icon('back')}</button><h2>お知らせ・要望</h2><span></span>`, 'menu', `<div class="nlist"><p class="empty">読み込み中…</p></div>
+    <button class="btn ghost big news-fb">${icon('chat')}要望・バグを管理者に送る</button>`);
   el.querySelector('.back').onclick = showMenu;
+  el.querySelector('.news-fb').onclick = () => showFeedback(); // 要望・バグ報告はお知らせの中から（1.15）
   let list = [];
-  try { list = await rpc('sr_news_list', { p_token: Auth.currentUser()?.token }); }
+  try { list = (await rpc('sr_news_list', { p_token: Auth.currentUser()?.token })) || []; } // お知らせが0件だと空（null）が返る
   catch (e) { el.querySelector('.nlist').innerHTML = `<p class="empty">${esc(e.message)}</p>`; return; }
   const seen = +(localStorage.getItem(NEWS_SEEN) || 0);
   const day = (t) => new Date(t).toLocaleDateString('ja-JP', { year: 'numeric', month: 'numeric', day: 'numeric' });
@@ -3065,8 +3137,8 @@ async function showVisit() {
   // 今いる家（家 or 別荘）の部屋と、もう一方への切りかえ
   const home = homeOf(room.id);
   const here = v.house.rooms.map((rr, i) => ({ rr, i })).filter(x => homeOf(x.rr.id) === home);
-  const other = v.house.rooms.findIndex(rr => homeOf(rr.id) !== home);
-  const navHTML = here.length > 1 || other >= 0 ? `<nav class="rooms">${here.map(({ rr, i }) => `<button data-i="${i}" class="${i === v.current ? 'on' : ''}">${icon(roomDef(rr.id).icon)}${esc(roomLabel(rr))}</button>`).join('')}${other >= 0 ? `<button data-i="${other}" class="homebtn">${home === 'main' ? `${icon('palm')}別荘へ` : `${icon('home')}家へ`}</button>` : ''}</nav>` : '';
+  const others = ['main', 'villa', 'cabin'].filter(k => k !== home).map(k => [k, v.house.rooms.findIndex(rr => homeOf(rr.id) === k)]).filter(([, i]) => i >= 0);
+  const navHTML = here.length > 1 || others.length ? `<nav class="rooms">${here.map(({ rr, i }) => `<button data-i="${i}" class="${i === v.current ? 'on' : ''}">${icon(roomDef(rr.id).icon)}${esc(roomLabel(rr))}</button>`).join('')}${others.map(([k, i]) => `<button data-i="${i}" class="homebtn">${icon(homeIcon(k))}${homeName(k)}へ</button>`).join('')}</nav>` : '';
   app.innerHTML = '';
   const el = h(`
     <div class="home visiting">
@@ -3099,8 +3171,9 @@ async function leaveVisit(goBack) {
 // =========================== 管理者 ===========================
 async function showAdmin() {
   if (!isAdmin()) return showMenu();
-  const el = screenWithTabs('admin', `<button class="icon back">${icon('back')}</button><h2>管理者</h2><span></span>`, 'menu', `<div class="row2 admin-btns"><button class="btn primary compose">${icon('bell')}お知らせを書く</button><button class="btn ghost inbox">${icon('chat')}要望・バグを見る</button></div><button class="btn ghost big sendgift">${icon('gift')}みんなにプレゼントを送る</button><button class="btn ghost big errlog">${icon('info')}エラーの記録を見る</button><div class="row2 admin-btns"><button class="btn ghost msdone">${icon('mission')}ミッションを全部達成に</button><button class="btn ghost msreset">${icon('refresh')}ミッションを最初から</button></div>${EV.EVENTS.length ? `<button class="btn ghost big evpreview">${icon('snow')}${EV.previewing() ? 'イベントのためしをやめる' : `イベントをためす（${esc(EV.EVENTS.at(-1).name)}）`}</button>` : ''}<div class="alist"><p class="empty">読み込み中…</p></div>`);
+  const el = screenWithTabs('admin', `<button class="icon back">${icon('back')}</button><h2>管理者</h2><span></span>`, 'menu', `<button class="btn ghost big betasw">${icon(BETA ? 'home' : 'flask')}${BETA ? 'いつもの版にもどる' : 'テスト版を開く'}</button><div class="row2 admin-btns"><button class="btn primary compose">${icon('bell')}お知らせを書く</button><button class="btn ghost inbox">${icon('chat')}要望・バグを見る</button></div><button class="btn ghost big sendgift">${icon('gift')}みんなにプレゼントを送る</button><button class="btn ghost big errlog">${icon('info')}エラーの記録を見る</button><div class="row2 admin-btns"><button class="btn ghost msdone">${icon('mission')}ミッションを全部達成に</button><button class="btn ghost msreset">${icon('refresh')}ミッションを最初から</button></div>${EV.EVENTS.length ? `<button class="btn ghost big evpreview">${icon('snow')}${EV.previewing() ? 'イベントのためしをやめる' : `イベントをためす（${esc(EV.EVENTS.at(-1).name)}）`}</button>` : ''}<div class="alist"><p class="empty">読み込み中…</p></div>`);
   el.querySelector('.back').onclick = showMenu;
+  el.querySelector('.betasw').onclick = () => { location.href = BETA ? '../study-room/' : '../study-room-beta/'; };
   el.querySelector('.compose').onclick = () => composeNews(showNews);
   el.querySelector('.inbox').onclick = showFeedbackInbox;
   el.querySelector('.sendgift').onclick = () => composeGift();
@@ -4030,4 +4103,4 @@ if ('serviceWorker' in navigator && location.protocol === 'https:') {
   navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(r => r.update()).catch(() => {});
 }
 // テスト用
-window.__app = { toast, showEdit, putIntoRoom, get room3d() { return room3d; }, S, sub, HS, switchRoom, ensureRooms, goHome, showHome, curRoom, visitFriend, leaveVisit, showLoginBonus, showGiftBox, showArrange, showMissions, showMedalShop, showAdmin, M, problemById: (id) => byId[id], runChoice, arrange: (sel, style) => { arrSel = sel; return runArrange(style); } };
+window.__app = { toast, showEdit, putIntoRoom, get room3d() { return room3d; }, S, sub, HS, switchRoom, ensureRooms, goHome, showHome, curRoom, visitFriend, leaveVisit, showLoginBonus, showGiftBox, showArrange, showMissions, showMedalShop, showAdmin, showProfile, M, problemById: (id) => byId[id], runChoice, arrange: (sel, style) => { arrSel = sel; return runArrange(style); } };

@@ -3,7 +3,7 @@
 import json,re,urllib.request,sys
 import os
 here=os.path.join(os.path.dirname(os.path.abspath(__file__)),'..','js')
-src=''.join(open(os.path.join(here,f)).read() for f in ('catalog.js','exterior.js','items.js'))
+src=''.join(open(os.path.join(here,f)).read() for f in ('catalog.js','exterior.js','items.js','gacha.js','rewardfurn.js'))  # rewardfurn.js：組み合わせ家具（PARTS）の model:
 models=sorted(set(re.findall(r"model: '([^']+)'",src))|set(re.findall(r"placeModel\(g, '([^']+)'",src))|set(re.findall(r"'(shrub_0\d)'",src)))
 texs=sorted(set(re.findall(r"tex: '([^']+)'",src))|set(re.findall(r"texturedMaterial\('([^']+)'",src)))
 def get(u): return json.load(urllib.request.urlopen(urllib.request.Request(u,headers={'User-Agent':'study-room-builder/1.0'}),timeout=30))

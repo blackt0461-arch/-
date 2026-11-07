@@ -1,0 +1,49 @@
+# いまの Supabase（ytvocegvtlgrnxupmbnf）の関数の目印（md5(pg_get_functiondef)）。2026-11-07 にとった。
+# 新しい Supabase に作り直したら、同じ値になるかを照らし合わせる。
+sr_admin_backups(p_token text, p_username text) 2a8a24bca7a1f2ea94cece79fe55ba77
+sr_admin_delete_user(p_token text, p_username text) 879cdf36f32a6514157439a8d2a3ba9a
+sr_admin_errors(p_token text) 96ff555310f54e9caca6833836157122
+sr_admin_gift_user(p_token text, p_username text, p_title text, p_kind text, p_amount integer, p_item text) bfb9f0fef221cb652d595a77960b72e4
+sr_admin_grant_code(p_token text, p_username text, p_code text) c667625d3c9ee6c5b3e8d34e3cf16ec6
+sr_admin_restore(p_token text, p_username text, p_backup bigint) d944334bd6d76dc785b0a2ada1daeb2a
+sr_admin_set_side(p_token text, p_username text, p_side text) ecf2b8fe868d6a26a732a3c4974168c5
+sr_admin_users(p_token text) 16fcd129a2414fe167700f95423a0633
+sr_backup_before_save() 7a698de4b1e990dc15591b436150a34b
+sr_block(p_token text, p_username text) ba6cc0b7201b146ee8a43686005f344d
+sr_block_list(p_token text) 1cf5cef941664ffae9b87787b5e43478
+sr_delete_me(p_token text, p_password text) 12b6efa62f94436b135d9896e786d509
+sr_feedback_done(p_token text, p_id bigint, p_done boolean) 23c72e6121bb63832f4982be6b37c90e
+sr_feedback_list(p_token text) a6c0bc37339a963d4f0941cee6bdff65
+sr_feedback_send(p_token text, p_kind text, p_body text) 86ecf995cf2bc032ebae10bf1f6a9a5b
+sr_friend_house(p_token text, p_username text) 0ead0fa8e081eb5c2c913dabd47276b8
+sr_friend_list(p_token text) 08f664ab0000e4bd324cbd535d23c8de
+sr_friend_remove(p_token text, p_username text) c1e3d9d1aa6736874ada2265f6fc9305
+sr_friend_request(p_token text, p_username text) 61f74660d175a5968575a9f38a29e9b5
+sr_friend_respond(p_token text, p_username text, p_accept boolean) 44a9cf354c35376231f6819002985e63
+sr_gift_list(p_token text) ec6abd403e2b102fede99a38155ed32a
+sr_gift_send(p_token text, p_title text, p_kind text, p_amount integer, p_item text, p_days integer) c3336e2e09d14fc3a291ebfa12e62d6a
+sr_load(p_token text) 1fb77a7a9f785318bfe45acf2776a649
+sr_log_error(p_token text, p_version text, p_msg text, p_stack text, p_place text, p_ua text) 9a9d79f1190a500bb39dbbf1ee9a0d1d
+sr_login(p_username text, p_password text) 11570be5f5cb25f4492dd03c75e62568
+sr_logout(p_token text) 4193975d10b5841c0adefce06833aa79
+sr_my_codes(p_token text) df8df7f974d51d38e3b6a2c1e3d41960
+sr_name_key(p text) cd64088d05d59c4b0b7f2ca7e1e17071
+sr_name_ng(p text) edd029509e91ec536ecbc959ced769bb
+sr_news_delete(p_token text, p_id bigint) ad03ad380a16d420f8f378db28958c5e
+sr_news_list(p_token text) b1ae2d9a098776232057b2e40481ccf8
+sr_news_post(p_token text, p_title text, p_body text) ad7d4d38b457c3cbc9bc30660198a163
+sr_news_post2(p_token text, p_title text, p_body text, p_admin_only boolean) 83697151f9c007de2fe1469878fad22d
+sr_password_reset(p_username text, p_code text, p_new text) 21ac9e26a3eeda08e8bc9438ad62bc09
+sr_ping(p_token text) 54a12a1b48ad42b96a544af8dee54287
+sr_profile(p_token text, p_username text) 7ccf89ecc00e795baf9c8248a58d2226
+sr_recovery_make(p_token text) bdcdd9b32491cf78cd48fc65d893107d
+sr_recovery_status(p_token text) 02533435c61bcc470e6824056fbbac2c
+sr_save(p_token text, p_data jsonb) ebc532681f6399ef40e5cacd6251c60c
+sr_signup(p_username text, p_password text) fa679d1ca6b97700ba5e3f4df5eee4cc
+sr_summary(d jsonb) 1a821af565755c5817b544243f04bbb8
+sr_unblock(p_token text, p_username text) 9e9709e3aa3de2f26ac39d03568a74fa
+sr_unit_times() cf86d205d73be1139a4f13d58ac1f704
+sr_weekly_points(p_token text, p_week text) 73e8b2bb4fb2366e42b3222c9c8db305
+sr_weekly_puzzle(p_token text, p_week text) 94e04b74629fdde12ff44cc605073258
+sr_weekly_ranking(p_token text, p_week text) 0aa2454409725a332d0c14ea67c1eb40
+sr_who(p_token text) 8db8039a93509a97485d6cc199f0ee42

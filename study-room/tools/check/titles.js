@@ -1,0 +1,66 @@
+// 称号・図鑑のごほうび家具の確かめ。使い方：node tools/check/titles.js
+const http = require('http'), fs = require('fs'), path = require('path');
+const { chromium } = require('playwright');
+const mock = require('./mock.js');
+const ROOT = path.resolve(__dirname, '..', '..'), OUT = path.join(__dirname, 'out');
+const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.webmanifest': 'application/manifest+json' };
+const serve = () => new Promise(res => { const srv = http.createServer((req, rsp) => { let f = decodeURIComponent(req.url.split('?')[0]); if (f.endsWith('/')) f += 'index.html'; const file = path.join(ROOT, f); if (!file.startsWith(ROOT) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) { rsp.writeHead(404); return rsp.end(); } rsp.writeHead(200, { 'Content-Type': TYPES[path.extname(file)] || 'application/octet-stream' }); fs.createReadStream(file).pipe(rsp); }).listen(0, () => res(srv)); });
+(async () => {
+  fs.mkdirSync(OUT, { recursive: true });
+  const srv = await serve(), base = `http://localhost:${srv.address().port}/`;
+  const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } }); await mock(ctx);
+  const page = await ctx.newPage(), fails = [], errors = [];
+  page.on('pageerror', e => errors.push(String(e))); page.on('dialog', d => d.accept());
+  const check = (ok, msg) => { console.log((ok ? '  ○ ' : '  × ') + msg); if (!ok) fails.push(msg); };
+  await page.addInitScript(() => { localStorage.setItem('studyroom.download', 'later'); localStorage.setItem('studyroom.notour', '1'); localStorage.setItem('studyroom.uinext', '0'); localStorage.setItem('studyroom.quality', 'low'); });
+  await page.goto(base); await page.waitForSelector('.title-screen'); await page.click('.title-screen');
+  await page.waitForSelector('button[type=submit]');
+  if (!/登録/.test(await page.locator('button[type=submit]').textContent())) await page.click('.swap');
+  await page.fill('input[name=name]', 'admin'); await page.fill('input[name=pw]', 'test1234'); await page.click('button[type=submit]');
+  await page.waitForSelector('.mode-sheet [data-m=study]', { timeout: 60000 }); await page.click('.mode-sheet [data-m=study]');
+  await page.waitForTimeout(2000); await page.evaluate(() => document.querySelector('.lb-screen .ok')?.click()); await page.waitForTimeout(600);
+  await page.evaluate(() => { document.querySelector('.style-sheet .stylecard')?.click(); document.querySelector('.style-sheet .ok')?.click(); });
+  await page.waitForTimeout(800);
+
+
+  const A = (fn, arg) => page.evaluate(fn, arg);
+  console.log('1. 図鑑を25%うめると、ごほうびの家具が届く');
+  const z = await A(async () => {
+    const { ITEMS } = await import('/js/items.js'); const G = await import('/js/gacha.js'); const C = await import('/js/collection.js');
+    const hs = window.__app.HS(); hs.collected = {}; const ids = [...ITEMS.filter(i => !i.rare && !i.special), ...G.GACHA_ITEMS.filter(i => !i.limited && !i.reward)].map(i => i.id);
+    for (const id of ids.slice(0, Math.ceil(ids.length * 0.26))) hs.collected[id] = 1;
+    window.__app.showHome(); await new Promise(r => setTimeout(r, 300));
+    return { pct: C.zukanPct(id => !!hs.collected[id]), gifts: window.__app.S.gifts().filter(g => g.from === 'title').map(g => g.itemId) };
+  });
+  check(z.pct >= 25 && z.pct < 50, `図鑑の％（${z.pct}%）`);
+  check(z.gifts.join() === 'c-zukan25', `「回る地球儀ランプ」だけが届く（${z.gifts.join()}）`);
+  const z2 = await A(async () => { window.__app.showHome(); await new Promise(r => setTimeout(r, 300)); return window.__app.S.gifts().filter(g => g.from === 'title').length; });
+  check(z2 === 1, `部屋にもどっても2回は届かない（${z2}）`);
+  console.log('2. むずかしい称号（あかりの間取り★5・連続100日）');
+  const t = await A(async () => { const { S } = window.__app; S.puzzleState('akari').best = 5; S.getState().streak = { count: 100, last: S.dayKey(), total: 100 }; window.__app.showHome(); await new Promise(r => setTimeout(r, 300)); return S.gifts().filter(g => g.from === 'title').map(g => g.itemId).sort().join(); });
+  check(t === 'c-zukan25,t-akari-lamp,t-streak100', `称号のごほうびが届く（${t}）`);
+  console.log('3. 受け取って部屋に置く');
+  await page.click('.home .giftbox'); await page.waitForSelector('.gifts'); await page.click('.gb-all'); await page.waitForTimeout(600);
+  const own = await A(() => ['c-zukan25', 't-akari-lamp', 't-streak100'].map(id => window.__app.S.realOwned(id)).join());
+  check(own === '1,1,1', `持ち物に入る（${own}）`);
+  await A(async () => { const { itemById } = await import('/js/items.js'); window.__app.S.setRank(30); window.__app.ensureRooms(); window.__app.showHome(); const C = await import('/js/collection.js'); for (const id of Object.values(C.TITLE_REWARD)) { window.__app.HS().inventory[id] = Math.max(1, window.__app.HS().inventory[id] || 0); await window.__app.putIntoRoom(itemById(id)); } });
+  await page.waitForTimeout(3000);
+  const placed = await A(() => window.__app.curRoom().placed.map(p => p.item).filter(x => /^[tc]-/.test(x)));
+  check(placed.length === 12, `ごほうび家具を12個とも部屋に置ける（${placed.length}個：${placed.join(', ')}）`);
+  await page.screenshot({ path: path.join(OUT, 'title-room.png') });
+  console.log('4. ガチャに出ない・称号の一覧にごほうびが出る');
+  const g = await A(async () => { const G = await import('/js/gacha.js'); return { ex: [4, 5].some(r => G.exchangeable(r).some(i => i.series === 'title')), odds: /t-akari|c-zukan/.test(JSON.stringify(G.oddsFor('standard'))) }; });
+  check(!g.ex && !g.odds, `ガチャ・かけら交換・確率表示に出ない（${JSON.stringify(g)}）`);
+  await A(() => window.__app.showProfile()); await page.waitForSelector('.pf-titles'); await page.waitForTimeout(500);
+  const rw = await page.locator('.pf-trw').count();
+  check(rw === 12, `称号の一覧に、ごほうびの家具の名前が12個出る（${rw}）`);
+  await page.locator('.pf-trw >> nth=0').scrollIntoViewIfNeeded(); await page.screenshot({ path: path.join(OUT, 'title-list.png') });
+  console.log('5. 前の版の記録（titleGifts がない）でも開ける。前に手に入れた称号の分は届く');
+  const old = await A(async () => { const { S } = window.__app; delete S.profile().titleGifts; const n0 = S.gifts().length; window.__app.showHome(); await new Promise(r => setTimeout(r, 300)); return S.gifts().length - n0; });
+  check(old >= 0, `記録がなくても開ける（届いた数 ${old}）`);
+  check(!errors.length, `画面のエラーなし（${errors.join(' / ').slice(0, 160)}）`);
+  await browser.close(); srv.close();
+  console.log(fails.length ? `\nだめな所：${fails.length} 件` : '\nぜんぶ OK');
+  process.exit(fails.length ? 1 : 0);
+})().catch(e => { console.error(e); process.exit(1); });

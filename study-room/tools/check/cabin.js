@@ -1,0 +1,58 @@
+// 山小屋（Lv25）の確かめ。使い方：node tools/check/cabin.js
+const http = require('http'), fs = require('fs'), path = require('path');
+const { chromium } = require('playwright');
+const mock = require('./mock.js');
+const ROOT = path.resolve(__dirname, '..', '..'), OUT = path.join(__dirname, 'out');
+const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.webmanifest': 'application/manifest+json' };
+const serve = () => new Promise(res => { const srv = http.createServer((req, rsp) => { let f = decodeURIComponent(req.url.split('?')[0]); if (f.endsWith('/')) f += 'index.html'; const file = path.join(ROOT, f); if (!file.startsWith(ROOT) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) { rsp.writeHead(404); return rsp.end(); } rsp.writeHead(200, { 'Content-Type': TYPES[path.extname(file)] || 'application/octet-stream' }); fs.createReadStream(file).pipe(rsp); }).listen(0, () => res(srv)); });
+(async () => {
+  fs.mkdirSync(OUT, { recursive: true });
+  const srv = await serve(), base = `http://localhost:${srv.address().port}/`;
+  const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } }); await mock(ctx);
+  const page = await ctx.newPage(), fails = [], errors = [];
+  page.on('pageerror', e => errors.push(String(e))); page.on('dialog', d => d.accept());
+  const check = (ok, msg) => { console.log((ok ? '  ○ ' : '  × ') + msg); if (!ok) fails.push(msg); };
+  await page.addInitScript(() => { localStorage.setItem('studyroom.download', 'later'); localStorage.setItem('studyroom.notour', '1'); localStorage.setItem('studyroom.uinext', '0'); localStorage.setItem('studyroom.quality', 'low'); });
+  await page.goto(base); await page.waitForSelector('.title-screen'); await page.click('.title-screen');
+  await page.waitForSelector('button[type=submit]');
+  if (!/登録/.test(await page.locator('button[type=submit]').textContent())) await page.click('.swap');
+  await page.fill('input[name=name]', 'admin'); await page.fill('input[name=pw]', 'test1234'); await page.click('button[type=submit]');
+  await page.waitForSelector('.mode-sheet [data-m=study]', { timeout: 60000 }); await page.click('.mode-sheet [data-m=study]');
+  await page.waitForTimeout(2000); await page.evaluate(() => document.querySelector('.lb-screen .ok')?.click()); await page.waitForTimeout(600);
+  await page.evaluate(() => { document.querySelector('.style-sheet .stylecard')?.click(); document.querySelector('.style-sheet .ok')?.click(); });
+  await page.waitForTimeout(800);
+
+
+  const A = (fn, arg) => page.evaluate(fn, arg);
+  const homeNow = () => A(async () => { const R = await import('/js/rooms.js'); return R.homeOf(window.__app.curRoom().id); });
+  console.log('1. Lv24 では開かない・Lv25 で開く');
+  const l24 = await A(() => { const { S } = window.__app; S.setRank(24); window.__app.ensureRooms(); return window.__app.HS().rooms.filter(r => r.id.startsWith('c-')).length; });
+  check(l24 === 0, `Lv24 では山小屋の部屋がない（${l24}）`);
+  await page.click('.room-name'); await page.waitForSelector('.room-pop');
+  check(await page.locator('.rp-home[data-lock=cabin]').count() === 1, '部屋えらびに「山小屋 Lv25で開く」が出る');
+  await page.click('.rp-home[data-lock=cabin]'); await page.waitForTimeout(300);
+  const l25 = await A(() => { const { S } = window.__app; S.setRank(25); window.__app.ensureRooms(); window.__app.showHome(); return window.__app.HS().rooms.filter(r => r.id.startsWith('c-')).map(r => r.id).join(); });
+  check(l25 === 'c-living,c-loft,c-study', `Lv25 で3部屋が開く（${l25}）`);
+  await page.waitForSelector('.villa-sheet .go', { timeout: 5000 }).catch(() => {});
+  check(await page.locator('.villa-sheet .go').count() === 1, '山小屋ができたお祝いが出る');
+  await page.screenshot({ path: path.join(OUT, 'cabin-celebrate.png') });
+  console.log('2. 山小屋へ行く・ドアでめぐる・家へもどる');
+  await page.click('.villa-sheet .go'); await page.waitForTimeout(3500);
+  check(await homeNow() === 'cabin', `山小屋に来た（${await homeNow()}）`);
+  await page.screenshot({ path: path.join(OUT, 'cabin-room.png') });
+  await page.click('.room-name'); await page.waitForSelector('.room-pop');
+  const pop = await A(() => ({ head: document.querySelector('.rp-head b')?.textContent, rooms: document.querySelectorAll('.rp-room[data-i]').length, back: !!document.querySelector('.rp-home[data-home=main]') }));
+  check(pop.head === '山小屋の部屋' && pop.rooms === 3 && pop.back, `部屋えらびは山小屋の3部屋と「家へもどる」（${JSON.stringify(pop)}）`);
+  await page.click('.rp-home[data-home=main]'); await page.waitForTimeout(3000);
+  check(await homeNow() === 'main', `家にもどった（${await homeNow()}）`);
+  console.log('3. 2回目はお祝いが出ない・古い記録でもこわれない');
+  await A(() => window.__app.showHome()); await page.waitForTimeout(500);
+  check(await page.locator('.villa-sheet').count() === 0, 'お祝いは1回だけ');
+  const old = await A(() => { const hs = window.__app.HS(); const keep = hs.cabin; delete hs.cabin; delete hs.cabinNew; window.__app.ensureRooms(); const r = { cabin: hs.cabin, n: hs.rooms.filter(x => x.id.startsWith('c-')).length }; hs.cabinNew = false; return r; });
+  check(old.cabin === true && old.n === 3, `記録に cabin がなくても、Lv25 以上なら開いたまま・部屋がふえない（${JSON.stringify(old)}）`);
+  check(!errors.length, `画面のエラーなし（${errors.join(' / ').slice(0, 160)}）`);
+  await browser.close(); srv.close();
+  console.log(fails.length ? `\nだめな所：${fails.length} 件` : '\nぜんぶ OK');
+  process.exit(fails.length ? 1 : 0);
+})().catch(e => { console.error(e); process.exit(1); });

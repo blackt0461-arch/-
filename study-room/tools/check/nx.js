@@ -101,7 +101,7 @@ const serve = () => new Promise(res => { const srv = http.createServer((req, rsp
   await page.evaluate(() => window.__app.showHome()); await page.waitForTimeout(400);
   await page.click('.nx-menubtn'); await page.waitForSelector('.nx-menu button'); await page.waitForTimeout(500);
   const items = await page.locator('.nx-menu .nm-t').allTextContents();
-  check(items.includes('設定') && items.includes('勉強レポート') && items.includes('部屋の写真'), `右上のメニューを押すと、下に項目がのびる（${items.join('・')}）`);
+  check(items.includes('設定') && items.includes('記録・レポート') && items.includes('お知らせ・要望') && items.includes('部屋の写真') && !items.includes('勉強レポート') && !items.includes('要望・バグ報告'), `右上のメニューを押すと、下に項目がのびる（まとめて5つ）（${items.join('・')}）`);
   await page.screenshot({ path: path.join(OUT, 'nx-4-menu.png') });
   await page.mouse.click(120, 400); await page.waitForTimeout(400);
   check(await page.locator('.nx-menu').count() === 0, 'ほかの所を押すと、たたまれる');

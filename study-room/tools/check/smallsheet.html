@@ -1,0 +1,21 @@
+<!doctype html><html><head><meta charset="utf-8"><base href="../../">
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"}}</script>
+<style>body{margin:0;background:#f4f1ea;font:12px sans-serif}#g{display:grid;grid-template-columns:repeat(10,1fr);gap:4px;padding:8px}figure{margin:0;text-align:center}img{width:100%;background:#fff;border-radius:8px}h2{margin:8px 10px 0;font-size:14px}</style>
+</head><body><div id="g"></div>
+<script type="module">
+import { ITEMS } from './js/items.js';
+import { GACHA_ITEMS } from './js/gacha.js';
+import { renderThumb } from './js/thumbs.js';
+const q = new URLSearchParams(location.search);
+const pre = q.get('pre') || 'sm-'; const zone = q.get('zone'); const cols = q.get('cols'); if (cols) document.getElementById('g').style.gridTemplateColumns = `repeat(${cols},1fr)`;
+const list = [...ITEMS, ...GACHA_ITEMS].filter((it, i, a) => a.indexOf(it) === i && (it.id.startsWith(pre) || (pre === 'sm-' && /^g4-band-(picks|sticks|tuner|setlist)/.test(it.id)) || (pre === 'fx' && it.src?.fixshape))).filter(it => !zone || it.zone === zone).filter(it => !q.get('ids') || q.get('ids').split(',').includes(it.id.replace(/^sm-/, '')));
+const g = document.getElementById('g');
+let n = 0;
+for (const it of list) {
+  const url = await renderThumb(it).catch(e => { console.error(it.id, e.message); return null; });
+  const f = document.createElement('figure');
+  f.innerHTML = `<img src="${url || ''}"><figcaption>${it.name}</figcaption>`;
+  g.append(f); n++;
+}
+window.DONE = n;
+</script></body></html>

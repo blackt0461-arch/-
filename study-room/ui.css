@@ -615,6 +615,7 @@ h3.sec { font-size: 14px; color: var(--muted); margin: 18px 4px 8px; font-weight
 .fix-vs { display: flex; flex-wrap: wrap; gap: 6px; }
 .fix-v { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px 6px 6px; border-radius: 99px; border: 1px solid var(--card-line); background: rgba(255,255,255,.04); color: inherit; font-size: 12px; }
 .fix-v i { width: 18px; height: 18px; border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(255,255,255,.25); }
+.fix-shapes { margin: 0 0 8px; }
 .fix-v.on { border-color: var(--gold1); background: rgba(240,180,76,.18); color: var(--gold1); font-weight: 700; }
 
 /* 4択の問題 */
@@ -1297,3 +1298,32 @@ body.calc-on .problem .num-tap { font: inherit; }
 .ms-sheet { color: var(--sk-text, #f2efe9); }
 .ms-sheet .ev-nm small, .ms-sheet .ms-t small, .ms-sheet .ms-h small, .ms-sheet .ev-st { color: var(--sk-muted, rgba(242,239,233,.74)); opacity: 1; }
 .ms-sheet .ev-row { background: var(--sk-card, rgba(255,255,255,.05)); border-color: var(--sk-card-line, rgba(255,255,255,.08)); }
+/* 称号・図鑑のごほうび */
+.pf-t .pf-trw { display: inline-flex; align-items: center; gap: 3px; color: var(--sk-accent-text, var(--sk-accent, #f2b84b)); }
+.pf-t .pf-trw .ic { width: 12px; height: 12px; }
+.zk-goal { display: flex; align-items: center; gap: 6px; margin: 6px 2px 8px; font-size: 12.5px; color: var(--sk-muted, inherit); }
+.zk-goal .ic { width: 16px; height: 16px; color: var(--sk-accent-text, var(--sk-accent, #f2b84b)); flex: none; }
+.zk-goal b { color: var(--sk-text, inherit); }
+/* 山小屋 */
+.rp-home + .rp-home { margin-top: 6px; }
+.rp-home.cabin { background: linear-gradient(180deg, rgba(120,92,70,.9), rgba(70,52,40,.9)); color: #fff; border-color: rgba(255,255,255,.35); }
+/* メニューの整理（1.15）：記録・レポートの切りかえ／イベントとミッションのタブ */
+.rec-switch, .evms-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; border-radius: 12px; background: rgba(255,255,255,.07); margin: 0 0 12px; }
+.rec-switch button, .evms-tabs button { position: relative; border: 0; background: none; padding: 8px 4px; border-radius: 9px; font-size: 13px; color: var(--sk-muted, var(--muted)); display: flex; align-items: center; justify-content: center; gap: 6px; }
+.rec-switch button svg, .evms-tabs button svg { width: 16px; height: 16px; }
+.rec-switch button.on, .evms-tabs button.on { background: var(--sk-accent, var(--accent)); color: #2a1706; font-weight: 700; }
+.evms-tabs .gb-n { position: static; margin-left: 2px; }
+.screen .news-fb { margin: 14px 0 6px; width: 100%; justify-content: center; }
+.screen .betasw { width: 100%; justify-content: center; margin-bottom: 10px; }
+
+/* 文字の見えにくさの直し（品質チェック contrast.js より） */
+.cand.rare { background: linear-gradient(180deg, rgba(150,110,210,.22), var(--sk-card, var(--card)) 70%); }
+.cand.rare .chips i { color: var(--sk-muted, var(--muted)); background: var(--sk-icon-bg, rgba(255,255,255,.08)); }
+.gr-it.got i, .gr-next b, .gr-head .ic { color: var(--gold1, #e6c068); }
+[data-skin="b"] .mode-tag.study, [data-skin="c"] .mode-tag.study, [data-skin="e3"] .mode-tag.study { color: #2457a8; }
+[data-skin="b"] .mode-tag.puzzle, [data-skin="c"] .mode-tag.puzzle, [data-skin="e3"] .mode-tag.puzzle { color: #2a7246; }
+[data-skin="c"] { --sk-on-accent: #fff; }
+.rr-lv small { color: inherit; opacity: 1; font-weight: 700; }
+.rr-row:not(.got):not(.next) .rr-lv { color: var(--sk-text); opacity: 1; }
+.pr-report { opacity: 1; color: var(--sk-muted, var(--muted)); }
+.gc-it .gc-ok { background: #1f7a48; }

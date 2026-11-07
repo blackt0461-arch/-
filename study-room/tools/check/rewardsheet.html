@@ -1,0 +1,15 @@
+<!doctype html><html><head><meta charset="utf-8"><base href="../../">
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"}}</script>
+<style>body{margin:0;background:#f4f1ea;font:12px sans-serif}#g{display:grid;grid-template-columns:repeat(6,1fr);gap:4px;padding:8px}figure{margin:0;text-align:center}img{width:100%;background:#fff;border-radius:8px}</style>
+</head><body><div id="g"></div>
+<script type="module">
+import { renderThumb } from './js/thumbs.js';
+const L = [['akariLamp','格子のあかりの間取りランプ','floor'],['aburiDesk','虫めがねと古い設計図の机','floor'],['rokujoBoard','たたみ六畳のミニチュア棚','floor'],['hikkoshiCrates','積み上げた木箱の棚','floor'],['pzCrown','金のパズルピースのトロフィー','floor'],['streak100','百日の日めくりと金の砂時計','floor'],['bookTower','天井まで届く本の塔','floor'],['legendLaurel','金の月桂樹の飾り額','wall'],['zukan25','回る地球儀ランプ','floor'],['zukan50','ガラスの陳列ケース','floor'],['zukan75','回転する展示台','floor'],['zukan100','金の額のコレクターの間の飾り','wall'],['cocoaCounter','ホットチョコのカウンター','floor'],['gingerHouse','ジンジャークッキーの家','floor'],['cafeSign','ランタンの冬のカフェ看板','wall'],['snowGarland','雪の結晶のガーランド','wall']];
+const g = document.getElementById('g');
+for (const [t, n, pl] of L) {
+  const it = { id: 'test-' + t, name: n, genre: 'decor', place: pl, src: { gacha: t }, size: 1 };
+  const url = await renderThumb(it).catch(e => { console.error(t, e.message); return null; });
+  const f = document.createElement('figure'); f.innerHTML = `<img src="${url || ''}"><figcaption>${t}<br>${n}</figcaption>`; g.append(f);
+}
+window.DONE = L.length;
+</script></body></html>

@@ -83,6 +83,7 @@ export const TITLES = [
   { id: 'streak3', name: '三日坊主卒業', how: '3日続けて開く', test: c => c.streak >= 3 },
   { id: 'streak7', name: '一週間の習慣', how: '7日続けて開く', test: c => c.streak >= 7 },
   { id: 'streak30', name: '継続は力なり', how: '30日続けて開く', test: c => c.streak >= 30 },
+  { id: 'streak100', name: '百日の継続', how: '100日続けて開く', test: c => c.streak >= 100 },
   { id: 'pz1', name: 'パズル入門', how: 'パズルを1回クリア', test: c => c.pzClears >= 1 },
   { id: 'pz50', name: 'パズル好き', how: 'パズルを50回クリア', test: c => c.pzClears >= 50 },
   { id: 'akari5', name: '照明デザイナー', how: 'あかりの間取りの ★5 をクリア', test: c => pz(c, 'akari').best >= 5 },
@@ -97,7 +98,14 @@ export const TITLES = [
   { id: 'lv50', name: 'レジェンド', how: 'Lv50 になる', test: c => c.rank >= 50 },
   { id: 'items30', name: 'インテリア好き', how: '家具を30種類集める', test: c => c.collected >= 30 },
   { id: 'items100', name: 'コーディネーター', how: '家具を100種類集める', test: c => c.collected >= 100 },
+  { id: 'zukan25', name: '図鑑の見習い', how: '図鑑を25%うめる', test: c => (c.zukan || 0) >= 25 },
+  { id: 'zukan50', name: '図鑑の案内人', how: '図鑑を50%うめる', test: c => (c.zukan || 0) >= 50 },
+  { id: 'zukan75', name: '図鑑の学芸員', how: '図鑑を75%うめる', test: c => (c.zukan || 0) >= 75 },
+  { id: 'zukan100', name: '図鑑の館長', how: '図鑑を100%うめる', test: c => (c.zukan || 0) >= 100 },
+  { id: 'band-all', name: 'OVERDRIVE コンプリート', how: 'バンドシリーズの家具をすべて集める', test: c => (c.series || []).includes('band') },
   { id: 'star5', name: '強運の持ち主', how: 'ガチャで ★5 の家具を手に入れる', test: c => c.star5 >= 1 },
+  // 期間限定イベントの記念（ぜんぶのごほうびを受け取る。c.evDone = 受け取り終わったイベントの id）
+  { id: 'ev-wintercafe2026', name: '冬のカフェの常連', how: '「冬のカフェ」（2026年12月）のごほうびをすべて受け取る', test: c => (c.evDone || []).includes('wintercafe2026'), event: true },
   { id: 'admin', name: '管理人', how: '管理者だけ', test: c => c.admin, secret: true },
 ];
 export const titleById = (id) => TITLES.find(t => t.id === id) || null;

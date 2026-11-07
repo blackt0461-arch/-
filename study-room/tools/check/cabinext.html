@@ -1,0 +1,14 @@
+<!doctype html><html><head><meta charset="utf-8"><base href="../../">
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"}}</script>
+<style>body{margin:0}</style></head><body>
+<script type="module">
+import * as THREE from 'three';
+import { buildMountain } from './js/cabinext.js';
+const r = new THREE.WebGLRenderer({ antialias: true }); r.setSize(800, 500); document.body.append(r.domElement);
+const sc = new THREE.Scene(); sc.background = new THREE.Color('#cfdcea');
+sc.add(new THREE.HemisphereLight('#ffffff', '#889', 1.5)); const d = new THREE.DirectionalLight('#fff', 2); d.position.set(-3, 5, 4); sc.add(d);
+const ext = await buildMountain({ photo: new URLSearchParams(location.search).get('m') || 'morning' });
+sc.add(ext.world); ext.world.traverse(o => { if (o.userData.noShadow && new URLSearchParams(location.search).get('nv')) { o.material = new THREE.MeshNormalMaterial(); } });
+const cam = new THREE.PerspectiveCamera(60, 1.6, 0.05, 60); cam.position.set(0, 1.4, -2.6); cam.lookAt(0, 4, -50);
+ext.update(1); r.render(sc, cam); window.DONE = 1;
+</script></body></html>

@@ -1,0 +1,18 @@
+<!doctype html><html><head><meta charset="utf-8"><base href="../../">
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"}}</script>
+</head><body><script type="module">
+import * as THREE from 'three';
+import { ITEMS } from './js/items.js';
+import { GACHA_ITEMS } from './js/gacha.js';
+import { buildProc } from './js/procfurn.js';
+const list = [...ITEMS, ...GACHA_ITEMS].filter((it, i, a) => a.indexOf(it) === i && it.src?.proc?.type === 'small');
+const out = [];
+for (const it of list) {
+  const g = buildProc(it.src.proc); g.updateMatrixWorld(true);
+  const bb = new THREE.Box3().setFromObject(g), sz = bb.getSize(new THREE.Vector3());
+  let meshes = 0, tris = 0, nan = false, inst = 0; const mats = new Set();
+  g.traverse(o => { if (!o.isMesh) return; meshes++; if (o.isInstancedMesh) inst++; const geo = o.geometry; const n = geo.index ? geo.index.count / 3 : geo.attributes.position.count / 3; tris += n * (o.isInstancedMesh ? o.count : 1); [].concat(o.material).forEach(m => mats.add(m.uuid)); const p = geo.attributes.position.array; for (let i = 0; i < p.length; i += 97) if (!isFinite(p[i])) nan = true; });
+  out.push({ id: it.id, name: it.name, zone: it.zone, size: it.size, w: +sz.x.toFixed(3), h: +sz.y.toFixed(3), d: +sz.z.toFixed(3), minY: +bb.min.y.toFixed(4), cx: +((bb.min.x + bb.max.x) / 2).toFixed(3), cz: +((bb.min.z + bb.max.z) / 2).toFixed(3), meshes, inst, tris: Math.round(tris), mats: mats.size, nan });
+}
+window.OUT = out;
+</script></body></html>
