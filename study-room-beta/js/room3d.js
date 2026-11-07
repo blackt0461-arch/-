@@ -410,6 +410,7 @@ export class Room3D {
       p.needsUpdate = true;
     }
     if (this.exterior?.update) this.exterior.update(t);
+    for (const f of this.shellTicks || []) f(t, dt); // 備え付けの動き（暖炉の炎など）
     // 何も動いていない時は、描きかえを1秒に30回に減らす（スマホが熱くならない・電池が長もち）
     let appearing = false;
     const busy = this.dragging || this.targetLook || this.walk || this.itemDrag || this.preview ||
@@ -722,6 +723,7 @@ export class Room3D {
     if (item.place !== 'ceiling' && item.place !== 'rug' && sh.slope && bb.max.y > Math.min(ceilAt(sh, bb.min.x), ceilAt(sh, bb.max.x)) + 0.02) return true;
     for (const s of this.solids || []) {
       if (s === skip) continue;
+      if (s.block === 'none') continue; // 天井の梁など、置き方のじゃまをしない物
       if (s.block === 'wall' && item.place !== 'wall') continue;
       if (bb.intersectsBox(s.box)) return true;
     }
@@ -1887,6 +1889,7 @@ export class Room3D {
       const nt = sh.notch;
       this.solids.push({ block: 'all', box: new THREE.Box3(new THREE.Vector3(nt.x0, -1, nt.z0), new THREE.Vector3(nt.x1, H + 1, nt.z1)) });
     }
+    this.shellTicks = fixtures.filter(f => f?.obj.userData.tick).map(f => f.obj.userData.tick);
     for (const f of fixtures) {
       if (!f) continue;
       g.add(f.obj);

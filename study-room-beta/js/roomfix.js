@@ -800,10 +800,135 @@ export async function fixturePreview(kind, shape) {
   return fn ? await fn(b, seg, sh) : null;
 }
 
+// ===================== 山小屋の備え付け（暖炉・薪ストーブ・天井の丸太の梁） =====================
+// 石積みの質感
+const stoneM = (base = '#8f8a82') => cvMat('stone' + base, 256, 256, (x, w, h) => {
+  x.fillStyle = '#4a4640'; x.fillRect(0, 0, w, h);
+  let r = 5; const rnd = () => (r = (r * 16807) % 2147483647) / 2147483647;
+  const b = new THREE.Color(base);
+  // 大きさのちがう石を、すこしずつずらして積む（形はでこぼこの多角形）
+  let y = 0;
+  while (y < h) {
+    const rh = 18 + rnd() * 22; let cx = -rnd() * 40;
+    while (cx < w) {
+      const sw = 26 + rnd() * 46, c = b.clone().offsetHSL((rnd() - 0.5) * 0.03, (rnd() - 0.5) * 0.06, (rnd() - 0.5) * 0.18);
+      x.fillStyle = '#' + c.getHexString();
+      x.beginPath();
+      const n = 7, cxm = cx + sw / 2, cym = y + rh / 2;
+      for (let i = 0; i < n; i++) { const a = i / n * Math.PI * 2, k = 0.82 + rnd() * 0.18; x.lineTo(cxm + Math.cos(a) * (sw / 2 - 2) * k, cym + Math.sin(a) * (rh / 2 - 2) * k); }
+      x.closePath(); x.fill();
+      x.fillStyle = 'rgba(255,255,255,0.07)'; x.fillRect(cx + sw * 0.25, y + 3, sw * 0.4, 3);
+      for (let i = 0; i < 12; i++) { x.fillStyle = `rgba(0,0,0,${0.05 + rnd() * 0.08})`; x.fillRect(cx + rnd() * sw, y + rnd() * rh, 2, 2); }
+      cx += sw;
+    }
+    y += rh;
+  }
+}, { rough: 0.92, rep: [1.5, 2] });
+// ゆらめく炎（光る円すい）と、熾火の光
+function fire(g, x, y, z, w, n = 6) {
+  const flames = [];
+  const outer = std({ color: '#000000', emissive: '#ff7a1a', emissiveIntensity: 2.4, transparent: true, opacity: 0.85, depthWrite: false });
+  const inner = std({ color: '#000000', emissive: '#ffd27a', emissiveIntensity: 3, transparent: true, opacity: 0.9, depthWrite: false });
+  for (let i = 0; i < n; i++) {
+    const fx = x - w / 2 + (i + 0.5) * w / n;
+    const o = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.26, 8, 1, true), outer); o.position.set(fx, y + 0.13, z); o.castShadow = false; g.add(o);
+    const c = new THREE.Mesh(new THREE.ConeGeometry(0.025, 0.15, 8, 1, true), inner); c.position.set(fx, y + 0.08, z + 0.01); c.castShadow = false; g.add(c);
+    flames.push([o, c, i * 1.7]);
+  }
+  const ember = std({ color: '#2a0d04', emissive: '#ff5a1a', emissiveIntensity: 1.3, roughness: 0.9 });
+  box(g, w, 0.025, 0.18, ember, x, y + 0.012, z).castShadow = false;
+  const light = new THREE.PointLight('#ff9a4a', 1.6, 6, 2); light.position.set(x, y + 0.35, z + 0.35); g.add(light);
+  g.userData.tick = (t) => {
+    for (const [o, c, ph] of flames) {
+      const k = 0.8 + 0.3 * Math.sin(t * 7 + ph) * Math.sin(t * 3.1 + ph * 2);
+      o.scale.set(1, k, 1); o.position.y = y + 0.13 * k; c.scale.set(1, 0.9 + 0.25 * Math.sin(t * 9 + ph), 1);
+    }
+    ember.emissiveIntensity = 1.2 + 0.35 * Math.sin(t * 2.3) * Math.sin(t * 3.7);
+    light.intensity = 1.5 + 0.25 * Math.sin(t * 5.3) * Math.sin(t * 2.9);
+  };
+}
+function logs(g, x, y, z, w) {
+  const bark = std({ color: '#5a3d28', roughness: 0.95 }), cut = std({ color: '#c99a68', roughness: 0.8 });
+  for (const [dx, dy, ry] of [[-0.12, 0, 0.25], [0.12, 0, -0.2], [0, 0.07, 0.05]]) {
+    const l = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.055, w * 0.8, 10, 1, false), [bark, cut, cut]);
+    l.rotation.set(0, ry, Math.PI / 2); l.position.set(x + dx * 0.4, y + 0.05 + dy, z + dx * 0.3); l.castShadow = true; g.add(l);
+  }
+}
+Object.assign(BUILD, {
+  // 石積みの暖炉：壁から出た石の胸壁・炉・木の梁のマントル（上に小物を置ける）・石の炉台
+  fireplace(b, seg, sh) {
+    const g = new THREE.Group();
+    const W0 = b.len || 1.7, D = 0.45, st = stoneM('#9a948a');
+    // 胸壁（炉の口をあけて、左右と上）
+    box(g, (W0 - 0.9) / 2, 1.0, D, st, -W0 / 2 + (W0 - 0.9) / 4, 0.5, D / 2);
+    box(g, (W0 - 0.9) / 2, 1.0, D, st, W0 / 2 - (W0 - 0.9) / 4, 0.5, D / 2);
+    box(g, W0, sh.h - 1.0, D, st, 0, 1.0 + (sh.h - 1.0) / 2, D / 2);
+    // 炉の中（すすけた奥）
+    const soot = std({ color: '#1a1614', roughness: 1 });
+    box(g, 0.9, 1.0, 0.04, soot, 0, 0.5, 0.02);
+    box(g, 0.9, 0.04, D, soot, 0, 0.98, D / 2);
+    // 炉台
+    box(g, W0 + 0.3, 0.12, 0.55, stoneM('#7f7a72'), 0, 0.06, D + 0.15);
+    // 鉄の薪台と薪・炎
+    const iron = std({ color: '#222', roughness: 0.5, metalness: 0.6 });
+    for (const sx of [-1, 1]) { box(g, 0.03, 0.12, 0.3, iron, sx * 0.25, 0.18, 0.25); }
+    logs(g, 0, 0.18, 0.25, 0.7);
+    fire(g, 0, 0.26, 0.25, 0.5, 6);
+    // 木の梁のマントル
+    const beam = std({ color: '#6b4a30', roughness: 0.75 });
+    box(g, W0 + 0.2, 0.16, 0.24, beam, 0, 1.18, D + 0.02);
+    // 火かき棒のスタンド
+    const tl = new THREE.Group();
+    cyl(tl, 0.08, 0.09, 0.02, iron, 0, 0.01, 0, 12); cyl(tl, 0.008, 0.008, 0.7, iron, 0, 0.36, 0, 6);
+    for (let i = 0; i < 3; i++) { const t = cyl(tl, 0.006, 0.006, 0.62, std({ color: '#3a3a3a', roughness: 0.4, metalness: 0.7 }), Math.cos(i * 2.1) * 0.03, 0.42, Math.sin(i * 2.1) * 0.03, 6); t.rotation.z = 0.06; }
+    tl.position.set(W0 / 2 + 0.05, 0.12, D + 0.2); g.add(tl);
+    g.userData.tops = [{ x0: -W0 / 2 - 0.08, x1: W0 / 2 + 0.08, z0: D - 0.08, z1: D + 0.13, y: 1.34 }];
+    return putOnWall(g, seg, b.a);
+  },
+  // 鉄の薪ストーブ：脚つきの箱・ガラスの扉の炎・煙突・石の炉台・薪かご（ストーブの上に小物を置ける）
+  woodstove(b, seg, sh) {
+    const g = new THREE.Group();
+    const iron = std({ color: '#2a2928', roughness: 0.55, metalness: 0.4 });
+    const z0 = 0.45;
+    box(g, 1.1, 0.04, 1.0, stoneM('#6f6b66'), 0, 0.02, 0.5);
+    box(g, 1.1, 1.3, 0.03, stoneM('#8a857d'), 0, 0.65, 0.015); // 壁の石の板（熱よけ）
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) box(g, 0.04, 0.16, 0.04, iron, sx * 0.24, 0.12, z0 + sz * 0.2);
+    box(g, 0.56, 0.52, 0.48, iron, 0, 0.46, z0);
+    box(g, 0.6, 0.03, 0.52, iron, 0, 0.735, z0);
+    // ガラスの扉と炎
+    const fr = std({ color: '#1a1918', roughness: 0.4, metalness: 0.5 });
+    box(g, 0.42, 0.34, 0.02, fr, 0, 0.45, z0 + 0.245);
+    logs(g, 0, 0.3, z0 + 0.05, 0.4);
+    fire(g, 0, 0.36, z0 + 0.08, 0.3, 4);
+    const glass = new THREE.Mesh(new THREE.PlaneGeometry(0.34, 0.26), std({ color: '#2a1408', emissive: '#ff8a3a', emissiveIntensity: 0.35, transparent: true, opacity: 0.35, depthWrite: false }));
+    glass.position.set(0, 0.45, z0 + 0.257); g.add(glass);
+    const hd = cyl(g, 0.012, 0.012, 0.12, std({ color: '#c9a35a', roughness: 0.3, metalness: 1 }), 0.17, 0.45, z0 + 0.27, 8);
+    // 煙突（上へ、天井まで）
+    cyl(g, 0.075, 0.075, sh.h - 0.75, iron, 0, 0.75 + (sh.h - 0.75) / 2, z0 - 0.08, 16);
+    // 薪かご
+    const bk = new THREE.Group();
+    box(bk, 0.4, 0.22, 0.3, std({ color: '#7a5a3a', roughness: 0.9 }), 0, 0.11, 0);
+    for (let i = 0; i < 5; i++) { const l = cyl(bk, 0.04, 0.045, 0.36, std({ color: '#6b4a30', roughness: 0.95 }), -0.12 + i * 0.06, 0.25 + (i % 2) * 0.03, 0, 8); l.rotation.z = Math.PI / 2; l.rotation.y = Math.PI / 2; }
+    bk.position.set(0.85, 0.04, 0.4); g.add(bk);
+    g.userData.tops = [{ x0: -0.28, x1: 0.28, z0: z0 - 0.02, z1: z0 + 0.24, y: 0.75 }];
+    return putOnWall(g, seg, b.a);
+  },
+  // 天井の丸太の梁（家具の置き方のじゃまはしない）
+  beams(b, seg, sh) {
+    const g = new THREE.Group();
+    const wood = std({ color: '#6b4a30', roughness: 0.8 });
+    for (const z of b.zs || [-1.2, 1.2]) {
+      const m = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.12, sh.w, 12), wood);
+      m.rotation.z = Math.PI / 2; m.position.set(0, sh.h - 0.1, z); m.castShadow = true; m.receiveShadow = true; g.add(m);
+    }
+    return g;
+  },
+});
+
 // 備え付けの物を作る。戻り値 { obj, block }（block = 'all' 家具を重ねない / 'wall' 壁の物だけ重ねない）
 // 備え付けの物の「種類」（色・素材）。模様がえでいつでも取りかえられる（買わなくてよい）。
 // tint = 金属・ガラス・水以外の部分にかける色。null は元のまま
-export const FIX_NAMES = { kitchen: 'キッチン', fridge: '冷蔵庫', bathtub: '浴槽', hinoki: '湯船', shower: 'シャワー', washarea: '洗い場', vanity: '洗面台', washer: '洗たく機', closet: '押し入れ・収納', shoji: '障子', tokonoma: '床の間', fusuma: 'ふすま', shutter: 'シャッター', workbench: '作業台', aircon: 'エアコン' };
+export const FIX_NAMES = { kitchen: 'キッチン', fridge: '冷蔵庫', bathtub: '浴槽', hinoki: '湯船', shower: 'シャワー', washarea: '洗い場', vanity: '洗面台', washer: '洗たく機', closet: '押し入れ・収納', shoji: '障子', tokonoma: '床の間', fusuma: 'ふすま', shutter: 'シャッター', workbench: '作業台', aircon: 'エアコン', fireplace: '暖炉', woodstove: '薪ストーブ', beams: '天井の梁' };
 const V = (id, name, tint) => ({ id, name, tint });
 const BASIC = [V('std', 'いつもの', null), V('wood', '木目', '#c99a68'), V('dark', 'ブラック', '#3a3836'), V('sage', 'セージ', '#a9bea0'), V('navy', 'ネイビー', '#5c6f93')];
 export const FIX_VARIANTS = {
@@ -819,6 +944,9 @@ export const FIX_VARIANTS = {
   shoji: [V('std', 'いつもの', null), V('dark', 'こげ茶の桟', '#8a7262')],
   shutter: [V('std', 'いつもの', null), V('dark', 'ブラック', '#3a3a3c'), V('red', 'レッド', '#b5574b')],
   aircon: [V('std', 'ホワイト', null), V('dark', 'ブラック', '#3a3a3c'), V('beige', 'ベージュ', '#e6d6b8')],
+  fireplace: [V('std', '石積み', null), V('white', '白いしっくい', '#f2ece2'), V('dark', '黒い石', '#5a5650')],
+  woodstove: [V('std', 'ブラック', null), V('red', 'えんじ', '#c45a4a'), V('green', '深緑', '#5e8a6e')],
+  beams: [V('std', 'こげ茶', null), V('light', '明るい木', '#d8b48a')],
 };
 // 種類の色をかける（金属・ガラス・水は元のまま）
 export function applyFixVariant(obj, kind, vid) {
@@ -844,6 +972,6 @@ export async function buildFixture(b, sh, variant, shape) {
   const obj = await fn(b, seg, sh);
   obj.userData.fixture = b.kind;
   if (variant) applyFixVariant(obj, b.kind, variant);
-  const block = { fusuma: 'wall', shutter: 'wall' }[b.kind] || 'all';
+  const block = { fusuma: 'wall', shutter: 'wall', beams: 'none' }[b.kind] || 'all';
   return { obj, block };
 }

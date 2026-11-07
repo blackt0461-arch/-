@@ -22,8 +22,8 @@ const serve = () => new Promise(res => { const srv = http.createServer((req, rsp
   await page.waitForTimeout(2000); await page.evaluate(() => document.querySelector('.lb-screen .ok')?.click()); await page.waitForTimeout(600);
   await page.evaluate(() => { document.querySelector('.style-sheet .stylecard')?.click(); document.querySelector('.style-sheet .ok')?.click(); });
   await page.waitForTimeout(800);
-  // いまは本物のイベントがないので、テスト用のイベントを入れて確かめる（しくみの確かめ）
-  await page.evaluate(async () => { const EV = await import('/js/events.js'); if (!EV.EVENTS.length) EV.EVENTS.push({ id: 'test-ev', name: 'テストフェス', unit: '雪の結晶', desc: 'テスト用', start: '2099-12-01', end: '2099-12-25', rewards: [{ at: 10, kind: 'ticket', amount: 2 }, { at: 30, kind: 'item', item: 'ev-gift-pile' }, { at: 60, kind: 'ticket4', amount: 1 }, { at: 100, kind: 'item', item: 'ev-snowman' }, { at: 150, kind: 'ticket', amount: 5 }, { at: 200, kind: 'item', item: 'ev-xmas-tree' }] }); });
+  // テスト用のイベントを最後に入れて確かめる（しくみの確かめ。管理者の「ためす」は最後のイベント）
+  await page.evaluate(async () => { const EV = await import('/js/events.js'); EV.EVENTS.push({ id: 'test-ev', name: 'テストフェス', unit: '雪の結晶', desc: 'テスト用', start: '2099-12-01', end: '2099-12-25', rewards: [{ at: 10, kind: 'ticket', amount: 2 }, { at: 30, kind: 'item', item: 'ev-gift-pile' }, { at: 60, kind: 'ticket4', amount: 1 }, { at: 100, kind: 'item', item: 'ev-snowman' }, { at: 150, kind: 'ticket', amount: 5 }, { at: 200, kind: 'item', item: 'ev-xmas-tree' }] }); });
   console.log('1. 期間の前は出ない → 管理者が「ためす」');
   check(await page.locator('.home .evbtn').count() === 0, '期間の前は部屋にイベントのボタンが出ない');
   await page.evaluate(() => document.querySelector('[data-t=menu]')?.click()); await page.waitForTimeout(400);
@@ -65,6 +65,24 @@ const serve = () => new Promise(res => { const srv = http.createServer((req, rsp
   await page.evaluate(() => { const r = window.__app.room3d, it = r.items.children.find(o => /xmasTree/.test(o.children[0]?.name || '')); if (it) r.lookAt(it.position.clone().setY(1)); });
   await page.waitForTimeout(2500);
   await page.screenshot({ path: path.join(OUT, 'event-room.png') });
+  console.log('5. 12月の「冬のカフェ」');
+  const wc = await page.evaluate(async () => {
+    const EV = await import('/js/events.js'); const { itemById } = await import('/js/items.js'); const G = await import('/js/gacha.js');
+    const ev = EV.EVENTS.find(e => e.id === 'wintercafe2026');
+    const items = ev.rewards.filter(r => r.kind === 'item').map(r => r.item);
+    const ok = items.every(id => itemById(id) && G.gachaById(id)?.series === 'event' && G.gachaById(id).reward);
+    const inGacha = [3, 4, 5].some(r => G.exchangeable(r).some(i => items.includes(i.id))) || items.some(id => JSON.stringify(G.oddsFor('standard')).includes(id));
+    EV.setPreview(null); const before = EV.activeEvent('2026-11-30')?.id || null, during = EV.activeEvent('2026-12-10')?.id || null, after = EV.activeEvent('2026-12-29')?.id || null;
+    EV.setPreview('wintercafe2026'); const st = EV.stateOf(ev); st.pts = 400; for (let i = 0; i < ev.rewards.length; i++) EV.claim(ev, i);
+    window.__app.showHome(); await new Promise(r => setTimeout(r, 300));
+    const P = await import('/js/profile.js');
+    return { ok, inGacha, items: items.length, done: !!st.done, before, during, after, icon: !!document.querySelector('.home .evbtn'), titleShown: P.earnedTitles({ study: [], puzzle: [], evDone: ['wintercafe2026'] }).some(t => t.id === 'ev-wintercafe2026') };
+  });
+  check(wc.ok && wc.items === 7, `ごほうびの家具7つ（前の3つ＋新しい4つ）がそろっていて、イベントの家具になっている（${wc.items}）`);
+  check(wc.before !== 'wintercafe2026' && wc.during === 'wintercafe2026' && wc.after !== 'wintercafe2026', `12/1〜12/28 だけ開く（${wc.before}・${wc.during}・${wc.after}）`);
+  check(!wc.inGacha, 'イベントの家具はガチャ・かけら交換・確率表示に出ない');
+  check(wc.done && wc.titleShown, `ぜんぶ受け取ると記念の称号（${JSON.stringify({ done: wc.done, t: wc.titleShown })}）`);
+  check(wc.icon, 'ためし中は部屋にカフェのボタンが出る');
   await page.evaluate(async () => { const EV = await import('/js/events.js'); EV.setPreview(null); });
   check(!errors.length, `画面のエラーなし（${errors.join(' / ').slice(0, 160)}）`);
   await browser.close(); srv.close();

@@ -7,6 +7,7 @@ import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { buildProc } from './procfurn.js';
+import { REWARD_BUILDERS } from './rewardfurn.js';
 
 // 植物・ギターは procfurn の形を使う
 const PROC = buildProc;
@@ -3779,6 +3780,8 @@ const BUILDERS = {
   // 期間限定イベント（ウィンターフェス）
   xmasTree: [xmasTree, 'floor'], snowman: [snowman, 'floor'], giftPile: [giftPile, 'floor'],
   sakuraTree: [sakuraTree, 'floor'], byobu: [byobu, 'floor'], andon: [andon, 'floor'], tsukubai: [tsukubai, 'floor'], lacquerTable: [lacquerTable, 'floor'],
+  // 称号・図鑑のごほうび家具（js/rewardfurn.js。ガチャには出ない）
+  ...REWARD_BUILDERS,
 };
 // 種類 → 置き方
 export const GACHA_TYPES = Object.fromEntries(Object.entries(BUILDERS).map(([k, v]) => [k, { place: v[1] }]));

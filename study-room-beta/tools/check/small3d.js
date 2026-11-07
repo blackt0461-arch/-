@@ -16,6 +16,9 @@ const PLAN = {
   kitchen: { furn: ['table-rect-oak'], small: ['sm-tetsubin', 'sm-fryingpan', 'sm-toaster', 'sm-plates', 'sm-canisters', 'sm-oliveoil', 'sm-fruitbasket', 'sm-microwave', 'sm-kyusu'], fix: { kitchen: 'fx-kitchen-country', fridge: 'fx-fridge-retro' }, look: 'kitchen' },
   bath: { furn: [], small: ['sm-shampoo', 'sm-bodysoap', 'sm-duck'], fix: { bathtub: 'g4-fx-bathtub-claw' }, look: 'bathtub' },
   washroom: { furn: [], small: ['sm-toothbrush', 'sm-handsoap', 'sm-lotion', 'sm-detergent', 'sm-towels'], fix: { vanity: 'fx-vanity-woodbowl', washer: 'fx-washer-top' }, look: 'vanity' },
+  'c-living': { furn: ['sofa-chester-brown', 'table-trunk-pine'], small: ['sm-aromacandle', 'sm-tripleframe', 'sm-mug', 'sm-teddy'], look: 'fireplace' },
+  'c-loft': { furn: ['bed-platform-oak', 'table-side-oak'], small: ['sm-bunko', 'sm-digiclock'], look: 'furn' },
+  'c-study': { furn: ['table-farm-desk'], small: ['sm-kettle', 'sm-refbooks', 'sm-penstand'], look: 'woodstove' },
   study: { furn: ['table-metal-desk', 'storage-steel-shelves'], small: ['sm-laptop', 'sm-monitor', 'sm-penstand', 'sm-headphones', 'sm-refbooks', 'sm-digiclock', 'sm-cube', 'sm-deskfan'], fix: { aircon: 'fx-aircon-wood' }, look: 'furn' },
 };
 
@@ -51,7 +54,7 @@ const PLAN = {
     const idx = await page.evaluate(async (roomId) => {
       const a = window.__app, hs = a.HS();
       let i = hs.rooms.findIndex(r => r.id === roomId);
-      if (i < 0) { const { STARTER } = await import('/js/items.js'); hs.rooms.push({ id: roomId, style: 'natural', surf: { ...STARTER }, placed: [] }); i = hs.rooms.length - 1; }
+      if (i < 0) { const { STARTER } = await import('/js/items.js'); const { roomDef } = await import('/js/rooms.js'); hs.rooms.push({ id: roomId, style: 'natural', surf: { ...STARTER, ...(roomDef(roomId).surf || {}) }, placed: [] }); i = hs.rooms.length - 1; }
       hs.rooms[i].style = hs.rooms[i].style || 'natural';
       hs.rooms[i].placed = [];
       await a.switchRoom(i);
@@ -84,7 +87,9 @@ const PLAN = {
       if (pt) { pt.y = Math.max(0.6, pt.y - 0.2); r.lookAt(pt); }
     }, plan.look);
     await shot(roomId);
+    if (roomId === 'c-living') { if (process.env.NOAO) await page.evaluate(() => { const r = window.__app.room3d; if (r.ao) r.ao.enabled = false; }); await page.evaluate(() => { const r = window.__app.room3d; r.lookAt(new r.camera.position.constructor(0.6, 1.1, -2.8)); }); await shot(roomId + '-window'); }
     // 夜
+    if (roomId.startsWith('c-')) { await page.evaluate(() => window.__app.room3d.setMoodId('sunset')); await shot(roomId + '-sunset'); }
     await page.evaluate(() => window.__app.room3d.setMoodId('night'));
     await shot(roomId + '-night');
     await page.evaluate(() => window.__app.room3d.setMoodId('day'));

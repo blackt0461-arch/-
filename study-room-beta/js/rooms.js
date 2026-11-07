@@ -99,10 +99,31 @@ export const ROOMS = [
       windows: [{ wall: '-z', a: 0, w: 3.4, y0: 0.7, y1: 2.35, open: true }],
       door: { wall: '+z', a: 1.3 }, cam: [0.4, 1.1],
       built: [{ kind: 'hinoki', x: -0.6, z: -1.2, w: 2.2, d: 1.1 }, { kind: 'shower', wall: '+x', a: 0.2 }, { kind: 'washarea', x: 1.3, z: 0.5 }] } },
+
+  // ---- 山小屋（雪山の中の丸太小屋。開く条件・行き来のボタンは main.js 側）----
+  { id: 'c-living', name: '暖炉のリビング', icon: 'flame', home: 'cabin', level: 0, unlock: 0,
+    surf: { wall: 'wall-raw-plank', floor: 'floor-worn-wood' },
+    shape: { w: 6.4, d: 5.6, h: 3.0, plain: true, ceil: '#8a6a4c',
+      windows: [{ wall: '-z', a: 0.6, w: 3.6, y0: 0.45, y1: 2.6 }],
+      door: { wall: '+z', a: 2.2 }, cam: [0.4, 1.5],
+      built: [{ kind: 'fireplace', wall: '-x', a: 0.2, len: 1.7 }, { kind: 'beams', zs: [-1.3, 1.3] }] } },
+  { id: 'c-loft', name: 'ロフトの寝室', icon: 'moon', home: 'cabin', level: 1, unlock: 0,
+    surf: { wall: 'wall-cedar', floor: 'floor-old-wood' },
+    shape: { w: 5.6, d: 4.8, h: 2.8, plain: true, ceil: '#a07e5a',
+      windows: [{ wall: '-z', a: -1.4, w: 1.4, y0: 0.7, y1: 2.1 }],
+      door: { wall: '-x', a: 1.4 }, slope: { start: -0.2, low: 1.2 },
+      skylight: { u: 0.45, z: 0.2, len: 1.1, wid: 0.9 }, cam: [-1.2, 0.6] } },
+  { id: 'c-study', name: '薪ストーブの書斎', icon: 'book', home: 'cabin', level: 0, unlock: 0,
+    surf: { wall: 'wall-wood-plank', floor: 'floor-dark-planks' },
+    shape: { w: 4.6, d: 5.0, h: 2.9, plain: true, ceil: '#7a5a40',
+      windows: [{ wall: '-z', a: -0.6, w: 1.4, y0: 0.7, y1: 2.5 }],
+      door: { wall: '+z', a: 1.4 }, cam: [-0.4, 1.4],
+      built: [{ kind: 'woodstove', wall: '+x', a: -1.2 }, { kind: 'beams', zs: [-1.0, 1.0] }] } },
 ];
 export const HOMES = {
   main: { id: 'main', name: '家', icon: 'home' },
   villa: { id: 'villa', name: '別荘', icon: 'palm' },
+  cabin: { id: 'cabin', name: '山小屋', icon: 'snow' },
 };
 export function roomDef(id) { return ROOMS.find(r => r.id === id) || ROOMS[0]; }
 export function homeOf(id) { return roomDef(id).home || 'main'; }

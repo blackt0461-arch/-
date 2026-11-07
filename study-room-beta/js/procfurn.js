@@ -255,7 +255,7 @@ function baseMat(key) {
   });
 }
 // 材質キー / '#色' / 材質そのもの → 材質
-function matOf(v, def = 'oak') {
+export function matOf(v, def = 'oak') {
   if (v && v.isMaterial) return v;
   if (typeof v === 'string') {
     if (MATS[v] || v === 'fabric') return baseMat(v);

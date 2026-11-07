@@ -203,6 +203,13 @@ add(5, [
 add(4, [
   ['ev-snowman', 'マフラーの雪だるま', 'decor', 'nmr', { gacha: 'snowman' }, 1.2, { series: 'event' }],
   ['ev-gift-pile', 'プレゼントの山', 'decor', 'nmr', { gacha: 'giftPile' }, 0.7, { series: 'event' }],
+  // 冬のカフェ（2026年12月）
+  ['ev-cocoa-counter', 'ホットチョコのカウンター', 'table', 'nr', { gacha: 'cocoaCounter' }, 1.2, { series: 'event' }],
+  ['ev-ginger-house', 'ジンジャークッキーの家', 'decor', 'nr', { gacha: 'gingerHouse' }, 0.4, { series: 'event' }],
+  ['ev-snow-garland', '雪の結晶のガーランド', 'wallart', 'nmr', { gacha: 'snowGarland' }, 1.6, { place: 'wall', light: '#dff1ff', series: 'event' }],
+], {});
+add(5, [
+  ['ev-cafe-sign', 'ランタンの冬のカフェ看板', 'wallart', 'nr', { gacha: 'cafeSign' }, 1.0, { place: 'wall', light: '#ffcf8a', series: 'event' }],
 ], {});
 // ───────── 備え付けの豪華な形（★4・★5 恒常）。引くと「模様がえ → 備え付け」で選べる ─────────
 add(4, [
@@ -221,7 +228,22 @@ add(4, [
   ['m-door-navy', '紺と真ちゅうのドア', 'fixture', 'rm', { proc: { type: 'door', style: 'panel4', color: '#1f2d4a', handle: 'brass' } }, 2.1, { ...SF('door'), series: 'medal' }],
   ['m-door-mint', 'ミントのガラスドア', 'fixture', 'nm', { proc: { type: 'door', style: 'glass', color: '#9fd3c2', handle: 'brass' } }, 2.1, { ...SF('door'), series: 'medal' }],
 ], {});
-for (const it of GACHA_ITEMS) if (it.series === 'event' || it.series === 'medal') it.reward = true;
+// ───────── 称号・図鑑のごほうび家具（むずかしい称号・図鑑の％でもらう。ガチャからは出ない） ─────────
+add(5, [
+  ['t-akari-lamp', '格子のあかりの間取りランプ', 'light', 'nm', { gacha: 'akariLamp' }, 1.4, { light: '#ffd6a0', series: 'title' }],
+  ['t-aburi-desk', '虫めがねと古い設計図の机', 'table', 'r', { gacha: 'aburiDesk' }, 1.2, { series: 'title' }],
+  ['t-rokujo-board', 'たたみ六畳のミニチュア棚', 'storage', 'n', { gacha: 'rokujoBoard' }, 1.0, { series: 'title' }],
+  ['t-hikkoshi-crates', '積み上げた木箱の棚', 'storage', 'ni', { gacha: 'hikkoshiCrates' }, 1.4, { series: 'title' }],
+  ['t-pz-crown', '金のパズルピースのトロフィー', 'decor', 'rm', { gacha: 'pzCrown' }, 0.4, { series: 'title' }],
+  ['t-streak100', '百日の日めくりと金の砂時計', 'decor', 'nr', { gacha: 'streak100' }, 0.4, { series: 'title' }],
+  ['t-book-tower', '天井まで届く本の塔', 'storage', 'rn', { gacha: 'bookTower' }, 2.3, { light: '#ffd9a8', series: 'title' }],
+  ['t-legend-laurel', '金の月桂樹の飾り額', 'wallart', 'rm', { gacha: 'legendLaurel' }, 1.0, { ...W, series: 'title' }],
+  ['c-zukan25', '回る地球儀ランプ', 'light', 'rn', { gacha: 'zukan25' }, 0.5, { light: '#ffe0b0', series: 'title' }],
+  ['c-zukan50', 'ガラスの陳列ケース', 'storage', 'mr', { gacha: 'zukan50' }, 1.8, { light: '#fff0d8', series: 'title' }],
+  ['c-zukan75', '回転する展示台', 'decor', 'm', { gacha: 'zukan75' }, 1.0, { light: '#fff0d8', series: 'title' }],
+  ['c-zukan100', '金の額のコレクターの間の飾り', 'wallart', 'rm', { gacha: 'zukan100' }, 1.3, { ...W, series: 'title' }],
+], {});
+for (const it of GACHA_ITEMS) if (it.series === 'event' || it.series === 'medal' || it.series === 'title') it.reward = true;
 for (const it of GACHA_ITEMS) if (it.place === 'avatar') it.reward = true; // 引いた回数のごほうび。ガチャからランダムには出ない
 
 export const GACHA_BY_ID = Object.fromEntries(GACHA_ITEMS.map((it) => [it.id, it]));

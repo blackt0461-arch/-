@@ -4,6 +4,7 @@
 // 別荘（home = 'villa'）は海辺：テラス → 砂浜とヤシの木 → 波の立つ海 → 遠くの島。
 import * as THREE from 'three';
 import { texturedMaterial, fitMaterial, loadModel, loadTex, shadowAll } from './loaders.js';
+import { buildMountain } from './cabinext.js';
 
 const TREES = {
   island_tree_01: { w: 4.76, h: 5.03 },
@@ -16,6 +17,7 @@ function rng(seed) { let s = seed; return () => (s = (s * 16807) % 2147483647) /
 
 export async function buildExterior(mood, level = 0, home = 'main') {
   if (home === 'villa') return buildSeaside(mood);
+  if (home === 'cabin') return buildMountain(mood); // 山小屋：雪山と針葉樹（js/cabinext.js）
   const g = new THREE.Group();
   const night = mood.photo === 'night';
   const R = rng(11);

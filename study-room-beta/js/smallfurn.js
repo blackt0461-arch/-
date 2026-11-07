@@ -1028,3 +1028,15 @@ export function buildSmall(spec, matOf) {
   try { fn(spec); } finally { G = prev; }
   return g;
 }
+// ほかの形（ごほうび家具 js/rewardfurn.js など）でも、同じ道具を使えるように
+export const SF = { bx, cy, la, las, sp, to, tb, pl, R, add, labeled, faced, faceMat, canvasMat, label, rnd, P, CER, MET, CHROME, BRASS, IRON, GL, LIQ, CLOTH, GLOW, SCREEN, photoMat, book, wood: (k) => WOOD(k) };
+// fn(spec) で G（今つくっている物）に形を足す。戻り値は THREE.Group
+export function buildWith(fn, spec = {}) {
+  const g = new THREE.Group();
+  const prev = G; G = g;
+  try { fn(spec, g); } finally { G = prev; }
+  return g;
+}
+// 作っている途中で、入れ子のグループに切りかえる（戻り値で元にもどす）
+export function pushGroup(g) { const prev = G; G.add(g); G = g; return () => { G = prev; }; }
+export function setWood(fn) { if (fn) WOOD = fn; }
