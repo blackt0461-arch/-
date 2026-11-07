@@ -223,11 +223,12 @@ h3.sec { font-size: 14px; color: var(--muted); margin: 18px 4px 8px; font-weight
 .brand, .t-logo { font-family: "Cormorant Garamond", "Times New Roman", serif; font-weight: 600; letter-spacing: .32em; }
 .login .brand { font-size: 40px; margin: 6px 0 2px; padding-left: .32em; color: var(--gold1); text-shadow: 0 0 24px rgba(255,207,122,.35); }
 .title-screen { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; align-content: center; gap: 10px; cursor: pointer; overflow: hidden;
-  background: radial-gradient(120% 80% at 50% 35%, var(--t1), var(--t2) 60%, #0b0907); transition: opacity .9s ease; }
+  background-color: #0b0907; background-image: radial-gradient(120% 80% at 50% 35%, var(--t1, #3b4466), var(--t2, #141826) 60%, #0b0907); transition: opacity .9s ease; }
 .title-screen.t-morning { --t1: #f6dcae; --t2: #6d5a49; }
 .title-screen.t-day { --t1: #e9e2d0; --t2: #55606b; }
 .title-screen.t-sunset { --t1: #f0a46a; --t2: #5a3424; }
 .title-screen.t-night { --t1: #3b4466; --t2: #141826; }
+.title-screen.t-overcast { --t1: #9aa1ab; --t2: #343a42; } /* くもり・雨の朝と昼（これが無くて、背景が透けていた） */
 .t-glow { position: absolute; width: 140vmax; height: 140vmax; left: 50%; top: 40%; transform: translate(-50%, -50%); background: conic-gradient(from 0deg, rgba(255,240,210,.0), rgba(255,240,210,.12), rgba(255,240,210,0) 30%); animation: spin 24s linear infinite; pointer-events: none; }
 @keyframes spin { to { transform: translate(-50%, -50%) rotate(360deg); } }
 .t-logo { position: relative; margin: 0; font-size: clamp(52px, 17vw, 120px); color: #fffaf0; padding-left: .32em; text-shadow: 0 2px 30px rgba(255,220,170,.55), 0 0 2px rgba(255,255,255,.6); }
