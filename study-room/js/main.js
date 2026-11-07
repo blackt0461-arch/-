@@ -27,6 +27,7 @@ import { runTour } from './tour.js';
 import * as BGM from './bgm.js';
 import { AVATARS, AVATAR_COLORS, GACHA_AVATARS, NIGHT_COLORS, avatarHTML, avatarItemId, pullRewards } from './avatars.js';
 import { studyParams, puzzleParams, radarSVG, TITLES, titleById, earnedTitles } from './profile.js';
+import * as Calc from './calc.js';
 
 // bank：data/bank/<科目>.json の問題バンク（教科書に合わせた 教科 → ジャンル → 単元）。あとから読みこむ
 const SUBJECTS = [
@@ -1684,7 +1685,7 @@ function photoMode() {
 
 // =========================== 更新のお知らせ ===========================
 // このプログラムの版（version.json と同じにする。公開のたびに上げる）
-const APP_VERSION = '1.12.3';
+const APP_VERSION = '1.14.0';
 ERR.setVersion(APP_VERSION);
 // 新しい版が出たら、みんな同じタイミングでそろうように強制で再起動する。
 // 開いた時・画面に戻った時・1分ごとに version.json を見る
@@ -1947,13 +1948,18 @@ async function chooseSubject() {
   el.querySelector('.mode-switch')?.addEventListener('click', () => { setMode('puzzle'); el.remove(); showHome(); showPuzzleHub(); });
   const draw = () => {
     if (UINEXT) drawContinue(el);
+    // おすすめ（倍率1.2以上）は、多すぎると目立たないので上から2つまで（倍率が高い→やった数が少ない順）
+    const ms = S.subjectMults(multSids());
+    const recIds = SUBJECTS.filter(s0 => !s0.pack && probs(s0.id).length && (ms[s0.id]?.mult || 1) >= 1.2)
+      .sort((a, b) => ms[b.id].mult - ms[a.id].mult || ms[a.id].n - ms[b.id].n).slice(0, 2).map(s0 => s0.id);
     el.querySelector('.subjgrid').innerHTML = SUBJECTS.map(s0 => {
       const ready = probs(s0.id).length > 0;
+      const rec = recIds.includes(s0.id) ? `<i class="subj-rec">おすすめ ×${ms[s0.id].mult}</i>` : '';
       const st = ready ? S.subject(s0.id) : null;
       const resume = st && st.session && st.session.idx < st.session.set.length;
       const stats = st ? S.stats(st, probs(s0.id)) : null;
       const meta = !ready ? (s0.bank && !bankDone[s0.id] ? '読みこみ中' : '準備中') : resume ? '続きから' : stats.due ? `復習 ${stats.due}問` : S.wrongList(st, probs(s0.id)).length ? `まちがい ${S.wrongList(st, probs(s0.id)).length}問` : `${probs(s0.id).length}問`;
-      return `<button class="subj ${ready ? '' : 'soon'}" data-s="${s0.id}" ${ready ? '' : 'disabled'}>
+      return `<button class="subj ${ready ? '' : 'soon'} ${rec ? 'rec' : ''}" data-s="${s0.id}" ${ready ? '' : 'disabled'}>${rec}
         <span class="s-ic">${icon(SUBJECT_ICON[s0.id] || 'book')}</span><b>${esc(s0.name)}</b><small>${meta}</small></button>`;
     }).join('');
     el.querySelectorAll('.subj:not(.soon)').forEach(b => b.onclick = () => { subjectId = b.dataset.s; chooseScope(el); });
@@ -3225,7 +3231,15 @@ function showSettings() {
 }
 
 // =========================== 問題を解く ===========================
+// みんなの単元ごとの「ふつうの時間」（1.14.0）。アプリを開いて最初に解く時に1回だけ読む（失敗しても、★の表の秒数を使う）
+let unitTimesLoaded = false;
+function loadUnitTimes() {
+  if (unitTimesLoaded || !Auth.currentUser()?.token) return;
+  unitTimesLoaded = true;
+  rpc('sr_unit_times', {}).then(m => S.setUnitTimes(m)).catch(() => { unitTimesLoaded = false; });
+}
 async function startSet() {
+  loadUnitTimes();
   BGM.duck(true); // 解いている間は BGM を小さく
   await loadBank(subjectId); // 問題バンクの問題が入ったセットの続きでも、問題が見つかるように
   const st = sub();
@@ -3390,7 +3404,7 @@ function runProblem(p, isReview, retry) {
       stepEl.innerHTML = `
         <div class="res ok">
           <div class="ttl">${retry ? '確認できました' : perfect ? '正解！' : '正解（文字は1回まちがい）'}</div>
-          ${!retry ? `<div class="pts">+${pts}<small>ゲージ（むずかしい問題ほど多い）${ss.bonus && pts ? '・今日の最初の5問 ×1.5' : ''}</small></div>` : ''}
+          ${!retry ? `<div class="pts">+${pts}<small>ゲージ（むずかしい問題ほど多い）${ss.bonus && pts ? '・今日の最初の5問 ×1.5' : ''}</small></div>${gaugeNote(ss)}` : ''}
           ${xpLine}
           ${mastered ? `<div class="master">${icon('trophy')}克服しました！ 特別な家具がもらえます</div>` : ''}
           <div class="formula">${fx}<small>${esc(p.formula.name)}</small></div>
@@ -3402,7 +3416,7 @@ function runProblem(p, isReview, retry) {
         </div>`;
       stepEl.querySelector('.why').onclick = (e) => { stepEl.querySelector('.reason').classList.toggle('hide'); e.target.remove(); };
       stepEl.querySelector('.home').onclick = () => endOne(true);
-      stepEl.querySelector('.more').onclick = () => endOne(false);
+      stepEl.querySelector('.more').onclick = () => endOne(false); bindGaugeNote(stepEl);
     } else {
       vibrate([60, 40, 60]);
       const legend = [...p.quantities, p.target, ...p.formulaSymbols]
@@ -3410,24 +3424,54 @@ function runProblem(p, isReview, retry) {
       stepEl.innerHTML = `
         <div class="res ng">
           <div class="ttl">おしい！ 正しい公式はこれ</div>
+          ${!retry && pts ? `<div class="pts">+${pts}<small>ゲージ（考えたぶん）</small></div>${gaugeNote(ss)}` : ''}
           ${xpLine}
           <div class="formula">${fx}<small>${esc(p.formula.name)}</small></div>
           <ul class="legend">${legend}</ul>
           <p class="reason">${esc(p.reason)}</p>
           <button class="btn primary big again">見ながら もう一度</button>
         </div>`;
-      stepEl.querySelector('.again').onclick = () => runProblem(p, isReview, true);
+      stepEl.querySelector('.again').onclick = () => runProblem(p, isReview, true); bindGaugeNote(stepEl);
     }
   }
 
   step1();
 }
 
+// 倍率を決める教科（テスト勉強の問題集はのぞく）
+const multSids = () => SUBJECTS.filter(s0 => !s0.pack).map(s0 => s0.id);
+// 答えたあとの「ゲージ」の説明（1.13.0）。減っている時は、ほかの教科・単元をすすめる
+function gaugeNote(ss) {
+  const gf = ss.gf; if (!gf) return '';
+  const parts = [];
+  if (gf.mult > 1) parts.push(`おすすめの教科 ×${gf.mult}`);
+  if (gf.repeat) parts.push('今日もう正解した問題なので少なめ');
+  let html = parts.length ? `<small class="gf-note">${parts.join('・')}</small>` : '';
+  if (gf.decayed) {
+    const rec = recommendSubject();
+    html += `<div class="gf-decay">${icon('info')}<span class="gf-t">${gf.subjDecayed ? '同じ教科' : '同じ単元'}が続いているので、ゲージが少なめです。${gf.subjDecayed ? 'ほかの教科' : 'ほかの単元や教科'}だと多くたまります</span>${rec ? `<button class="link gf-go" data-s="${rec.id}">${icon('pencil')}${esc(rec.name)}${rec.mult > 1 ? ` ×${rec.mult}` : ''}</button>` : ''}</div>`;
+  }
+  return html;
+}
+// おすすめの教科（倍率がいちばん高く、今日あまりやっていない教科）
+function recommendSubject() {
+  const ms = S.subjectMults(multSids());
+  const list = SUBJECTS.filter(s0 => !s0.pack && s0.id !== subjectId && probs(s0.id).length).map(s0 => ({ id: s0.id, name: s0.name, mult: ms[s0.id]?.mult || 1, min: S.todayUse(s0.id, '').min }));
+  list.sort((a, b) => b.mult - a.mult || a.min - b.min);
+  return list[0] || null;
+}
+function bindGaugeNote(root) {
+  root.querySelector('.gf-go')?.addEventListener('click', (e) => { const sid = e.currentTarget.dataset.s; endOne(true); setTimeout(() => { subjectId = sid; chooseSubject?.(); }, 80); });
+}
 // 1問の結果から、ゲージ・経験値・チケットなどのごほうびを出して記録する（物理も4択も共通）
 function awardResult(st, ss, p, perfect, ok, isReview, secs) {
   let pts = 0, mastered = false, xp = null;
-      pts = S.gaugePoints(perfect, ok && !perfect, secs, subjectId);
+      // 1.13.0：教科の倍率（おすすめ）・同じ教科／単元が続くと減る・その日もう正解した問題は3割
+      const gf = S.gaugeFactor({ sid: subjectId, unit: p.unit, sub: st, id: p.id, sids: multSids() });
+      pts = Math.round(S.gaugePoints(perfect, ok && !perfect, secs, subjectId, p.level, p.unit) * gf.f);
       if (ss.bonus) pts = Math.round(pts * 1.5);
+      ss.gf = gf;
+      S.logTime(subjectId, p.unit, secs);
       HS().gauge += pts;
       S.addPoints(pts); // ランキングのポイント
       ss.gained += pts;
@@ -3459,6 +3503,9 @@ function awardResult(st, ss, p, perfect, ok, isReview, secs) {
   return { pts, xp, mastered };
 }
 
+// 関数電卓（1.14.0）：数学・物理の4択で出す。履歴は、アプリを開いている間は問題をまたいで残る
+const CALC_SUBJECTS = ['math', 'physics4'];
+const calcStore = { hist: [], ans: 0 };
 // 4択の問題（物理以外の教科）
 function runChoice(p, isReview) {
   // テスト勉強の問題集（電子回路など）は、記号を添え字にして・解説を1文ずつにして見やすくする
@@ -3477,21 +3524,47 @@ function runChoice(p, isReview) {
         <span class="tag">${isReview ? `${icon('refresh')}復習` : esc(p.unit)}</span>
       </header>
       <div class="problem ${fx ? 'fx' : ''}">${fm(p.text).replace(/\n/g, '<br>')}</div>
+      ${CALC_SUBJECTS.includes(subjectId) || p.steps ? `<div class="calc-row">${p.steps ? `<button class="calc-btn steps-btn">${icon('level')}段階に分けて解く</button>` : ''}${CALC_SUBJECTS.includes(subjectId) ? `<button class="calc-btn" aria-label="電卓をひらく">${icon('calc')}電卓</button>` : ''}</div>` : ''}
       <div class="step">
         <p class="ask">正しいものを <b>1つ</b> 選ぼう</p>
         <div class="cards ch4">${order.map(i => `<button class="fcard" data-i="${i}">${fm(p.choices[i])}</button>`).join('')}</div>
       </div>
     </div>`);
   app.append(el);
-  el.querySelector('.back').onclick = () => { S.save(); showHome(); };
+  el.querySelector('.back').onclick = () => { Calc.closeCalc(); S.save(); showHome(); };
+  el.querySelector('.calc-btn:not(.steps-btn)')?.addEventListener('click', (e) => Calc.openCalc({ screen: el, problem: el.querySelector('.problem'), btn: e.currentTarget, store: calcStore }));
   const stepEl = el.querySelector('.step');
-  stepEl.querySelectorAll('.fcard').forEach(b => b.onclick = () => {
+  const bindCards = () => stepEl.querySelectorAll('.fcard').forEach(b => b.onclick = () => {
     const ok = +b.dataset.i === p.answer;
     stepEl.querySelectorAll('.fcard').forEach(x => { x.disabled = true; if (+x.dataset.i === p.answer) x.classList.add('right'); });
     if (!ok) b.classList.add('wrong');
     setTimeout(() => result(ok, +b.dataset.i), ok ? 400 : 700);
   });
+  bindCards();
+  // 段階に分けて解く（1.14.0）：小問を1つずつ。途中でまちがえたらヒントを出して、もう一度。最後は元の問題の選択肢
+  el.querySelector('.steps-btn')?.addEventListener('click', (e) => {
+    e.currentTarget.remove();
+    const steps = p.steps;
+    const show = (k) => {
+      const s0 = steps[k], last = k === steps.length - 1;
+      const ord = S.shuffle([0, 1, 2, 3]);
+      stepEl.innerHTML = `
+        <div class="st-prog">${steps.map((_, j) => `<i class="${j < k ? 'done' : j === k ? 'on' : ''}"></i>`).join('')}<small>ステップ ${k + 1} / ${steps.length}</small></div>
+        <p class="ask st-ask">${fm(s0.ask)}</p>
+        <div class="cards ch4">${(last ? order : ord).map(i => `<button class="fcard" data-i="${i}">${fm((last ? p.choices : s0.choices)[i])}</button>`).join('')}</div>
+        <p class="st-hint hide"></p>`;
+      if (last) return bindCards();
+      stepEl.querySelectorAll('.fcard').forEach(b => b.onclick = () => {
+        if (+b.dataset.i === s0.answer) { b.classList.add('right'); vibrate(15); setTimeout(() => show(k + 1), 450); return; }
+        b.classList.add('wrong'); b.disabled = true; vibrate([40, 30, 40]);
+        const h0 = stepEl.querySelector('.st-hint'); if (s0.hint) { h0.textContent = s0.hint; h0.classList.remove('hide'); }
+      });
+    };
+    show(0);
+  });
   function result(ok, picked) {
+    Calc.closeCalc();
+    el.querySelector('.calc-row')?.remove();
     const secs = (Date.now() - t0) / 1000;
     const { pts, xp, mastered } = awardResult(st, ss, p, ok, ok, isReview, secs);
     vibrate(ok ? [20, 30, 20] : [60, 40, 60]);
@@ -3509,6 +3582,7 @@ function runChoice(p, isReview) {
         ${p.detail ? `<details class="detail-ex"${ok ? '' : ' open'}><summary>${icon('book')}くわしい解説</summary>${explainHTML(p.detail)}</details>` : ''}
         ${mastered ? `<div class="master">${icon('trophy')}克服しました！ 特別な家具がもらえます</div>` : ''}
         ${ss.rewards && (ss.rewards.ticket || ss.rewards.ticket4 || ss.rewards.ticket5) ? `<div class="ru-tickets">${['ticket', 'ticket4', 'ticket5'].filter(k => ss.rewards[k]).map(k => `<span>${ticketSVG(k, 'mini')}<b>×${ss.rewards[k]}</b></span>`).join('')}<small class="ru-box">${icon('gift')}プレゼントBOXに届きました</small></div>` : ''}
+        ${gaugeNote(ss)}
         <p class="nx-gain">${[pts ? `ゲージ +${pts}${ss.bonus ? '（×1.5）' : ''}` : '', xp ? `+${xp.gained} XP` : '', xp?.rankUp ? `<b>Lv${xp.rank}にアップ！</b>` : '', HS().gauge >= S.gaugeMax(HS()) ? `<b>${icon('gift')}家具が買えます</b>` : ''].filter(Boolean).join('<i>・</i>')}</p>
         <button class="link pr-report">${icon('info')}この問題のまちがいを報告</button>
       </div>
@@ -3516,12 +3590,14 @@ function runChoice(p, isReview) {
       stepEl.querySelector('.home').onclick = () => endOne(true);
       stepEl.querySelector('.more').onclick = () => endOne(false);
       stepEl.querySelector('.pr-report').onclick = () => reportProblem(p);
+      bindGaugeNote(stepEl);
       return;
     }
     stepEl.innerHTML = `
       <div class="res ${ok ? 'ok' : 'ng'}">
         <div class="ttl">${ok ? '正解！' : 'おしい！'}</div>
-        ${ok ? `<div class="pts">+${pts}<small>ゲージ（むずかしい問題ほど多い）${ss.bonus && pts ? '・今日の最初の5問 ×1.5' : ''}</small></div>` : ''}
+        ${pts ? `<div class="pts">+${pts}<small>ゲージ（むずかしい問題ほど多い）${ss.bonus && pts ? '・今日の最初の5問 ×1.5' : ''}</small></div>` : ''}
+        ${gaugeNote(ss)}
         ${xpLine}
         ${mastered ? `<div class="master">${icon('trophy')}克服しました！ 特別な家具がもらえます</div>` : ''}
         <div class="formula">${fm(p.choices[p.answer])}<small>正解</small></div>
@@ -3536,6 +3612,7 @@ function runChoice(p, isReview) {
     stepEl.querySelector('.home').onclick = () => endOne(true);
     stepEl.querySelector('.more').onclick = () => endOne(false);
     stepEl.querySelector('.pr-report').onclick = () => reportProblem(p);
+    bindGaugeNote(stepEl);
   }
 }
 // 問題のまちがいを報告（1.12.0）：管理者の「要望・バグを見る」に、問題の番号といっしょに届く
@@ -3708,4 +3785,4 @@ if ('serviceWorker' in navigator && location.protocol === 'https:') {
   navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(r => r.update()).catch(() => {});
 }
 // テスト用
-window.__app = { toast, showEdit, putIntoRoom, get room3d() { return room3d; }, S, sub, HS, switchRoom, ensureRooms, goHome, showHome, curRoom, visitFriend, leaveVisit, showLoginBonus, showGiftBox, showArrange, arrange: (sel, style) => { arrSel = sel; return runArrange(style); } };
+window.__app = { toast, showEdit, putIntoRoom, get room3d() { return room3d; }, S, sub, HS, switchRoom, ensureRooms, goHome, showHome, curRoom, visitFriend, leaveVisit, showLoginBonus, showGiftBox, showArrange, problemById: (id) => byId[id], runChoice, arrange: (sel, style) => { arrSel = sel; return runArrange(style); } };

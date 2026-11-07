@@ -38,8 +38,13 @@ const serve = () => new Promise(res => { const srv = http.createServer((req, rsp
   await page.click('.nx-bar .mode-toggle [data-mode=study]'); await page.waitForTimeout(500);
   await page.screenshot({ path: path.join(OUT, 'nx-2-home.png') });
   console.log('3. 解く → 答えた後（まちがい）の言い方');
+  // 1.13.0：今日は数学を25分やったことにして、「同じ教科が続いている」の案内を出す
+  await page.evaluate(async () => { const S = await import('/js/store.js'); S.logDay({}); const e = S.dayLog()[S.dayKey()]; e.t = { math: 25 * 60 }; e.u = { 'jp|古文単語': [3, 3] }; });
   await page.evaluate(() => document.querySelector('.solve-ring')?.click());
   await page.waitForFunction(() => { const b = document.querySelector('.subj[data-s=math]'); return b && !b.disabled; }, null, { timeout: 30000 });
+  const recs = await page.locator('.subj-rec').count();
+  check(recs >= 1 && recs <= 2, `教科えらびの「おすすめ」は2つまで（${recs}こ）`);
+  await page.waitForTimeout(700); await page.screenshot({ path: path.join(OUT, 'nx-2b-subjects.png') });
   await page.click('.subj[data-s=math]'); await page.waitForTimeout(400);
   await page.evaluate(() => (document.querySelector('.sc-list [data-all]') || document.querySelector('.sc-list [data-gall]'))?.click()); await page.waitForSelector('.fcard');
   const ans = await page.evaluate(async () => { const t = document.querySelector('.choice .problem').textContent.trim(); const r = await fetch('/data/bank/math.json'); const a = await r.json(); const n = (x) => String(x).replace(/\s+/g, ''); return a.find(p => n(p.text) === n(t))?.answer; });
@@ -48,6 +53,7 @@ const serve = () => new Promise(res => { const srv = http.createServer((req, rsp
   const verdict = (await page.locator('.nx-verdict').textContent()).trim();
   check(/ざんねん、まちがい/.test(verdict) && !/ちがいます/.test(verdict), `まちがいの言い方：「${verdict.replace(/\s+/g, ' ')}」`);
   check(await vis('.nx-next .more'), '「次の問題」が下にある');
+  check(await page.locator('.gf-decay .gf-go').count() === 1, `同じ教科が続くと、ほかの教科をすすめる（${(await page.locator('.gf-decay').textContent().catch(() => '')).trim().slice(0, 60)}）`);
   await page.waitForTimeout(1200); await page.screenshot({ path: path.join(OUT, 'nx-3-result.png') });
   await page.click('.nx-next .home'); await page.waitForTimeout(900);
   await page.evaluate(() => document.querySelector('.solve-ring')?.click()); await page.waitForSelector('.nx-cta', { timeout: 8000 }).catch(() => {});

@@ -48,10 +48,36 @@ const serve = () => new Promise(res => { const srv = http.createServer((req, rsp
     delete p.side; p.mode = 'puzzle'; r.noSide = S.sideOf(); p.mode = 'study';
     return r;
   });
-  const gp = await N.page.evaluate(async () => { const S = await import('/js/store.js'); return { jp15: S.gaugePoints(true, false, 15, 'jp'), math60: S.gaugePoints(true, false, 60, 'math'), jpIdle: S.gaugePoints(true, false, 600, 'jp'), mathIdle: S.gaugePoints(true, false, 600, 'math'), wrong: S.gaugePoints(false, false, 60, 'math'), quick: S.gaugePoints(true, false, 2, 'jp') }; });
-  check(gp.jp15 === 23 && gp.math60 === 90, `ゲージはかかった時間に比例（国語15秒 ${gp.jp15}・数学60秒 ${gp.math60}）`);
-  check(gp.jpIdle < gp.mathIdle && gp.jpIdle === Math.round(45 * 1.5), `放っておいても上限まで（国語 ${gp.jpIdle}・数学 ${gp.mathIdle}）`);
-  check(gp.wrong === 0 && gp.quick === 12, `まちがいは0、すぐ答えても少しはたまる（${gp.wrong}・${gp.quick}）`);
+  const gp = await N.page.evaluate(async () => { const S = await import('/js/store.js'); const g = S.gaugePoints;
+    const r = { jp: g(true, false, 15, 'jp', 2, 'x'), jpSlow: g(true, false, 300, 'jp', 2, 'x'), jpFast: g(true, false, 5, 'jp', 2, 'x'), math1: g(true, false, 30, 'math', 1, 'x'), math3: g(true, false, 50, 'math', 3, 'x'),
+      tap: g(true, false, 1, 'math', 3, 'x'), wrong: g(false, false, 90, 'math', 3, 'x'), wrongTap: g(false, false, 2, 'math', 3, 'x') };
+    S.setUnitTimes({ 'math|二次関数': [150 * 120, 150, 3], 'math|数列': [20 * 120, 20, 1] });
+    r.blend = S.stdTime('math', 2, '二次関数'); r.few = S.stdTime('math', 2, '数列'); S.setUnitTimes({}); return r; });
+  check(gp.jp === 30 && gp.jpSlow === 30, `早くても遅くても同じ（国語★2：15秒 ${gp.jp}・5分 ${gp.jpSlow}）`);
+  check(gp.math1 === 60 && gp.math3 === 135, `教科と★で決まる（数学★1 ${gp.math1}・★3 ${gp.math3}）`);
+  check(gp.jpFast < gp.jp && gp.tap <= 4, `早押しは少ない（国語5秒 ${gp.jpFast}・数学★3を1秒 ${gp.tap}）`);
+  check(gp.wrong === Math.round(135 * 0.3) && gp.wrongTap <= 3, `まちがいは3割、早押しのまちがいはほぼ0（${gp.wrong}・${gp.wrongTap}）`);
+  check(gp.blend === Math.round(60 * (0.3 + 0.7 * 2)) && gp.few === 60, `記録が十分な単元だけ平均に近づける（二次関数 ${gp.blend}秒・記録が少ない数列 ${gp.few}秒）`);
+  const mk = await N.page.evaluate(async () => {
+    const S = await import('/js/store.js'), st = window.__app.S;
+    S.logDay({}); const d = S.dayKey(), log = S.dayLog();
+    const keep = JSON.stringify(log);
+    for (const k of Object.keys(log)) delete log[k];
+    // 7日で国語40問（正解率9割）・数学10問（正解率4割）。英語は0問
+    log[d] = { n: 50, c: 40, pz: 0, u: { 'jp|古文単語': [40, 36], 'math|二次関数': [10, 4] }, t: { jp: 25 * 60 } };
+    const m = S.subjectMults(['jp', 'math', 'english']);
+    const decayJp = S.todayUse('jp', '古文単語'), f = S.gaugeFactor({ sid: 'jp', unit: '古文単語', sids: ['jp', 'math', 'english'] });
+    const fm = S.gaugeFactor({ sid: 'math', unit: '二次関数', sids: ['jp', 'math', 'english'] });
+    const sub = { srs: { q1: { lastOk: d } } }, fr = S.gaugeFactor({ sid: 'math', unit: '二次関数', sub, id: 'q1', sids: ['math'] });
+    for (const k of Object.keys(log)) delete log[k];
+    Object.assign(log, JSON.parse(keep));
+    const few = S.subjectMults(['jp', 'english']);
+    return { m, f, fm, fr, decayJp, few };
+  });
+  check(mk.m.english.mult === 1.3 && mk.m.math.mult === 1.2 && mk.m.jp.mult === 0.9, `倍率：やっていない英語1.3・苦手な数学1.2・やりすぎの国語0.9（${mk.m.english.mult}・${mk.m.math.mult}・${mk.m.jp.mult}）`);
+  check(Math.abs(mk.f.f - 0.9 * 0.7 * 0.4) < 1e-9 && mk.f.decayed, `国語25分・古文単語40問 → 0.9×0.7×0.4（${mk.f.f.toFixed(3)}）`);
+  check(mk.fm.f === 1.2 && !mk.fm.decayed, `数学は減らずに1.2倍（${mk.fm.f}）`);
+  check(Math.abs(mk.fr.f - 1.2 * 0.3) < 1e-9 && mk.fr.repeat, `今日もう正解した問題は3割（${mk.fr.f.toFixed(2)}）`);
   check(tk.wrong === 0, `まちがいは数えない（${tk.wrong}回）`);
   check(tk.first === 1 && tk.need2 === 10, `正解5問で1回、次は10問（${tk.first}回・あと${tk.need2}問）`);
   check(tk.nine === 1 && tk.second === 2 && tk.need3 === 15, `正解10問で2回目、その次は15問（${tk.second}回・あと${tk.need3}問）`);
