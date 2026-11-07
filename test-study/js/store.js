@@ -12,14 +12,15 @@
 //   tg/<テスト>@<日>   その日の目標の問題数 {n}
 //   dt/<テスト>        テストの日を変えたとき {date}
 //   dy/<日>            1.6.0 より前に数えていた日ごとの問題数 {n:{テスト:数}}
-//   ls/<授業>          授業をどこまで見たか {last:スライド番号, done:見終わったか}
+//   ls/<授業>          授業をどこまで見たか {last:スライド番号, done:見終わったか, doneAt:見終わった時刻}
+//   pl/<テスト>        成長グラフの目標の線（はじめて計画を出した日に決めて、動かさない）
 //   <問題>（記号なし）  1.6.0 より前の問題ごとの状態。ここから先のできごとを足していく
 //
 // 記述の答え・写真は IndexedDB。ドライブとのやりとりは cloud.js（state()・merge()・sent()）。
 import * as mem from './memory.js';
 
 const AKEY = 'ts_all_v2', DKEY = 'ts_dirty_v2';
-const PRE = ['ev/', '★/', '採/', 'tg/', 'dt/', 'dy/', 'ls/'];
+const PRE = ['ev/', '★/', '採/', 'tg/', 'dt/', 'dy/', 'ls/', 'pl/'];
 const isLegacy = (k) => !PRE.some((p) => k.startsWith(p));
 const testOf = (q) => q.split('/').slice(0, 2).join('/');
 const dateKey = (ms) => { const d = new Date(ms); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
@@ -137,8 +138,30 @@ export const lesson = (key) => ALL['ls/' + key] || null;
 export function setLesson(key, last, done) {
   const o = ALL['ls/' + key] || {};
   const d = !!(o.done || done);
-  if (o.last === last && o.done === d) return;
-  put('ls/' + key, { last, done: d, t: Date.now() });
+  // 見終わった時刻は最初の1回だけ残す（あとで見直しても動かない）。古い記録は t を使う
+  const doneAt = o.doneAt || (o.done ? o.t : d ? Date.now() : undefined);
+  if (o.last === last && o.done === d && o.doneAt === doneAt) return;
+  put('ls/' + key, { last, done: d, ...(doneAt ? { doneAt } : {}), t: Date.now() });
+}
+export const lessonDoneAt = (key) => { const o = ALL['ls/' + key]; return o && o.done ? o.doneAt || o.t || null : null; };
+
+// ---- 成長グラフの目標の線 ----
+export const planBase = (testKey) => ALL['pl/' + testKey] || null;
+export function setPlanBase(testKey, v) { put('pl/' + testKey, { ...v, t: Date.now() }); }
+// ある時刻に「覚えていた」（思い出せる確率 90% 以上）問題の数。できごとをその時刻までたどって計算する
+export function rememberedAt(keys, T) {
+  calc();
+  const R = {};
+  for (const [k, v] of Object.entries(ALL)) if (isLegacy(k) && v && v.n && (v.t || 0) <= T) R[k] = { ...v };
+  for (const e of EVENTS) {
+    if (e.at > T) break;
+    const base = ALL[e.q];
+    if (base && base.n && e.at <= (base.t || 0)) continue;
+    R[e.q] = step(R[e.q], e.r, e.at);
+  }
+  let n = 0;
+  for (const k of keys) { const r = R[k]; if (r && r.n && !r.wrong && mem.recall(r, T) >= mem.GOAL) n++; }
+  return n;
 }
 
 // ---- Claude の採点（答えの uid ごと） ----

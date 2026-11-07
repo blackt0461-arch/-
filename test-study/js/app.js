@@ -3,7 +3,7 @@
 import * as store from './store.js';
 import * as cloud from './cloud.js';
 
-const APP_VERSION = '1.9.1';
+const APP_VERSION = '1.11.0';
 const $app = document.getElementById('app');
 let COURSES = [];
 const testCache = {};
@@ -881,6 +881,7 @@ async function stats() {
     .sort((a, b) => { const ra = store.get(a.key), rb = store.get(b.key); return ra.ok / ra.n - rb.ok / rb.n || rb.n - ra.n; }).slice(0, 10);
   w.innerHTML = `
     <button class="row notice" data-report style="position:relative;z-index:2;margin-top:0"><span class="av c4">${icon('chart')}</span><div class="t"><div class="name">ふりかえりレポート</div><div class="meta">今までの勉強をまとめて見る</div></div><span class="arrow">${icon('next')}</span></button>
+    ${tests.map((x, ti) => scheduleHTML(x.c, x.t, x.d, ti)).join('')}
     <div class="stats">
       <div class="stat"><b>${n ? pct(ok / n) : 0}<span style="font-size:.5em">%</span></b><span>正解率</span></div>
       <div class="stat"><b>${remember}</b><span>覚えている問題</span></div>
@@ -898,11 +899,118 @@ async function stats() {
     <div class="cloud-line">v${APP_VERSION}</div>`;
   math(w); bindStars(w);
   w.querySelector('[data-report]').onclick = report;
+  w.querySelectorAll('[data-sl]').forEach((b) => (b.onclick = () => {
+    const [ti, li] = b.dataset.sl.split(':').map(Number);
+    const { c, t, d } = tests[ti];
+    const L = d.lessons[li]; const st = store.lesson(lkey(c, t, L));
+    playLesson(c, t, d, L, st && !st.done ? st.last || 0 : 0);
+  }));
   const wb = w.querySelector('[data-weak]');
   if (wb) wb.onclick = () => {
     const { c, t, d } = tests.find((x) => x.d.questions.includes(weak[0]));
     startQuiz(c, t, d, weak.filter((q) => d.questions.includes(q)), { id: 'weak', name: '苦手な問題', back: stats, keepOrder: true }, { limit: 0 });
   };
+}
+
+// ---------- 成長グラフ（目標の線と実際の線） ----------
+// 目標の線は、はじめて計画を出した日に決めて保存し、あとから動かさない（遅れ・進みが見えるように）。
+// ・授業：その日の終わりまでに見終わっている本数（目標は計画表と同じ割りふり）
+// ・覚えている問題：その日の終わりに思い出せる確率が 90% 以上の問題の数（目標はテストの日に全問へ向かう直線）
+const DAY_MS = 86400000;
+const dayStart = (key) => new Date(key + 'T00:00:00').getTime();
+function ensurePlanBase(c, t, d, days, dl) {
+  const tk = tkey(c, t), exam = testDate(c, t);
+  let base = store.planBase(tk);
+  if (base && base.exam === exam && base.v === 1) return base;
+  const ls = d.lessons || [];
+  const today = days[0].key;
+  const doneBefore = ls.filter((L) => { const at = store.lessonDoneAt(lkey(c, t, L)); return at && dateKey(new Date(at)) < today; }).length;
+  const lessonsT = days.map((r) => doneBefore + days.slice(0, r.k + 1).reduce((n, x) => n + x.lessons.length, 0));
+  const keys = d.questions.map((q) => q.key);
+  const startQ = store.rememberedAt(keys, Date.now());
+  const qT = days.map((r) => Math.round(startQ + (keys.length - startQ) * (dl ? r.k / dl : 1)));
+  base = { v: 1, exam, start: today, days: days.map((r) => r.key), lessonsT, qT, totalL: ls.length, totalQ: keys.length };
+  store.setPlanBase(tk, base);
+  return base;
+}
+function lineChart({ labels, plan, actual, max, todayIdx, unit }) {
+  const W = 320, H = 150, L = 30, R = 10, T = 12, B = 26;
+  const n = labels.length, x = (i) => L + (n === 1 ? (W - L - R) / 2 : (i * (W - L - R)) / (n - 1)), y = (v) => T + (H - T - B) * (1 - v / Math.max(1, max));
+  const path = (arr) => arr.map((v, i) => (v === null ? null : `${x(i)},${y(v)}`)).filter(Boolean).join(' ');
+  const grid = [0, 0.5, 1].map((f) => `<line x1="${L}" x2="${W - R}" y1="${y(max * f)}" y2="${y(max * f)}" stroke="var(--line)"/><text x="${L - 6}" y="${y(max * f) + 4}" text-anchor="end" font-size="10" fill="var(--sub)">${Math.round(max * f)}</text>`).join('');
+  const xl = labels.map((lb, i) => `<text x="${x(i)}" y="${H - 8}" text-anchor="middle" font-size="10" fill="${i === todayIdx ? 'var(--ng)' : 'var(--sub)'}" font-weight="${i === todayIdx ? 800 : 500}">${lb}</text>`).join('');
+  const today = todayIdx >= 0 ? `<line x1="${x(todayIdx)}" x2="${x(todayIdx)}" y1="${T}" y2="${H - B}" stroke="var(--ng)" stroke-dasharray="3 3" opacity=".6"/>` : '';
+  const pdots = plan.map((v, i) => `<circle cx="${x(i)}" cy="${y(v)}" r="3" fill="var(--card)" stroke="var(--sub)" stroke-width="1.5"/>`).join('');
+  const adots = actual.map((v, i) => (v === null ? '' : `<circle cx="${x(i)}" cy="${y(v)}" r="4.5" fill="var(--acc)"/><text x="${x(i)}" y="${y(v) - 8}" text-anchor="middle" font-size="10" font-weight="800" fill="var(--acc)">${v}</text>`)).join('');
+  return `<svg viewBox="0 0 ${W} ${H}" class="growth">${grid}${today}
+    <polyline points="${path(plan)}" fill="none" stroke="var(--sub)" stroke-width="2" stroke-dasharray="5 4"/>${pdots}
+    <polyline points="${path(actual)}" fill="none" stroke="var(--acc)" stroke-width="3" stroke-linejoin="round"/>${adots}${xl}</svg>
+    <div class="glegend"><span><i class="gp"></i>目標</span><span><i class="ga"></i>実際</span><span class="muted">単位：${unit}</span></div>`;
+}
+function growthHTML(c, t, d, days, dl) {
+  const base = ensurePlanBase(c, t, d, days, dl);
+  const ls = d.lessons || [], keys = d.questions.map((q) => q.key);
+  const now = Date.now(), today = dateKey(new Date());
+  const todayIdx = base.days.indexOf(today);
+  const labels = base.days.map((k) => { const [, m, dd] = k.split('-'); return `${+m}/${+dd}`; });
+  const actualL = [], actualQ = [];
+  base.days.forEach((k) => {
+    if (k > today) { actualL.push(null); actualQ.push(null); return; }
+    const end = k === today ? now : dayStart(k) + DAY_MS - 1;
+    actualL.push(ls.filter((L) => { const at = store.lessonDoneAt(lkey(c, t, L)); return at && at <= end; }).length);
+    actualQ.push(store.rememberedAt(keys, end));
+  });
+  const i = todayIdx >= 0 ? todayIdx : base.days.length - 1;
+  const diff = (a, p, u) => { const v = a[i] - p[i]; return v > 0 ? `<b class="gok">目標より ${v}${u} 進んでいます</b>` : v < 0 ? `<b class="gng">目標まで あと ${-v}${u}</b>` : '<b class="gok">目標どおり</b>'; };
+  return `<div class="gbox"><div class="gt">授業の進み　${diff(actualL, base.lessonsT, '本')}</div>
+      ${lineChart({ labels, plan: base.lessonsT, actual: actualL, max: base.totalL, todayIdx, unit: '本' })}</div>
+    <div class="gbox"><div class="gt">覚えている問題　${diff(actualQ, base.qT, '問')}</div>
+      ${lineChart({ labels, plan: base.qT, actual: actualQ, max: base.totalQ, todayIdx, unit: '問' })}
+      <div class="muted small">覚えている＝いま思い出せる確率が 90% 以上の問題。目標はテストの日に全${base.totalQ}問。</div></div>`;
+}
+
+// ---------- テストまでの計画（目安） ----------
+// 今日からテストの日まで1日1行。まだ見ていない授業を、今日からテストの前日までの日に分けて割りふる。
+// テストの前日は「まとめシートの見直し」、当日は「忘れかけの問題の見直し」。
+// 今日見終わった授業は今日の分として ✓ をつけ、それ以外は毎日のこりの量で割りふり直す。
+function scheduleHTML(c, t, d, ti) {
+  const dl = daysLeft(testDate(c, t));
+  const ls = d.lessons || [];
+  if (dl === null || dl < 0 || !ls.length) return '';
+  const today = dateKey(new Date());
+  const st = (L) => store.lesson(lkey(c, t, L)) || {};
+  const doneDay = (L) => { const at = store.lessonDoneAt(lkey(c, t, L)); return at ? dateKey(new Date(at)) : null; };
+  // 今日より前に見終わった授業は割りふらない
+  const all = ls.map((L, i) => ({ L, i }));
+  const rest = [...all.filter(({ L }) => doneDay(L) === today), ...all.filter(({ L }) => !doneDay(L))]; // 今日見終わった分を今日の先頭に
+  const days = [];
+  for (let k = 0; k <= dl; k++) { const dt = new Date(); dt.setHours(0, 0, 0, 0); dt.setDate(dt.getDate() + k); days.push({ k, key: dateKey(dt), dt, lessons: [], notes: [] }); }
+  const lessonDays = Math.max(1, dl); // テストの前日までの日に分ける（前日はまとめシートの見直しもする）
+  const per = Math.ceil(rest.length / lessonDays);
+  rest.forEach((x, n) => days[Math.min(Math.floor(n / Math.max(1, per)), lessonDays - 1)].lessons.push(x));
+  if (dl >= 1) days[dl - 1].notes.push(d.sheet ? 'まとめシートを印刷して見直す' : 'まちがえた問題を見直す');
+  days[dl].notes.push('テスト当日：忘れかけの問題だけ見直し');
+  const totals = store.dayTotals();
+  const p = plan(c, t, d);
+  const W = ['日', '月', '火', '水', '木', '金', '土'];
+  const doneN = ls.filter((L) => st(L).done).length;
+  const rows = days.map((r) => {
+    const isToday = r.k === 0;
+    const lessons = r.lessons.map(({ L, i }) => {
+      const ok = !!st(L).done;
+      return `<button class="sl-chip ${ok ? 'ok' : ''}" data-sl="${ti}:${i}">${ok ? icon('check') : ''}${esc(L.lecture || '')}<span>${esc(L.title)}</span></button>`;
+    }).join('');
+    const q = isToday ? (p && p.target ? `<span class="sq ${p.done >= p.target ? 'ok' : ''}">問題 ${Math.min(p.done, p.target)}/${p.target}</span>` : '') : r.k > 0 && r.k < dl ? '<span class="sq">今日の勉強の問題</span>' : '';
+    return `<div class="srow ${isToday ? 'today' : ''} ${r.k === dl ? 'exam-day' : ''}">
+      <div class="sd"><b class="num">${r.dt.getMonth() + 1}/${r.dt.getDate()}</b><small>${isToday ? '今日' : r.k === dl ? 'テスト' : W[r.dt.getDay()]}</small></div>
+      <div class="sc">${lessons}${r.notes.map((x) => `<div class="snote">${esc(x)}</div>`).join('')}${q}${!lessons && !r.notes.length && !q ? '<div class="snote">のこりの問題をくり返す</div>' : ''}</div></div>`;
+  }).join('');
+  return `<h2>テストまでの計画（目安）</h2>
+    <div class="card sched"><div class="sh"><b>${esc(c.name)}・${esc(t.name)}</b><span class="muted small">授業 ${doneN}/${ls.length}本 見終わった</span></div>
+      <div class="meter ok" style="margin:6px 0 10px"><i style="width:${(doneN / ls.length) * 100}%"></i></div>
+      ${growthHTML(c, t, d, days, dl)}
+      ${rows}
+      <div class="muted small" style="margin-top:8px">授業を押すとすぐ始まります。遅れても大丈夫、毎日のこりの量で割りふり直します。</div></div>`;
 }
 
 // ---------- ふりかえりレポート（今までの全部） ----------

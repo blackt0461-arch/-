@@ -404,3 +404,31 @@ textarea.input { min-height: 160px; resize: vertical; }
 .gpop .gd p { margin: 8px 0; font-size: 16px; line-height: 1.75; }
 .gpop .tex { margin-top: 8px; padding: 10px; border-radius: 12px; background: var(--card2); overflow-x: auto; }
 
+
+/* テストまでの計画 */
+.sched .sh { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.srow { display: grid; grid-template-columns: 3.4em 1fr; gap: 10px; padding: 10px 0; border-top: 1px dashed var(--line); }
+.srow.today { background: var(--soft); margin: 0 -16px; padding: 10px 16px; border-radius: 12px; border-top-color: transparent; }
+.srow .sd { text-align: center; line-height: 1.2; }
+.srow .sd b { font-size: 17px; display: block; }
+.srow .sd small { font-size: 11px; color: var(--sub); font-weight: 700; }
+.srow.today .sd small, .srow.exam-day .sd small { color: var(--ng); }
+.srow .sc { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; min-width: 0; }
+.sl-chip { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; padding: 5px 10px; border-radius: 10px; background: var(--card); border: 1px solid var(--line); font-size: 13px; font-weight: 700; color: var(--acc); }
+.sl-chip span { color: var(--fg); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 11em; }
+.sl-chip svg { width: 14px; height: 14px; }
+.sl-chip.ok { background: var(--ok-bg); border-color: transparent; color: var(--ok); }
+.sl-chip.ok span { text-decoration: line-through; color: var(--sub); }
+.snote { font-size: 13px; color: var(--sub); width: 100%; }
+.sq { font-size: 12px; font-weight: 700; color: var(--sub); background: var(--card2); border-radius: 99px; padding: 2px 10px; }
+.sq.ok { color: var(--ok); background: var(--ok-bg); }
+
+/* 成長グラフ */
+.gbox { margin: 6px 0 14px; padding: 12px; border-radius: 14px; background: var(--card2); }
+.gbox .gt { font-size: 13px; font-weight: 700; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 4px; }
+.gok { color: var(--ok); } .gng { color: var(--ng); }
+.growth { width: 100%; height: auto; display: block; margin-top: 4px; }
+.glegend { display: flex; gap: 14px; font-size: 12px; color: var(--sub); align-items: center; }
+.glegend i { display: inline-block; width: 18px; height: 0; margin-right: 4px; vertical-align: middle; }
+.glegend .gp { border-top: 2px dashed var(--sub); }
+.glegend .ga { border-top: 3px solid var(--acc); }
