@@ -2988,7 +2988,7 @@ async function showNews() {
   el.querySelector('.back').onclick = showMenu;
   el.querySelector('.news-fb').onclick = () => showFeedback(); // 要望・バグ報告はお知らせの中から（1.15）
   let list = [];
-  try { list = await rpc('sr_news_list', { p_token: Auth.currentUser()?.token }); }
+  try { list = (await rpc('sr_news_list', { p_token: Auth.currentUser()?.token })) || []; } // お知らせが0件だと空（null）が返る
   catch (e) { el.querySelector('.nlist').innerHTML = `<p class="empty">${esc(e.message)}</p>`; return; }
   const seen = +(localStorage.getItem(NEWS_SEEN) || 0);
   const day = (t) => new Date(t).toLocaleDateString('ja-JP', { year: 'numeric', month: 'numeric', day: 'numeric' });
