@@ -578,6 +578,7 @@ function slideLevel(star) {
 }
 // 手数で決まるポイントの割合：最短なら100%、最短の2倍で50%、それより多くても50%
 export const slideRate = (moves, min) => moves <= min ? 1 : Math.max(0.5, 1 - 0.5 * (moves - min) / min);
+const ZOOM_IC = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m20 20-4.8-4.8M10.5 7.5v6M7.5 10.5h6"/></svg>';
 const UNDO_IC = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></svg>';
 const RESET_IC = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>';
 
@@ -641,12 +642,12 @@ export function mountPuzzle(id, lv, host, cb = {}) {
     // ★1・★2 だけ、はじめからいくつかぬってある
     const filled = []; G.forEach((r, y) => r.forEach((v, x) => { if (v) filled.push([y, x]); }));
     shuffle(filled).slice(0, Math.round(filled.length * (ABURI_REVEAL[lv - 1] || 0))).forEach(([y, x]) => { mark[y][x] = 1; });
-    const wrap = h(`<div class="pz-aburi n${Wn}"><div class="pz-nono"></div><div class="pz-tools"><button class="pz-tool on" data-m="1">ぬる</button><button class="pz-tool" data-m="2">×</button></div><p class="pz-tip">指でなぞると、まとめてぬれます</p></div>`); host.appendChild(wrap);
-    const board = wrap.querySelector('.pz-nono');
+    const wrap = h(`<div class="pz-aburi n${Wn}"><div class="pz-nscroll"><div class="pz-nono"></div></div><div class="pz-tools"><button class="pz-tool on" data-m="1">ぬる</button><button class="pz-tool" data-m="2">×</button><button class="pz-zoom" hidden aria-pressed="false">${ZOOM_IC}<span>拡大</span></button></div><p class="pz-tip">指でなぞると、まとめてぬれます</p></div>`); host.appendChild(wrap);
+    const board = wrap.querySelector('.pz-nono'), scroller = wrap.querySelector('.pz-nscroll'), zoomB = wrap.querySelector('.pz-zoom'), tip = wrap.querySelector('.pz-tip');
     wrap.querySelectorAll('.pz-tool').forEach(b => b.onclick = () => { mode = +b.dataset.m; wrap.querySelectorAll('.pz-tool').forEach(x => x.classList.toggle('on', x === b)); });
     const rc = G.map(cluesOf), cc = G[0].map((_, x) => cluesOf(G.map(r => r[x])));
     const cells = [], rowClue = [], colClue = [];
-    board.style.gridTemplateColumns = `auto repeat(${Wn}, 1fr)`;
+    board.style.gridTemplateColumns = `auto repeat(${Wn}, var(--cs))`;
     board.appendChild(document.createElement('div'));
     cc.forEach((c) => { const d = document.createElement('div'); d.className = 'pz-clue c'; d.innerHTML = c.map(v => `<span>${v}</span>`).join(''); board.appendChild(d); colClue.push(d); });
     for (let y = 0; y < Hn; y++) {
@@ -654,8 +655,6 @@ export function mountPuzzle(id, lv, host, cb = {}) {
       cells.push([]);
       for (let x = 0; x < Wn; x++) {
         const b = document.createElement('button'); b.className = 'pz-cell'; b.dataset.y = y; b.dataset.x = x;
-        const sh = [(x + 1) % 5 === 0 && x < Wn - 1 && 'inset -2px 0 0 #2b2a33', (y + 1) % 5 === 0 && y < Hn - 1 && 'inset 0 -2px 0 #2b2a33'].filter(Boolean);
-        if (sh.length) b.style.boxShadow = sh.join(',');
         board.appendChild(b); cells[y].push(b);
       }
     }
@@ -700,15 +699,57 @@ export function mountPuzzle(id, lv, host, cb = {}) {
     // キーボード・ためし用（指やマウスは pointerdown で受けるので、detail が 0 のクリックだけ）
     board.addEventListener('click', (e) => { if (e.detail !== 0) return; const b = e.target.closest('.pz-cell'); if (b) act(+b.dataset.y, +b.dataset.x); });
     paintAll();
-    // 左の数字の列のぶん、マスが右によるので、右にも同じだけすきまを足して、マスを左右のまん中にする
-    // （15×15 など、すきまを足すとマスが小さくなりすぎる時は、足せるだけ）
-    const center = () => {
-      if (!board.isConnected) return removeEventListener('resize', center);
-      board.style.paddingRight = '0px';
-      const w = board.firstChild.getBoundingClientRect().width, bw = board.getBoundingClientRect().width;
-      board.style.paddingRight = Math.max(0, Math.min(w, bw - w - Wn * 19)) + 'px';
+    // 5マスごとの太い線：マスの「中」ではなく、マスとマスのすき間（さかい目）にぴったり重ねる（1.16.x）
+    const seps = [];
+    for (let x = 5; x < Wn; x += 5) seps.push(['v', x]);
+    for (let y = 5; y < Hn; y += 5) seps.push(['h', y]);
+    const sepEls = seps.map(([k]) => { const e = document.createElement('i'); e.className = 'pz-sep ' + k; board.appendChild(e); return e; });
+    const frame = document.createElement('i'); frame.className = 'pz-frame'; board.appendChild(frame);
+    const placeSeps = () => {
+      const a = cells[0][0], z = cells[Hn - 1][Wn - 1], top = a.offsetTop, left = a.offsetLeft, bottom = z.offsetTop + z.offsetHeight, right = z.offsetLeft + z.offsetWidth;
+      frame.style.cssText = `left:${left - 2}px;top:${top - 2}px;width:${right - left + 4}px;height:${bottom - top + 4}px`;
+      seps.forEach(([k, i], j) => {
+        if (k === 'v') { const p = cells[0][i - 1], q = cells[0][i], mid = (p.offsetLeft + p.offsetWidth + q.offsetLeft) / 2; sepEls[j].style.cssText = `left:${mid - 1.5}px;top:${top}px;width:3px;height:${bottom - top}px`; }
+        else { const p = cells[i - 1][0], q = cells[i][0], mid = (p.offsetTop + p.offsetHeight + q.offsetTop) / 2; sepEls[j].style.cssText = `left:${left}px;top:${mid - 1.5}px;width:${right - left}px;height:3px`; }
+      });
     };
-    requestAnimationFrame(center); addEventListener('resize', center);
+    // 大きさ：画面の幅いっぱいに。マスが小さくなる大きい盤（スマホの ★3〜★5）は「拡大」して、左右に動かして使う
+    // （拡大中は左の数字が左にくっついたまま。数字の所をなぞると盤が左右に動く）
+    let zoom = null, fitCs = 0, zoomCs = 0;
+    const layout = () => {
+      if (!board.isConnected) return removeEventListener('resize', layout);
+      board.style.paddingRight = '4px';
+      const W = scroller.clientWidth, gap = 2;
+      const r = scroller.getBoundingClientRect(), below = wrap.querySelector('.pz-tools').offsetHeight + tip.offsetHeight + 40;
+      const H = Math.max(240, (window.innerHeight || 800) - r.top - below);
+      // 左・上の数字の大きさはマスの大きさで変わるので、2回はかって決める
+      let cs = 24;
+      for (let k = 0; k < 2; k++) {
+        board.style.setProperty('--cs', cs + 'px'); board.style.setProperty('--cf', Math.max(9, Math.min(14, Math.round(cs * 0.42))) + 'px');
+        const cw = rowClue.reduce((m, d) => Math.max(m, d.scrollWidth), 0) + 1, ch = colClue.reduce((m, d) => Math.max(m, d.scrollHeight), 0) + 1;
+        // 幅：左右のすきま 4px ずつ＋数字の列＋（マス＋すき間）× 列の数
+        fitCs = Math.floor(Math.min((W - cw - 8) / Wn - gap, (H - ch - 8) / Hn - gap, 44));
+        zoomCs = Math.floor(Math.min(38, (H - ch - 8) / Hn - gap));
+        const canZoom = zoomCs >= fitCs + 6 && fitCs < 29; // マスが十分大きい時（★1・★2）は「拡大」を出さない
+        if (zoom === null && k === 1) zoom = canZoom && fitCs < 28; // はじめは、マスが小さい時だけ拡大
+        if (!canZoom) zoom = false;
+        zoomB.hidden = !canZoom;
+        // まん中にそろえても（右にも数字の列と同じすきま）マスが 26px 以上あるなら、まん中を優先
+        const midCs = Math.floor(Math.min((W - 2 * cw - 8) / Wn - gap, fitCs));
+        cs = zoom ? zoomCs : midCs >= 26 ? midCs : fitCs;
+        board.dataset.cw = cw;
+      }
+      board.style.setProperty('--cs', cs + 'px'); board.style.setProperty('--cf', Math.max(9, Math.min(14, Math.round(cs * 0.42))) + 'px');
+      zoomB.setAttribute('aria-pressed', !!zoom); zoomB.querySelector('span').textContent = zoom ? '全体を見る' : '拡大';
+      board.classList.toggle('zoom', !!zoom);
+      // 収まる時は、左の数字の幅ぶん右にもすきまを足して、マスを左右のまん中に
+      const cw = +board.dataset.cw, need = cw + 8 + Wn * (cs + gap);
+      board.style.paddingRight = 4 + Math.max(0, Math.min(cw, W - need)) + 'px';
+      tip.textContent = zoom ? '数字の所を左右になぞると、盤が動きます' : '指でなぞると、まとめてぬれます';
+      placeSeps();
+    };
+    zoomB.onclick = () => { zoom = !zoom; layout(); scroller.scrollLeft = 0; };
+    requestAnimationFrame(layout); addEventListener('resize', layout);
     host._solve = () => { wrap.querySelector('.pz-tool[data-m="1"]').click(); for (let y = 0; y < Hn; y++) for (let x = 0; x < Wn; x++) if (G[y][x] && !over) cells[y][x].click(); };
     host._pic = pic.n; host._G = G;
   }

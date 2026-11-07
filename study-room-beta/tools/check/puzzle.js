@@ -142,10 +142,27 @@ const serve = () => new Promise(res => { const srv = http.createServer((req, rsp
   await page.click('.pz-star[data-p=aburi][data-s="5"]'); await page.waitForSelector('.pz-nono .pz-cell'); await page.waitForTimeout(300);
   { const r = await page.evaluate(() => ({ n: document.querySelectorAll('.pz-nono .pz-cell').length, pre: [...document.querySelectorAll('.pz-nono .pz-cell')].filter(b => b.style.background && b.style.background !== 'rgb(255, 255, 255)').length, w: document.querySelector('.pz-nono .pz-cell').getBoundingClientRect().width, right: document.querySelector('.pz-nono').getBoundingClientRect().right }));
     check(r.n === 225 && r.pre === 0, `★5 は 15×15・はじめからぬってあるマスなし（${r.n}マス・${r.pre}）`);
-    check(r.w >= 18 && r.right <= 390, `15×15 でも画面におさまる（1マス ${r.w.toFixed(1)}px）`); }
+    check(r.w >= 34, `15×15 は、はじめから拡大して押しやすい（1マス ${r.w.toFixed(1)}px）`); }
+  // 5マスごとの太い線が、マスとマスのすき間のまん中にある（マスの中に入りこまない）
+  const sepOk = () => page.evaluate(() => { const c = [...document.querySelectorAll('.pz-nono .pz-cell')], N = Math.sqrt(c.length), out = [];
+    document.querySelectorAll('.pz-sep').forEach(s => { const r = s.getBoundingClientRect(), v = s.classList.contains('v');
+      const i = v ? Math.round(out.filter(o => o.v).length + 1) * 5 : Math.round(out.filter(o => !o.v).length + 1) * 5;
+      const p = (v ? c[i - 1] : c[(i - 1) * N]).getBoundingClientRect(), q = (v ? c[i] : c[i * N]).getBoundingClientRect();
+      const mid = v ? (p.right + q.left) / 2 : (p.bottom + q.top) / 2, me = v ? (r.left + r.right) / 2 : (r.top + r.bottom) / 2;
+      out.push({ v, d: Math.abs(mid - me), inP: v ? r.left < p.right - 1 : r.top < p.bottom - 1 }); });
+    return { n: out.length, bad: out.filter(o => o.d > 0.6 || o.inP).length }; });
+  { const r = await sepOk(); check(r.n === 4 && r.bad === 0, `5マスごとの太い線が、マスのさかい目にぴったり重なる（${r.n}本・ずれ ${r.bad}本）`); }
+  { const r = await page.evaluate(async () => { const sc = document.querySelector('.pz-nscroll'), before = sc.scrollLeft; sc.scrollLeft = 200; await new Promise(r => setTimeout(r, 100)); const clue = document.querySelector('.pz-clue.r').getBoundingClientRect(), sr = sc.getBoundingClientRect(); const moved = sc.scrollLeft; sc.scrollLeft = before; return { moved, stuck: Math.abs(clue.left - sr.left) < 2, over: sc.scrollWidth > sc.clientWidth }; });
+    check(r.over && r.moved > 0 && r.stuck, '拡大中は盤を左右に動かせて、左の数字はついてくる'); }
+  await page.screenshot({ path: path.join(OUT, 'puzzle-4a-aburi5-zoom.png') });
+  await page.click('.pz-zoom'); await page.waitForTimeout(250);
+  { const r = await page.evaluate(() => { const sc = document.querySelector('.pz-nscroll'); return { fit: sc.scrollWidth <= sc.clientWidth + 1, w: document.querySelector('.pz-nono .pz-cell').getBoundingClientRect().width, t: document.querySelector('.pz-zoom').textContent }; });
+    check(r.fit && /拡大/.test(r.t), `「全体を見る」で盤全体が画面におさまる（1マス ${r.w.toFixed(1)}px）`); }
+  { const r = await sepOk(); check(r.bad === 0, '全体を見る時も、太い線はさかい目にぴったり'); }
   await page.screenshot({ path: path.join(OUT, 'puzzle-4a-aburi5.png') });
+  await page.click('.pz-zoom'); await page.waitForTimeout(250); // 拡大にもどして、なぞる確かめ
   // 指でなぞると、まとめてぬれる：横に3マス以上つづく「ぬるマス」をなぞる
-  { const seg = await page.evaluate(() => { const G = document.querySelector('.pz-host')._G; for (let y = 0; y < G.length; y++) for (let x = 0; x + 2 < G[y].length; x++) if (G[y][x] && G[y][x + 1] && G[y][x + 2]) { const c = (xx) => { const r = document.querySelectorAll('.pz-nono .pz-cell')[y * G.length + xx].getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; }; let e = x + 2; while (e + 1 < G[y].length && G[y][e + 1]) e++; return { y, x, e, a: c(x), b: c(e) }; } return null; });
+  { const seg = await page.evaluate(() => { const G = document.querySelector('.pz-host')._G, cl = document.querySelector('.pz-clue.r').getBoundingClientRect().right; const cell = (y, xx) => document.querySelectorAll('.pz-nono .pz-cell')[y * G.length + xx].getBoundingClientRect(); const vis = (y, xx) => { const r = cell(y, xx); return r.left > cl && r.right < innerWidth; }; for (let y = 0; y < G.length; y++) for (let x = 0; x + 2 < G[y].length; x++) if (G[y][x] && G[y][x + 1] && G[y][x + 2] && vis(y, x) && vis(y, x + 2)) { const c = (xx) => { const r = cell(y, xx); return [r.left + r.width / 2, r.top + r.height / 2]; }; let e = x + 2; while (e + 1 < G[y].length && G[y][e + 1] && vis(y, e + 1)) e++; return { y, x, e, a: c(x), b: c(e) }; } return null; });
     await page.mouse.move(seg.a[0], seg.a[1]); await page.mouse.down();
     for (let k = 1; k <= 8; k++) await page.mouse.move(seg.a[0] + (seg.b[0] - seg.a[0]) * k / 8, seg.a[1], { steps: 2 });
     await page.mouse.up(); await page.waitForTimeout(200);

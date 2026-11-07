@@ -262,3 +262,19 @@
 .puzzle-screen { display: flex; flex-direction: column; }
 .puzzle-screen > .bar, .puzzle-screen > .pz-moves, .puzzle-screen > .ed-score, .puzzle-screen > .ed-next { flex: none; }
 .puzzle-screen > .pz-host { flex: 1 0 auto; justify-content: center; }
+
+/* ---------- 家具あぶりだし 1.16.x：太い線はマスのさかい目に・画面の幅いっぱい・拡大して左右に動かす ---------- */
+.pz-nscroll { width: calc(100% + 20px); margin: 0 -10px; overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch; display: flex; scrollbar-width: thin; }
+.pz-nscroll .pz-nono { position: relative; margin: 0 auto; width: max-content; gap: 2px; padding: 4px; touch-action: auto; }
+.pz-nscroll .pz-nono .pz-cell { width: var(--cs); border: 1px solid #cfc8b8; border-radius: 2px; box-sizing: border-box; touch-action: none; box-shadow: none; }
+.pz-aburi .pz-nono .pz-clue { font-size: var(--cf, 11px); touch-action: pan-x; }
+.pz-aburi .pz-nono .pz-clue.r { padding-right: 4px; letter-spacing: 0; }
+.pz-aburi .pz-nono .pz-x { font-size: calc(var(--cs) * .62); }
+.pz-sep { position: absolute; z-index: 2; background: #2b2a33; border-radius: 1px; pointer-events: none; }
+.pz-frame { position: absolute; z-index: 2; border: 2px solid #2b2a33; border-radius: 4px; pointer-events: none; box-sizing: border-box; }
+.pz-nono.reveal .pz-sep, .pz-nono.reveal .pz-frame { opacity: 0; transition: opacity .5s; }
+/* 拡大中：左の数字は左にくっついたまま（盤だけが左右に動く） */
+.pz-nono.zoom .pz-clue.r, .pz-nono.zoom > div:first-child { position: sticky; left: 0; z-index: 3; background: var(--pz-bg, #f6f1e7); box-shadow: 6px 0 6px -4px rgba(43,42,51,.25); }
+.pz-zoom { display: inline-flex; align-items: center; gap: 5px; padding: 10px 12px; border-radius: 10px; border: 2px solid var(--pz-line); background: #fff; color: var(--pz-ink); font-size: 14px; font-weight: 700; }
+.pz-zoom[hidden] { display: none; }
+.pz-zoom[aria-pressed="true"] { background: #fff7c2; }
