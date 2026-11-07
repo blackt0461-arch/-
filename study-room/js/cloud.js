@@ -1,8 +1,8 @@
 // Supabase（ネット上の保存先）を呼ぶ。
 // ここに書くのは公開してよい値だけ（Project URL と Publishable key）。秘密のキーは使わない。
 // 表には直接さわれず、supabase/setup.sql の関数（sr_signup / sr_login / sr_load / sr_save / sr_logout）だけを呼ぶ。
-export const SUPABASE_URL = 'https://ytvocegvtlgrnxupmbnf.supabase.co';
-export const SUPABASE_KEY = 'sb_publishable_dRcpHiDz_wRt_SZz4P98TA_oNfDqqy7';
+export const SUPABASE_URL = 'https://zmteazudhtnzvfvmndqn.supabase.co';
+export const SUPABASE_KEY = 'sb_publishable_0kgkan6JFFV-TMSLLTgiOQ_uwgeEfQf';
 
 const MESSAGES = {
   name_taken: 'そのユーザー名はもう使われています',

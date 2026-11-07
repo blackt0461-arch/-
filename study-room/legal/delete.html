@@ -15,7 +15,7 @@
 <p>パスワードを忘れた時は、アプリのログイン画面の「パスワードを忘れた」から、復元コードで新しいパスワードにしてください。復元コードもない時は、アプリの「要望・バグ報告」（ほかのアカウントから）で、消したいユーザー名を知らせてください。</p>
 <p><a href="privacy.html">プライバシーポリシー</a> ・ <a href="terms.html">利用規約</a></p>
 <script type="module">
-const URL0 = 'https://ytvocegvtlgrnxupmbnf.supabase.co/rest/v1/rpc/', KEY = 'sb_publishable_dRcpHiDz_wRt_SZz4P98TA_oNfDqqy7';
+const URL0 = 'https://zmteazudhtnzvfvmndqn.supabase.co/rest/v1/rpc/', KEY = 'sb_publishable_0kgkan6JFFV-TMSLLTgiOQ_uwgeEfQf';
 const rpc = async (n, b) => { const r = await fetch(URL0 + n, { method: 'POST', headers: { apikey: KEY, 'Content-Type': 'application/json' }, body: JSON.stringify(b) }); const j = await r.json().catch(() => null); if (!r.ok) throw new Error(j?.message || 'server'); return j; };
 const T = { bad_login: 'ユーザー名かパスワードがちがいます', cannot_delete_admin: '管理者のアカウントは、このページでは消せません', server: 'うまくいきませんでした。少ししてからもう一度ためしてください' };
 const f = document.getElementById('f'), m = document.getElementById('m');
