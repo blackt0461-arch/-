@@ -23,6 +23,7 @@
 - ユーザーが「許可」「OK」などと言ったら、`node study-room-beta/tools/release/release.js` で本番に写し、プルリクエスト → main にマージ → 本番に出る。
 - テスト版：https://blackt0461-arch.github.io/-/study-room-beta/ ／ 本番：https://blackt0461-arch.github.io/-/study-room/
 - くわしくは study-room-beta/SPEC.md の「23. 新しい版の出し方」。
+- **不具合（バグ）の直しは、テスト版を通さず本番に直接出してよい**（本人の決定 2026-11-08）。`study-room/` を直接直して版を上げ、同じ直しを `study-room-beta/` にも入れておく。新しい機能や見た目の変更は、今までどおりテスト版から。
 - 本番に出すときは、前に本番に出した版からの変更を全部まとめてお知らせに書く（テスト版を何回か出していても、本番の人には1回分しか見えないため）。
 
 ## ROOMIN の更新のお知らせ（version.json の notes）の書き方
