@@ -1,0 +1,6 @@
+# Cloudflare Pages 用の転送（独自ドメインで短い URL にする）
+/roomin              /study-room/          301
+/roomin/*            /study-room/:splat    301
+/roomin-beta         /study-room-beta/     301
+/roomin-beta/*       /study-room-beta/:splat 301
+/class-reminder      https://class-reminder-omega.vercel.app/  302
