@@ -39,3 +39,17 @@
 - 並べる順番は、いちばん大きな変更から。新しいこと → 良くしたこと → 直したこと。
 - 1つ1文、25字くらいまで。数字や細かい手順は入れない。3つまで。書ききれない小さな変更は「そのほか、細かな改善を行いました」の1行にまとめる（4つ目として足してよい）。
 - 本番に出す前に、ユーザーにお知らせの文を見せる。
+
+## GitHub が止まっている間のこと（2026-11-07〜）
+
+GitHub のアカウント（blackt0461-arch）が止められている。clone・push・プルリクエスト・GitHub Pages は使えない（403）。本人が GitHub に申し立て中。
+
+- **公開の場所**：Cloudflare Pages のプロジェクト「kotetsuworks」＋ 独自ドメイン **kotetsuworks.com**（Cloudflare で購入）。
+  - 入口ページ `index.html`（KOTETSU WORKS）、ROOMIN 本番 `/roomin`（= `/study-room/`）、テスト版 `/roomin-beta`（= `/study-room-beta/`）、ほかのアプリはフォルダ名のまま。`_redirects` で短い URL にしている。
+- **更新のしかた**：公開するフォルダ（index.html・_redirects・manifest.webmanifest・assets・各アプリ。cat-model・docs・youtube_highlights・roomin-questions・tools・*.md はのぞく）を zip にして本人に送り、本人が Cloudflare Pages の「Create deployment」でアップロードする。
+- ROOMIN の「テスト版 → 許可 → 本番」の順番は変わらない。本番に写すのは `node study-room-beta/tools/release/release.js`。
+- 作り手の名前は **KOTETSU WORKS**（こてつワークス）。アイコンは `assets/`。
+- みんなの記録は Supabase にあり、GitHub とは関係なく無事。
+- 予備の写しは、本人の Google ドライブ「ROOMIN バックアップ」フォルダに zip で置く。
+- 目覚まし管理（alarm）は、データを GitHub（alarm-data）に読み書きするので、いまは動かない。
+- GitHub が戻ったら：手元にたまっている変更を送り、Cloudflare Pages を GitHub につなぐ（つなぎかえで作り直しても、ドメインのおかげで URL は変わらない）。
