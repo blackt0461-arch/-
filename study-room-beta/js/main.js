@@ -1770,7 +1770,7 @@ function photoMode() {
 
 // =========================== 更新のお知らせ ===========================
 // このプログラムの版（version.json と同じにする。公開のたびに上げる）
-const APP_VERSION = '1.16.0';
+const APP_VERSION = '1.16.1';
 ERR.setVersion(APP_VERSION);
 // 新しい版が出たら、みんな同じタイミングでそろうように強制で再起動する。
 // 開いた時・画面に戻った時・1分ごとに version.json を見る
@@ -1814,9 +1814,41 @@ function forceRestart(info, waited = 0) {
     setTimeout(() => location.reload(), 400);
   }, 2600);
 }
+// 新しい版が出たら「アップデートしますか？」とたずねる（1.16.1〜 本人の決定）。
+// 「あとで」を押したら30分たつか、次にアプリを開いた時にまたたずねる。記録は保存されているので、あとでも安全
+const UP_SNOOZE = 'studyroom.upSnooze';
+function askUpdate(info, waited = 0) {
+  if (restarting || document.querySelector('.up-ask')) return;
+  try { const z = JSON.parse(sessionStorage.getItem(UP_SNOOZE) || 'null'); if (z && z.v === info.version && Date.now() < z.until) return; } catch (e) { /* なし */ }
+  // ガチャの演出・問題のとちゅう・ログボ・写真の時は、終わるまで待ってからたずねる
+  if (document.querySelector('.pfx, .quiz, .lb-screen, .photo-ui, .title-screen')) {
+    clearTimeout(askUpdate.t);
+    askUpdate.t = setTimeout(() => askUpdate(info, waited + 3000), 3000);
+    return;
+  }
+  const el = h(`
+    <div class="up-ask" role="dialog" aria-modal="true">
+      <div class="up-card">
+        <span class="up-ic">${icon('sparkle')}</span>
+        <h3>アップデートがあります</h3>
+        <p class="up-v">ver ${esc(APP_VERSION)} → <b>ver ${esc(info.version)}</b></p>
+        ${info.notes?.length ? `<ul class="up-list">${info.notes.map(t => `<li>${icon('check')}${esc(t)}</li>`).join('')}</ul>` : ''}
+        <p class="up-s">記録は保存されています。すぐに終わります</p>
+        <button class="btn primary big up-go">今すぐアップデート</button>
+        <button class="btn ghost up-later">あとで</button>
+      </div>
+    </div>`);
+  document.body.append(el);
+  requestAnimationFrame(() => el.classList.add('show'));
+  el.querySelector('.up-go').onclick = () => { el.remove(); forceRestart(info); };
+  el.querySelector('.up-later').onclick = () => {
+    try { sessionStorage.setItem(UP_SNOOZE, JSON.stringify({ v: info.version, until: Date.now() + 30 * 60000 })); } catch (e) { /* なし */ }
+    el.remove();
+  };
+}
 async function watchVersion() {
   const v = await latestVersion();
-  if (v?.version && v.version !== APP_VERSION) forceRestart(v);
+  if (v?.version && v.version !== APP_VERSION) askUpdate(v);
 }
 setInterval(watchVersion, 60000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) watchVersion(); });
@@ -1826,7 +1858,7 @@ async function checkUpdateNotes() {
   try {
     const v = await (await fetch('version.json', { cache: 'no-store' })).json();
     // 手元のプログラムが古いまま（スマホが前の版を覚えている）なら、1回だけ読みこみ直す
-    if (v.version !== APP_VERSION) return forceRestart(v);
+    if (v.version !== APP_VERSION) { try { sessionStorage.removeItem(UP_SNOOZE); } catch (e) { /* なし */ } return askUpdate(v); } // 開いた時は「あとで」をわすれて、もう一度たずねる
     const seen = localStorage.getItem('studyroom.version');
     localStorage.setItem('studyroom.version', v.version);
     if (!seen || seen === v.version || !v.notes?.length) return;

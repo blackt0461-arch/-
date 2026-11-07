@@ -69,7 +69,8 @@ const serve = () => new Promise(res => { const srv = http.createServer((req, rsp
   await page.waitForSelector('.nx-gtabs', { timeout: 8000 }).catch(() => {});
   check(await page.locator('.nx-gtabs button').count() >= 2, 'ジャンルは上のタブで切りかえ');
   check(/えらんで/.test(await page.locator('.cand-sheet .ok').textContent()), 'えらぶ前のボタンは「家具をえらんでください」');
-  await page.click('.cand >> nth=0'); await page.waitForTimeout(400);
+  // 置く物をえらぶ（備え付けの形 fx- は置かずに形が変わるだけなので、よける）
+  await page.evaluate(() => { const b = [...document.querySelectorAll('.cand')].find(e => !/^fx-/.test(e.dataset.id || '')) || document.querySelector('.cand'); b.click(); }); await page.waitForTimeout(400);
   check(/を(買う|もらう)/.test(await page.locator('.cand-sheet .ok').textContent()), `えらぶと「○○を買う」（${(await page.locator('.cand-sheet .ok').textContent()).trim()}）`);
   await page.click('.cand-sheet .ok'); await page.waitForTimeout(1500);
   // 1.15：買ったら、その場で置く場所を決める
@@ -91,9 +92,14 @@ const serve = () => new Promise(res => { const srv = http.createServer((req, rsp
   await page.click('.eb-view [data-v=walk]'); await page.waitForTimeout(300);
   const cam0 = await page.evaluate(() => window.__app.room3d.camera.position.toArray().map(v => v.toFixed(2)).join(','));
   // 床のあたり（画面の下のほう）をタップ
-  await page.mouse.click(195, 600); await page.waitForTimeout(150);
-  await page.mouse.click(195, 600); await page.waitForTimeout(1800);
-  const cam1 = await page.evaluate(() => window.__app.room3d.camera.position.toArray().map(v => v.toFixed(2)).join(','));
+  // 家具をタップすると歩かないので、何か所かためす
+  let cam1 = cam0;
+  for (const [x, y] of [[195, 600], [100, 650], [290, 650], [195, 700]]) {
+    await page.mouse.click(x, y); await page.waitForTimeout(150);
+    await page.mouse.click(x, y); await page.waitForTimeout(1800);
+    cam1 = await page.evaluate(() => window.__app.room3d.camera.position.toArray().map(v => v.toFixed(2)).join(','));
+    if (cam1 !== cam0) break;
+  }
   check(cam0 !== cam1, `「歩く」で床をタップすると歩く（${cam0} → ${cam1}）`);
   await page.screenshot({ path: path.join(OUT, 'nx-4c-walk.png') });
   await page.click('.editbar .done'); await page.waitForTimeout(500);
