@@ -27,6 +27,13 @@ export function downloadState() {
 export function setDownloadState(v) {
   try { localStorage.setItem(FLAG, v); } catch (e) { /* なし */ }
 }
+// まだ保存していないデータ（アップデートで増えた分など）。{ list, bytes }
+export async function missing() {
+  const cache = await caches.open(CACHE);
+  const have = new Set((await cache.keys()).map(r => r.url));
+  const list = downloadList().filter(x => !have.has(new URL(x.url, location.href).href));
+  return { list, bytes: list.reduce((a, b) => a + b.size, 0) };
+}
 export function canDownload() { return 'caches' in window; }
 
 // onProgress(done, total, bytesDone, bytesTotal)。stop() で中断
@@ -35,7 +42,8 @@ export function downloadAll(onProgress) {
   const run = (async () => {
     try { await navigator.storage?.persist?.(); } catch (e) { /* なし */ }
     const cache = await caches.open(CACHE);
-    const list = downloadList();
+    const have = new Set((await cache.keys()).map(r => r.url));
+    const list = downloadList().filter(x => !have.has(new URL(x.url, location.href).href));
     const total = list.length;
     const bytesTotal = list.reduce((a, b) => a + b.size, 0);
     let done = 0, bytes = 0, failed = 0, i = 0;
