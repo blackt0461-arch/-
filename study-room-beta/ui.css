@@ -1315,3 +1315,13 @@ body.calc-on .problem .num-tap { font: inherit; }
 .evms-tabs .gb-n { position: static; margin-left: 2px; }
 .screen .news-fb { margin: 14px 0 6px; width: 100%; justify-content: center; }
 .screen .betasw { width: 100%; justify-content: center; margin-bottom: 10px; }
+
+/* 文字の見えにくさの直し（品質チェック contrast.js より） */
+.cand.rare { background: linear-gradient(180deg, rgba(150,110,210,.22), var(--sk-card, var(--card)) 70%); }
+.cand.rare .chips i { color: var(--sk-muted, var(--muted)); background: var(--sk-icon-bg, rgba(255,255,255,.08)); }
+.gr-it.got i, .gr-next b, .gr-head .ic { color: var(--gold1, #e6c068); }
+[data-skin="b"] .mode-tag.study, [data-skin="c"] .mode-tag.study, [data-skin="e3"] .mode-tag.study { color: #2457a8; }
+[data-skin="b"] .mode-tag.puzzle, [data-skin="c"] .mode-tag.puzzle, [data-skin="e3"] .mode-tag.puzzle { color: #2a7246; }
+[data-skin="c"] { --sk-on-accent: #fff; }
+.rr-lv small { color: inherit; opacity: 1; font-weight: 700; }
+.rr-row:not(.got):not(.next) .rr-lv { color: var(--sk-text); opacity: 1; }
