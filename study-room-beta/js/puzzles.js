@@ -32,6 +32,9 @@ const ABURI_REVEAL = [0.5, 0.3, 0.15, 0, 0];                            // は�
 const shuffle = (a) => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 
 // ---------------- あかりの間取り：問題を作る ----------------
+// 人がふつうに使う推理（1つしか置けない・小さい部屋をつぶすマスを消す・部屋が列の中に収まる）だけで
+// 最後まで解けて、答えが1つの問題だけを出す。部屋は2マス以上（★4・★5 は3マス以上）。2026-11-08
+const D4 = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 function akariCount(N, reg, limit = 2) {
   let n = 0; const col = Array(N).fill(false), used = Array(N).fill(false), pos = [];
   (function row(r) { if (n >= limit) return; if (r === N) { n++; return; }
@@ -39,7 +42,110 @@ function akariCount(N, reg, limit = 2) {
       col[c] = used[reg[r][c]] = true; pos[r] = c; row(r + 1); col[c] = used[reg[r][c]] = false; } })(0);
   return n;
 }
-export function genAkari(N) {
+// 推理だけで解く。maxK：いくつの部屋（列）をまとめて考えるか。解けたら true
+export function akariLogic(N, reg, maxK, small = 3, score = false) {
+  const cand = Array.from({ length: N }, () => Array(N).fill(true));
+  const lampR = Array(N).fill(-1), doneC = Array(N).fill(false), doneG = Array(N).fill(false);
+  let placed = 0;
+  const kill = (r, c) => { if (cand[r][c]) { cand[r][c] = false; return true; } return false; };
+  const place = (r, c) => {
+    lampR[r] = c; doneC[c] = true; doneG[reg[r][c]] = true; placed++;
+    for (let i = 0; i < N; i++) { kill(r, i); kill(i, c); }
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) if (reg[y][x] === reg[r][c]) kill(y, x);
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const y = r + dy, x = c + dx; if (y >= 0 && x >= 0 && y < N && x < N) kill(y, x); }
+  };
+  // まだ照明がない「たて・横・部屋」ごとの候補
+  const units = () => {
+    const U = [];
+    for (let r = 0; r < N; r++) if (lampR[r] < 0) { const cs = []; for (let c = 0; c < N; c++) if (cand[r][c]) cs.push([r, c]); U.push(cs); }
+    for (let c = 0; c < N; c++) if (!doneC[c]) { const cs = []; for (let r = 0; r < N; r++) if (cand[r][c]) cs.push([r, c]); U.push(cs); }
+    const G = Array.from({ length: N }, () => []);
+    for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) if (cand[r][c] && !doneG[reg[r][c]]) G[reg[r][c]].push([r, c]);
+    for (let g = 0; g < N; g++) if (!doneG[g]) U.push(G[g]);
+    return { U, G };
+  };
+  const combos = (arr, k, f) => { const pick = []; (function go(s) { if (pick.length === k) { f(pick); return; } for (let i = s; i < arr.length; i++) { pick.push(arr[i]); go(i + 1); pick.pop(); } })(0); };
+  for (let guard = 0; guard < 500; guard++) {
+    if (placed === N) return true;
+    const { U, G } = units();
+    if (U.some(u => !u.length)) return score ? -1 : false;
+    // 1) 候補が1つだけ → そこに照明
+    const one = U.find(u => u.length === 1);
+    if (one) { place(one[0][0], one[0][1]); continue; }
+    let changed = false;
+    // 2) そこに置くと、どこかの「たて・横・部屋」の候補がなくなる → 置けない
+    for (let r = 0; r < N && !changed; r++) for (let c = 0; c < N && !changed; c++) {
+      if (!cand[r][c]) continue;
+      const hit = (y, x) => y === r || x === c || reg[y][x] === reg[r][c] || (Math.abs(y - r) <= 1 && Math.abs(x - c) <= 1);
+      if (U.some(u => u.length <= small && !u.some(([y, x]) => y === r && x === c) && u.every(([y, x]) => hit(y, x)))) { kill(r, c); changed = true; }
+    }
+    if (changed) continue;
+    // 3) k個の部屋が、k本のたて（横）の中だけにある → その列のほかのマスは置けない（逆も）
+    const openG = [...Array(N).keys()].filter(g => !doneG[g]);
+    const openR = [...Array(N).keys()].filter(r => lampR[r] < 0), openC = [...Array(N).keys()].filter(c => !doneC[c]);
+    for (let k = 1; k <= maxK && !changed; k++) {
+      for (const axis of [0, 1]) {
+        combos(openG, k, (gs) => { if (changed) return; const lines = new Set(); gs.forEach(g => G[g].forEach(p => lines.add(p[axis]))); if (lines.size !== k) return;
+          for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) if (cand[r][c] && lines.has(axis ? c : r) && !gs.includes(reg[r][c])) { kill(r, c); changed = true; } });
+        if (changed) break;
+        combos(axis ? openC : openR, k, (ls) => { if (changed) return; const gs = new Set(); for (const l of ls) for (let i = 0; i < N; i++) { const r = axis ? i : l, c = axis ? l : i; if (cand[r][c]) gs.add(reg[r][c]); } if (gs.size !== k) return;
+          for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) if (cand[r][c] && gs.has(reg[r][c]) && !ls.includes(axis ? c : r)) { kill(r, c); changed = true; } });
+        if (changed) break;
+      }
+    }
+    if (!changed) break;
+  }
+  if (placed === N) return true;
+  if (!score) return false;
+  let k = placed * N * 2; for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) if (!cand[r][c]) k++;
+  return k;
+}
+
+function genAkariTry(N, minSize, maxK, small) {
+  const t0 = Date.now();
+  for (let tries = 0; tries < 400 && Date.now() - t0 < 2500; tries++) {
+    const p = [];
+    const ok = (function place(r, used) { if (r === N) return true; for (const c of shuffle([...Array(N).keys()])) { if (used.has(c) || (r && Math.abs(p[r - 1] - c) < 2)) continue; p[r] = c; used.add(c); if (place(r + 1, used)) return true; used.delete(c); } return false; })(0, new Set());
+    if (!ok) continue;
+    const g = Array.from({ length: N }, () => Array(N).fill(-1)), size = Array(N).fill(1);
+    p.forEach((c, r) => { g[r][c] = r; });
+    const frontier = (k) => { const cs = []; for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) if (g[y][x] === k) for (const [dx, dy] of D4) { const nx = x + dx, ny = y + dy; if (nx >= 0 && ny >= 0 && nx < N && ny < N && g[ny][nx] < 0) cs.push([nx, ny]); } return cs; };
+    let left = N * N - N, stuck = false;
+    // まず小さい部屋から大きくして、どの部屋も minSize 以上に
+    for (let round = 0; round < minSize - 1 && !stuck; round++) for (const k of shuffle([...Array(N).keys()])) { const cs = frontier(k); if (!cs.length) { stuck = true; break; } const [x, y] = cs[Math.floor(Math.random() * cs.length)]; g[y][x] = k; size[k]++; left--; }
+    if (stuck) continue;
+    for (let guard = 0; left && guard < 20000; guard++) { const k = Math.floor(Math.random() * N), cs = frontier(k); if (!cs.length) continue; const [x, y] = cs[Math.floor(Math.random() * cs.length)]; g[y][x] = k; size[k]++; left--; }
+    if (left) continue;
+    const conn = (k) => { const cells = []; for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) if (g[y][x] === k) cells.push(y * N + x); const seen = new Set([cells[0]]), st = [cells[0]]; while (st.length) { const q = st.pop(), y = Math.floor(q / N), x = q % N; for (const [dx, dy] of D4) { const nx = x + dx, ny = y + dy, nq = ny * N + nx; if (nx >= 0 && ny >= 0 && nx < N && ny < N && g[ny][nx] === k && !seen.has(nq)) { seen.add(nq); st.push(nq); } } } return seen.size === cells.length; };
+    let cur = akariLogic(N, g, maxK, small, true); if (cur === true) return { reg: g, sol: p };
+    // さかい目のマスをとなりの部屋に付けかえて、推理だけで解ける形をさがす
+    for (let step = 0; step < 1500 && Date.now() - t0 < 2500; step++) {
+      const x = Math.floor(Math.random() * N), y = Math.floor(Math.random() * N);
+      if (p[y] === x) continue;
+      const [dx, dy] = D4[Math.floor(Math.random() * 4)], nx = x + dx, ny = y + dy;
+      if (nx < 0 || ny < 0 || nx >= N || ny >= N || g[ny][nx] === g[y][x]) continue;
+      const old = g[y][x]; if (size[old] <= minSize) continue;
+      g[y][x] = g[ny][nx];
+      if (!conn(old)) { g[y][x] = old; continue; }
+      const nw = akariLogic(N, g, maxK, small, true);
+      if (nw === true) return { reg: g, sol: p };
+      if (nw >= cur) { cur = nw; size[old]--; size[g[y][x]]++; } else g[y][x] = old;
+    }
+  }
+  return null;
+}
+
+// ★ごとの決まり：部屋の最小マス数・まとめて考える部屋の数。1マスの部屋は作らない
+const AKARI_MIN = [2, 2, 2, 3, 3], AKARI_K = [1, 1, 1, 2, 2];
+export function genAkari(N, star = N - 4) {
+  const i = Math.max(0, Math.min(4, star - 1));
+  // 推理だけで解けて、答えが1つの問題ができるまで（まれに作れない時は、決まりを少しゆるめる）
+  for (const [min, k] of [[AKARI_MIN[i], AKARI_K[i]], [2, 2], [2, 3]]) {
+    for (let t = 0; t < 3; t++) { const r = genAkariTry(N, min, k, 3); if (r && akariCount(N, r.reg, 2) === 1) return r; }
+  }
+  return genAkariOld(N);
+}
+function genAkariOld(N) {
   for (let tries = 0; tries < 40; tries++) {
     const p = [];
     const ok = (function place(r, used) { if (r === N) return true; for (const c of shuffle([...Array(N).keys()])) { if (used.has(c) || (r && Math.abs(p[r - 1] - c) < 2)) continue; p[r] = c; used.add(c); if (place(r + 1, used)) return true; used.delete(c); } return false; })(0, new Set());
@@ -151,7 +257,7 @@ export function mountPuzzle(id, lv, host, cb = {}) {
   const win = (extra = {}) => { over = true; cb.onWin?.({ mistakes: LIVES - life.n, ...extra }); };
 
   if (id === 'akari') {
-    const N = akariSize(lv); const { reg, sol } = genAkari(N);
+    const N = akariSize(lv); const { reg, sol } = genAkari(N, lv);
     const st = Array.from({ length: N }, () => Array(N).fill(0));
     const board = h(`<div class="pz-board pz-akari" style="grid-template-columns:repeat(${N},1fr)"></div>`); host.appendChild(board);
     const draw = () => {
