@@ -45,6 +45,8 @@ function serve() {
 const click = (sel) => (p) => p.evaluate((s) => { const e = document.querySelector(s); if (!e) throw new Error('見つからない: ' + s); e.click(); }, sel);
 const waitFor = (sel, t = 20000) => (p) => p.waitForSelector(sel, { state: 'attached', timeout: t });
 const sleep = (ms) => (p) => p.waitForTimeout(ms);
+// 教科のあとに出る「ジャンル → 単元」のえらび（1.8.0〜）。出たら、いちばん上をえらぶ
+const pickScope = (sel) => async (p) => { for (let i = 0; i < 3; i++) { await p.waitForSelector(`${sel}, .sc-row`, { timeout: 20000 }); if (await p.locator(sel).count()) return; await p.locator('.sc-row').first().click(); await p.waitForTimeout(300); } await p.waitForSelector(sel, { timeout: 20000 }); };
 const SCREENS = [
   { id: 'home', name: '部屋', steps: [sleep(800)] },
   { id: 'half-furn', name: '家具（半分の画面）', steps: [click('.hotbar [data-t=furn]'), waitFor('.half-sheet'), sleep(700)] },
@@ -65,9 +67,9 @@ const SCREENS = [
   { id: 'bag', name: '持ち物（アイテム）', steps: [click('.hotbar [data-t=furn]'), waitFor('.half-sheet'), click('.half-sheet .hc[data-i="4"]'), waitFor('.bagtabs'), click('.bagtabs [data-t=items]'), sleep(600)] },
   { id: 'edit', name: '模様がえ', steps: [click('.hotbar [data-t=furn]'), waitFor('.half-sheet'), click('.half-sheet .hc[data-i="1"]'), waitFor('.editbar'), sleep(600)] },
   { id: 'subjects', name: '教科えらび', steps: [click('.hotbar [data-t=play]'), waitFor('.subj'), sleep(600)] },
-  { id: 'quiz', name: '問題（物理）', steps: [click('.hotbar [data-t=play]'), waitFor('.subj'), click('.subj[data-s=physics]'), waitFor('.sym'), sleep(600)] },
-  { id: 'choice', name: '問題（4択）', steps: [click('.hotbar [data-t=play]'), waitFor('.subj'), click('.subj[data-s=math]'), waitFor('.ch4 .fcard'), sleep(500)] },
-  { id: 'choice-res', name: '問題の結果', steps: [click('.hotbar [data-t=play]'), waitFor('.subj'), click('.subj[data-s=math]'), waitFor('.ch4 .fcard'), click('.ch4 .fcard'), waitFor('.res'), sleep(800)] },
+  { id: 'quiz', name: '問題（物理）', steps: [click('.hotbar [data-t=play]'), waitFor('.subj'), click('.subj[data-s=physics]'), pickScope('.sym'), sleep(600)] },
+  { id: 'choice', name: '問題（4択）', steps: [click('.hotbar [data-t=play]'), waitFor('.subj'), click('.subj[data-s=math]'), pickScope('.ch4 .fcard'), sleep(500)] },
+  { id: 'choice-res', name: '問題の結果', steps: [click('.hotbar [data-t=play]'), waitFor('.subj'), click('.subj[data-s=math]'), pickScope('.ch4 .fcard'), click('.ch4 .fcard'), waitFor('.res'), sleep(800)] },
   { id: 'home-full', name: '部屋（ゲージ満タン）', steps: [(p) => p.evaluate(() => { const A = window.__app, hs = A.HS(); hs.gauge = A.S.gaugeMax(hs); hs.fullNotified = true; A.showHome(); }), waitFor('.buy-tip'), sleep(600), (p) => p.evaluate(() => document.getElementById('toast')?.classList.remove('show')), sleep(500)] },
   { id: 'giftbox', name: 'プレゼントBOX', steps: [(p) => p.evaluate(() => { const S = window.__app.S; S.addGift({ kind: 'ticket', amount: 3, title: '新規登録記念', from: 'operator' }); S.addGift({ kind: 'ticket4', amount: 1, title: 'Lv5 のごほうび', from: 'rank' }); window.__app.showGiftBox(); }), waitFor('.gb-row'), sleep(600)] },
   { id: 'gacha-item', name: '出る家具を3Dで見る', steps: [click('.hotbar [data-t=gacha]'), waitFor('.gc-it'), click('.gc-it'), waitFor('.gi-view'), sleep(1500)] },
