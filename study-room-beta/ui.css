@@ -1326,3 +1326,4 @@ body.calc-on .problem .num-tap { font: inherit; }
 .rr-lv small { color: inherit; opacity: 1; font-weight: 700; }
 .rr-row:not(.got):not(.next) .rr-lv { color: var(--sk-text); opacity: 1; }
 .pr-report { opacity: 1; color: var(--sk-muted, var(--muted)); }
+.gc-it .gc-ok { background: #1f7a48; }

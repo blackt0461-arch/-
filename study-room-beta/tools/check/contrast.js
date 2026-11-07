@@ -168,7 +168,7 @@ function ratio(a, b) { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); re
   await ctx.route('https://fonts.googleapis.com/**', r => r.continue()).catch(() => {});
   const page = await ctx.newPage();
   const errors = [];
-  page.on('pageerror', e => errors.push(e.message));
+  page.on('pageerror', e => errors.push(process.env.CC_STACK ? e.stack : e.message));
   await page.addInitScript(() => { localStorage.setItem('studyroom.download', 'later'); localStorage.setItem('studyroom.notour', '1'); localStorage.setItem('studyroom.uinext', '0'); localStorage.setItem('studyroom.quality', 'low'); window.__ccFreeze = true; });
   await page.goto(base);
   await page.waitForSelector('.title-screen'); await page.click('.title-screen');
@@ -184,7 +184,7 @@ function ratio(a, b) { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); re
 
   const results = [];
   for (const skin of skins) {
-    for (const sc of SCREENS.filter(x => !process.env.CC_ONLY || x.id === process.env.CC_ONLY)) {
+    for (const sc of SCREENS.filter(x => !process.env.CC_ONLY || process.env.CC_ONLY.split(',').includes(x.id))) {
       // まっさらな部屋の画面から始める
       await page.evaluate((id) => {
         document.querySelectorAll('.pfx, .lb-screen, .update-ov, .sheet, .room-pop').forEach(e => e.remove());
