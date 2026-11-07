@@ -48,10 +48,16 @@ const serve = () => new Promise(res => { const srv = http.createServer((req, rsp
     delete p.side; p.mode = 'puzzle'; r.noSide = S.sideOf(); p.mode = 'study';
     return r;
   });
-  const gp = await N.page.evaluate(async () => { const S = await import('/js/store.js'); return { jp15: S.gaugePoints(true, false, 15, 'jp'), math60: S.gaugePoints(true, false, 60, 'math'), jpIdle: S.gaugePoints(true, false, 600, 'jp'), mathIdle: S.gaugePoints(true, false, 600, 'math'), wrong: S.gaugePoints(false, false, 60, 'math'), quick: S.gaugePoints(true, false, 2, 'jp') }; });
-  check(gp.jp15 === 23 && gp.math60 === 90, `ゲージはかかった時間に比例（国語15秒 ${gp.jp15}・数学60秒 ${gp.math60}）`);
-  check(gp.jpIdle < gp.mathIdle && gp.jpIdle === Math.round(45 * 1.5), `放っておいても上限まで（国語 ${gp.jpIdle}・数学 ${gp.mathIdle}）`);
-  check(gp.wrong === Math.round(60 * 1.5 * 0.3) && gp.quick === 12, `まちがいは考えた時間の3割、すぐ答えても少しはたまる（${gp.wrong}・${gp.quick}）`);
+  const gp = await N.page.evaluate(async () => { const S = await import('/js/store.js'); const g = S.gaugePoints;
+    const r = { jp: g(true, false, 15, 'jp', 2, 'x'), jpSlow: g(true, false, 300, 'jp', 2, 'x'), jpFast: g(true, false, 5, 'jp', 2, 'x'), math1: g(true, false, 30, 'math', 1, 'x'), math3: g(true, false, 50, 'math', 3, 'x'),
+      tap: g(true, false, 1, 'math', 3, 'x'), wrong: g(false, false, 90, 'math', 3, 'x'), wrongTap: g(false, false, 2, 'math', 3, 'x') };
+    S.setUnitTimes({ 'math|二次関数': [150 * 120, 150, 3], 'math|数列': [20 * 120, 20, 1] });
+    r.blend = S.stdTime('math', 2, '二次関数'); r.few = S.stdTime('math', 2, '数列'); S.setUnitTimes({}); return r; });
+  check(gp.jp === 30 && gp.jpSlow === 30, `早くても遅くても同じ（国語★2：15秒 ${gp.jp}・5分 ${gp.jpSlow}）`);
+  check(gp.math1 === 60 && gp.math3 === 135, `教科と★で決まる（数学★1 ${gp.math1}・★3 ${gp.math3}）`);
+  check(gp.jpFast < gp.jp && gp.tap <= 4, `早押しは少ない（国語5秒 ${gp.jpFast}・数学★3を1秒 ${gp.tap}）`);
+  check(gp.wrong === Math.round(135 * 0.3) && gp.wrongTap <= 3, `まちがいは3割、早押しのまちがいはほぼ0（${gp.wrong}・${gp.wrongTap}）`);
+  check(gp.blend === Math.round(60 * (0.3 + 0.7 * 2)) && gp.few === 60, `記録が十分な単元だけ平均に近づける（二次関数 ${gp.blend}秒・記録が少ない数列 ${gp.few}秒）`);
   const mk = await N.page.evaluate(async () => {
     const S = await import('/js/store.js'), st = window.__app.S;
     S.logDay({}); const d = S.dayKey(), log = S.dayLog();

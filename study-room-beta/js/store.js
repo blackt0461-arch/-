@@ -433,20 +433,41 @@ export function newUid() { const h = house(); return h.nextUid++; }
 export function gaugeMax(sub) {
   return Math.min(60 + sub.unlocks * 12, 150);
 }
-// ゲージ（1.12.3）：正解した問題に、かかった時間に比例してたまる（どの教科も、1分あたりはほぼ同じ）。
-// 画面では「むずかしい問題ほど多くたまる」と出す。放っておいてもふえないよう、教科ごとに上限の秒数がある。
+// ゲージ（1.14.0）：正解した問題に「その問題のふつうの時間 × 1.5」たまる。早く解いても遅く解いても同じ（時間かせぎはできない）。
+// ふつうの時間は、教科と★（level 1〜3）の表で決める。みんなの記録が十分たまった単元だけ、本当の平均に少しずつ近づける。
+// 早押し対策：ふつうの時間の4割より早い正解は、かけた時間に応じて減る。まちがいは3割（ふつうの時間より早いと、さらに減る）。
+// 画面では「むずかしい問題ほど多くたまる」と出す。
 export const GAUGE_PER_SEC = 1.5;
-export const GAUGE_MIN_SEC = 8;
-export const GAUGE_CAP_SEC = { jp: 45, social: 45, english: 45, chem: 75, bio: 75, earth: 75, math: 120, physics4: 120, physics: 180 };
-export function gaugePoints(perfect, step1Miss, seconds, sid) {
-  const cap = GAUGE_CAP_SEC[sid] || 60;
-  const t = Math.min(cap, Math.max(GAUGE_MIN_SEC, seconds || 0));
-  const pts = t * GAUGE_PER_SEC;
-  if (perfect) return Math.round(pts);
-  if (step1Miss) return Math.round(pts / 2); // 物理（公式）で、とちゅうでまちがえた時は半分
-  return Math.round(pts * WRONG_RATE); // まちがえても、考えた時間の3割（1.13.0）
-}
+export const STD_SEC = {
+  jp: [15, 20, 30], social: [15, 20, 30], english: [15, 20, 30],
+  chem: [25, 35, 50], bio: [25, 35, 50], earth: [25, 35, 50],
+  math: [40, 60, 90], physics4: [40, 60, 90], physics: [60, 90, 120],
+};
+export const FULL_AT = 0.4; // ふつうの時間の4割かければ満額
 export const WRONG_RATE = 0.3;
+// みんなの単元ごとの平均（サーバーの sr_unit_times）。{ 'sid|unit': [合計秒, 問題数, 人数] }
+let unitTimes = {};
+export function setUnitTimes(m) { unitTimes = m || {}; }
+export const UNIT_MIN_USERS = 3, UNIT_MIN_N = 30;
+export function stdTime(sid, level, unit) {
+  const row = STD_SEC[sid] || [25, 35, 50];
+  const base = row[Math.min(2, Math.max(0, (level || 2) - 1))];
+  const u = unitTimes[`${sid}|${unit || ''}`];
+  if (!u || u[2] < UNIT_MIN_USERS || u[1] < UNIT_MIN_N) return base;
+  // 単元の平均は★をまぜた値なので、表の★2との比で、その★の秒数を直す。記録が多いほど強く近づける（最大7割）
+  const ratio = Math.min(2, Math.max(0.5, (u[0] / u[1]) / row[1]));
+  const w = Math.min(0.7, u[1] / 150);
+  return Math.round(base * (1 - w + w * ratio));
+}
+export function gaugePoints(perfect, step1Miss, seconds, sid, level, unit) {
+  const std = stdTime(sid, level, unit), t = Math.max(0, seconds || 0);
+  const full = std * GAUGE_PER_SEC;
+  if (perfect || step1Miss) {
+    const k = Math.min(1, t / (std * FULL_AT));
+    return Math.round(full * k * (perfect ? 1 : 0.5)); // 物理（公式）で、とちゅうでまちがえた時は半分
+  }
+  return Math.round(full * WRONG_RATE * Math.min(1, t / std));
+}
 
 // ===== 教科ごとの倍率と「同じものを続けると減る」（1.13.0） =====
 // 倍率：この7日間の記録で、教科ごとに決める（やっていない ×1.3・苦手 ×1.2・やりすぎ ×0.9。2つ当てはまればかけ合わせ）

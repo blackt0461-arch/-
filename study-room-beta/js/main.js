@@ -1685,7 +1685,7 @@ function photoMode() {
 
 // =========================== 更新のお知らせ ===========================
 // このプログラムの版（version.json と同じにする。公開のたびに上げる）
-const APP_VERSION = '1.13.0';
+const APP_VERSION = '1.14.0';
 ERR.setVersion(APP_VERSION);
 // 新しい版が出たら、みんな同じタイミングでそろうように強制で再起動する。
 // 開いた時・画面に戻った時・1分ごとに version.json を見る
@@ -3231,7 +3231,15 @@ function showSettings() {
 }
 
 // =========================== 問題を解く ===========================
+// みんなの単元ごとの「ふつうの時間」（1.14.0）。アプリを開いて最初に解く時に1回だけ読む（失敗しても、★の表の秒数を使う）
+let unitTimesLoaded = false;
+function loadUnitTimes() {
+  if (unitTimesLoaded || !Auth.currentUser()?.token) return;
+  unitTimesLoaded = true;
+  rpc('sr_unit_times', {}).then(m => S.setUnitTimes(m)).catch(() => { unitTimesLoaded = false; });
+}
 async function startSet() {
+  loadUnitTimes();
   BGM.duck(true); // 解いている間は BGM を小さく
   await loadBank(subjectId); // 問題バンクの問題が入ったセットの続きでも、問題が見つかるように
   const st = sub();
@@ -3460,7 +3468,7 @@ function awardResult(st, ss, p, perfect, ok, isReview, secs) {
   let pts = 0, mastered = false, xp = null;
       // 1.13.0：教科の倍率（おすすめ）・同じ教科／単元が続くと減る・その日もう正解した問題は3割
       const gf = S.gaugeFactor({ sid: subjectId, unit: p.unit, sub: st, id: p.id, sids: multSids() });
-      pts = Math.round(S.gaugePoints(perfect, ok && !perfect, secs, subjectId) * gf.f);
+      pts = Math.round(S.gaugePoints(perfect, ok && !perfect, secs, subjectId, p.level, p.unit) * gf.f);
       if (ss.bonus) pts = Math.round(pts * 1.5);
       ss.gf = gf;
       S.logTime(subjectId, p.unit, secs);
