@@ -3,7 +3,7 @@
 import * as store from './store.js';
 import * as cloud from './cloud.js';
 
-const APP_VERSION = '1.9.1';
+const APP_VERSION = '1.10.0';
 const $app = document.getElementById('app');
 let COURSES = [];
 const testCache = {};
@@ -881,6 +881,7 @@ async function stats() {
     .sort((a, b) => { const ra = store.get(a.key), rb = store.get(b.key); return ra.ok / ra.n - rb.ok / rb.n || rb.n - ra.n; }).slice(0, 10);
   w.innerHTML = `
     <button class="row notice" data-report style="position:relative;z-index:2;margin-top:0"><span class="av c4">${icon('chart')}</span><div class="t"><div class="name">ふりかえりレポート</div><div class="meta">今までの勉強をまとめて見る</div></div><span class="arrow">${icon('next')}</span></button>
+    ${tests.map((x, ti) => scheduleHTML(x.c, x.t, x.d, ti)).join('')}
     <div class="stats">
       <div class="stat"><b>${n ? pct(ok / n) : 0}<span style="font-size:.5em">%</span></b><span>正解率</span></div>
       <div class="stat"><b>${remember}</b><span>覚えている問題</span></div>
@@ -898,11 +899,60 @@ async function stats() {
     <div class="cloud-line">v${APP_VERSION}</div>`;
   math(w); bindStars(w);
   w.querySelector('[data-report]').onclick = report;
+  w.querySelectorAll('[data-sl]').forEach((b) => (b.onclick = () => {
+    const [ti, li] = b.dataset.sl.split(':').map(Number);
+    const { c, t, d } = tests[ti];
+    const L = d.lessons[li]; const st = store.lesson(lkey(c, t, L));
+    playLesson(c, t, d, L, st && !st.done ? st.last || 0 : 0);
+  }));
   const wb = w.querySelector('[data-weak]');
   if (wb) wb.onclick = () => {
     const { c, t, d } = tests.find((x) => x.d.questions.includes(weak[0]));
     startQuiz(c, t, d, weak.filter((q) => d.questions.includes(q)), { id: 'weak', name: '苦手な問題', back: stats, keepOrder: true }, { limit: 0 });
   };
+}
+
+// ---------- テストまでの計画（目安） ----------
+// 今日からテストの日まで1日1行。まだ見ていない授業を、今日からテストの前日までの日に分けて割りふる。
+// テストの前日は「まとめシートの見直し」、当日は「忘れかけの問題の見直し」。
+// 今日見終わった授業は今日の分として ✓ をつけ、それ以外は毎日のこりの量で割りふり直す。
+function scheduleHTML(c, t, d, ti) {
+  const dl = daysLeft(testDate(c, t));
+  const ls = d.lessons || [];
+  if (dl === null || dl < 0 || !ls.length) return '';
+  const today = dateKey(new Date());
+  const st = (L) => store.lesson(lkey(c, t, L)) || {};
+  const doneDay = (L) => (st(L).done ? dateKey(new Date(st(L).t || 0)) : null);
+  // 今日より前に見終わった授業は割りふらない
+  const all = ls.map((L, i) => ({ L, i }));
+  const rest = [...all.filter(({ L }) => doneDay(L) === today), ...all.filter(({ L }) => !doneDay(L))]; // 今日見終わった分を今日の先頭に
+  const days = [];
+  for (let k = 0; k <= dl; k++) { const dt = new Date(); dt.setHours(0, 0, 0, 0); dt.setDate(dt.getDate() + k); days.push({ k, key: dateKey(dt), dt, lessons: [], notes: [] }); }
+  const lessonDays = Math.max(1, dl); // テストの前日までの日に分ける（前日はまとめシートの見直しもする）
+  const per = Math.ceil(rest.length / lessonDays);
+  rest.forEach((x, n) => days[Math.min(Math.floor(n / Math.max(1, per)), lessonDays - 1)].lessons.push(x));
+  if (dl >= 1) days[dl - 1].notes.push(d.sheet ? 'まとめシートを印刷して見直す' : 'まちがえた問題を見直す');
+  days[dl].notes.push('テスト当日：忘れかけの問題だけ見直し');
+  const totals = store.dayTotals();
+  const p = plan(c, t, d);
+  const W = ['日', '月', '火', '水', '木', '金', '土'];
+  const doneN = ls.filter((L) => st(L).done).length;
+  const rows = days.map((r) => {
+    const isToday = r.k === 0;
+    const lessons = r.lessons.map(({ L, i }) => {
+      const ok = !!st(L).done;
+      return `<button class="sl-chip ${ok ? 'ok' : ''}" data-sl="${ti}:${i}">${ok ? icon('check') : ''}${esc(L.lecture || '')}<span>${esc(L.title)}</span></button>`;
+    }).join('');
+    const q = isToday ? (p && p.target ? `<span class="sq ${p.done >= p.target ? 'ok' : ''}">問題 ${Math.min(p.done, p.target)}/${p.target}</span>` : '') : r.k > 0 && r.k < dl ? '<span class="sq">今日の勉強の問題</span>' : '';
+    return `<div class="srow ${isToday ? 'today' : ''} ${r.k === dl ? 'exam-day' : ''}">
+      <div class="sd"><b class="num">${r.dt.getMonth() + 1}/${r.dt.getDate()}</b><small>${isToday ? '今日' : r.k === dl ? 'テスト' : W[r.dt.getDay()]}</small></div>
+      <div class="sc">${lessons}${r.notes.map((x) => `<div class="snote">${esc(x)}</div>`).join('')}${q}${!lessons && !r.notes.length && !q ? '<div class="snote">のこりの問題をくり返す</div>' : ''}</div></div>`;
+  }).join('');
+  return `<h2>テストまでの計画（目安）</h2>
+    <div class="card sched"><div class="sh"><b>${esc(c.name)}・${esc(t.name)}</b><span class="muted small">授業 ${doneN}/${ls.length}本 見終わった</span></div>
+      <div class="meter ok" style="margin:6px 0 10px"><i style="width:${(doneN / ls.length) * 100}%"></i></div>
+      ${rows}
+      <div class="muted small" style="margin-top:8px">授業を押すとすぐ始まります。遅れても大丈夫、毎日のこりの量で割りふり直します。</div></div>`;
 }
 
 // ---------- ふりかえりレポート（今までの全部） ----------
