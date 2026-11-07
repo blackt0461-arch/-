@@ -19,6 +19,7 @@ import * as DL from './download.js';
 import * as Sync from './sync.js';
 import * as R from './report.js';
 import * as EV from './events.js';
+import * as M from './missions.js';
 import * as ERR from './errlog.js';
 import { rpc } from './cloud.js';
 import { PUZZLES, puzzleById, levelInfo, mountPuzzle, livesOf, slideRate } from './puzzles.js';
@@ -560,6 +561,7 @@ function halfSocial() {
 function adminTopUp() {
   const hs = HS();
   for (const k of ['rareTickets', 'rareTickets4', 'rareTickets5', 'shards4', 'shards5', 'tickets']) if ((hs[k] || 0) < 99) hs[k] = 99;
+  if ((hs.medals || 0) < 9999) hs.medals = 9999;
 }
 function canBuyNow() { const hs = HS(); return hs.gauge >= S.gaugeMax(hs) || hs.tickets > 0; }
 // いま何個買えるか（ゲージは満タンをこえてもためておける。1つ買うごとに満タンの分だけ減る）
@@ -957,6 +959,7 @@ function showHome() {
       <div class="side-tools">
         ${UINEXT ? `<button class="round nx-menubtn" aria-label="メニュー" aria-expanded="false">${icon('menu')}${newsBadge ? '<i class="gb-n dot-only"></i>' : ''}</button>` : `<button class="round photo" aria-label="写真をとる">${icon('camera')}</button>`}
         ${EV.activeEvent() ? `<button class="round evbtn" aria-label="${esc(EV.activeEvent().name)}">${icon('snow')}${EV.readyCount(EV.activeEvent()) ? `<i class="gb-n">${EV.readyCount(EV.activeEvent())}</i>` : ''}</button>` : ''}
+        <button class="round msbtn" aria-label="ミッション">${icon('mission')}${M.readyCount() ? `<i class="gb-n">${M.readyCount()}</i>` : ''}</button>
         <button class="round giftbox" aria-label="プレゼントBOX">${icon('gift')}${S.gifts().length ? `<i class="gb-n">${S.gifts().length > 99 ? '99+' : S.gifts().length}</i>` : ''}</button>
       </div>
     </div>`);
@@ -967,6 +970,7 @@ function showHome() {
   el.querySelector('.giftbox')?.addEventListener('click', () => showGiftBox());
   refreshGifts();
   el.querySelector('.evbtn')?.addEventListener('click', () => showEvent());
+  el.querySelector('.msbtn')?.addEventListener('click', () => showMissions());
   el.querySelector('.rankchip').onclick = showRankRoad;
   el.querySelector('.room-name').onclick = () => showRoomPicker({ hs, r, here, locked, home });
   app.append(el, tabbar('room'));
@@ -1738,7 +1742,7 @@ function photoMode() {
 
 // =========================== 更新のお知らせ ===========================
 // このプログラムの版（version.json と同じにする。公開のたびに上げる）
-const APP_VERSION = '1.15.1';
+const APP_VERSION = '1.15.2';
 ERR.setVersion(APP_VERSION);
 // 新しい版が出たら、みんな同じタイミングでそろうように強制で再起動する。
 // 開いた時・画面に戻った時・1分ごとに version.json を見る
@@ -1969,6 +1973,7 @@ function puzzleResult(id, star, won, r, secs) {
     S.addPoints(pts); // ランキングのポイント
     xp = S.addPuzzleClear(id, star, r.mistakes || 0, rate);
     evToast(EV.addPoints(star));
+    missionToast(M.onPuzzle({ id, star, mistakes: r.mistakes || 0 }));
     const first = S.markPlayedToday();
     if (first) setTimeout(() => toast(`連続 ${S.currentStreak()}日目！`), 600);
     S.save(); Sync.push?.();
@@ -2513,6 +2518,80 @@ function showEvent() {
   });
 }
 const md = (k) => `${+k.slice(5, 7)}/${+k.slice(8, 10)}`;
+// ミッション（毎日3つ・毎週3つ）とメダル交換所（missions.js）
+function missionToast(names) {
+  if (!names || !names.length) return;
+  setTimeout(() => toast(`ミッション達成：${names[0]}${names.length > 1 ? ` ほか${names.length - 1}つ` : ''}`, 2600), 1900);
+}
+const medalIcon = () => `<span class="ms-medal">${icon('medal')}</span>`;
+function showMissions() {
+  const st = M.state(), d = M.daily(), w = M.weekly(), ready = M.readyCount();
+  const row = (kind, m) => `
+    <div class="ms-row ${m.claimed ? 'got' : m.done ? 'can' : ''}">
+      <span class="ms-t"><b>${esc(m.name)}</b><span class="ms-bar"><i style="width:${Math.round(m.now / m.goal * 100)}%"></i></span><small>${m.now} / ${m.goal}</small></span>
+      <span class="ms-rw">${medalIcon()}${M.REWARD[kind].each}</span>
+      ${m.claimed ? `<span class="ev-st">${icon('check')}受け取りずみ</span>` : m.done ? `<button class="btn gold sm ms-claim" data-k="${kind}" data-id="${m.id}">受け取る</button>` : ''}
+    </div>`;
+  const bonus = (kind, list, rec) => {
+    const all = M.REWARD[kind].all, n = list.filter(x => x.claimed).length, can = n === list.length && !rec.all;
+    return `<div class="ms-bonus ${rec.all ? 'got' : can ? 'can' : ''}">
+      <span class="ms-t"><b>3つ全部</b><small>${rec.all ? '受け取りました' : `のこり ${list.length - n}つ（受け取ると進みます）`}</small></span>
+      <span class="ms-rw">${medalIcon()}${all.medals}<span class="ms-tk">${ticketSVG('ticket', 'mini')}</span>×${all.ticket}</span>
+      ${rec.all ? `<span class="ev-st">${icon('check')}</span>` : can ? `<button class="btn gold sm ms-all" data-k="${kind}">受け取る</button>` : ''}
+    </div>`;
+  };
+  const el = sheet(`
+    <div class="sh-head"><span class="sh-ic ms-ic">${icon('mission')}</span><div><h3>ミッション</h3><p>${M.sideKey() === 'puzzle' ? 'パズルサイド' : 'スタディサイド'}のミッション</p></div><button class="sh-x close" aria-label="とじる">${icon('x')}</button></div>
+    <div class="ms-wallet">${medalIcon()}<b>${M.medals()}</b><span>メダル</span><button class="btn ghost sm ms-shop">${icon('gift')}メダル交換所</button></div>
+    ${ready > 1 ? `<button class="btn primary big ms-every">${icon('gift')}まとめて受け取る（${ready}）</button>` : ''}
+    <h4 class="ms-h">毎日のミッション<small>のこり ${M.timeLeft('daily')}</small></h4>
+    <div class="ms-list">${d.map(m => row('daily', m)).join('')}${bonus('daily', d, st.day)}</div>
+    <h4 class="ms-h">毎週のミッション<small>のこり ${M.timeLeft('weekly')}</small></h4>
+    <div class="ms-list">${w.map(m => row('weekly', m)).join('')}${bonus('weekly', w, st.week)}</div>
+    <p class="note">毎日は朝6時、毎週は月曜の朝6時に新しくなります。メダルは交換所で家具などと交換できます</p>`, 'ms-sheet');
+  const done = (r) => { if (!r) return; S.save(); vibrate([20, 30, 20]); toast(`メダル ${r.medals}枚${r.ticket ? `・レアチケット ${r.ticket}枚` : ''}を受け取りました`); showMissions(); };
+  el.querySelector('.close').onclick = () => { el.remove(); showHome(); };
+  el.querySelectorAll('.ms-claim').forEach(b => b.onclick = () => done(M.claim(b.dataset.k, b.dataset.id)));
+  el.querySelectorAll('.ms-all').forEach(b => b.onclick = () => done(M.claimAll(b.dataset.k)));
+  el.querySelector('.ms-every')?.addEventListener('click', () => done(M.claimEverything()));
+  el.querySelector('.ms-shop').onclick = () => showMedalShop();
+}
+function shopName(e) { return e.kind === 'item' ? (itemById(e.item)?.name || '家具') : e.name; }
+function shopArt(e) {
+  if (e.kind === 'item') { const it = itemById(e.item); return it ? `<span class="thumb">${thumbHTML(it)}</span>` : `<span class="gb-ic">${icon('gift')}</span>`; }
+  if (e.kind === 'ticket') return `<span class="gb-ic ev-tk">${ticketSVG('ticket', 'mini')}</span>`;
+  if (e.kind === 'shards4' || e.kind === 'shards5') return `<span class="gb-ic"><span class="shard ${e.kind === 'shards4' ? 's4' : 's5'}">${icon('sparkle')}</span></span>`;
+  return `<span class="gb-ic">${icon('box')}</span>`;
+}
+function showMedalShop() {
+  const free = isAdmin();
+  const el = sheet(`
+    <div class="sh-head"><span class="sh-ic ms-ic">${icon('medal')}</span><div><h3>メダル交換所</h3><p>ミッションのメダルと交換</p></div><button class="sh-x close" aria-label="とじる">${icon('x')}</button></div>
+    <div class="ms-wallet">${medalIcon()}<b>${M.medals()}</b><span>メダル</span><button class="btn ghost sm ms-back">${icon('mission')}ミッション</button></div>
+    <div class="ev-list ms-shop-list">${M.SHOP.map(e => { const left = M.shopLeft(e), can = left > 0 && (free || M.medals() >= e.cost); return `
+      <div class="ev-row ${left ? '' : 'got'}">${shopArt(e)}<span class="ev-nm"><b>${esc(shopName(e))}</b><small>${e.kind === 'item' ? (left ? '交換所だけの家具' : '交換ずみ') : `今月あと${left}回`}</small></span>
+        <span class="ms-rw">${medalIcon()}${e.cost}</span>
+        ${left ? `<button class="btn ${can ? 'gold' : 'ghost'} sm ms-buy" data-id="${e.id}" ${can ? '' : 'disabled'}>交換</button>` : `<span class="ev-st">${icon('check')}</span>`}</div>`; }).join('')}</div>
+    <p class="note">「今月あと」の回数は、毎月1日の朝6時にもどります。交換所の家具はガチャからは出ません</p>`, 'ms-sheet');
+  hydrateThumbs(el);
+  el.querySelector('.close').onclick = () => { el.remove(); showHome(); };
+  el.querySelector('.ms-back').onclick = () => showMissions();
+  el.querySelectorAll('.ms-buy').forEach(b => b.onclick = () => {
+    const e = M.SHOP.find(x => x.id === b.dataset.id);
+    const ok = sheet(`<div class="sh-head"><span class="sh-ic ms-ic">${icon('medal')}</span><div><h3>交換しますか？</h3><p>${esc(shopName(e))}</p></div></div>
+      <div class="ev-list"><div class="ev-row">${shopArt(e)}<span class="ev-nm"><b>${esc(shopName(e))}</b><small>メダル ${e.cost}枚 → のこり ${free ? M.medals() : M.medals() - e.cost}枚</small></span></div></div>
+      <div class="row2"><button class="btn ghost no">やめる</button><button class="btn primary yes">交換する</button></div>`, 'ms-sheet');
+    hydrateThumbs(ok);
+    ok.querySelector('.no').onclick = () => showMedalShop();
+    ok.querySelector('.yes').onclick = () => {
+      const r = M.buy(e.id, { free });
+      if (r !== true) { toast(r === 'medals' ? 'メダルが足りません' : '今月はもう交換できません'); return showMedalShop(); }
+      S.save(); vibrate([20, 40, 20]);
+      toast(e.kind === 'item' ? `「${shopName(e)}」を持ち物に入れました` : `${shopName(e)}を受け取りました`, 2400);
+      showMedalShop();
+    };
+  });
+}
 // 勉強レポート（1.12.0）：週・月ごとのまとめ。画像で保存できる
 function showReport(kind = 'week', offset = 0) {
   const log = S.dayLog(), p = R.period(kind, offset), pv = R.period(kind, offset - 1);
@@ -3038,12 +3117,14 @@ async function leaveVisit(goBack) {
 // =========================== 管理者 ===========================
 async function showAdmin() {
   if (!isAdmin()) return showMenu();
-  const el = screenWithTabs('admin', `<button class="icon back">${icon('back')}</button><h2>管理者</h2><span></span>`, 'menu', `<div class="row2 admin-btns"><button class="btn primary compose">${icon('bell')}お知らせを書く</button><button class="btn ghost inbox">${icon('chat')}要望・バグを見る</button></div><button class="btn ghost big sendgift">${icon('gift')}みんなにプレゼントを送る</button><button class="btn ghost big errlog">${icon('info')}エラーの記録を見る</button>${EV.EVENTS.length ? `<button class="btn ghost big evpreview">${icon('snow')}${EV.previewing() ? 'イベントのためしをやめる' : `イベントをためす（${esc(EV.EVENTS.at(-1).name)}）`}</button>` : ''}<div class="alist"><p class="empty">読み込み中…</p></div>`);
+  const el = screenWithTabs('admin', `<button class="icon back">${icon('back')}</button><h2>管理者</h2><span></span>`, 'menu', `<div class="row2 admin-btns"><button class="btn primary compose">${icon('bell')}お知らせを書く</button><button class="btn ghost inbox">${icon('chat')}要望・バグを見る</button></div><button class="btn ghost big sendgift">${icon('gift')}みんなにプレゼントを送る</button><button class="btn ghost big errlog">${icon('info')}エラーの記録を見る</button><div class="row2 admin-btns"><button class="btn ghost msdone">${icon('mission')}ミッションを全部達成に</button><button class="btn ghost msreset">${icon('refresh')}ミッションを最初から</button></div>${EV.EVENTS.length ? `<button class="btn ghost big evpreview">${icon('snow')}${EV.previewing() ? 'イベントのためしをやめる' : `イベントをためす（${esc(EV.EVENTS.at(-1).name)}）`}</button>` : ''}<div class="alist"><p class="empty">読み込み中…</p></div>`);
   el.querySelector('.back').onclick = showMenu;
   el.querySelector('.compose').onclick = () => composeNews(showNews);
   el.querySelector('.inbox').onclick = showFeedbackInbox;
   el.querySelector('.sendgift').onclick = () => composeGift();
   el.querySelector('.errlog').onclick = showErrors;
+  el.querySelector('.msdone').onclick = () => { M.adminCompleteAll(); S.save(); toast('今日と今週のミッションを、全部達成にしました'); showMissions(); };
+  el.querySelector('.msreset').onclick = () => { M.adminReset(); S.save(); toast('ミッションの記録を消しました（この端末の自分の分）'); };
   if (el.querySelector('.evpreview')) el.querySelector('.evpreview').onclick = () => { EV.setPreview(EV.previewing() ? null : EV.EVENTS.at(-1).id); toast(EV.previewing() ? 'この端末だけ、イベントを期間の前でもためせます' : 'イベントのためしをやめました'); showAdmin(); };
   const u = Auth.currentUser();
   let list = [];
@@ -3662,6 +3743,7 @@ function awardResult(st, ss, p, perfect, ok, isReview, secs) {
       xp = S.addAnswer(st, p.unit, perfect ? 'perfect' : ok ? 'ok' : 'wrong');
       S.logDay({ sid: subjectId, unit: p.unit, ok });
       evToast(EV.addPoints(ok ? EV.POINTS.right : EV.POINTS.wrong));
+      missionToast(M.onAnswer({ sid: subjectId, ok }));
       if (S.countStudyForPuzzle(ok)) setTimeout(() => toast('パズルが1回できるようになりました', 2400), 1200);
       const firstPlay = S.markPlayedToday();
       // 50問ごと・連続7日ごと・克服でたまにレアチケット
@@ -3966,4 +4048,4 @@ if ('serviceWorker' in navigator && location.protocol === 'https:') {
   navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(r => r.update()).catch(() => {});
 }
 // テスト用
-window.__app = { toast, showEdit, putIntoRoom, get room3d() { return room3d; }, S, sub, HS, switchRoom, ensureRooms, goHome, showHome, curRoom, visitFriend, leaveVisit, showLoginBonus, showGiftBox, showArrange, problemById: (id) => byId[id], runChoice, arrange: (sel, style) => { arrSel = sel; return runArrange(style); } };
+window.__app = { toast, showEdit, putIntoRoom, get room3d() { return room3d; }, S, sub, HS, switchRoom, ensureRooms, goHome, showHome, curRoom, visitFriend, leaveVisit, showLoginBonus, showGiftBox, showArrange, showMissions, showMedalShop, showAdmin, M, problemById: (id) => byId[id], runChoice, arrange: (sel, style) => { arrSel = sel; return runArrange(style); } };

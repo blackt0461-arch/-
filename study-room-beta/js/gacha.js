@@ -214,7 +214,14 @@ add(5, [
   ['g5-fx-bathtub-gold', '金の猫足浴槽', 'fixture', 'r', { fixshape: { kind: 'bathtub', shape: 'goldclaw' } }, 1.6, SF('fix-bathtub')],
   ['g5-fx-vanity-marble', '大理石の二つボウル洗面台', 'fixture', 'mr', { fixshape: { kind: 'vanity', shape: 'marble2' } }, 2.1, SF('fix-vanity')],
 ]);
-for (const it of GACHA_ITEMS) if (it.series === 'event') it.reward = true;
+// ───────── メダル交換所の家具（ミッションのメダルと交換。ガチャからは出ない） ─────────
+add(4, [
+  ['m-chester-wine', 'ワインレッドのチェスターフィールドチェア', 'chair', 'r', { gacha: 'chesterChair', fabric: '#6a1626' }, 1.0, { series: 'medal' }],
+  ['m-boucle-sage', 'セージグリーンのブークレソファ', 'sofa', 'nm', { gacha: 'boucleSofa', fabric: '#a9b79b' }, 2.1, { series: 'medal' }],
+  ['m-door-navy', '紺と真ちゅうのドア', 'fixture', 'rm', { proc: { type: 'door', style: 'panel4', color: '#1f2d4a', handle: 'brass' } }, 2.1, { ...SF('door'), series: 'medal' }],
+  ['m-door-mint', 'ミントのガラスドア', 'fixture', 'nm', { proc: { type: 'door', style: 'glass', color: '#9fd3c2', handle: 'brass' } }, 2.1, { ...SF('door'), series: 'medal' }],
+], {});
+for (const it of GACHA_ITEMS) if (it.series === 'event' || it.series === 'medal') it.reward = true;
 for (const it of GACHA_ITEMS) if (it.place === 'avatar') it.reward = true; // 引いた回数のごほうび。ガチャからランダムには出ない
 
 export const GACHA_BY_ID = Object.fromEntries(GACHA_ITEMS.map((it) => [it.id, it]));

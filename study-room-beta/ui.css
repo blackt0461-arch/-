@@ -1268,3 +1268,33 @@ body.calc-on .problem .num-tap { font: inherit; }
 /* 買った家具を、その場で置く（1.15） */
 .editbar.place-new .eb-btns { display: block; }
 .editbar.place-new .eb-btns .done { width: 100%; justify-content: center; }
+
+/* ミッション・メダル交換所（色は着せ替えに合わせる） */
+.sheet.ms-sheet { max-height: 90vh; overflow-y: auto; }
+.ms-ic { color: var(--sk-accent-text, var(--sk-accent, #f2b84b)) !important; }
+.ms-medal { display: inline-grid; place-items: center; width: 18px; height: 18px; color: var(--sk-accent-text, var(--sk-accent, #f2b84b)); }
+.ms-medal .ic { width: 18px; height: 18px; }
+.ms-wallet { display: flex; align-items: center; gap: 6px; padding: 10px 12px; border-radius: 14px; background: var(--sk-card, rgba(255,255,255,.05)); border: 1px solid var(--sk-card-line, rgba(255,255,255,.1)); margin-bottom: 10px; }
+.ms-wallet b { font-size: 22px; }
+.ms-wallet > span:not(.ms-medal) { font-size: 12.5px; }
+.ms-wallet .btn { margin-left: auto; }
+.ms-every { margin-bottom: 8px; }
+.ms-h { display: flex; align-items: baseline; justify-content: space-between; margin: 12px 2px 6px; font-size: 14px; }
+.ms-h small { font-size: 12px; font-weight: 400; }
+.ms-list { display: flex; flex-direction: column; gap: 6px; }
+.ms-row, .ms-bonus { display: flex; align-items: center; gap: 10px; padding: 9px 11px; border-radius: 14px; background: var(--sk-card, rgba(255,255,255,.05)); border: 1px solid var(--sk-card-line, rgba(255,255,255,.08)); }
+.ms-row.can, .ms-bonus.can { border: 2px solid var(--sk-accent, #f2b84b); }
+.ms-row.got, .ms-bonus.got { border-style: dashed; }
+.ms-bonus { border-style: dashed; }
+.ms-t { flex: 1; min-width: 0; display: grid; gap: 3px; }
+.ms-t b { font-size: 13.5px; }
+.ms-t small { font-size: 12px; }
+.ms-bar { display: block; height: 6px; border-radius: 99px; background: var(--sk-card-line, rgba(255,255,255,.12)); overflow: hidden; }
+.ms-bar i { display: block; height: 100%; border-radius: 99px; background: var(--sk-accent, #f2b84b); }
+.ms-rw { display: inline-flex; align-items: center; gap: 3px; font-weight: 800; font-size: 13px; white-space: nowrap; flex: none; }
+.ms-tk { display: inline-block; margin-left: 4px; }
+.ms-tk svg { width: 30px; height: 15px; vertical-align: middle; }
+.ms-sheet .btn[disabled] { opacity: .5; }
+.ms-sheet { color: var(--sk-text, #f2efe9); }
+.ms-sheet .ev-nm small, .ms-sheet .ms-t small, .ms-sheet .ms-h small, .ms-sheet .ev-st { color: var(--sk-muted, rgba(242,239,233,.74)); opacity: 1; }
+.ms-sheet .ev-row { background: var(--sk-card, rgba(255,255,255,.05)); border-color: var(--sk-card-line, rgba(255,255,255,.08)); }

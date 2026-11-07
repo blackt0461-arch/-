@@ -71,6 +71,8 @@ const SCREENS = [
   { id: 'home-full', name: '部屋（ゲージ満タン）', steps: [(p) => p.evaluate(() => { const A = window.__app, hs = A.HS(); hs.gauge = A.S.gaugeMax(hs); hs.fullNotified = true; A.showHome(); }), waitFor('.buy-tip'), sleep(600), (p) => p.evaluate(() => document.getElementById('toast')?.classList.remove('show')), sleep(500)] },
   { id: 'giftbox', name: 'プレゼントBOX', steps: [(p) => p.evaluate(() => { const S = window.__app.S; S.addGift({ kind: 'ticket', amount: 3, title: '新規登録記念', from: 'operator' }); S.addGift({ kind: 'ticket4', amount: 1, title: 'Lv5 のごほうび', from: 'rank' }); window.__app.showGiftBox(); }), waitFor('.gb-row'), sleep(600)] },
   { id: 'gacha-item', name: '出る家具を3Dで見る', steps: [click('.hotbar [data-t=gacha]'), waitFor('.gc-it'), click('.gc-it'), waitFor('.gi-view'), sleep(1500)] },
+  { id: 'missions', name: 'ミッション', steps: [(p) => p.evaluate(() => { const A = window.__app; A.M.adminReset(); A.M.onAnswer({ sid: 'math', ok: true }); A.M.adminCompleteAll(); A.M.claim('daily', A.M.daily()[0].id); A.showMissions(); }), waitFor('.ms-row'), sleep(600)] },
+  { id: 'medal-shop', name: 'メダル交換所', steps: [(p) => p.evaluate(() => window.__app.showMedalShop()), waitFor('.ms-shop-list'), sleep(1200)] },
   { id: 'admin', name: '管理者', steps: [click('.hotbar [data-t=menu]'), waitFor('[data-m=admin]'), click('[data-m=admin]'), waitFor('.acard'), sleep(600)] },
 ];
 
@@ -169,6 +171,9 @@ function ratio(a, b) { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); re
   await page.goto(base);
   await page.waitForSelector('.title-screen'); await page.click('.title-screen');
   await page.click('.swap'); await page.fill('input[name=name]', 'admin'); await page.fill('input[name=pw]', 'test1234'); await page.click('button[type=submit]');
+  // はじめの「何のために使いますか」（1.11.0〜）
+  await page.waitForSelector('.mode-sheet [data-m=study], .lb-screen.show', { timeout: 60000 });
+  if (await page.locator('.mode-sheet [data-m=study]').count()) await page.click('.mode-sheet [data-m=study]');
   await page.waitForSelector('.lb-screen.show', { timeout: 60000 }); await page.click('.lb-screen .ok', { force: true });
   await page.waitForSelector('.style-sheet .stylecard', { timeout: 15000 }).catch(() => {});
   if (await page.locator('.style-sheet .stylecard').count()) { await page.evaluate(() => document.querySelector('.stylecard').click()); await page.waitForTimeout(300); await page.evaluate(() => document.querySelector('.style-sheet .ok').click()); }
