@@ -66,7 +66,9 @@ const serve = () => new Promise(res => { const srv = http.createServer((req, rsp
         const host = document.querySelector('.pz-host');
         if (id === 'akari') { for (const b of host.querySelectorAll('.pz-cell')) { b.click(); b.click(); if (document.querySelectorAll('.pz-life i.on').length < 3) break; } }
         if (id === 'aburi') { host.querySelector('.pz-tool[data-m="2"]').click(); for (const b of host.querySelectorAll('.pz-nono .pz-cell')) { b.click(); if (document.querySelectorAll('.pz-life i.on').length < 3) break; } }
-        if (id === 'rokujo') { const empty = [...host.querySelectorAll(".pz-sd .pz-cell")].findIndex(b => !b.querySelector("svg")); host.querySelectorAll('.pz-sd .pz-cell')[empty].click(); for (const b of host.querySelectorAll('.pz-pal button')) { b.click(); if (document.querySelectorAll('.pz-life i.on').length < 3) break; } }
+        if (id === 'rokujo') { // あいているマスをえらんで家具を順に押す（たまたま正解でうまったら、次のあいているマスで続ける）
+          for (let k = 0; k < 30 && document.querySelectorAll('.pz-life i.on').length === 3; k++) { const cells = [...host.querySelectorAll('.pz-sd .pz-cell')], e = cells.find(b => !b.querySelector('svg')); if (!e) break; e.click();
+            for (const b of host.querySelectorAll('.pz-pal button')) { b.click(); if (document.querySelectorAll('.pz-life i.on').length < 3 || e.querySelector('svg')) break; } } }
       }, id);
       check(await page.locator('.pz-life i.on').count() === 2, `${id}：まちがえるとハートが1つ減る`);
     }

@@ -700,6 +700,15 @@ export function mountPuzzle(id, lv, host, cb = {}) {
     // キーボード・ためし用（指やマウスは pointerdown で受けるので、detail が 0 のクリックだけ）
     board.addEventListener('click', (e) => { if (e.detail !== 0) return; const b = e.target.closest('.pz-cell'); if (b) act(+b.dataset.y, +b.dataset.x); });
     paintAll();
+    // 左の数字の列のぶん、マスが右によるので、右にも同じだけすきまを足して、マスを左右のまん中にする
+    // （15×15 など、すきまを足すとマスが小さくなりすぎる時は、足せるだけ）
+    const center = () => {
+      if (!board.isConnected) return removeEventListener('resize', center);
+      board.style.paddingRight = '0px';
+      const w = board.firstChild.getBoundingClientRect().width, bw = board.getBoundingClientRect().width;
+      board.style.paddingRight = Math.max(0, Math.min(w, bw - w - Wn * 19)) + 'px';
+    };
+    requestAnimationFrame(center); addEventListener('resize', center);
     host._solve = () => { wrap.querySelector('.pz-tool[data-m="1"]').click(); for (let y = 0; y < Hn; y++) for (let x = 0; x < Wn; x++) if (G[y][x] && !over) cells[y][x].click(); };
     host._pic = pic.n; host._G = G;
   }

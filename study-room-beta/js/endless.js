@@ -164,7 +164,14 @@ export function mountPack(host, cb = {}) {
   // ためし用
   host._state = () => ({ score, moves, lines, over, tray: tray.map(p => p && p.cells), grid: g.map(r => r.map(v => v ? 1 : 0)) });
   host._put = (i, r, c) => put(i, r, c);
-  host._auto = () => { for (let i = 0; i < 3; i++) { const p = tray[i]; if (!p) continue; const at = fitsAny(g, p.cells); if (at) return put(i, at[0], at[1]); } return false; };
+  // ためし用の自動プレイ：いちばん多く列がそろう所、なければ端に近い所に置く
+  host._auto = () => {
+    let best = null;
+    tray.forEach((p, i) => { if (!p) return; for (let r = 0; r < PN; r++) for (let c = 0; c < PN; c++) { if (!canPut(g, p.cells, r, c)) continue;
+      const gg = g.map(row => row.slice()); p.cells.forEach(([dr, dc]) => { gg[r + dr][c + dc] = 1; }); const { rows, cols } = fullLines(gg);
+      const sc = (rows.length + cols.length) * 100 - r - c; if (!best || sc > best.sc) best = { sc, i, r, c }; } });
+    return best ? put(best.i, best.r, best.c) : false;
+  };
   host._end = () => { if (!over) { over = true; cb.onEnd?.({ score, moves, lines, quit: true }); } };
   host._setTray = (list) => { tray = list.map(cs => cs && { cells: cs, color: BOX[0] }); drawTray(); };
   return { get score() { return score; } };
