@@ -432,3 +432,5 @@ textarea.input { min-height: 160px; resize: vertical; }
 .glegend i { display: inline-block; width: 18px; height: 0; margin-right: 4px; vertical-align: middle; }
 .glegend .gp { border-top: 2px dashed var(--sub); }
 .glegend .ga { border-top: 3px solid var(--acc); }
+.replan { display: flex; gap: 8px; align-items: flex-start; background: color-mix(in srgb, var(--acc) 12%, transparent); border-radius: 12px; padding: 10px 12px; margin: 4px 0 10px; font-size: 13px; line-height: 1.5; }
+.replan svg { width: 18px; height: 18px; flex: none; margin-top: 1px; stroke: var(--acc); fill: none; stroke-width: 2; }

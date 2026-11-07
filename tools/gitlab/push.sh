@@ -23,7 +23,8 @@ export FILTER_BRANCH_SQUELCH_WARNING=1
 git filter-branch -f --index-filter "git rm -r -q --cached --ignore-unmatch cat-model/reference" --prune-empty -- --branches --tags >/dev/null 2>&1
 git for-each-ref --format='%(refname)' refs/replace refs/original refs/remotes | xargs -r -n1 git update-ref -d
 rm -f shallow
-git push "https://gitlab.com/kotetsu-works-group/kotetsuworks-site.git" 'refs/heads/*:refs/heads/*' --tags
+# main は担当がじかに足すことがある（テスト勉強担当など）ので、ここでは送らない。送るのは作業ブランチだけ
+git push "https://gitlab.com/kotetsu-works-group/kotetsuworks-site.git" "refs/heads/$BR:refs/heads/$BR"
 echo "送りました：https://gitlab.com/kotetsu-works-group/kotetsuworks-site"
 if [ "$DEPLOY" = "--deploy" ]; then
   TAG=deploy-$(date -u +%Y%m%d-%H%M%S); git tag "$TAG" "refs/heads/$BR"
