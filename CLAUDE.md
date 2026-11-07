@@ -60,11 +60,11 @@ GitHub のアカウント（blackt0461-arch）が止められている。clone�
 ## GitLab（コードの置き場所）と、止められないためのきまり（2026-11-07〜）
 
 コードは GitLab の非公開グループ **kotetsu-works-group** にも置く：https://gitlab.com/kotetsu-works-group/kotetsuworks-site
-鍵は環境「全部許可」の gitlab.com 宛てに保存してあり、通信の途中で自動で付く。送るときは `bash tools/gitlab/push.sh`（手元の写しは履歴が途中からなので、送る用に作り直してから送る。cat-model/reference の参考写真は外す）。
+鍵は環境「全部許可」の gitlab.com 宛てに保存してあり、通信の途中で自動で付く。送るときは `bash tools/gitlab/push.sh`（手元の写しは履歴が途中からなので、送る用に作り直してから送る。いまは cat-model/reference の参考写真を外している。完全な写しで上書きされたら、このやり方は使わず普通に git push する）。
 
 止められないためのきまり：
 - GitLab・Cloudflare のアカウントは2段階認証を使う（本人が設定ずみ）。
 - 鍵・トークン・.env はコードや履歴に入れない（URL にも書かない）。本人にもチャットに貼ってもらわない。
-- 他の人が作った素材（写真・音楽・3Dモデルなど）は GitLab に送らず、非公開の Cloudflare R2 に置く。
+- 他の人が作った素材（写真・音楽・3Dモデルなど）は、GitLab を非公開のまま使う（本人の決定 2026-11-07：すでにあるものはそのまま送る）。新しく入れる時は出典を書き、なるべく非公開の Cloudflare R2 に置く。
 - 100MB をこえるファイルは送らない（R2 に置く）。
 - 大量の自動操作（短い間に何度も送る・たくさん作る）をしない。
