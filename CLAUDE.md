@@ -46,7 +46,10 @@ GitHub のアカウント（blackt0461-arch）が止められている。clone�
 
 - **公開の場所**：Cloudflare Pages のプロジェクト「kotetsuworks」＋ 独自ドメイン **kotetsuworks.com**（Cloudflare で購入）。
   - 入口ページ `index.html`（KOTETSU WORKS）、ROOMIN 本番 `/roomin`（= `/study-room/`）、テスト版 `/roomin-beta`（= `/study-room-beta/`）、ほかのアプリはフォルダ名のまま。`_redirects` で短い URL にしている。
-- **更新のしかた**：公開するフォルダ（index.html・_redirects・manifest.webmanifest・assets・各アプリ。cat-model・docs・youtube_highlights・roomin-questions・tools・*.md はのぞく）を zip にして本人に送り、本人が Cloudflare Pages の「Create deployment」でアップロードする。
+- **更新のしかた**：
+  - 鍵（api.cloudflare.com 用の API トークン。権限は Cloudflare Pages の Edit だけ）がこの環境に登録してあれば、`node tools/deploy/deploy.js` で Claude が直接公開する（直接アップロードなので、Cloudflare の月500回のビルド回数を使わない）。
+  - 鍵がない時は、`node tools/deploy/build.js --zip` で `_backup/kotetsuworks-site.zip` を作って本人に送り、本人が Cloudflare Pages の「Create deployment」でアップロードする。
+  - どちらも、入れるもの・入れないものは tools/deploy/build.js にまとめてある（cat-model・docs・youtube_highlights・roomin-questions・各アプリの tools などはのぞく）。
 - ROOMIN の「テスト版 → 許可 → 本番」の順番は変わらない。本番に写すのは `node study-room-beta/tools/release/release.js`。
 - 作り手の名前は **KOTETSU WORKS**（こてつワークス）。アイコンは `assets/`。
 - みんなの記録は Supabase にあり、GitHub とは関係なく無事。
