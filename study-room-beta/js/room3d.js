@@ -268,15 +268,16 @@ export class Room3D {
   handleTap(cx, cy) {
     if (this.editMode) {
       const o = this.pickItem(cx, cy);
-      this.select(o ? o.userData.uid : null);
-      return;
+      if (o || !this.walkEdit || this.topView) { this.select(o ? o.userData.uid : null); return; }
+      // 模様がえの「歩く」：家具でない所をタップしたら、選ぶのをやめて、そこへ歩く（ドアでは部屋を移らない）（1.15）
+      if (this.selected) { this.select(null); return; }
     }
     const ray = this.ray(cx, cy);
     const hits = ray.intersectObjects([this.shell, this.items], true).filter(h => (h.object.visible || h.object.userData.lightSwitch) && !h.object.isPoints);
     const h = hits[0];
     if (!h) return;
     if (h.object.userData.lightSwitch) { this.toggleLights(); return; }
-    if (h.object.userData.door) { this.onDoor && this.onDoor(); return; }
+    if (h.object.userData.door) { if (!this.editMode) this.onDoor && this.onDoor(); return; }
     // 床なら当たった所、家具なら家具の足もと
     const p = h.point.clone(); p.y = 0;
     this.walkTo(p);
@@ -1233,7 +1234,7 @@ export class Room3D {
   // --- 模様がえ ---
   setEditMode(on) {
     this.editMode = !!on && !this.readOnly;
-    if (!this.editMode) { this.select(null); this.setTopView(false); }
+    if (!this.editMode) { this.select(null); this.setTopView(false); this.walkEdit = false; }
     this.setGrid(this.editMode);
   }
   // 床の薄い格子（50cmごと）。模様がえのあいだだけ
@@ -1255,6 +1256,8 @@ export class Room3D {
     this.grid.renderOrder = 2;
     this.scene.add(this.grid);
   }
+  // 模様がえ中に歩く（床をタップするとそこへ歩く）
+  setWalkEdit(on) { this.walkEdit = !!on; if (this.walkEdit) this.setTopView(false); }
   // 上から見る（俯瞰）。天井と天井の照明を隠して、真上から部屋全体を見る
   setTopView(on) {
     on = !!on && !!this.sh;

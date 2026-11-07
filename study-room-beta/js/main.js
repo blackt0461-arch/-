@@ -1324,16 +1324,20 @@ function chooseCandidate(genreId) {
     vibrate([30, 40, 60]);
     // おためしで置いて見せていた物は、そのまま本当に置く
     const pv = room3d?.preview && room3d.preview.userData.item?.id === picked.id ? room3d.commitPreview(S.newUid()) : null;
+    let placedUid = null;
     if (pv) {
       curRoom().placed.push(pv);
       S.save();
       if (!HS().villa) ensureRooms();
-      toast(`${picked.name}を置きました。${canBuyNow() ? `まだ${buyCount()}つ買えます` : '模様がえで動かせます'}`, 2600);
+      placedUid = pv.uid;
     } else {
       room3d?.clearPreview();
-      await putIntoRoom(picked, true);
+      const r = await putIntoRoom(picked, true, true);
+      if (r && r !== true) placedUid = r;
     }
     S.save();
+    // 買ったら、その場で置く場所を決められる（なぞって動かす・回す →「ここに置く」）（1.15）
+    if (placedUid && room3d?.objByUid?.[placedUid]) return placeJustBought(placedUid, picked);
     showHome();
   };
 }
@@ -1362,7 +1366,7 @@ function renameRoom(r) {
 }
 
 // 持ち物から部屋へ（壁紙などはその場で変える）
-async function putIntoRoom(item, justBought) {
+async function putIntoRoom(item, justBought, quiet = false) {
   const r = curRoom();
   if (item.place === 'surface') {
     r.surf[item.surface] = item.id;
@@ -1387,8 +1391,36 @@ async function putIntoRoom(item, justBought) {
   }
   S.save(); // 置いた位置を保存
   if (!HS().villa) ensureRooms(); // 家具がそろったら別荘が開く
+  if (quiet) return p.uid;
   toast(justBought ? `${item.name}を置きました。模様がえで動かせます` : `${item.name}を置きました`, 2600);
   return true;
+}
+
+// 買った家具を、その場で好きな所に置く。模様がえと同じ操作で、終わったら買う画面（まだ買えるなら）か部屋へ（1.15）
+function placeJustBought(uid, item) {
+  closeSheets();
+  showHome();
+  for (const sel of ['.dock', '.side-tools', '.hint', '.mode-toggle']) app.querySelector(sel)?.remove();
+  app.querySelector('.tabbar')?.classList.add('hide');
+  room3d.setEditMode(true);
+  setFocus(true);
+  const more = canBuyNow();
+  const bar = h(`
+    <div class="editbar place-new">
+      <div class="eb-top"><b>${icon('sofa')}置く場所を決める</b><span class="cap">${esc(item.name)}</span></div>
+      <p class="eb-hint">家具をなぞって動かす。「回す」で向きを変える。細かい位置は矢印で</p>
+      <div class="eb-btns">
+        <button class="btn primary big done">${icon('check')}ここに置く${more ? `（あと${buyCount()}つ買えます）` : ''}</button>
+      </div>
+    </div>`);
+  bar.querySelector('.done').onclick = () => {
+    room3d.setEditMode(false); S.save(); vibrate([20, 30]);
+    toast(`${item.name}を置きました${more ? '' : '。模様がえでいつでも動かせます'}`, 2200);
+    if (canBuyNow()) buyFlow(); else showHome();
+  };
+  app.querySelector('.home').append(bar);
+  room3d.select(uid);
+  room3d.focusSelected?.();
 }
 
 // ログインボーナス：その日はじめて開いたとき、専用の画面で30日のカレンダーにスタンプ
@@ -1459,7 +1491,7 @@ function showEdit() {
     <div class="editbar">
       <div class="eb-top"><b>${icon('sofa')}模様がえ</b><span class="cap">置いている <b>${curRoom().placed.length}</b> / ${S.capacity()}</span></div>
       ${hintN < 3 ? '<p class="eb-hint">家具をタップして選ぶ → なぞって動かす。細かい位置は矢印で。小さい物や天井の物は「一覧」から</p>' : ''}
-      <div class="eb-view seg"><button data-v="eye" class="on">${icon('eye')}ふつう</button><button data-v="top">${icon('grid')}上から</button></div>
+      <div class="eb-view seg"><button data-v="eye" class="on">${icon('eye')}ふつう</button><button data-v="walk">${icon('move')}歩く</button><button data-v="top">${icon('grid')}上から</button></div>
       <div class="eb-btns">
         <button class="btn ghost plist">${icon('menu')}一覧</button>
         <button class="btn ghost inv">${icon('box')}持ち物</button>
@@ -1470,6 +1502,8 @@ function showEdit() {
   bar.querySelectorAll('.eb-view button').forEach(b => b.onclick = () => {
     bar.querySelectorAll('.eb-view button').forEach(x => x.classList.toggle('on', x === b));
     room3d.setTopView(b.dataset.v === 'top');
+    room3d.setWalkEdit(b.dataset.v === 'walk');
+    if (b.dataset.v === 'walk') toast('床をタップすると、そこへ歩きます。家具をタップすると動かせます', 2600);
   });
   bar.querySelector('.inv').onclick = showInventory;
   bar.querySelector('.plist').onclick = showPlacedList;
@@ -1685,7 +1719,7 @@ function photoMode() {
 
 // =========================== 更新のお知らせ ===========================
 // このプログラムの版（version.json と同じにする。公開のたびに上げる）
-const APP_VERSION = '1.14.1';
+const APP_VERSION = '1.14.2';
 ERR.setVersion(APP_VERSION);
 // 新しい版が出たら、みんな同じタイミングでそろうように強制で再起動する。
 // 開いた時・画面に戻った時・1分ごとに version.json を見る
