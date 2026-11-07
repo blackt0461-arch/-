@@ -405,6 +405,10 @@ export async function itemObject(item) {
     const mat = new THREE.MeshStandardMaterial({ color: src.color, roughness: 0.85 });
     own = [mat];
     obj = chip(mat); kind = 'swatch';
+  } else if (src.fixshape) {
+    // 備え付けの形（キッチン・浴槽など）。斜め前から見せる
+    const { fixturePreview } = await import('./roomfix.js');
+    obj = await fixturePreview(src.fixshape.kind, src.fixshape.shape); kind = 'fixture';
   } else if (src.curtain) {
     obj = curtainObj(src.curtain); kind = 'wall';
     obj.traverse((o) => o.isMesh && own.push(o.material));
@@ -421,7 +425,7 @@ async function drawItem(item, opts = {}) {
   const { renderer, scene, camera, key, fill, ground, stage } = studio();
   const px = opts.size || SIZE;
   if (px !== SIZE) renderer.setSize(px, px, false);
-  const wall = kind === 'wall' || item.place === 'wall' || (item.place === 'surface' && kind !== 'swatch');
+  const wall = kind === 'wall' || item.place === 'wall' || (item.place === 'surface' && kind !== 'swatch' && kind !== 'fixture');
   obj.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
 
   await settle(obj, 1500, src.proc ? 700 : 0);
@@ -625,7 +629,7 @@ export async function spinViewer(host, item) {
     const span = Math.hypot(sz.x, sz.z);
     const vb = new THREE.Box3(new THREE.Vector3(-span / 2, 0, -span / 2), new THREE.Vector3(span / 2, sz.y, span / 2));
     const center = vb.getCenter(new THREE.Vector3());
-    const wall = kind === 'wall' || kind === 'swatch' || item.place === 'wall' || item.place === 'surface';
+    const wall = kind === 'wall' || kind === 'swatch' || item.place === 'wall' || (item.place === 'surface' && kind !== 'fixture');
     const el = wall ? 0.08 : 0.3;
     const dir = new THREE.Vector3(0, Math.sin(el), Math.cos(el));
     fitCamera(camera, vb, center, dir, 0.86);

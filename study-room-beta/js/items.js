@@ -44,6 +44,7 @@ function add(genre, def, rows) {
     if (surface) item.surface = surface;
     if (o.light) item.light = o.light;
     if (o.special) item.special = true;
+    if (o.zone || def.zone) item.zone = o.zone || def.zone; // 小物の置き場所（bath / kitchen / desk / living）
     ITEMS.push(item);
   }
 }
@@ -344,6 +345,117 @@ add('decor', { place: 'floor' }, [
   ['decor-candle-ceramic', '白い陶器のキャンドル皿', 'n', { proc: { type: 'candle', n: 1, holder: 'ceramic' } }, 0.15],
 ]);
 
+// ───────── 小物（お風呂・台所・机・リビング。js/smallfurn.js の形）─────────
+// テーブル・棚・洗面台・キッチンの天板などの上に置く。zone = 置き場所の目安（部屋に合う物が候補に出やすい／自動で置く所）
+add('decor', { place: 'floor', zone: 'bath' }, [ // お風呂・洗面所
+  ['sm-shampoo', 'シャンプーとリンス', 'nm', { proc: { type: 'small', kind: 'shampoo' } }, 0.24],
+  ['sm-bodysoap', 'ボディソープ', 'nm', { proc: { type: 'small', kind: 'bodysoap' } }, 0.3],
+  ['sm-soapdish', 'せっけんと石けん皿', 'nr', { proc: { type: 'small', kind: 'soapdish' } }, 0.14],
+  ['sm-toothbrush', '歯ブラシとコップ', 'nm', { proc: { type: 'small', kind: 'toothbrush' } }, 0.22],
+  ['sm-etoothbrush', '電動歯ブラシ', 'm', { proc: { type: 'small', kind: 'etoothbrush' } }, 0.27],
+  ['sm-toothpaste', '歯みがき粉', 'nm', { proc: { type: 'small', kind: 'toothpaste' } }, 0.18],
+  ['sm-towels', 'たたんだタオル', 'nm', { proc: { type: 'small', kind: 'towels' } }, 0.3],
+  ['sm-towelbasket', '丸めたタオルのかご', 'n', { proc: { type: 'small', kind: 'towelbasket' } }, 0.3],
+  ['sm-handsoap', 'ハンドソープ', 'ri', { proc: { type: 'small', kind: 'handsoap' } }, 0.22],
+  ['sm-lotion', '化粧水のびん', 'nm', { proc: { type: 'small', kind: 'lotion' } }, 0.19],
+  ['sm-dryer', 'ドライヤー', 'm', { proc: { type: 'small', kind: 'dryer' } }, 0.25],
+  ['sm-hairbrush', 'ヘアブラシ', 'nr', { proc: { type: 'small', kind: 'hairbrush' } }, 0.2],
+  ['sm-razor', 'ひげそり', 'im', { proc: { type: 'small', kind: 'razor' } }, 0.15],
+  ['sm-cottonswab', '綿棒のケース', 'm', { proc: { type: 'small', kind: 'cottonswab' } }, 0.12],
+  ['sm-handmirror', '手鏡', 'rn', { proc: { type: 'small', kind: 'handmirror' } }, 0.25],
+  ['sm-bathsalt', 'バスソルトのびん', 'n', { proc: { type: 'small', kind: 'bathsalt' } }, 0.14],
+  ['sm-duck', 'アヒルのおもちゃ', 'nm', { proc: { type: 'small', kind: 'duck' } }, 0.12],
+  ['sm-bathbomb', '入浴剤の箱', 'n', { proc: { type: 'small', kind: 'bathbomb' } }, 0.13],
+  ['sm-diffuser', 'ルームフレグランス', 'nm', { proc: { type: 'small', kind: 'diffuser' } }, 0.35],
+  ['sm-perfume', '香水のびん', 'rm', { proc: { type: 'small', kind: 'perfume' } }, 0.11],
+  ['sm-cottonjar', 'コットンのびん', 'm', { proc: { type: 'small', kind: 'cottonjar' } }, 0.14],
+  ['sm-mouthwash', 'マウスウォッシュ', 'm', { proc: { type: 'small', kind: 'mouthwash' } }, 0.27],
+  ['sm-detergent', '洗たく洗剤', 'm', { proc: { type: 'small', kind: 'detergent' } }, 0.27],
+  ['sm-softener', '柔軟剤', 'nm', { proc: { type: 'small', kind: 'softener' } }, 0.24],
+  ['sm-pinbasket', '洗たくばさみのかご', 'n', { proc: { type: 'small', kind: 'pinbasket' } }, 0.18],
+]);
+add('decor', { place: 'floor', zone: 'kitchen' }, [ // 台所・食器
+  ['sm-plates', '重ねた白いお皿', 'nm', { proc: { type: 'small', kind: 'plates' } }, 0.25],
+  ['sm-chawan', '茶わん', 'nr', { proc: { type: 'small', kind: 'chawan' } }, 0.25],
+  ['sm-mug', 'マグカップ', 'n', { proc: { type: 'small', kind: 'mug' } }, 0.12],
+  ['sm-glasses', 'ガラスのコップ', 'm', { proc: { type: 'small', kind: 'glasses' } }, 0.15],
+  ['sm-petbottle', 'ペットボトルの水', 'm', { proc: { type: 'small', kind: 'petbottle' } }, 0.24],
+  ['sm-tetsubin', '鉄びん', 'ri', { proc: { type: 'small', kind: 'tetsubin' } }, 0.24],
+  ['sm-kettle', 'やかん', 'im', { proc: { type: 'small', kind: 'kettle' } }, 0.25],
+  ['sm-fryingpan', 'フライパン', 'i', { proc: { type: 'small', kind: 'fryingpan' } }, 0.42],
+  ['sm-saucepan', '片手なべ', 'im', { proc: { type: 'small', kind: 'saucepan' } }, 0.32],
+  ['sm-donabe', '土なべ', 'nr', { proc: { type: 'small', kind: 'donabe' } }, 0.3],
+  ['sm-saltpepper', '塩とこしょう', 'm', { proc: { type: 'small', kind: 'saltpepper' } }, 0.11],
+  ['sm-soysauce', 'しょうゆさし', 'nr', { proc: { type: 'small', kind: 'soysauce' } }, 0.13],
+  ['sm-oliveoil', 'オリーブオイル', 'nr', { proc: { type: 'small', kind: 'oliveoil' } }, 0.3],
+  ['sm-cuttingboard', 'まな板と包丁', 'n', { proc: { type: 'small', kind: 'cuttingboard' } }, 0.34],
+  ['sm-fruitbasket', '果物かご', 'n', { proc: { type: 'small', kind: 'fruitbasket' } }, 0.3],
+  ['sm-breadbasket', 'パンかご', 'nr', { proc: { type: 'small', kind: 'breadbasket' } }, 0.33],
+  ['sm-coffeemill', 'コーヒーミル', 'r', { proc: { type: 'small', kind: 'coffeemill' } }, 0.2],
+  ['sm-drippot', 'ドリップポット', 'im', { proc: { type: 'small', kind: 'drippot' } }, 0.27],
+  ['sm-toaster', 'トースター', 'rm', { proc: { type: 'small', kind: 'toaster' } }, 0.26],
+  ['sm-ricecooker', '炊飯器', 'm', { proc: { type: 'small', kind: 'ricecooker' } }, 0.27],
+  ['sm-microwave', '電子レンジ', 'm', { proc: { type: 'small', kind: 'microwave' } }, 0.48],
+  ['sm-canisters', '保存びんのセット', 'n', { proc: { type: 'small', kind: 'canisters' } }, 0.24],
+  ['sm-honey', 'はちみつのびん', 'n', { proc: { type: 'small', kind: 'honey' } }, 0.15],
+  ['sm-kyusu', '急須と湯のみ', 'nr', { proc: { type: 'small', kind: 'kyusu' } }, 0.24],
+  ['sm-wine', 'ワインとグラス', 'r', { proc: { type: 'small', kind: 'wine' } }, 0.32],
+]);
+add('decor', { place: 'floor', zone: 'desk' }, [ // 机・勉強
+  ['sm-notebooks', 'ノートの束', 'nm', { proc: { type: 'small', kind: 'notebooks' } }, 0.25],
+  ['sm-penstand', 'ペン立て', 'n', { proc: { type: 'small', kind: 'penstand' } }, 0.19],
+  ['sm-handheld', '携帯ゲーム機', 'm', { proc: { type: 'small', kind: 'handheld' } }, 0.2],
+  ['sm-smartphone', 'スマホ', 'm', { proc: { type: 'small', kind: 'smartphone' } }, 0.16],
+  ['sm-keyboard', 'キーボード', 'm', { proc: { type: 'small', kind: 'keyboard' } }, 0.36],
+  ['sm-mouse', 'マウス', 'm', { proc: { type: 'small', kind: 'mouse' } }, 0.11],
+  ['sm-laptop', 'ノートパソコン', 'm', { proc: { type: 'small', kind: 'laptop' } }, 0.31],
+  ['sm-monitor', 'モニター', 'im', { proc: { type: 'small', kind: 'monitor' } }, 0.55],
+  ['sm-digiclock', 'デジタル時計', 'nm', { proc: { type: 'small', kind: 'digiclock' } }, 0.16],
+  ['sm-calculator', '電卓', 'm', { proc: { type: 'small', kind: 'calculator' } }, 0.15],
+  ['sm-headphones', 'ヘッドホン', 'im', { proc: { type: 'small', kind: 'headphones' } }, 0.27],
+  ['sm-memo', '付せんとメモ帳', 'nm', { proc: { type: 'small', kind: 'memo' } }, 0.18],
+  ['sm-refbooks', '参考書の山', 'nr', { proc: { type: 'small', kind: 'refbooks' } }, 0.26],
+  ['sm-pencase', '筆箱', 'nm', { proc: { type: 'small', kind: 'pencase' } }, 0.2],
+  ['sm-pencils', '鉛筆と消しゴム', 'n', { proc: { type: 'small', kind: 'pencils' } }, 0.17],
+  ['sm-rulers', '定規セット', 'm', { proc: { type: 'small', kind: 'rulers' } }, 0.3],
+  ['sm-filebox', 'ファイルボックス', 'im', { proc: { type: 'small', kind: 'filebox' } }, 0.3],
+  ['sm-tablet', 'タブレット', 'm', { proc: { type: 'small', kind: 'tablet' } }, 0.25],
+  ['sm-phonestand', 'スマホスタンド', 'm', { proc: { type: 'small', kind: 'phonestand' } }, 0.17],
+  ['sm-deskcal', '卓上カレンダー', 'nm', { proc: { type: 'small', kind: 'deskcal' } }, 0.16],
+  ['sm-cube', '6色の立体パズル', 'm', { proc: { type: 'small', kind: 'cube' } }, 0.06],
+  ['sm-hourglass', '砂時計', 'nr', { proc: { type: 'small', kind: 'hourglass' } }, 0.16],
+  ['sm-deskfan', '卓上扇風機', 'rm', { proc: { type: 'small', kind: 'deskfan' } }, 0.25],
+  ['sm-minispeaker', '小さなスピーカー', 'm', { proc: { type: 'small', kind: 'minispeaker' } }, 0.16],
+  ['sm-bookstand', 'ブックスタンド', 'n', { proc: { type: 'small', kind: 'bookstand' } }, 0.25],
+]);
+add('decor', { place: 'floor', zone: 'living' }, [ // リビング・かざり
+  ['sm-aromacandle', 'アロマキャンドル', 'nr', { proc: { type: 'small', kind: 'aromacandle' } }, 0.1],
+  ['sm-tripleframe', '3連の写真立て', 'n', { proc: { type: 'small', kind: 'tripleframe' } }, 0.34],
+  ['sm-teddy', 'くまのぬいぐるみ', 'nr', { proc: { type: 'small', kind: 'teddy' } }, 0.28],
+  ['sm-catplush', 'ねこのぬいぐるみ', 'nm', { proc: { type: 'small', kind: 'catplush' } }, 0.25],
+  ['sm-bunko', '文庫本の束', 'nr', { proc: { type: 'small', kind: 'bunko' } }, 0.15],
+  ['sm-remote', 'テレビのリモコン', 'm', { proc: { type: 'small', kind: 'remote' } }, 0.17],
+  ['sm-tissue', 'ティッシュ箱', 'nm', { proc: { type: 'small', kind: 'tissue' } }, 0.24],
+  ['sm-succulent', '多肉植物の小鉢', 'nm', { proc: { type: 'small', kind: 'succulent' } }, 0.11],
+  ['sm-snowglobe', 'スノードーム', 'rn', { proc: { type: 'small', kind: 'snowglobe' } }, 0.15],
+  ['sm-shelljar', '貝がらのびん', 'n', { proc: { type: 'small', kind: 'shelljar' } }, 0.2],
+  ['sm-woodtray', '木のトレイ', 'n', { proc: { type: 'small', kind: 'woodtray' } }, 0.32],
+  ['sm-incense', 'お香立て', 'nr', { proc: { type: 'small', kind: 'incense' } }, 0.25],
+  ['sm-musicbox', 'オルゴール', 'r', { proc: { type: 'small', kind: 'musicbox' } }, 0.15],
+  ['sm-cards', 'トランプ', 'r', { proc: { type: 'small', kind: 'cards' } }, 0.16],
+  ['sm-boardgame', 'ボードゲームの箱', 'nm', { proc: { type: 'small', kind: 'boardgame' } }, 0.3],
+  ['sm-keytray', '鍵のトレイ', 'rm', { proc: { type: 'small', kind: 'keytray' } }, 0.16],
+  ['sm-watchstand', '腕時計スタンド', 'rm', { proc: { type: 'small', kind: 'watchstand' } }, 0.15],
+  ['sm-sunglasses', 'サングラス', 'm', { proc: { type: 'small', kind: 'sunglasses' } }, 0.14],
+  ['sm-records', 'レコード数枚', 'ri', { proc: { type: 'small', kind: 'records' } }, 0.32],
+  ['sm-magazines', '雑誌の束', 'm', { proc: { type: 'small', kind: 'magazines' } }, 0.28],
+  ['sm-sweetstin', 'お菓子の缶', 'r', { proc: { type: 'small', kind: 'sweetstin' } }, 0.19],
+  ['sm-paperweight', 'ガラスの文鎮', 'm', { proc: { type: 'small', kind: 'paperweight' } }, 0.08],
+  ['sm-woodbird', '木彫りの小鳥', 'n', { proc: { type: 'small', kind: 'woodbird' } }, 0.15],
+  ['sm-kokeshi', 'こけし', 'n', { proc: { type: 'small', kind: 'kokeshi' } }, 0.2],
+  ['sm-daruma', 'だるま', 'nr', { proc: { type: 'small', kind: 'daruma' } }, 0.13],
+]);
+
 // ───────── 壁かけ ─────────
 add('wallart', { place: 'wall' }, [
   ['art-sunset-oak', 'オーク額の夕日の海', 'n', { proc: { type: 'frame', img: 'img/out-sunset.jpg', frame: 'oak', w: 0.9, h: 0.6, mat: true } }, 0.9],
@@ -535,6 +647,24 @@ add('fixture', WIN, [
   ['window-arched-brass', '真ちゅう枠のアーチ窓', 'r', { proc: { type: 'window', style: 'arched', frame: 'brass' } }, 2.2, R],
 ]);
 
+// ───────── 備え付けの形（キッチン・浴槽・冷蔵庫・洗面台・洗たく機・エアコン）─────────
+// いつもの形は無料（持たなくてよい）。ここの形は買うと「模様がえ → 備え付け」で選べる。豪華な形はガチャ（gacha.js）
+// place = 'surface'、surface = 'fix-<種類>'（部屋の surf に入れると、その形で作る）
+const FX = (kind) => ({ place: 'surface', surface: 'fix-' + kind });
+add('fixture', {}, [
+  ['fx-kitchen-country', '木のカントリーキッチン', 'nr', { fixshape: { kind: 'kitchen', shape: 'country' } }, 2.4, FX('kitchen')],
+  ['fx-kitchen-steel', 'ステンレスの業務用キッチン', 'im', { fixshape: { kind: 'kitchen', shape: 'steel' } }, 2.4, FX('kitchen')],
+  ['fx-bathtub-retro', 'タイル張りのレトロ浴槽', 'rn', { fixshape: { kind: 'bathtub', shape: 'retro' } }, 1.6, FX('bathtub')],
+  ['fx-fridge-retro', '丸いレトロ冷蔵庫', 'r', { fixshape: { kind: 'fridge', shape: 'retro' } }, 1.6, FX('fridge')],
+  ['fx-fridge-french', '両開きの大型冷蔵庫', 'mi', { fixshape: { kind: 'fridge', shape: 'french' } }, 1.85, FX('fridge')],
+  ['fx-vanity-woodbowl', '木のカウンターの洗面台', 'n', { fixshape: { kind: 'vanity', shape: 'woodbowl' } }, 1.9, FX('vanity')],
+  ['fx-vanity-pedestal', '脚つき陶器のレトロ洗面台', 'r', { fixshape: { kind: 'vanity', shape: 'pedestal' } }, 1.9, FX('vanity')],
+  ['fx-washer-top', '縦型の洗たく機', 'm', { fixshape: { kind: 'washer', shape: 'top' } }, 1.0, FX('washer')],
+  ['fx-washer-twin', 'レトロな二槽式洗たく機', 'r', { fixshape: { kind: 'washer', shape: 'twin' } }, 1.0, FX('washer')],
+  ['fx-aircon-slim', '壁かけスリムなエアコン', 'm', { fixshape: { kind: 'aircon', shape: 'slim' } }, 0.86, FX('aircon')],
+  ['fx-aircon-wood', '木目パネルのエアコン', 'nr', { fixshape: { kind: 'aircon', shape: 'wood' } }, 0.82, FX('aircon')],
+]);
+
 // ───────── 趣味 ─────────
 add('hobby', { place: 'floor' }, [
   ['hobby-guitar-acoustic', 'アコースティックギター', 'nr', { proc: { type: 'guitar', style: 'acoustic', color: '#c9925a' } }, 1.05],
@@ -611,6 +741,10 @@ const BY_ID = new Map(ITEMS.map((it) => [it.id, it]));
 addToPool(ITEMS.filter((it) => it.rare && !it.special), 3);
 export function itemById(id) {
   return BY_ID.get(id) || gachaById(id) || null;
+}
+// 部屋に合う小物の置き場所（お風呂・洗面所＝bath、キッチン＝kitchen、書斎＝desk）。ほかの部屋は null（どれでも）
+export function decorZone(roomId) {
+  return { bath: 'bath', washroom: 'bath', 'v-bath': 'bath', kitchen: 'kitchen', study: 'desk' }[roomId] || null;
 }
 export function itemsOf(genre) {
   return ITEMS.filter((it) => it.genre === genre);

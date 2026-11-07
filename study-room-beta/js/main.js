@@ -2,8 +2,8 @@
 // 下のアイコン：部屋／模様がえ／解く／図鑑／メニュー（記録・フレンド・設定・管理者）
 import { Room3D, moodNow, weatherToday } from './room3d.js';
 import { ROOMS, roomDef, roomShape, STYLES, styleDef, homeOf, VILLA_MIN_ITEMS } from './rooms.js';
-import { FIX_VARIANTS, FIX_NAMES } from './roomfix.js';
-import { GENRES, ITEMS, itemById, itemsOf, SPECIAL_IDS, STARTER } from './items.js';
+import { FIX_VARIANTS, FIX_NAMES, fixKindsOf } from './roomfix.js';
+import { GENRES, ITEMS, itemById, itemsOf, SPECIAL_IDS, STARTER, decorZone } from './items.js';
 import { icon, GENRE_ICON, SUBJECT_ICON } from './icons.js';
 import { ticketSVG, TICKET_NAME } from './tickets.js';
 import * as G from './gacha.js';
@@ -1178,7 +1178,13 @@ function matchSurface(kind, src) {
 
 // =========================== 家具を買う ===========================
 function pickCandidates(genre, style) {
-  const pool = itemsOf(genre).filter(i => !i.special && !i.rare && !S.realOwned(i.id)); // レアな物はガチャだけ
+  let pool = itemsOf(genre).filter(i => !i.special && !i.rare && !S.realOwned(i.id)); // レアな物はガチャだけ
+  // 小物：お風呂・洗面所・キッチン・書斎では、その場所の小物を出す（3D担当 2026-11：小物100種類）
+  const zone = genre === 'decor' ? decorZone(curRoom()?.id) : null;
+  if (zone && pool.filter(i => i.zone === zone).length >= 3) pool = pool.filter(i => i.zone === zone);
+  // 備え付けの形は、今の部屋にその備え付けがある時だけ（キッチンの形はキッチンで）
+  const fk = fixKindsOf(roomShape(curDef()));
+  pool = pool.filter(i => !i.src?.fixshape || fk.includes(i.src.fixshape.kind));
   const match = S.shuffle(pool.filter(i => style && i.styles?.includes(style)));
   const other = S.shuffle(pool.filter(i => !(style && i.styles?.includes(style))));
   // 3つのうち2つは部屋の雰囲気に合う物（足りなければほかから）
@@ -1664,18 +1670,30 @@ function showSurfaces(kind = 'wall') {
 }
 
 // 部屋に備え付けの物があれば「備え付け」の切りかえも出す
-function surfKinds() { return roomShape(curDef()).built.some(b => FIX_VARIANTS[b.kind]) ? [...SURFACE_KINDS, ['fix', '備え付け']] : SURFACE_KINDS; }
+function surfKinds() { return fixKindsOf(roomShape(curDef())).length ? [...SURFACE_KINDS, ['fix', '備え付け']] : SURFACE_KINDS; }
 function showFixtures() {
   const r = curRoom();
-  const kinds = [...new Set(roomShape(curDef()).built.map(b => b.kind))].filter(k => FIX_VARIANTS[k]);
+  const kinds = fixKindsOf(roomShape(curDef()));
+  // 形：いつもの（無料）＋ 持っている形（買った物・ガチャの物）（3D担当 2026-11）
+  const allSurf = [...ITEMS, ...G.GACHA_ITEMS.filter(i => !ITEMS.includes(i))];
+  const shapesOf = (k) => allSurf.filter(i => i.place === 'surface' && i.surface === 'fix-' + k && S.owned(i.id));
   const el = sheet(`
-    <div class="sh-head"><span class="sh-ic">${icon('brush')}</span><div><h3>壁・床・ドア・窓</h3><p>備え付けの物は、いつでも色や素材を変えられます</p></div></div>
+    <div class="sh-head"><span class="sh-ic">${icon('brush')}</span><div><h3>壁・床・ドア・窓</h3><p>備え付けの物は、いつでも形や色を変えられます</p></div></div>
     <div class="seg kinds">${surfKinds().map(([k, n]) => `<button data-k="${k}" class="${k === 'fix' ? 'on' : ''}">${n}</button>`).join('')}</div>
-    <div class="fixlist">${kinds.map(k => `<div class="fix-row"><b>${FIX_NAMES[k] || k}</b><div class="fix-vs">${FIX_VARIANTS[k].map(v => `
+    <div class="fixlist">${kinds.map(k => `<div class="fix-row"><b>${FIX_NAMES[k] || k}</b>
+      ${shapesOf(k).length ? `<div class="invgrid fix-shapes"><button class="inv-item fix-s ${!r.surf?.['fix-' + k] ? 'on' : ''}" data-k="${k}" data-id=""><span class="thumb none">${icon('check')}</span><b>いつもの形</b></button>${shapesOf(k).map(it => `<button class="inv-item fix-s ${r.surf?.['fix-' + k] === it.id ? 'on' : ''}" data-k="${k}" data-id="${it.id}"><span class="thumb">${thumbHTML(it)}</span><b>${esc(it.name)}</b></button>`).join('')}</div>` : ''}
+      <div class="fix-vs">${FIX_VARIANTS[k].map(v => `
       <button class="fix-v ${(r.fix?.[k] || 'std') === v.id ? 'on' : ''}" data-k="${k}" data-v="${v.id}"><i style="background:${v.tint || 'linear-gradient(135deg,#f4f1ea,#cfc6b8)'}"></i>${v.name}</button>`).join('')}</div></div>`).join('')}</div>
     <button class="link close">とじる</button>`, 'inv-sheet');
   el.querySelector('.close').onclick = () => el.remove();
   el.querySelectorAll('.kinds button').forEach(b => b.onclick = () => showSurfaces(b.dataset.k));
+  el.querySelectorAll('.fix-s').forEach(b => b.onclick = async () => {
+    r.surf = r.surf || {};
+    if (b.dataset.id) r.surf['fix-' + b.dataset.k] = b.dataset.id; else delete r.surf['fix-' + b.dataset.k];
+    S.save();
+    el.querySelectorAll(`.fix-s[data-k="${b.dataset.k}"]`).forEach(x => x.classList.toggle('on', x === b));
+    await room3d.buildShell();
+  });
   el.querySelectorAll('.fix-v').forEach(b => b.onclick = async () => {
     r.fix = r.fix || {};
     if (b.dataset.v === 'std') delete r.fix[b.dataset.k]; else r.fix[b.dataset.k] = b.dataset.v;
@@ -1720,7 +1738,7 @@ function photoMode() {
 
 // =========================== 更新のお知らせ ===========================
 // このプログラムの版（version.json と同じにする。公開のたびに上げる）
-const APP_VERSION = '1.15.0';
+const APP_VERSION = '1.15.1';
 ERR.setVersion(APP_VERSION);
 // 新しい版が出たら、みんな同じタイミングでそろうように強制で再起動する。
 // 開いた時・画面に戻った時・1分ごとに version.json を見る

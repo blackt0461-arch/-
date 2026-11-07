@@ -8,7 +8,7 @@ import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { roomShape, ceilAt } from './rooms.js';
-import { buildFixture, segRot, segPoint, putOnWall } from './roomfix.js';
+import { buildFixture, buildAircon, segRot, segPoint, putOnWall } from './roomfix.js';
 import { layoutSpots } from './layouts.js';
 import { itemById, STARTER } from './items.js';
 import { buildProc } from './procfurn.js';
@@ -553,7 +553,15 @@ export class Room3D {
     else if (item.surface === 'window' || item.surface === 'curtain') { const w = sh.windows[0], s = w && segOf(sh, w.wall); if (s) look(segPoint(s, w.a, 1.4, 0)); }
     else if (item.surface === 'floor') this.targetLook = { yaw: this.yaw, pitch: -0.7 };
     else if (item.surface === 'wall') this.targetLook = { yaw: this.yaw, pitch: 0.05 };
+    else if (item.surface?.startsWith('fix-')) {
+      // 備え付けの形：その備え付けのほうを向く
+      const kind = item.surface.slice(4);
+      if (kind === 'aircon') { const s = sh.ac && segOf(sh, sh.ac.wall); if (s) look(segPoint(s, sh.ac.a, sh.h - 0.35, 0)); }
+      else { const sd = (this.solids || []).find(x => x.kind === kind); if (sd) look(sd.box.getCenter(new THREE.Vector3())); }
+    }
   }
+  // 備え付けの形（模様がえで選んだ物。買う前のためし映しもふくむ）
+  fixShape(kind) { return this.surfItem('fix-' + kind)?.src?.fixshape?.shape || null; }
   surfItem(kind) {
     if (this.surfPreview && this.surfPreview.surface === kind) return this.surfPreview;
     const id = this.st?.surf?.[kind] ?? STARTER?.[kind];
@@ -605,6 +613,7 @@ export class Room3D {
     const wrap = new THREE.Group();
     wrap.add(obj);
     wrap.userData = { uid: p.uid, item, p, baseScale: 1 };
+    this.refitFixRider(p);
     this.mountPlaced(wrap, p);
     if (animate) { wrap.userData.baseY = wrap.position.y; wrap.userData.appear = 0; }
     const old = this.objByUid?.[p.uid];
@@ -638,7 +647,8 @@ export class Room3D {
     // 照明（アーム付きのスタンドなど）は足もとの台だけに小さく。ほかは家具の大きさに合わせる
     const lamp = item.genre === 'light';
     const fx = lamp ? Math.min(0.45, sz.x) : sz.x * 1.08, fz = lamp ? Math.min(0.45, sz.z) : sz.z * 1.08;
-    b.scale.set(Math.max(0.2, fx), 1, Math.max(0.2, fz));
+    const minB = Room3D.canStack(item) && Math.max(sz.x, sz.z) < 0.4 ? 0.05 : 0.2; // 小物は小さな影
+    b.scale.set(Math.max(minB, fx), 1, Math.max(minB, fz));
     b.position.set(c.x, bb.min.y + 0.004, c.z);
     b.visible = true;
   }
@@ -707,10 +717,11 @@ export class Room3D {
   static isSupport(item) { return item.place === 'floor' && (item.genre === 'table' || item.genre === 'storage'); }
   boxOf(o) { return new THREE.Box3().setFromObject(o); }
   // 備え付けの物・切り取った角・低い天井にかかっていないか
-  hitsShell(item, bb) {
+  hitsShell(item, bb, skip) {
     const sh = this.sh;
     if (item.place !== 'ceiling' && item.place !== 'rug' && sh.slope && bb.max.y > Math.min(ceilAt(sh, bb.min.x), ceilAt(sh, bb.max.x)) + 0.02) return true;
     for (const s of this.solids || []) {
+      if (s === skip) continue;
       if (s.block === 'wall' && item.place !== 'wall') continue;
       if (bb.intersectsBox(s.box)) return true;
     }
@@ -721,7 +732,18 @@ export class Room3D {
     const item = o.userData.item, p = o.userData.p;
     const sh = this.sh;
     const shrink = 0.01;
-    const bb = this.boxOf(o).expandByScalar(-shrink);
+    let bb = this.boxOf(o).expandByScalar(-shrink);
+    // 小物：備え付けの天板（洗面台・キッチンなど）の上なら、そこにのせる
+    if (Room3D.canStack(item) && !Room3D.isSupport(item)) {
+      const top = this.fixTopAt(bb);
+      if (top) {
+        if (p.on !== top.id || p.y !== top.y) { p.on = top.id; p.y = top.y; this.mountPlaced(o, p); bb = this.boxOf(o).expandByScalar(-shrink); }
+        if (this.hitsShell(item, bb, top.solid)) return false;
+        // 同じ天板の物・壁の物・ほかの家具と重ならない
+        return !this.items.children.some(x => x !== o && x.userData.uid && x.userData.item?.place !== 'rug' && x.userData.item?.place !== 'ceiling' && bb.intersectsBox(this.boxOf(x)));
+      }
+      if (typeof p.on === 'string' && p.on.startsWith('fix:')) { delete p.on; delete p.y; this.mountPlaced(o, p); bb = this.boxOf(o).expandByScalar(-shrink); }
+    }
     if (this.hitsShell(item, bb)) return false;
     if (item.place === 'rug') return true;
     const others = this.items.children.filter(x => x !== o && x.userData.uid && x.userData.item?.place !== 'rug');
@@ -784,6 +806,17 @@ export class Room3D {
       }
     }
     return false;
+  }
+  // 備え付けの天板にのっている物（p.on = 'fix:…'）の高さを、今の天板に合わせる。天板がなくなっていたら床へ
+  refitFixRider(p, o) {
+    if (!p || typeof p.on !== 'string' || !p.on.startsWith('fix:')) return;
+    const t = (this.fixTops || []).find(x => x.id === p.on) || (this.fixTops || []).find(x => p.x > x.x0 && p.x < x.x1 && p.z > x.z0 && p.z < x.z1);
+    if (t) { p.on = t.id; p.y = t.y; } else { delete p.on; delete p.y; }
+    if (o) { this.mountPlaced(o, p); this.updateBlob(o); }
+  }
+  // 真上から見て、小物がまるごとおさまる備え付けの天板（なければ null）
+  fixTopAt(bb, pad = 0.015) {
+    return (this.fixTops || []).find(t => bb.min.x > t.x0 - pad && bb.max.x < t.x1 + pad && bb.min.z > t.z0 - pad && bb.max.z < t.z1 + pad) || null;
   }
   // 家具の「物をのせられる面」の高さを、上から光線を当てて見つける（棚の中の板もふくむ）
   shelfLevels(sup) {
@@ -911,7 +944,17 @@ export class Room3D {
     // 小物：テーブルや棚の上
     if (Room3D.canStack(item) && !Room3D.isSupport(item)) {
       // テーブル・棚の「上」だけ（needOn：上にのらなければ使わない。すぐ横の床に落ちないように）
+      // 備え付けの天板（洗面台・キッチンなど）。お風呂・台所の小物はこちらを先に
+      const fix = [];
+      for (const t of this.fixTops || []) {
+        const n = Math.max(1, Math.round((t.x1 - t.x0) / 0.12)), m = Math.max(1, Math.round((t.z1 - t.z0) / 0.12));
+        const rot = this.fixRotAt(t);
+        for (let i = 0; i < n; i++) for (let j = m - 1; j >= 0; j--) fix.push({ x: t.x0 + (t.x1 - t.x0) * (i + 0.5) / n, z: t.z0 + (t.z1 - t.z0) * (j + 0.5) / m, rot, needOn: true });
+      }
+      const wet = item.zone === 'bath' || item.zone === 'kitchen';
+      if (wet) out.push(...fix);
       for (const s of byGenre('table', 'storage')) { const c = centerOf(s), rr = s.userData.p.rot || 0; for (const [dx, dz] of [[0, 0], [0.22, 0], [-0.22, 0], [0, 0.22], [0, -0.22], [0.3, 0], [-0.3, 0], [0, 0.3], [0, -0.3]]) out.push({ x: c.x + dx, z: c.z + dz, rot: rr, needOn: true }); }
+      if (!wet) out.push(...fix);
       out.push(...designed);
     }
     if (g === 'table') {
@@ -926,6 +969,12 @@ export class Room3D {
     } else wallSide(); // ソファ・ベッド・棚・趣味の物などは壁ぎわ（背中を壁に付ける）
     out.push(...corners);
     return out;
+  }
+  // 天板の前（部屋の中）を向く角度。備え付けは壁ぎわなので、近い壁から部屋の中へ
+  fixRotAt(t) {
+    const cx = (t.x0 + t.x1) / 2, cz = (t.z0 + t.z1) / 2, sh = this.sh;
+    const d = [[sh.hw - cx, -Math.PI / 2], [cx + sh.hw, Math.PI / 2], [sh.hd - cz, Math.PI], [cz + sh.hd, 0]].sort((a, b) => a[0] - b[0]);
+    return d[0][1];
   }
   autoPlace(o) {
     const p = o.userData.p, item = o.userData.item;
@@ -1365,6 +1414,8 @@ export class Room3D {
       // 棚・テーブルの上の物は、その上からはみ出さない
       const sup = p.on != null && this.objByUid?.[p.on];
       if (sup) { const sb = this.boxOf(sup); if (p.x < sb.min.x + 0.03 || p.x > sb.max.x - 0.03 || p.z < sb.min.z + 0.03 || p.z > sb.max.z - 0.03) { Object.assign(p, before); return false; } }
+      const ft = typeof p.on === 'string' && (this.fixTops || []).find(t => t.id === p.on);
+      if (ft && (p.x < ft.x0 || p.x > ft.x1 || p.z < ft.z0 || p.z > ft.z1)) { Object.assign(p, before); return false; }
     }
     this.mountPlaced(o, p);
     if (!this.checkPlacement(o)) { Object.assign(p, before); if (before.on == null) { delete p.on; } this.mountPlaced(o, p); this.selBox && this.selBox.update(); return false; }
@@ -1420,6 +1471,15 @@ export class Room3D {
             const d = hit.distanceTo(ray.origin);
             if (d < best) { best = d; top = hit; }
           }
+        }
+      }
+      if (Room3D.canStack(item) && !Room3D.isSupport(item)) {
+        let best = top ? top.distanceTo(ray.origin) : Infinity;
+        for (const t of this.fixTops || []) {
+          const hit = ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), -t.y), new THREE.Vector3());
+          if (!hit || hit.x < t.x0 || hit.x > t.x1 || hit.z < t.z0 || hit.z > t.z1) continue;
+          const d = hit.distanceTo(ray.origin);
+          if (d < best) { best = d; top = hit; }
         }
       }
       if (top) { p.x = top.x; p.z = top.z; this.levelHint = top.y; }
@@ -1692,7 +1752,7 @@ export class Room3D {
       floorSrc?.tex ? texturedMaterial(floorSrc.tex, { rep: floorSrc.rep || 3, tint: floorSrc.tint }) : (floorSrc?.color ? new THREE.MeshStandardMaterial({ color: floorSrc.color, roughness: 0.7 }) : plainFloor),
       new THREE.MeshStandardMaterial({ color: sh.ceil, roughness: 0.95 }),
       // 備え付けの物（浴槽・キッチンなど）
-      Promise.all(sh.built.map(b => buildFixture(b, sh, this.st?.fix?.[b.kind]).catch(e => { console.warn('fixture', b.kind, e); return null; }))),
+      Promise.all(sh.built.map(b => buildFixture(b, sh, this.st?.fix?.[b.kind], this.fixShape(b.kind)).catch(e => { console.warn('fixture', b.kind, e); return null; }))),
     ]);
     if (this.sh !== sh) return; // 作っているあいだに別の部屋へ移った
     // 天井は下からの照り返しが少ないので、ほんのり明るくしておく
@@ -1817,7 +1877,7 @@ export class Room3D {
     this.door = dg;
     g.add(dg);
     // スイッチ・コンセント・エアコン・天井の縁
-    g.add(makeFixtures(sh, skirt.color));
+    g.add(makeFixtures(sh, skirt.color, { shape: this.fixShape('aircon'), variant: this.st?.fix?.aircon }));
     this.floorMesh = floor;
     floor.userData.floor = true;
 
@@ -1831,8 +1891,17 @@ export class Room3D {
       if (!f) continue;
       g.add(f.obj);
       f.obj.updateMatrixWorld(true);
-      this.solids.push({ block: f.block, box: new THREE.Box3().setFromObject(f.obj), kind: f.obj.userData.fixture });
+      const solid = { block: f.block, box: new THREE.Box3().setFromObject(f.obj), kind: f.obj.userData.fixture };
+      // 小物をのせられる天板（洗面台・キッチン・洗たく機の上など）。roomfix.js の userData.tops（その物の向きの長方形）を部屋の向きに直す
+      solid.tops = (f.obj.userData.tops || []).map(t => {
+        const a = new THREE.Vector3(t.x0, t.y, t.z0).applyMatrix4(f.obj.matrixWorld), b = new THREE.Vector3(t.x1, t.y, t.z1).applyMatrix4(f.obj.matrixWorld);
+        return { x0: Math.min(a.x, b.x), x1: Math.max(a.x, b.x), z0: Math.min(a.z, b.z), z1: Math.max(a.z, b.z), y: +a.y.toFixed(3) };
+      });
+      this.solids.push(solid);
     }
+    this.fixTops = this.solids.flatMap((sd, si) => (sd.tops || []).map((t, ti) => ({ ...t, id: `fix:${sd.kind}:${si}:${ti}`, solid: sd })));
+    // 備え付けの形が変わったら、天板にのっている小物の高さを合わせなおす
+    for (const o of this.items?.children || []) this.refitFixRider(o.userData.p, o);
 
     // 家の外（別荘は海辺。2階の部屋は3m上から見る）
     const level = this.roomDef.level || 0;
@@ -2061,7 +2130,7 @@ function makeDoor(color) {
 }
 
 // スイッチ・コンセント・エアコン・天井の縁（廻り縁）
-function makeFixtures(sh, trimColor) {
+function makeFixtures(sh, trimColor, acOpt = {}) {
   const g = new THREE.Group();
   const H = sh.h;
   const white = new THREE.MeshStandardMaterial({ color: '#f4f2ee', roughness: 0.35 });
@@ -2116,14 +2185,8 @@ function makeFixtures(sh, trimColor) {
   for (const [w, a] of outs) onWall(outlet(), w, a, 0.25);
   // エアコン
   if (sh.ac && segOf(sh, sh.ac.wall)) {
-    const ac = new THREE.Group();
-    const body = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.28, 0.22), white); body.position.z = 0.11; body.castShadow = true; ac.add(body);
-    const front = new THREE.Mesh(new THREE.BoxGeometry(0.78, 0.2, 0.01), new THREE.MeshStandardMaterial({ color: '#fbfaf8', roughness: 0.2 }));
-    front.position.set(0, 0.03, 0.222); ac.add(front);
-    const vent = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.04, 0.02), new THREE.MeshStandardMaterial({ color: '#c9c6c0', roughness: 0.5 }));
-    vent.position.set(0, -0.115, 0.2); vent.rotation.x = 0.4; ac.add(vent);
-    const led = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.006, 0.004), new THREE.MeshStandardMaterial({ color: '#000', emissive: '#58e07a', emissiveIntensity: 1.5 }));
-    led.position.set(0.3, -0.07, 0.228); ac.add(led);
+    // 形（いつもの・壁かけスリム・木目パネル）と色は模様がえで選べる（roomfix.js の buildAircon）
+    const ac = buildAircon(acOpt.shape, acOpt.variant);
     const acY = H - 0.35;
     onWall(ac, sh.ac.wall, sh.ac.a, acY);
     // エアコンの配管カバー

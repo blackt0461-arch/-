@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { mergeGeometries, mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 import { texturedMaterial, loadTex } from './loaders.js';
+import { buildSmall, SMALL_KINDS } from './smallfurn.js';
 
 const PI = Math.PI, TAU = Math.PI * 2;
 const UP = new THREE.Vector3(0, 1, 0);
@@ -2927,12 +2928,14 @@ export const PROC_TYPES = {
   amp: { place: 'floor', params: { color: '外側の色', grille: '前の布の色' } },
   micstand: { place: 'floor', params: { mat: MATKEY } },
   bookstack: { place: 'floor', params: { n: '冊数', colors: '色の配列', top: 'false でマグカップなし' } },
+  small: { place: 'floor', params: { kind: SMALL_KINDS, color: '本体の色（種類による）' } },
 };
 
 const BUILDERS = {
   pendant, floorlamp, sconce, sofa, bed, chair, table, shelf, plant, vase, books, candle,
   frame, mirror, clock, wallshelf, door, window: windowFrame, guitar, keyboard, speaker,
   turntable, drum, easel, telescope, globe, gamechair, amp, micstand, bookstack,
+  small: (s) => buildSmall(s, matOf), // 小物（js/smallfurn.js）
 };
 
 // spec = { type, ...引数 } → THREE.Group（すぐ返す）

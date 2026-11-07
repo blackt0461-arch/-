@@ -41,6 +41,7 @@ function add(rarity, rows, def = {}) {
     };
     if (o.surface) item.surface = o.surface;
     if (o.light) item.light = o.light;
+    if (o.zone) item.zone = o.zone;
     const series = o.series || def.series;
     if (series) { item.series = series; item.limited = true; }
     GACHA_ITEMS.push(item);
@@ -141,6 +142,11 @@ add(4, [
   ['g4-band-wall', '暗い赤レンガの壁', 'interior', 'i', { tex: 'red_brick_03', rep: 2, tint: '#8f7d7a' }, 6, SF('wall')],
   ['g4-band-floor', '黒い板の床', 'interior', 'i', { tex: 'black_painted_planks', rep: 3 }, 6, SF('floor')],
   ['g4-band-door', '赤いドア', 'fixture', 'ir', { proc: { type: 'door', style: 'panel4', color: '#8a1420', handle: 'chrome' } }, 2.1, SF('door')],
+  // 小物（js/smallfurn.js）。テーブルや棚の上に置ける
+  ['g4-band-picks', 'ギターピックと小皿', 'decor', 'ir', { proc: { type: 'small', kind: 'picks' } }, 0.13, { zone: 'desk' }],
+  ['g4-band-sticks', 'ドラムスティック', 'decor', 'ir', { proc: { type: 'small', kind: 'sticks' } }, 0.42, { zone: 'desk' }],
+  ['g4-band-tuner', 'チューナーとケーブル', 'decor', 'i', { proc: { type: 'small', kind: 'tuner' } }, 0.2, { zone: 'desk' }],
+  ['g4-band-setlist', 'セットリストとライブチケット', 'decor', 'ir', { proc: { type: 'small', kind: 'setlist' } }, 0.2, { zone: 'desk' }],
 ], { series: 'band' });
 
 // ───────── ★5 限定：お休み中のシリーズ ─────────
@@ -198,6 +204,16 @@ add(4, [
   ['ev-snowman', 'マフラーの雪だるま', 'decor', 'nmr', { gacha: 'snowman' }, 1.2, { series: 'event' }],
   ['ev-gift-pile', 'プレゼントの山', 'decor', 'nmr', { gacha: 'giftPile' }, 0.7, { series: 'event' }],
 ], {});
+// ───────── 備え付けの豪華な形（★4・★5 恒常）。引くと「模様がえ → 備え付け」で選べる ─────────
+add(4, [
+  ['g4-fx-kitchen-marble', '大理石の天板のキッチン', 'fixture', 'mr', { fixshape: { kind: 'kitchen', shape: 'marble' } }, 2.4, SF('fix-kitchen')],
+  ['g4-fx-bathtub-claw', '猫足の浴槽', 'fixture', 'rn', { fixshape: { kind: 'bathtub', shape: 'clawfoot' } }, 1.6, SF('fix-bathtub')],
+  ['g4-fx-fridge-glass', 'ガラス扉の冷蔵庫', 'fixture', 'im', { fixshape: { kind: 'fridge', shape: 'glass' } }, 1.85, SF('fix-fridge')],
+]);
+add(5, [
+  ['g5-fx-bathtub-gold', '金の猫足浴槽', 'fixture', 'r', { fixshape: { kind: 'bathtub', shape: 'goldclaw' } }, 1.6, SF('fix-bathtub')],
+  ['g5-fx-vanity-marble', '大理石の二つボウル洗面台', 'fixture', 'mr', { fixshape: { kind: 'vanity', shape: 'marble2' } }, 2.1, SF('fix-vanity')],
+]);
 for (const it of GACHA_ITEMS) if (it.series === 'event') it.reward = true;
 for (const it of GACHA_ITEMS) if (it.place === 'avatar') it.reward = true; // 引いた回数のごほうび。ガチャからランダムには出ない
 
