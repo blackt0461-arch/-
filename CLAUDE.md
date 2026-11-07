@@ -56,3 +56,15 @@ GitHub のアカウント（blackt0461-arch）が止められている。clone�
 - 予備の写しは、本人の Google ドライブ「ROOMIN バックアップ」フォルダに zip で置く。
 - 目覚まし管理（alarm）は、データを GitHub（alarm-data）に読み書きするので、いまは動かない。
 - GitHub が戻ったら：手元にたまっている変更を送り、Cloudflare Pages を GitHub につなぐ（つなぎかえで作り直しても、ドメインのおかげで URL は変わらない）。
+
+## GitLab（コードの置き場所）と、止められないためのきまり（2026-11-07〜）
+
+コードは GitLab の非公開グループ **kotetsu-works-group** にも置く：https://gitlab.com/kotetsu-works-group/kotetsuworks-site
+鍵は環境「全部許可」の gitlab.com 宛てに保存してあり、通信の途中で自動で付く。送るときは `bash tools/gitlab/push.sh`（手元の写しは履歴が途中からなので、送る用に作り直してから送る。cat-model/reference の参考写真は外す）。
+
+止められないためのきまり：
+- GitLab・Cloudflare のアカウントは2段階認証を使う（本人が設定ずみ）。
+- 鍵・トークン・.env はコードや履歴に入れない（URL にも書かない）。本人にもチャットに貼ってもらわない。
+- 他の人が作った素材（写真・音楽・3Dモデルなど）は GitLab に送らず、非公開の Cloudflare R2 に置く。
+- 100MB をこえるファイルは送らない（R2 に置く）。
+- 大量の自動操作（短い間に何度も送る・たくさん作る）をしない。

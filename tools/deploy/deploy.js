@@ -6,12 +6,14 @@
 // api.cloudflare.com に登録してあり、通信の途中で自動で付く。なので、ここでは本物の鍵を持たない（ダミーを渡す）。
 const { execSync } = require('child_process'), path = require('path');
 const ROOT = path.resolve(__dirname, '..', '..'), PROJECT = 'kotetsuworks';
-const api = async (p) => { const r = await fetch('https://api.cloudflare.com/client/v4' + p, { headers: { Authorization: 'Bearer placeholder' } }); const j = await r.json(); if (!j.success) throw new Error(`Cloudflare API ${p}: ${JSON.stringify(j.errors)}`); return j.result; };
+// Node の fetch は通信の中継（鍵を付けてくれる所）を通らないので、curl を使う。
+const api = async (p) => { const j = JSON.parse(execSync(`curl -sS https://api.cloudflare.com/client/v4${p}`, { encoding: 'utf8' })); if (!j.success) throw new Error(`Cloudflare API ${p}: ${JSON.stringify(j.errors)}`); return j.result; };
+// アカウントの番号（秘密ではない）。公開だけの鍵では自動で取れないので、ここに書いておく。
+const fs = require('fs'), ACC_FILE = path.join(__dirname, 'account-id.txt');
 (async () => {
   execSync('node tools/deploy/build.js', { cwd: ROOT, stdio: 'inherit' });
-  const accounts = await api('/accounts');
-  if (!accounts.length) throw new Error('アカウントが見つからない（鍵の権限を確かめる）');
-  const acc = accounts[0].id;
+  let acc = process.env.CLOUDFLARE_ACCOUNT_ID || (fs.existsSync(ACC_FILE) && fs.readFileSync(ACC_FILE, 'utf8').trim());
+  if (!acc) { const accounts = await api('/accounts'); if (!accounts.length) throw new Error('アカウントの番号がわからない。Cloudflare の「Workers & Pages」右側の Account ID を tools/deploy/account-id.txt に書く'); acc = accounts[0].id; }
   const proj = await api(`/accounts/${acc}/pages/projects/${PROJECT}`);
   const branch = proj.production_branch || 'main';
   console.log(`公開先：${PROJECT}（本番の枝：${branch}）`);
