@@ -1,0 +1,21 @@
+# kotetsuworks.com（Cloudflare Pages「kotetsuworks」）への公開。2026-11-07
+# ・ふだんの保存（push）では何も動かない。「deploy-」で始まるタグを送った時だけ公開する。
+#   合図の出し方（手元から）：bash tools/gitlab/push.sh --deploy
+# ・Cloudflare 側でビルドしない「直接アップロード」なので、Cloudflare の月500回のビルド回数は使わない。
+# ・鍵は GitLab の CI 変数 CLOUDFLARE_API_TOKEN（Pages Edit だけ）。ここには書かない。
+#   変数を Protected にした時は、タグ「deploy-*」も Protected tags に登録しておく（でないと鍵が渡らない）。
+workflow:
+  rules:
+    - if: '$CI_COMMIT_TAG =~ /^deploy-/'
+    - when: never
+
+publish:
+  image: node:20-slim
+  variables:
+    CLOUDFLARE_ACCOUNT_ID: "636a9f176e417dba1d31eb30dd503634"
+    WRANGLER_SEND_METRICS: "false"
+  script:
+    - test -n "$CLOUDFLARE_API_TOKEN" || (echo "CI 変数 CLOUDFLARE_API_TOKEN がない" && exit 1)
+    - node tools/deploy/build.js
+    - npx -y wrangler@3.114.0 pages deploy dist --project-name kotetsuworks --branch main --commit-dirty=true
+  timeout: 15m
