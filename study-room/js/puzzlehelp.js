@@ -1,6 +1,7 @@
 // パズルの遊び方（右上の「i」）。下からカードが出て、小さな盤の上で指が自動で操作してみせる（デザイン案A）。
 // 手順ごとに1行の説明（です・ます）。点を押すと、その手順にもどれる。
 import { art, INK } from './puzzles.js';
+import { MERGE_ITEMS } from './endless.js';
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 const reduce = () => { try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; } };
@@ -88,17 +89,49 @@ const DEMOS = {
     render(st, host) {
       const U = Math.floor(Math.min(host.clientWidth || 200, 200) / SL_W);
       const occ = (x, y) => st.ps.some(q => x >= q[1] && x < q[1] + q[3] && y >= q[2] && y < q[2] + q[4]);
-      let h = `<div class="ph-mv">手数 <b>${st.moves}</b> / 8</div><div class="ph-sl" style="width:${SL_W * U}px;height:${SL_H * U}px"><div class="ph-exit" style="left:4px;width:${2 * U - 8}px"></div>`;
+      let h = `<div class="ph-mv">手数 <b>${st.moves}</b></div><div class="ph-sl" style="width:${SL_W * U}px;height:${SL_H * U}px"><div class="ph-exit" style="left:4px;width:${2 * U - 8}px"></div>`;
       for (let y = 0; y < SL_H; y++) for (let x = 0; x < SL_W; x++) if (!occ(x, y)) h += `<div class="ph-e" data-k="e-${x},${y}" style="left:${x * U + 3}px;top:${y * U + 3}px;width:${U - 6}px;height:${U - 6}px"></div>`;
       st.ps.forEach((p, i) => { const [a, col] = SL_NAME[p[0]]; h += `<div class="ph-b ${st.sel === i ? 'sel' : ''} ${st.done && i === 0 ? 'out' : ''}" data-k="b-${i}" style="left:${p[1] * U + 3}px;top:${p[2] * U + 3}px;width:${p[3] * U - 6}px;height:${p[4] * U - 6}px;background:${col};--out:${2.4 * U}px">${A(a)}</div>`; });
-      h += `</div><div class="ph-arrows"><span data-k="arr-l">←</span><span data-k="arr-u">↑</span><span data-k="arr-d">↓</span><span data-k="arr-r">→</span></div>`;
+      h += `</div><div class="ph-arrows"><span data-k="arr-l">←</span><span data-k="arr-u">↑</span><span data-k="arr-d">↓</span><span data-k="arr-r">→</span></div><div class="ph-tools"><span data-k="undo">1手戻る</span><span>最初から</span></div>`;
       host.innerHTML = h;
     },
     steps: [
       { cap: '動かしたい家具を押して、えらびます', taps: [{ k: 'b-2', act: st => { st.sel = 2; } }] },
       { cap: '行きたい方の空きマスを押すと、すべって動きます（1手）', taps: [{ k: 'e-2,1', act: st => { st.ps[2][2] = 1; st.moves++; } }] },
       { cap: '矢印でも動かせます', taps: [{ k: 'b-1', act: st => { st.sel = 1; } }, { k: 'arr-r', act: st => { st.ps[1][1] = 1; st.moves++; } }, { k: 'arr-r', act: st => { st.ps[1][1] = 2; st.moves++; } }] },
-      { cap: 'ソファを緑の出口まで運べばクリアです！ 手数の上限に気をつけてください', taps: [{ k: 'b-0', act: st => { st.sel = 0; } }, { k: 'arr-d', act: st => { st.ps[0][2] = 1; st.moves++; } }, { k: 'arr-d', act: st => { st.ps[0][2] = 2; st.moves++; } }], fin: st => { st.done = true; st.sel = -1; }, hold: 2200 },
+      { cap: 'まちがえても「1手戻る」「最初から」で、何回でもやり直せます', taps: [{ k: 'undo', act: st => { st.ps[1][1] = 1; st.moves--; } }, { k: 'arr-r', act: st => { st.ps[1][1] = 2; st.moves++; } }] },
+      { cap: 'ソファを緑の出口まで運べばクリアです！ 少ない手数ほどポイントが多くなります', taps: [{ k: 'b-0', act: st => { st.sel = 0; } }, { k: 'arr-d', act: st => { st.ps[0][2] = 1; st.moves++; } }, { k: 'arr-d', act: st => { st.ps[0][2] = 2; st.moves++; } }], fin: st => { st.done = true; st.sel = -1; }, hold: 2200 },
+    ],
+  },
+  pack: {
+    // 4×4 の小さい押し入れ。いちばん下の列があと2マスでそろう
+    init: () => ({ g: { '3,0': '#e86f5a', '3,1': '#e86f5a', '2,0': '#f2b84b', '1,3': '#5b8def', '2,3': '#5b8def' }, tray: [[[0, 0], [0, 1]], [[0, 0], [1, 0], [1, 1]], [[0, 0]]], sel: -1, will: false, flash: false, done: false }),
+    render(st, host) {
+      let h = `<div class="ph-bd ph-pk ${st.done ? 'done' : ''}" style="grid-template-columns:repeat(4,1fr);gap:2px;background:#b9a888">`;
+      for (let r = 0; r < 4; r++) for (let c = 0; c < 4; c++) { const k = `${r},${c}`, v = st.g[k]; h += `<div class="ph-cell ${st.flash && r === 3 ? 'ng' : ''}" data-k="c-${k}" style="background:${v || '#efe6d2'};${v ? `box-shadow:inset 0 0 0 2px ${INK}` : ''}"></div>`; }
+      h += '</div><div class="ph-pktray">' + st.tray.map((cs, i) => `<span data-k="t-${i}" class="${st.sel === i ? 'on' : ''}">${cs ? `<i style="grid-template-columns:repeat(${Math.max(...cs.map(x => x[1])) + 1},12px)">${cs.map(([r, c]) => `<b style="grid-row:${r + 1};grid-column:${c + 1}"></b>`).join('')}</i>` : ''}</span>`).join('') + '</div>';
+      host.innerHTML = h;
+    },
+    steps: [
+      { cap: '下の箱を、押し入れの空いている所へドラッグして置きます', taps: [{ k: 't-0', act: st => { st.sel = 0; } }, { k: 'c-0,0', act: st => { st.g['0,0'] = st.g['0,1'] = '#f29bb4'; st.tray[0] = null; st.sel = -1; } }] },
+      { cap: '横か たての列がぜんぶうまると、片づいて消えます', taps: [{ k: 't-1', act: st => { st.sel = 1; } }, { k: 'c-2,2', act: st => { st.g['2,2'] = st.g['3,2'] = st.g['3,3'] = '#6cbf8a'; st.tray[1] = null; st.sel = -1; st.flash = true; } }], after: st => { st.flash = false; for (let c = 0; c < 4; c++) delete st.g[`3,${c}`]; }, hold: 1400 },
+      { cap: '3つ置くと、次の3つが出ます。置ける場所がなくなったら終わりです', taps: [{ k: 't-2', act: st => { st.sel = 2; } }, { k: 'c-1,1', act: st => { st.g['1,1'] = '#b28ad6'; st.tray = [[[0, 0], [0, 1], [0, 2]], [[0, 0], [1, 0]], [[0, 0], [0, 1], [1, 0], [1, 1]]]; st.sel = -1; } }], hold: 2000 },
+      { cap: 'スコアが区切りを越えるたびに、ゲージがもらえます！', fin: st => { st.done = true; }, hold: 2200 },
+    ],
+  },
+  merge: {
+    init: () => ({ g: { '3,0': 1, '3,1': 1, '3,2': 2, '1,2': 2 }, done: false, hl: null }),
+    render(st, host) {
+      let h = `<div class="ph-bd ph-mg ${st.done ? 'done' : ''}" style="grid-template-columns:repeat(4,1fr);gap:3px;padding:3px;background:#b9a888">`;
+      for (let r = 0; r < 4; r++) for (let c = 0; c < 4; c++) { const lv = st.g[`${r},${c}`], it = lv && MERGE_ITEMS[lv - 1]; h += `<div class="ph-cell ${st.hl === `${r},${c}` ? 'hl' : ''}" style="border-radius:6px;background:${it ? it.c : '#efe6d2'};${it ? `box-shadow:inset 0 0 0 2px ${INK}` : ''}">${it ? it.a().replace('mg-art', 'ph-art') + `<small class="ph-mgn">${2 ** lv}</small>` : ''}</div>`; }
+      h += `</div><div class="ph-arrows"><span data-k="arr-l">←</span><span data-k="arr-u">↑</span><span data-k="arr-d">↓</span><span data-k="arr-r">→</span></div>`;
+      host.innerHTML = h;
+    },
+    steps: [
+      { cap: '盤をスワイプすると、家具がみんな同じ向きにすべります', taps: [{ k: 'arr-r', act: st => { st.g = { '3,3': 2, '3,2': 2, '1,3': 2, '0,0': 1 }; } }] },
+      { cap: '同じ家具がぶつかると合わさって、1つ上の家具になります', taps: [{ k: 'arr-d', act: st => { st.g = { '3,3': 3, '3,2': 2, '3,0': 1, '0,1': 1 }; st.hl = '3,3'; } }], after: st => { st.hl = null; }, hold: 2200 },
+      { cap: 'ざぶとん → スツール → いす … と、どんどん良い家具に', taps: [{ k: 'arr-l', act: st => { st.g = { '3,0': 1, '3,1': 2, '3,2': 3, '0,0': 1, '1,3': 1 }; } }] },
+      { cap: 'スコアが区切りを越えるたびにゲージ。動かせなくなったら終わりです', fin: st => { st.done = true; }, hold: 2200 },
     ],
   },
 };

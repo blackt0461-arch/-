@@ -21,8 +21,9 @@ import * as R from './report.js';
 import * as EV from './events.js';
 import * as ERR from './errlog.js';
 import { rpc } from './cloud.js';
-import { PUZZLES, puzzleById, levelInfo, mountPuzzle, livesOf } from './puzzles.js';
+import { PUZZLES, puzzleById, levelInfo, mountPuzzle, livesOf, slideRate } from './puzzles.js';
 import { openPuzzleHelp } from './puzzlehelp.js';
+import { ENDLESS, endlessById, mountEndless, MILESTONES, MILESTONE_GAUGE, milestonesPassed, nextMilestone, MERGE_ITEMS } from './endless.js';
 import { runTour } from './tour.js';
 import * as BGM from './bgm.js';
 import { AVATARS, AVATAR_COLORS, GACHA_AVATARS, NIGHT_COLORS, avatarHTML, avatarItemId, pullRewards } from './avatars.js';
@@ -1324,16 +1325,20 @@ function chooseCandidate(genreId) {
     vibrate([30, 40, 60]);
     // おためしで置いて見せていた物は、そのまま本当に置く
     const pv = room3d?.preview && room3d.preview.userData.item?.id === picked.id ? room3d.commitPreview(S.newUid()) : null;
+    let placedUid = null;
     if (pv) {
       curRoom().placed.push(pv);
       S.save();
       if (!HS().villa) ensureRooms();
-      toast(`${picked.name}を置きました。${canBuyNow() ? `まだ${buyCount()}つ買えます` : '模様がえで動かせます'}`, 2600);
+      placedUid = pv.uid;
     } else {
       room3d?.clearPreview();
-      await putIntoRoom(picked, true);
+      const r = await putIntoRoom(picked, true, true);
+      if (r && r !== true) placedUid = r;
     }
     S.save();
+    // 買ったら、その場で置く場所を決められる（なぞって動かす・回す →「ここに置く」）（1.15）
+    if (placedUid && room3d?.objByUid?.[placedUid]) return placeJustBought(placedUid, picked);
     showHome();
   };
 }
@@ -1362,7 +1367,7 @@ function renameRoom(r) {
 }
 
 // 持ち物から部屋へ（壁紙などはその場で変える）
-async function putIntoRoom(item, justBought) {
+async function putIntoRoom(item, justBought, quiet = false) {
   const r = curRoom();
   if (item.place === 'surface') {
     r.surf[item.surface] = item.id;
@@ -1387,8 +1392,36 @@ async function putIntoRoom(item, justBought) {
   }
   S.save(); // 置いた位置を保存
   if (!HS().villa) ensureRooms(); // 家具がそろったら別荘が開く
+  if (quiet) return p.uid;
   toast(justBought ? `${item.name}を置きました。模様がえで動かせます` : `${item.name}を置きました`, 2600);
   return true;
+}
+
+// 買った家具を、その場で好きな所に置く。模様がえと同じ操作で、終わったら買う画面（まだ買えるなら）か部屋へ（1.15）
+function placeJustBought(uid, item) {
+  closeSheets();
+  showHome();
+  for (const sel of ['.dock', '.side-tools', '.hint', '.mode-toggle']) app.querySelector(sel)?.remove();
+  app.querySelector('.tabbar')?.classList.add('hide');
+  room3d.setEditMode(true);
+  setFocus(true);
+  const more = canBuyNow();
+  const bar = h(`
+    <div class="editbar place-new">
+      <div class="eb-top"><b>${icon('sofa')}置く場所を決める</b><span class="cap">${esc(item.name)}</span></div>
+      <p class="eb-hint">家具をなぞって動かす。「回す」で向きを変える。細かい位置は矢印で</p>
+      <div class="eb-btns">
+        <button class="btn primary big done">${icon('check')}ここに置く${more ? `（あと${buyCount()}つ買えます）` : ''}</button>
+      </div>
+    </div>`);
+  bar.querySelector('.done').onclick = () => {
+    room3d.setEditMode(false); S.save(); vibrate([20, 30]);
+    toast(`${item.name}を置きました${more ? '' : '。模様がえでいつでも動かせます'}`, 2200);
+    if (canBuyNow()) buyFlow(); else showHome();
+  };
+  app.querySelector('.home').append(bar);
+  room3d.select(uid);
+  room3d.focusSelected?.();
 }
 
 // ログインボーナス：その日はじめて開いたとき、専用の画面で30日のカレンダーにスタンプ
@@ -1459,7 +1492,7 @@ function showEdit() {
     <div class="editbar">
       <div class="eb-top"><b>${icon('sofa')}模様がえ</b><span class="cap">置いている <b>${curRoom().placed.length}</b> / ${S.capacity()}</span></div>
       ${hintN < 3 ? '<p class="eb-hint">家具をタップして選ぶ → なぞって動かす。細かい位置は矢印で。小さい物や天井の物は「一覧」から</p>' : ''}
-      <div class="eb-view seg"><button data-v="eye" class="on">${icon('eye')}ふつう</button><button data-v="top">${icon('grid')}上から</button></div>
+      <div class="eb-view seg"><button data-v="eye" class="on">${icon('eye')}ふつう</button><button data-v="walk">${icon('move')}歩く</button><button data-v="top">${icon('grid')}上から</button></div>
       <div class="eb-btns">
         <button class="btn ghost plist">${icon('menu')}一覧</button>
         <button class="btn ghost inv">${icon('box')}持ち物</button>
@@ -1470,6 +1503,8 @@ function showEdit() {
   bar.querySelectorAll('.eb-view button').forEach(b => b.onclick = () => {
     bar.querySelectorAll('.eb-view button').forEach(x => x.classList.toggle('on', x === b));
     room3d.setTopView(b.dataset.v === 'top');
+    room3d.setWalkEdit(b.dataset.v === 'walk');
+    if (b.dataset.v === 'walk') toast('床をタップすると、そこへ歩きます。家具をタップすると動かせます', 2600);
   });
   bar.querySelector('.inv').onclick = showInventory;
   bar.querySelector('.plist').onclick = showPlacedList;
@@ -1685,7 +1720,7 @@ function photoMode() {
 
 // =========================== 更新のお知らせ ===========================
 // このプログラムの版（version.json と同じにする。公開のたびに上げる）
-const APP_VERSION = '1.14.0';
+const APP_VERSION = '1.15.0';
 ERR.setVersion(APP_VERSION);
 // 新しい版が出たら、みんな同じタイミングでそろうように強制で再起動する。
 // 開いた時・画面に戻った時・1分ごとに version.json を見る
@@ -1844,11 +1879,21 @@ function showPuzzleHub() {
           : `<span class="pz-star locked" aria-label="★${st}（★${st - 1}をクリアすると選べます）">${icon('lock')}<small>★${st}</small></span>`).join('')}</div>
       </div>`; }).join('')}</div>
     <p class="pz-hub-note">★をクリアすると、次の★が選べるようになります。前の★にはいつでももどれます</p>
+    <p class="nx-sec ed-sec">終わりのないパズル<small>スコアを越えるたびにゲージ（1回で ★5 と同じまで）</small></p>
+    <div class="pz-hub">${ENDLESS.map(z => { const es = S.endlessState(z.id); return `
+      <div class="pz-pick ed-pick">
+        <div class="pz-pick-top"><span class="s-ic">${icon(z.icon)}</span>
+          <span class="pz-pick-t"><b>${z.name}</b><small>${z.short}</small></span></div>
+        <div class="ed-row"><span class="ed-rec">${icon('trophy')}ベスト <b>${es.best || 0}</b>${S.endlessWeekBest(z.id) ? `<small>今週 ${S.endlessWeekBest(z.id)}</small>` : ''}</span>
+          <button class="btn ghost sm ed-rk" data-e="${z.id}">ランキング</button><button class="btn primary sm ed-go" data-e="${z.id}">あそぶ</button></div>
+      </div>`; }).join('')}</div>
     <div class="sheet-foot">${switchBtn('study')}</div>`, 'subj-sheet puzzle-sheet');
   app.querySelector('.tabbar')?.classList.add('hide');
   el.querySelector('.close').onclick = () => { el.remove(); showHome(); };
   el.querySelector('.mode-switch')?.addEventListener('click', () => { setMode('study'); el.remove(); showHome(); chooseSubject(); });
   el.querySelectorAll('.pz-star[data-p]').forEach(b => b.onclick = () => { el.remove(); playPuzzle(b.dataset.p, +b.dataset.s); });
+  el.querySelectorAll('.ed-go').forEach(b => b.onclick = () => { el.remove(); playEndless(b.dataset.e); });
+  el.querySelectorAll('.ed-rk').forEach(b => b.onclick = () => { el.remove(); showEndlessRanking(b.dataset.e); });
 }
 function playPuzzle(id, star) {
   if (!freePuzzle()) {
@@ -1868,7 +1913,7 @@ function playPuzzle(id, star) {
       <header class="bar">
         <button class="icon back" aria-label="部屋にもどる">${icon('x')}</button>
         <h2>${z.name}<small>★${star}</small></h2>
-        <span class="pz-life" aria-label="まちがえられる回数">${'<i class="on"></i>'.repeat(lives)}</span>
+        ${id === 'hikkoshi' ? '' : `<span class="pz-life" aria-label="まちがえられる回数">${'<i class="on"></i>'.repeat(lives)}</span>`}
         <button class="pz-ibtn" aria-label="遊び方">i</button>
       </header>
       <p class="pz-moves" hidden></p>
@@ -1880,16 +1925,16 @@ function playPuzzle(id, star) {
   const ib = el.querySelector('.pz-ibtn');
   const help = () => openPuzzleHelp(id, z.name, () => {
     const pr = S.profile(); (pr.puzzleHelp || (pr.puzzleHelp = {}))[id] = true; S.save();
-    if (lives < 3) toast('★5 は、まちがいは2回までです', 2600);
+    if (lives < 3 && id !== 'hikkoshi') toast('★5 は、まちがいは2回までです', 2600);
   });
   ib.onclick = help;
   if (!S.profile().puzzleHelp?.[id]) setTimeout(() => { if (el.isConnected) help(); }, 400);
-  else if (lives < 3) toast('★5 は、まちがいは2回までです', 2600);
+  else if (lives < 3 && id !== 'hikkoshi') toast('★5 は、まちがいは2回までです', 2600);
   const life = el.querySelector('.pz-life'), mv = el.querySelector('.pz-moves');
   const t0 = Date.now();
   mountPuzzle(id, star, el.querySelector('.pz-host'), {
     onChange: (n) => { life.innerHTML = '<i class="on"></i>'.repeat(n) + '<i></i>'.repeat(lives - n); vibrate(60); },
-    onMoves: (n, max) => { mv.hidden = false; mv.innerHTML = `手数 <b>${n}</b> / ${max}`; mv.classList.toggle('warn', max - n <= 3); },
+    onMoves: (n, max, min) => { mv.hidden = false; mv.innerHTML = `手数 <b>${n}</b><small>最短 ${min}手</small>`; },
     onWin: (r) => setTimeout(() => puzzleResult(id, star, true, r, (Date.now() - t0) / 1000), r.picture ? 900 : 350),
     onLose: (why) => setTimeout(() => puzzleResult(id, star, false, { why }, 0), 500),
   });
@@ -1899,11 +1944,12 @@ function puzzleResult(id, star, won, r, secs) {
   let pts = 0, xp = null;
   if (won) {
     const hs = HS();
-    pts = S.puzzleGauge(star, r.mistakes || 0);
+    const rate = r.min ? slideRate(r.moves, r.min) : 1; // おひっこしは手数で決まる
+    pts = S.puzzleGauge(star, r.mistakes || 0, rate);
     if (S.solvedToday() < S.BONUS_PER_DAY) pts = Math.round(pts * 1.5); // 今日の最初のうちは1.5倍（勉強と同じ）
     hs.gauge += pts;
     S.addPoints(pts); // ランキングのポイント
-    xp = S.addPuzzleClear(id, star, r.mistakes || 0);
+    xp = S.addPuzzleClear(id, star, r.mistakes || 0, rate);
     evToast(EV.addPoints(star));
     const first = S.markPlayedToday();
     if (first) setTimeout(() => toast(`連続 ${S.currentStreak()}日目！`), 600);
@@ -1916,7 +1962,7 @@ function puzzleResult(id, star, won, r, secs) {
   const el = sheet(`
     <div class="res ${won ? 'ok' : 'ng'} pz-res">
       <div class="ttl">${won ? 'クリア！' : 'しっぱい…'}</div>
-      ${won ? `<p class="pz-sub">${r.picture ? `あらわれたのは「${esc(r.picture)}」！ ・ ` : ''}${r.moves ? `${r.moves}手${r.best ? '（最短！）' : ''} ・ ` : ''}${mm ? mm + '分' : ''}${ss}秒・まちがい ${r.mistakes || 0}回</p>
+      ${won ? `<p class="pz-sub">${r.picture ? `あらわれたのは「${esc(r.picture)}」！ ・ ` : ''}${r.moves ? `${r.moves}手${r.best ? '（最短！）' : `（最短 ${r.min}手）`} ・ ` : ''}${mm ? mm + '分' : ''}${ss}秒${r.min ? '' : `・まちがい ${r.mistakes || 0}回`}</p>
         <div class="pts">+${pts}<small>ゲージ（★${star}）</small></div>
         <div class="xpgain">${icon('level')}+${xp.gained} XP${xp.rankUp ? `<b>Lv${xp.rank}にアップ！</b>` : ''}</div>
         ${n ? `<p class="gold-t">${icon('gift')}家具が${n > 1 ? ` ${n}つ` : ''}買えます！</p>` : ''}
@@ -1933,6 +1979,122 @@ function puzzleResult(id, star, won, r, secs) {
   el.querySelector('.next').onclick = () => playPuzzle(id, star);
   el.querySelector('.down')?.addEventListener('click', () => playPuzzle(id, star - 1));
   el.querySelector('.home').onclick = () => showHome();
+}
+
+// ---------------- 終わりのないパズル（1.15.0：おしいれパッキング・インテリア・マージ） ----------------
+// スコアが区切りを越えるたびにゲージ（1回の上限は ★5 のパズル1回分）。終わったら自分のベストとみんなのランキング
+function playEndless(id) {
+  if (!freePuzzle()) {
+    if (!S.usePuzzleTicket()) { toast(`あと${S.studyToNextPuzzle()}問 正解すると、パズルが1回できます`, 3200); return showHome(); }
+    S.save();
+  }
+  const z = endlessById(id), es = S.endlessState(id);
+  BGM.duck(true);
+  room3d?.setActive(false);
+  canvas.classList.add('dim');
+  app.innerHTML = '';
+  const el = h(`
+    <div class="screen puzzle-screen endless-screen">
+      <header class="bar">
+        <button class="icon back" aria-label="部屋にもどる">${icon('x')}</button>
+        <h2>${z.name}</h2>
+        <button class="pz-ibtn" aria-label="遊び方">i</button>
+      </header>
+      <div class="ed-score"><div><small>スコア</small><b class="ed-now">0</b></div><div><small>ベスト</small><b class="ed-best">${es.best || 0}</b></div><div class="ed-g"><small>ゲージ</small><b class="ed-got">+0</b></div></div>
+      <div class="ed-next"><span class="ed-bar"><i></i></span><small class="ed-nt"></small></div>
+      <div class="pz-host"></div>
+    </div>`);
+  app.append(el);
+  const ib = el.querySelector('.pz-ibtn');
+  const help = () => openPuzzleHelp(id, z.name, () => { const pr = S.profile(); (pr.puzzleHelp || (pr.puzzleHelp = {}))[id] = true; S.save(); });
+  ib.onclick = help;
+  if (!S.profile().puzzleHelp?.[id]) setTimeout(() => { if (el.isConnected) help(); }, 400);
+  const host = el.querySelector('.pz-host'), nowEl = el.querySelector('.ed-now'), gotEl = el.querySelector('.ed-got'), bar = el.querySelector('.ed-bar i'), nt = el.querySelector('.ed-nt');
+  const t0 = Date.now(); let passed = 0, got = 0, ended = false;
+  const ms = MILESTONES[id];
+  const showNext = (score) => {
+    const nx = nextMilestone(id, score), prev = ms[passed - 1] || 0;
+    if (!nx) { bar.style.width = '100%'; nt.textContent = `ゲージはこの回の上限（+${got}）まで、もらいました`; return; }
+    bar.style.width = Math.min(100, (score - prev) / (nx - prev) * 100) + '%';
+    nt.textContent = `あと ${nx - score} 点でゲージ +${MILESTONE_GAUGE}`;
+  };
+  const pop = (txt) => { const p = h(`<div class="ed-pop">${txt}</div>`); el.appendChild(p); setTimeout(() => p.remove(), 1300); };
+  const finish = (r) => {
+    if (ended) return; ended = true;
+    setTimeout(() => endlessResult(id, r, got, (Date.now() - t0) / 1000), r.quit ? 0 : 200);
+  };
+  el.querySelector('.back').onclick = () => {
+    document.querySelector('.ph-sheet')?.remove();
+    if (!ended && (host._state?.().moves || 0) > 0) { if (!confirm('ここで終わりにしますか？（ここまでのスコアは記録されます）')) return; host._end?.(); return; }
+    ended = true; S.save(); showHome();
+  };
+  mountEndless(id, host, {
+    onScore: (score) => {
+      nowEl.textContent = score;
+      if (score > (es.best || 0)) { const b = el.querySelector('.ed-best'); b.textContent = score; if (es.best) b.classList.add('new'); }
+      const n = milestonesPassed(id, score);
+      while (passed < n) {
+        passed++;
+        const { pts } = S.endlessGauge(id, MILESTONE_GAUGE);
+        HS().gauge += pts; S.addPoints(pts); got += pts;
+        gotEl.textContent = '+' + got; pop(`ゲージ +${pts}`); vibrate(20);
+        S.save();
+      }
+      showNext(score);
+    },
+    onLines: (n, combo) => { if (n >= 2 || combo >= 2) pop(n >= 2 ? `${n}列 いっぺんに！` : `れんぞく ${combo}`); },
+    onNew: (name) => pop(`「${esc(name)}」ができた！`),
+    onEnd: finish,
+  });
+}
+function endlessResult(id, r, got, secs) {
+  const z = endlessById(id);
+  const res = S.addEndlessPlay(id, { score: r.score, maxLv: r.maxLv || 0, gauge: got });
+  if (got > 0) { const first = S.markPlayedToday(); if (first) setTimeout(() => toast(`連続 ${S.currentStreak()}日目！`), 600); }
+  S.save(); Sync.push?.();
+  // みんなのランキングに送る（サーバーでスコアの上限を確かめる。送れなくても遊んだ記録は手元に残る）
+  if (r.score > 0) rpc('sr_endless_submit', { p_token: Auth.currentUser()?.token, p_game: id, p_score: r.score, p_moves: r.moves || 0, p_secs: Math.round(secs) }).catch(() => {});
+  vibrate([20, 30, 20]);
+  const n = buyCount();
+  const el = sheet(`
+    <div class="res ok pz-res">
+      <div class="ttl">${res.newBest && r.score > 0 ? 'ベスト更新！' : 'おつかれさま！'}</div>
+      <p class="pz-sub">${z.name}${r.maxLv ? ` ・ いちばん良い家具「${esc(MERGE_ITEMS[Math.min(r.maxLv, MERGE_ITEMS.length) - 1].n)}」` : ''}${r.lines ? ` ・ ${r.lines}列 片づけた` : ''}</p>
+      <div class="ed-res"><div><small>スコア</small><b>${r.score}</b></div><div><small>ベスト</small><b>${res.best}</b></div></div>
+      <div class="pts">+${got}<small>ゲージ</small></div>
+      ${res.gained ? `<div class="xpgain">${icon('level')}+${res.gained} XP${res.rankUp ? `<b>Lv${res.rank}にアップ！</b>` : ''}</div>` : '<p class="pz-sub">はじめの区切りを越えると、ゲージがもらえます</p>'}
+      ${n ? `<p class="gold-t">${icon('gift')}家具が${n > 1 ? ` ${n}つ` : ''}買えます！</p>` : ''}
+    </div>
+    <div class="pz-res-btns">
+      <button class="btn primary big again">もう一度</button>
+      <button class="btn ghost rank">${icon('trophy')}ランキングを見る</button>
+      <button class="btn ghost home">部屋にもどる</button>
+    </div>`, 'pz-res-sheet');
+  el.querySelector('.again').onclick = () => playEndless(id);
+  el.querySelector('.rank').onclick = () => showEndlessRanking(id, () => endlessBack(id));
+  el.querySelector('.home').onclick = () => showHome();
+}
+const endlessBack = () => { showHome(); showPuzzleHub(); };
+async function showEndlessRanking(id, back = endlessBack, scope = 'week') {
+  const z = endlessById(id), es = S.endlessState(id);
+  const el = sheet(`
+    <div class="sh-head"><span class="sh-ic">${icon('trophy')}</span><div><h3>${z.name} のランキング</h3><p>${scope === 'week' ? '今週（月曜の朝6時にリセット）' : 'これまでの最高スコア'}</p></div><button class="sh-x close" aria-label="とじる">${icon('x')}</button></div>
+    <div class="seg bagtabs ed-tabs"><button data-s="week" class="${scope === 'week' ? 'on' : ''}">今週</button><button data-s="all" class="${scope === 'all' ? 'on' : ''}">歴代</button></div>
+    <div class="rk-me ed-me"><div class="rk-mecard"><span class="rk-pos">—</span>${avatarHTML(S.profile(), 'avatar rk-av')}<div><b>あなた<span class="rk-pt">${scope === 'week' ? S.endlessWeekBest(id) : es.best || 0}</span></b><small>${scope === 'week' ? '今週のベスト' : 'これまでのベスト'}</small></div></div></div>
+    <div class="rk-list"><p class="empty">読み込み中…</p></div>`, 'subj-sheet ed-rank-sheet');
+  app.querySelector('.tabbar')?.classList.add('hide');
+  el.querySelector('.close').onclick = () => { el.remove(); back(); };
+  el.querySelectorAll('.ed-tabs button').forEach(b => b.onclick = () => showEndlessRanking(id, back, b.dataset.s));
+  let r;
+  try { r = await rpc('sr_endless_ranking', { p_token: Auth.currentUser()?.token, p_game: id, p_scope: scope }); }
+  catch (e) { if (el.isConnected) el.querySelector('.rk-list').innerHTML = `<p class="empty">${esc(e.message)}</p>`; return; }
+  if (!el.isConnected) return;
+  if (r?.me) el.querySelector('.ed-me .rk-pos').innerHTML = `${r.me.pos}<small>位</small>`;
+  const medal = (p) => p <= 3 ? `<span class="medal m${p}">${p}</span>` : `<span class="rk-n">${p}</span>`;
+  const top = (r?.top || []).filter(x => !blockedNames.has(x.username));
+  el.querySelector('.rk-list').innerHTML = top.length ? top.map(x => `
+    <div class="rk-row ${x.me ? 'me' : ''}">${medal(x.pos)}${avatarHTML(x, 'avatar rk-av')}<b>${esc(x.username)}${x.title && titleById(x.title) ? `<small class="rk-title">${esc(titleById(x.title).name)}</small>` : ''}</b><span><span class="rk-pts">${x.score}</span></span></div>`).join('')
+    : `<p class="empty">${scope === 'week' ? '今週はまだだれも記録がありません。いちばん乗りしよう！' : 'まだだれも記録がありません'}</p>`;
 }
 
 async function chooseSubject() {
@@ -2104,12 +2266,12 @@ function profileCtx(v = null) {
   if (v) {
     const pf = v.profile || {}, col = new Set(v.collected || []);
     return { solved: pf.solved || 0, acc: pf.solved ? (pf.correct || 0) / pf.solved : 0, streak: S.streakOf(v.streak), rank: S.rankInfo(pf.xp || 0).rank,
-      study: studyParams(sid => ({ units: v.units?.[sid] || {} })), puzzle: puzzleParams(id => (pf.puzzle || {})[id] || {}),
+      study: studyParams(sid => ({ units: v.units?.[sid] || {} })), puzzle: puzzleParams(id => (pf.puzzle || {})[id] || {}, id => (pf.endless || {})[id] || {}),
       pzClears: pf.puzzleClears || 0, collected: col.size, star5: G.GACHA_ITEMS.filter(i => i.rarity === 5 && col.has(i.id)).length, admin: !!v.admin };
   }
   const pf = S.profile(), hs = HS();
   const study = studyParams(sid => S.subject(sid));
-  const puzzle = puzzleParams(id => S.puzzleState(id));
+  const puzzle = puzzleParams(id => S.puzzleState(id), id => S.endlessState(id));
   const collected = Object.keys(hs.collected || {}).length;
   const star5 = G.GACHA_ITEMS.filter(i => i.rarity === 5 && hs.collected?.[i.id]).length;
   return { solved: pf.solved || 0, acc: pf.solved ? (pf.correct || 0) / pf.solved : 0, streak: S.currentStreak(), rank: rankNow().rank,
@@ -2141,7 +2303,7 @@ function showProfile(view = null, back = null) {
       <p class="pf-note">解いた数が多いほど、正解率が高いほど上がります</p></section>`;
   const puzzleSec = `<section class="pf-sec"><h3 class="sec">${icon('grid')}パズルのパラメータ</h3>
       <div class="pf-radar">${radarSVG(c.puzzle, { color: '#6cbf8a' })}</div>
-      <div class="pf-list">${c.puzzle.map(a => `<div class="pf-row"><b>${a.label}<small>${a.sub}</small></b><span class="pf-rank r-${a.rank}">${a.rank}</span><span class="pf-bar g"><i style="width:${a.value}%"></i></span><small>${a.best ? `★${a.best}` : '—'}・${a.clears}回</small></div>`).join('')}</div>
+      <div class="pf-list">${c.puzzle.map(a => `<div class="pf-row"><b>${a.label}<small>${a.sub}</small></b><span class="pf-rank r-${a.rank}">${a.rank}</span><span class="pf-bar g"><i style="width:${a.value}%"></i></span><small>${a.endless ? `ベスト ${a.score}` : a.best ? `★${a.best}` : '—'}・${a.clears}回</small></div>`).join('')}</div>
       <p class="pf-note">クリアした★が高いほど、回数とノーミスが多いほど上がります</p></section>`;
   const list = TITLES.filter(t => !t.secret || earned.has(t.id));
   const el = screenWithTabs('profile', `<button class="icon back">${icon('back')}</button><h2>${mine ? 'プロフィール' : `${esc(name)}さん`}</h2><span></span>`, mine ? 'menu' : 'social', `
@@ -2411,7 +2573,8 @@ function showRecords(subj = subjectId) {
     </div>
     ${isPuzzle() ? `<h3 class="sec">パズル（クリア ${pf.puzzleClears || 0}回）</h3>
     <div class="unit-list">${PUZZLES.map(z => { const ps = S.puzzleState(z.id); return `
-      <div class="unit-row"><b>${z.name}</b><span>${ps.best ? `★${ps.best}までクリア` : 'まだクリアなし'}<small>クリア ${ps.clears}・ノーミス ${ps.perfect}</small></span></div>`; }).join('')}</div>` : ''}
+      <div class="unit-row"><b>${z.name}</b><span>${ps.best ? `★${ps.best}までクリア` : 'まだクリアなし'}<small>クリア ${ps.clears}・ノーミス ${ps.perfect}</small></span></div>`; }).join('')}${ENDLESS.map(z => { const es = S.endlessState(z.id); return `
+      <div class="unit-row"><b>${z.name}</b><span>${es.best ? `ベスト ${es.best}` : 'まだ記録なし'}<small>遊んだ回数 ${es.plays || 0}</small></span></div>`; }).join('')}</div>` : ''}
     <div class="rec-subj">${SUBJECTS.filter(x => probs(x.id).length).map(x => `
       <button data-s="${x.id}" class="${x.id === subj ? 'on' : ''}"><span class="ic2">${icon(SUBJECT_ICON[x.id] || 'book')}</span><b>${x.name}</b><small>${solvedOf(x.id)}問</small></button>`).join('')}</div>
     <h3 class="sec">分野ごと（${subjName}）</h3>

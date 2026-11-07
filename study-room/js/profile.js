@@ -1,5 +1,5 @@
 // プロフィール：パラメータ（勉強・パズル）と称号。
-// パラメータは 0〜100。勉強は「解いた数」と「正解率」、パズルは「クリアした★」「回数」「ノーミス」から出す。
+// パラメータは 0〜100。勉強は「解いた数」と「正解率」、パズルは「クリアした★」「回数」「ノーミス」（終わりのないパズルは「ベストのスコア」と「回数」）から出す。
 
 // 勉強の5つの力（理科は物理・化学・生物・地学をまとめる）
 export const STUDY_AXES = [
@@ -14,6 +14,9 @@ export const PUZZLE_AXES = [
   { key: 'aburi', label: '観察力', sub: '家具あぶりだし' },
   { key: 'rokujo', label: '論理力', sub: '六畳ロジック' },
   { key: 'hikkoshi', label: '段取り力', sub: 'おひっこし' },
+  // 終わりのないパズル（1.15.0）。ベストのスコアと遊んだ回数から出す（K＝およそ6割になるスコア）
+  { key: 'pack', label: '空間把握', sub: 'おしいれパッキング', endless: 2500 },
+  { key: 'merge', label: '先読み力', sub: 'インテリア・マージ', endless: 9000 },
 ];
 export const rankOf = (v) => v >= 90 ? 'S' : v >= 75 ? 'A' : v >= 55 ? 'B' : v >= 35 ? 'C' : v >= 15 ? 'D' : 'E';
 
@@ -28,9 +31,14 @@ export function studyParams(subjectOf) {
     return { ...ax, solved, correct, acc, value, rank: rankOf(value) };
   });
 }
-// stateOf(id) → { best, clears, perfect }
-export function puzzleParams(stateOf) {
+// stateOf(id) → { best, clears, perfect }、endlessOf(id) → { best（スコア）, plays }
+export function puzzleParams(stateOf, endlessOf = () => ({})) {
   return PUZZLE_AXES.map(ax => {
+    if (ax.endless) {
+      const e = endlessOf(ax.key) || {}, score = e.best || 0, plays = e.plays || 0;
+      const value = Math.min(100, Math.round(88 * (1 - Math.exp(-score / ax.endless)) + 12 * (1 - Math.exp(-plays / 15))));
+      return { ...ax, best: 0, score, clears: plays, perfect: 0, value, rank: rankOf(value) };
+    }
     const s = stateOf(ax.key) || {}, best = s.best || 0, clears = s.clears || 0, perfect = s.perfect || 0;
     const value = Math.round(best * 14 + 20 * (1 - Math.exp(-clears / 15)) + (clears ? 10 * perfect / clears : 0));
     return { ...ax, best, clears, perfect, value: Math.min(100, value), rank: rankOf(value) };
@@ -81,7 +89,9 @@ export const TITLES = [
   { id: 'aburi5', name: 'あぶりだし名人', how: '家具あぶりだしの ★5 をクリア', test: c => pz(c, 'aburi').best >= 5 },
   { id: 'rokujo5', name: '六畳の論理学者', how: '六畳ロジックの ★5 をクリア', test: c => pz(c, 'rokujo').best >= 5 },
   { id: 'hikkoshi5', name: '引っ越しのプロ', how: 'おひっこしの ★5 をクリア', test: c => pz(c, 'hikkoshi').best >= 5 },
-  { id: 'pzking', name: 'パズル王', how: '4つのパズルすべての ★5 をクリア', test: c => c.puzzle.every(x => x.best >= 5) },
+  { id: 'pzking', name: 'パズル王', how: '4つのパズルすべての ★5 をクリア', test: c => c.puzzle.filter(x => !x.endless).every(x => x.best >= 5) },
+  { id: 'pack2k', name: '収納の達人', how: 'おしいれパッキングで 2000点', test: c => (pz(c, 'pack').score || 0) >= 2000 },
+  { id: 'merge20k', name: '家具の目利き', how: 'インテリア・マージで 20000点', test: c => (pz(c, 'merge').score || 0) >= 20000 },
   { id: 'lv10', name: '一人前', how: 'Lv10 になる', test: c => c.rank >= 10 },
   { id: 'lv30', name: 'ベテラン', how: 'Lv30 になる', test: c => c.rank >= 30 },
   { id: 'lv50', name: 'レジェンド', how: 'Lv50 になる', test: c => c.rank >= 50 },

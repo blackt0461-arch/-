@@ -72,6 +72,31 @@ const serve = () => new Promise(res => { const srv = http.createServer((req, rsp
   await page.click('.cand >> nth=0'); await page.waitForTimeout(400);
   check(/を(買う|もらう)/.test(await page.locator('.cand-sheet .ok').textContent()), `えらぶと「○○を買う」（${(await page.locator('.cand-sheet .ok').textContent()).trim()}）`);
   await page.click('.cand-sheet .ok'); await page.waitForTimeout(1500);
+  // 1.15：買ったら、その場で置く場所を決める
+  check(await page.locator('.editbar.place-new').count() === 1, '買うと「置く場所を決める」になる');
+  check(await page.locator('.float-bar .rot, .float-bar .fb-name').count() >= 1 && await page.locator('.nudge').count() === 1, '買った家具が選ばれていて、回す・矢印が出る');
+  const before = await page.evaluate(() => { const r = window.__app.curRoom(); const p = r.placed[r.placed.length - 1]; return JSON.stringify(p); });
+  await page.evaluate(() => document.querySelector('.nudge [data-d="1,0"]')?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })));
+  await page.waitForTimeout(120);
+  await page.evaluate(() => document.querySelector('.nudge [data-d="1,0"]')?.dispatchEvent(new PointerEvent('pointerup', { bubbles: true })));
+  const after = await page.evaluate(() => { const r = window.__app.curRoom(); const p = r.placed[r.placed.length - 1]; return JSON.stringify(p); });
+  check(before !== after, `矢印で動かせる（${before} → ${after}）`);
+  await page.screenshot({ path: path.join(OUT, 'nx-4b-place.png') });
+  await page.click('.place-new .done'); await page.waitForTimeout(800);
+  check(await page.locator('.cand-sheet').count() === 1, '「ここに置く」で、まだ買えるときは買う画面にもどる');
+  await page.evaluate(() => { document.querySelector('.nx-buyx')?.click(); }); await page.waitForTimeout(500);
+  // 1.15：模様がえで歩く
+  await page.evaluate(() => window.__app.showEdit()); await page.waitForTimeout(500);
+  check(await page.locator('.eb-view [data-v=walk]').count() === 1, '模様がえに「歩く」がある');
+  await page.click('.eb-view [data-v=walk]'); await page.waitForTimeout(300);
+  const cam0 = await page.evaluate(() => window.__app.room3d.camera.position.toArray().map(v => v.toFixed(2)).join(','));
+  // 床のあたり（画面の下のほう）をタップ
+  await page.mouse.click(195, 600); await page.waitForTimeout(150);
+  await page.mouse.click(195, 600); await page.waitForTimeout(1800);
+  const cam1 = await page.evaluate(() => window.__app.room3d.camera.position.toArray().map(v => v.toFixed(2)).join(','));
+  check(cam0 !== cam1, `「歩く」で床をタップすると歩く（${cam0} → ${cam1}）`);
+  await page.screenshot({ path: path.join(OUT, 'nx-4c-walk.png') });
+  await page.click('.editbar .done'); await page.waitForTimeout(500);
   console.log('5. メニュー・設定・ガチャ・閉じ方');
   await page.evaluate(() => window.__app.showHome()); await page.waitForTimeout(400);
   await page.click('.nx-menubtn'); await page.waitForSelector('.nx-menu button'); await page.waitForTimeout(500);

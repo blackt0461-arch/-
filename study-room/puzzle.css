@@ -177,3 +177,88 @@
 .ph-b.out { transform: translateY(var(--out)); opacity: 0; }
 .ph-exit { position: absolute; bottom: -8px; height: 5px; background: #3fa66b; border-radius: 3px; }
 @media (prefers-reduced-motion: reduce) { .ph-finger, .ph-b { transition: none } .pz-ibtn.pulse::after { animation: none } .ph-card { animation: none } }
+
+/* ---------- 家具あぶりだし 1.15.0：大きい盤・なぞってぬる・色つきの絵 ---------- */
+.pz-nono { touch-action: none; user-select: none; -webkit-user-select: none; width: min(100%, 460px); }
+.pz-aburi.n13 .pz-clue, .pz-aburi.n14 .pz-clue, .pz-aburi.n15 .pz-clue { font-size: 9.5px; }
+.pz-aburi.n13 .pz-clue.r, .pz-aburi.n14 .pz-clue.r, .pz-aburi.n15 .pz-clue.r { padding-right: 3px; letter-spacing: -.02em; }
+.pz-aburi.n14 .pz-x, .pz-aburi.n15 .pz-x { font-size: 13px; }
+.pz-nono.reveal .pz-cell { border-color: transparent; transition: background .5s; }
+.pz-tip { margin: -4px 0 0; font-size: 12px; color: var(--pz-sub); }
+
+/* おひっこし 1.15.0：1手戻る・最初から */
+.pz-undo { display: flex; gap: 8px; }
+.pz-undo button { display: inline-flex; align-items: center; gap: 6px; padding: 9px 14px; border-radius: 10px; border: 2px solid var(--pz-line); background: #fff; color: var(--pz-ink); font-size: 14px; font-weight: 700; }
+.pz-undo button:disabled { opacity: .4; }
+.pz-moves small { margin-left: 6px; font-size: 13px; color: var(--pz-sub); }
+
+/* ================= 終わりのないパズル 1.15.0 ================= */
+.ed-sec { display: flex; flex-direction: column; gap: 2px; margin: 18px 0 8px; font-weight: 700; }
+.ed-sec small { font-weight: 400; font-size: 11.5px; color: var(--sk-muted); }
+.ed-row { display: flex; align-items: center; gap: 8px; }
+.ed-rec { flex: 1; display: flex; align-items: center; gap: 5px; font-size: 13px; color: var(--sk-muted); }
+.ed-rec svg { width: 16px; height: 16px; color: #f2c14e; }
+.ed-rec b { color: var(--sk-text); font-size: 16px; }
+.ed-rec small { margin-left: 4px; font-size: 11px; }
+.endless-screen .ed-score { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin: 0 0 8px; }
+.ed-score > div, .ed-res > div { background: #fff; border: 2px solid var(--pz-line, #2b2a33); border-radius: 10px; padding: 4px 8px 6px; text-align: center; display: flex; flex-direction: column; color: #2b2a33; }
+.ed-score small, .ed-res small { font-size: 11px; color: #6b6875; }
+.ed-score b { font-size: 21px; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.ed-score .ed-best.new { color: #d0453a; }
+.ed-score .ed-g b { color: #3fa66b; }
+.ed-next { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; }
+.ed-bar { flex: 0 0 34%; height: 8px; border-radius: 4px; background: #e2dacb; overflow: hidden; border: 1.5px solid #2b2a33; }
+.ed-bar i { display: block; height: 100%; width: 0; background: #6cbf8a; transition: width .3s; }
+.ed-nt { font-size: 12px; color: #6b6875; }
+.ed-pop { position: fixed; left: 50%; top: 34%; transform: translateX(-50%); z-index: 50; background: #2b2a33; color: #fff7c2; font-weight: 700; font-size: 17px; padding: 8px 16px; border-radius: 12px; pointer-events: none; animation: edPop 1.3s ease-out forwards; white-space: nowrap; }
+@keyframes edPop { 0% { opacity: 0; transform: translate(-50%, 10px) scale(.9); } 15% { opacity: 1; transform: translate(-50%, 0) scale(1.05); } 70% { opacity: 1; transform: translate(-50%, -6px); } 100% { opacity: 0; transform: translate(-50%, -24px); } }
+.ed-res { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 10px 0 4px; }
+.ed-res b { font-size: 26px; }
+.ed-tabs { margin: 0 0 10px; }
+.ed-rank-sheet .rk-row { display: flex; align-items: center; gap: 10px; }
+
+/* おしいれパッキング */
+.pk-wrap { display: flex; flex-direction: column; align-items: center; gap: 16px; width: 100%; }
+.pk-board { display: grid; grid-template-columns: repeat(8, 1fr); gap: 2px; padding: 4px; width: min(100%, 360px); aspect-ratio: 1; background: #b9a888; border: 3px solid #2b2a33; border-radius: 10px; touch-action: none; }
+.pk-cell { border-radius: 4px; background: #efe6d2; position: relative; }
+.pk-cell.box { border: 2px solid #2b2a33; background-image: linear-gradient(to bottom, transparent 40%, rgba(255,255,255,.4) 40% 58%, transparent 58%); }
+.pk-cell.ghost { background: var(--gc) !important; opacity: .35; }
+.pk-cell.will::after { content: ""; position: absolute; inset: -1px; border-radius: 4px; box-shadow: inset 0 0 0 3px #fff7c2; }
+.pk-cell.pop { animation: pkPop .22s ease-in forwards; }
+@keyframes pkPop { to { transform: scale(.2); opacity: 0; } }
+.pk-tray { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; width: min(100%, 360px); touch-action: none; }
+.pk-slot { height: 112px; border-radius: 12px; border: 2px dashed rgba(43,42,51,.25); background: transparent; display: grid; place-items: center; padding: 0; touch-action: none; }
+.pk-slot.sel { border: 3px solid #2b2a33; background: #fff7c2; }
+.pk-slot.nofit { opacity: .35; }
+.pk-slot.lifting .pk-mini { opacity: .25; }
+.pk-mini { --m: 19px; display: grid; gap: 2px; pointer-events: none; }
+.pk-mini i, .pk-drag i { border: 2px solid #2b2a33; border-radius: 4px; background-image: linear-gradient(to bottom, transparent 40%, rgba(255,255,255,.4) 40% 58%, transparent 58%); }
+.pk-drag { position: fixed; left: 0; top: 0; z-index: 80; display: grid; gap: 2px; pointer-events: none; opacity: .75; }
+.pk-drag.ok { opacity: .95; }
+
+/* インテリア・マージ */
+.mg-wrap { display: flex; flex-direction: column; align-items: center; gap: 12px; width: 100%; }
+.mg-board { position: relative; display: grid; grid-template-columns: repeat(4, 1fr); grid-template-rows: repeat(4, 1fr); gap: 3%; padding: 3%; width: min(100%, 360px); aspect-ratio: 1; background: #b9a888; border: 3px solid #2b2a33; border-radius: 12px; touch-action: none; box-sizing: border-box; }
+.mg-bg { background: #efe6d2; border-radius: 10px; }
+.mg-layer { position: absolute; inset: 0; pointer-events: none; }
+.mg-tile { position: absolute; width: 21.25%; height: 21.25%; left: calc(3% + var(--c) * 24.25%); top: calc(3% + var(--r) * 24.25%); border-radius: 10px; border: 2.5px solid #2b2a33; box-sizing: border-box; display: grid; place-items: center; transition: left .12s ease-out, top .12s ease-out; z-index: 2; }
+.mg-tile .mg-art { width: 66%; height: 66%; display: block; }
+.mg-tile b { position: absolute; right: 4px; bottom: 1px; font-size: 11px; color: #fff; text-shadow: 0 1px 0 rgba(0,0,0,.45); font-variant-numeric: tabular-nums; }
+.mg-tile.gone { z-index: 1; }
+.mg-tile.new { animation: mgNew .18s ease-out; }
+.mg-tile.pop { animation: mgPop .2s ease-out; z-index: 3; }
+@keyframes mgNew { from { transform: scale(.2); opacity: 0; } }
+@keyframes mgPop { 50% { transform: scale(1.14); } }
+.mg-pad { display: grid; grid-template-columns: repeat(4, 52px); gap: 8px; }
+.mg-pad button { height: 42px; border-radius: 10px; border: 2px solid #2b2a33; background: #fff; color: #2b2a33; font-size: 18px; font-weight: 700; }
+.ph-pktray { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 8px; }
+.ph-pktray span { height: 46px; border-radius: 8px; border: 2px dashed rgba(43,42,51,.25); display: grid; place-items: center; }
+.ph-pktray span.on { border: 2px solid #2b2a33; background: #fff7c2; }
+.ph-pktray i { display: grid; gap: 2px; grid-auto-rows: 12px; }
+.ph-pktray b { background: #e8a06a; border: 1.5px solid #2b2a33; border-radius: 3px; }
+.ph-mgn { position: absolute; right: 2px; bottom: 0; font-size: 8px; color: #fff; font-weight: 700; }
+
+/* 1.15.0：盤を画面のまん中に（上下は、見出しの下の空いている所のまん中） */
+.puzzle-screen { display: flex; flex-direction: column; }
+.puzzle-screen > .bar, .puzzle-screen > .pz-moves, .puzzle-screen > .ed-score, .puzzle-screen > .ed-next { flex: none; }
+.puzzle-screen > .pz-host { flex: 1 0 auto; justify-content: center; }
