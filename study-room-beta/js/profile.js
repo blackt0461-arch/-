@@ -1,3 +1,4 @@
+import { danOf } from './dan.js';
 // プロフィール：パラメータ（勉強・パズル）と称号。
 // パラメータは 0〜100。勉強は「解いた数」と「正解率」、パズルは「クリアした★」「回数」「ノーミス」（終わりのないパズルは「ベストのスコア」と「回数」）から出す。
 
@@ -105,7 +106,15 @@ export const TITLES = [
   { id: 'band-all', name: 'OVERDRIVE コンプリート', how: 'バンドシリーズの家具をすべて集める', test: c => (c.series || []).includes('band') },
   { id: 'star5', name: '強運の持ち主', how: 'ガチャで ★5 の家具を手に入れる', test: c => c.star5 >= 1 },
   // 期間限定イベントの記念（ぜんぶのごほうびを受け取る。c.evDone = 受け取り終わったイベントの id）
+  { id: 'ev-physics2026', name: '物理強化月間の修了生', how: '「物理強化月間」（2026年11月）のごほうびをすべて受け取る', test: c => (c.evDone || []).includes('physics2026'), event: true },
   { id: 'ev-wintercafe2026', name: '冬のカフェの常連', how: '「冬のカフェ」（2026年12月）のごほうびをすべて受け取る', test: c => (c.evDone || []).includes('wintercafe2026'), event: true },
+  // 教科の段位（dan.js）
+  { id: 'dan1', name: '段位デビュー', how: 'どれかの教科で初段になる', test: c => c.study.some(x => danOf(x) >= 1) },
+  { id: 'dan-jp', name: '言の葉の名人', how: '国語で十段になる', test: c => danOf(sp(c, 'jp')) >= 10 },
+  { id: 'dan-math', name: '数の名人', how: '数学で十段になる', test: c => danOf(sp(c, 'math')) >= 10 },
+  { id: 'dan-english', name: '英語の名人', how: '英語で十段になる', test: c => danOf(sp(c, 'english')) >= 10 },
+  { id: 'dan-sci', name: '理科の名人', how: '理科で十段になる', test: c => danOf(sp(c, 'sci')) >= 10 },
+  { id: 'dan-social', name: '社会の名人', how: '社会で十段になる', test: c => danOf(sp(c, 'social')) >= 10 },
   { id: 'admin', name: '管理人', how: '管理者だけ', test: c => c.admin, secret: true },
 ];
 export const titleById = (id) => TITLES.find(t => t.id === id) || null;

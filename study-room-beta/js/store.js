@@ -257,7 +257,7 @@ function giveRankRewards(from, to) {
 
 // --- プレゼントBOX ---
 // gift = { id, kind: 'ticket'|'ticket4'|'ticket5'|'exchange'|'shards4'|'shards5'|'gauge'|'item', amount, itemId, title, from, at }
-const GIFT_KEY = { ticket: 'rareTickets', ticket4: 'rareTickets4', ticket5: 'rareTickets5', exchange: 'tickets', shards4: 'shards4', shards5: 'shards5', gauge: 'gauge' };
+const GIFT_KEY = { ticket: 'rareTickets', ticket4: 'rareTickets4', ticket5: 'rareTickets5', exchange: 'tickets', shards4: 'shards4', shards5: 'shards5', gauge: 'gauge', medals: 'medals' }; // medals：ミッションのメダル（段位のごほうび）
 export function gifts() { const h = house(); return h.gifts || (h.gifts = []); }
 export function addGift(g) {
   const list = gifts();

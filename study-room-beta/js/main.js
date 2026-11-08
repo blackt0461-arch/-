@@ -21,6 +21,7 @@ import * as R from './report.js';
 import * as EV from './events.js';
 import * as M from './missions.js';
 import * as C from './collection.js';
+import * as D from './dan.js';
 import * as ERR from './errlog.js';
 import { rpc } from './cloud.js';
 import { PUZZLES, puzzleById, levelInfo, mountPuzzle, livesOf, slideRate } from './puzzles.js';
@@ -438,13 +439,13 @@ function goTab(t) {
   if (t === 'menu') return showMenu();
 }
 // =========================== プレゼントBOX ===========================
-const GIFT_LABEL = { ticket: 'レアチケット', ticket4: '★4以上確定チケット', ticket5: '★5限定チケット', exchange: '家具の引きかえ券', shards4: '★4のかけら', shards5: '★5のかけら', gauge: 'ゲージ', item: '家具' };
+const GIFT_LABEL = { medals: 'メダル', ticket: 'レアチケット', ticket4: '★4以上確定チケット', ticket5: '★5限定チケット', exchange: '家具の引きかえ券', shards4: '★4のかけら', shards5: '★5のかけら', gauge: 'ゲージ', item: '家具' };
 const lvGift = (g) => g.kind === 'item' && /^lv:\d+$/.test(g.itemId || '') ? +g.itemId.slice(3) : 0;
 function giftArt(g) {
   if (lvGift(g)) return `<span class="gb-ic gb-lv"><small>Lv</small>${lvGift(g)}</span>`;
   if (g.kind === 'ticket' || g.kind === 'ticket4' || g.kind === 'ticket5') return ticketSVG(g.kind, 'mini');
   if (g.kind === 'item') { const it = itemById(g.itemId); return it ? `<span class="thumb">${thumbHTML(it)}</span>` : icon('gift'); }
-  return `<span class="gb-ic">${icon(g.kind === 'gauge' ? 'level' : g.kind.startsWith('shards') ? 'sparkle' : 'gift')}</span>`;
+  return `<span class="gb-ic">${icon(g.kind === 'gauge' ? 'level' : g.kind === 'medals' ? 'medal' : g.kind.startsWith('shards') ? 'sparkle' : 'gift')}</span>`;
 }
 function giftName(g) { if (lvGift(g)) return `Lv${lvGift(g)} まで上がる`; return g.kind === 'item' ? (itemById(g.itemId)?.name || '家具') : GIFT_LABEL[g.kind] || 'プレゼント'; }
 // 運営からのプレゼントを取りに行って、まだならBOXに入れる（1分に1回まで）
@@ -477,7 +478,7 @@ function updateGiftBadge() {
 }
 function showGiftBox() {
   const list = [...S.gifts()].sort((a, b) => (b.at || 0) - (a.at || 0));
-  const from = { rank: 'Lvアップ', play: 'がんばったごほうび', master: '克服', operator: '運営から', gacha: 'ガチャのごほうび', title: '称号のごほうび' };
+  const from = { rank: 'Lvアップ', play: 'がんばったごほうび', master: '克服', operator: '運営から', gacha: 'ガチャのごほうび', title: '称号のごほうび', dan: '段位のごほうび' };
   const day = (t) => t ? new Date(t).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' }) : '';
   const el = screenWithTabs('gifts', `<button class="icon back">${icon('back')}</button><h2>プレゼントBOX</h2><span class="gb-count"><b>${list.length}</b> 件</span>`, 'room', `
     ${list.length ? `<button class="btn primary big gb-all">${icon('gift')}まとめて受け取る</button>
@@ -1781,7 +1782,7 @@ function photoMode() {
 
 // =========================== 更新のお知らせ ===========================
 // このプログラムの版（version.json と同じにする。公開のたびに上げる）
-const APP_VERSION = '1.16.7';
+const APP_VERSION = '1.17.0';
 ERR.setVersion(APP_VERSION);
 // 新しい版が出たら、みんな同じタイミングでそろうように強制で再起動する。
 // 開いた時・画面に戻った時・1分ごとに version.json を見る
@@ -2346,12 +2347,26 @@ function checkNewTitles() {
   // むずかしい称号・図鑑の％の称号のごほうび家具（1回だけ。前に手に入れた称号の分も届く）
   const gave = C.grantTitleRewards(got);
   if (gave.length) { S.save(); updateGiftBadge(); setTimeout(() => toast(`称号のごほうび「${itemById(gave[0])?.name || '家具'}」${gave.length > 1 ? ` ほか${gave.length - 1}つ` : ''}がプレゼントBOXに届きました`, 3400), 4300); }
+  // 教科の段位（dan.js）：上がったら知らせて、ごほうびをプレゼントBOXへ
+  const up = D.checkPromotions(profileCtx().study);
+  if (up.length) { S.save(); updateGiftBadge(); setTimeout(() => toast(`${up[0].label}が${D.DAN_NAMES[up[0].dan]}になりました！${up.length > 1 ? ` ほか${up.length - 1}教科` : ''}ごほうびはプレゼントBOXへ`, 3400), gave.length ? 8000 : 4300); }
   const first = !pf.titlesSeen;
   const seen = new Set(pf.titlesSeen || []);
   const fresh = got.filter(id => !seen.has(id));
   if (!fresh.length) return;
   pf.titlesSeen = [...seen, ...fresh]; S.save();
   setTimeout(() => toast(first ? `称号が ${fresh.length}つ 手に入っています。プロフィールで選べます` : `称号「${titleById(fresh[0]).name}」を手に入れました${fresh.length > 1 ? ` ほか${fresh.length - 1}つ` : ''}`, 3200), 900);
+}
+// 教科の段位（プロフィールの勉強の下）
+function danHTML(study, pf) {
+  const rows = study.map(a => {
+    const d = Math.max(D.danOf(a), D.danSaved(a.key, pf)), nx = D.toNext(a, d);
+    const pct = nx ? Math.min(100, Math.round((a.correct || 0) / D.NEED[nx.next] * 100)) : 100;
+    const hint = !nx ? '最高の段です' : nx.needCorrect ? `${D.DAN_NAMES[nx.next]}まで 正解あと${nx.needCorrect}問` : '';
+    const acc = nx?.needAcc ? `${hint ? '・' : `${D.DAN_NAMES[nx.next]}まで `}正解率${Math.round(nx.needAcc * 100)}%以上` : '';
+    return `<div class="pf-row dan-row"><b>${a.label}</b><span class="dan-badge ${d ? 'on' : ''}">${d ? D.DAN_NAMES[d] : '—'}</span><span class="pf-bar"><i style="width:${pct}%"></i></span><small>${hint}${acc}</small></div>`;
+  }).join('');
+  return `<h4 class="dan-h">${icon('medal')}教科の段位<small>初段〜十段。正解の数と正解率で上がります</small></h4><div class="pf-list dan-list">${rows}</div>`;
 }
 // view：ほかの人のプロフィール（なければ自分）。back：もどる先
 function showProfile(view = null, back = null) {
@@ -2366,7 +2381,8 @@ function showProfile(view = null, back = null) {
       <div class="pf-list">${c.study.map(a => UINEXT && a.solved < 3
         ? `<div class="pf-row nx-empty"><b>${a.label}</b><span class="pf-rank r-none">—</span><span class="pf-bar"><i style="width:${a.solved / 3 * 100}%"></i></span><small>あと${3 - a.solved}問で出ます</small></div>`
         : `<div class="pf-row"><b>${a.label}</b><span class="pf-rank r-${a.rank}">${a.rank}</span><span class="pf-bar"><i style="width:${a.value}%"></i></span><small>${a.solved}問・${a.solved ? Math.round(a.acc * 100) : 0}%</small></div>`).join('')}</div>
-      <p class="pf-note">解いた数が多いほど、正解率が高いほど上がります</p></section>`;
+      <p class="pf-note">解いた数が多いほど、正解率が高いほど上がります</p>
+      ${danHTML(c.study, pf)}</section>`;
   const puzzleSec = `<section class="pf-sec"><h3 class="sec">${icon('grid')}パズルのパラメータ</h3>
       <div class="pf-radar">${radarSVG(c.puzzle, { color: '#6cbf8a' })}</div>
       <div class="pf-list">${c.puzzle.map(a => `<div class="pf-row"><b>${a.label}<small>${a.sub}</small></b><span class="pf-rank r-${a.rank}">${a.rank}</span><span class="pf-bar g"><i style="width:${a.value}%"></i></span><small>${a.endless ? `ベスト ${a.score}` : a.best ? `★${a.best}` : '—'}・${a.clears}回</small></div>`).join('')}</div>
@@ -2554,7 +2570,8 @@ function showEvent() {
     ${evMsTabs('ev')}<p class="ev-desc">${esc(ev.desc)}</p>
     <div class="ev-meter"><div class="ev-num"><b>${st.pts}</b><span>${esc(ev.unit)}</span></div>
       <div class="ev-bar"><i style="width:${Math.min(100, st.pts / last * 100)}%"></i>${ev.rewards.map(r => `<span class="ev-tick ${st.pts >= r.at ? 'on' : ''}" style="left:${r.at / last * 100}%"></span>`).join('')}</div>
-      <small>${next ? `次のごほうびまで あと ${next.at - st.pts}${esc(ev.unit)}` : 'ぜんぶのごほうびを集めました！'}・問題は正解${EV.POINTS.right}・まちがい${EV.POINTS.wrong}、パズルは★の数</small></div>
+      <small>${next ? `次のごほうびまで あと ${next.at - st.pts}${esc(ev.unit)}` : 'ぜんぶのごほうびを集めました！'}・${esc(ev.howto || `問題は正解${EV.POINTS.right}・まちがい${EV.POINTS.wrong}、パズルは★の数`)}</small></div>
+    ${ev.bonus ? `<div class="ev-row ev-bonus ${EV.bonusReady(ev) ? 'can' : ''}"><span class="ev-at">${icon('refresh')}</span>${evRewardArt({ kind: ev.bonus.kind })}<span class="ev-nm"><b>${esc(ev.bonus.label)}</b><small>${esc(ev.bonus.note || '')}・上限なし・これまで ${EV.stateOf(ev).bc || 0}問</small></span>${EV.bonusReady(ev) ? `<button class="btn gold sm ev-bclaim">受け取る ×${EV.bonusReady(ev)}</button>` : `<span class="ev-st">あと${EV.bonusLeft(ev)}問</span>`}</div>` : ''}
     <div class="ev-list">${ev.rewards.map((r, i) => { const got = st.claimed.includes(i), can = st.pts >= r.at && !got; return `
       <div class="ev-row ${got ? 'got' : can ? 'can' : ''}"><span class="ev-at">${r.at}</span>${evRewardArt(r)}<span class="ev-nm"><b>${esc(evRewardName(r))}</b>${r.kind === 'item' ? '<small>イベント限定</small>' : ''}</span>
         ${got ? `<span class="ev-st">${icon('check')}受け取りずみ</span>` : can ? `<button class="btn gold sm ev-claim" data-i="${i}">受け取る</button>` : `<span class="ev-st">あと${r.at - st.pts}</span>`}</div>`; }).join('')}</div>
@@ -2562,6 +2579,7 @@ function showEvent() {
   hydrateThumbs(el);
   el.querySelector('.close').onclick = () => { el.remove(); showHome(); };
   bindEvMsTabs(el);
+  el.querySelector('.ev-bclaim')?.addEventListener('click', () => { if (EV.claimBonus(ev)) { vibrate([20, 30, 20]); toast('プレゼントBOXに届きました'); showEvent(); } });
   el.querySelectorAll('.ev-claim').forEach(b => b.onclick = () => {
     if (EV.claim(ev, +b.dataset.i)) { vibrate([20, 30, 20]); toast('プレゼントBOXに届きました'); showEvent(); }
   });
@@ -3201,7 +3219,7 @@ function adminRecovery(name) {
 }
 async function showAdmin() {
   if (!isAdmin()) return showMenu();
-  const el = screenWithTabs('admin', `<button class="icon back">${icon('back')}</button><h2>管理者</h2><span></span>`, 'menu', `<button class="btn ghost big betasw">${icon(BETA ? 'home' : 'flask')}${BETA ? 'いつもの版にもどる' : 'テスト版を開く'}</button><div class="row2 admin-btns"><button class="btn primary compose">${icon('bell')}お知らせを書く</button><button class="btn ghost inbox">${icon('chat')}要望・バグを見る</button></div><button class="btn ghost big sendgift">${icon('gift')}みんなにプレゼントを送る</button><button class="btn ghost big errlog">${icon('info')}エラーの記録を見る</button><div class="row2 admin-btns"><button class="btn ghost msdone">${icon('mission')}ミッションを全部達成に</button><button class="btn ghost msreset">${icon('refresh')}ミッションを最初から</button></div>${EV.EVENTS.length ? `<button class="btn ghost big evpreview">${icon('snow')}${EV.previewing() ? 'イベントのためしをやめる' : `イベントをためす（${esc(EV.EVENTS.at(-1).name)}）`}</button>` : ''}<div class="alist"><p class="empty">読み込み中…</p></div>`);
+  const el = screenWithTabs('admin', `<button class="icon back">${icon('back')}</button><h2>管理者</h2><span></span>`, 'menu', `<button class="btn ghost big betasw">${icon(BETA ? 'home' : 'flask')}${BETA ? 'いつもの版にもどる' : 'テスト版を開く'}</button><div class="row2 admin-btns"><button class="btn primary compose">${icon('bell')}お知らせを書く</button><button class="btn ghost inbox">${icon('chat')}要望・バグを見る</button></div><button class="btn ghost big sendgift">${icon('gift')}みんなにプレゼントを送る</button><button class="btn ghost big errlog">${icon('info')}エラーの記録を見る</button><div class="row2 admin-btns"><button class="btn ghost msdone">${icon('mission')}ミッションを全部達成に</button><button class="btn ghost msreset">${icon('refresh')}ミッションを最初から</button></div>${EV.previewing() ? `<button class="btn ghost big evpreview" data-ev="">${icon('snow')}イベントのためしをやめる</button>` : EV.EVENTS.map(e => `<button class="btn ghost big evpreview" data-ev="${e.id}">${icon(e.icon || 'snow')}イベントをためす（${esc(e.name)}）</button>`).join('')}<div class="alist"><p class="empty">読み込み中…</p></div>`);
   el.querySelector('.back').onclick = showMenu;
   el.querySelector('.betasw').onclick = () => { location.href = BETA ? '../study-room/' : '../study-room-beta/'; };
   el.querySelector('.compose').onclick = () => composeNews(showNews);
@@ -3210,7 +3228,7 @@ async function showAdmin() {
   el.querySelector('.errlog').onclick = showErrors;
   el.querySelector('.msdone').onclick = () => { M.adminCompleteAll(); S.save(); toast('今日と今週のミッションを、全部達成にしました'); showMissions(); };
   el.querySelector('.msreset').onclick = () => { M.adminReset(); S.save(); toast('ミッションの記録を消しました（この端末の自分の分）'); };
-  if (el.querySelector('.evpreview')) el.querySelector('.evpreview').onclick = () => { EV.setPreview(EV.previewing() ? null : EV.EVENTS.at(-1).id); toast(EV.previewing() ? 'この端末だけ、イベントを期間の前でもためせます' : 'イベントのためしをやめました'); showAdmin(); };
+  el.querySelectorAll('.evpreview').forEach(b => b.onclick = () => { EV.setPreview(b.dataset.ev || null); toast(EV.previewing() ? 'この端末だけ、イベントを期間の前でもためせます' : 'イベントのためしをやめました'); showAdmin(); });
   const u = Auth.currentUser();
   let list = [];
   try { list = await rpc('sr_admin_users', { p_token: u?.token }); } catch (e) { el.querySelector('.alist').innerHTML = `<p class="empty">${esc(e.message)}</p>`; return; }
@@ -3832,7 +3850,7 @@ function awardResult(st, ss, p, perfect, ok, isReview, secs) {
       if (mastered) HS().pendingSpecials++;
       xp = S.addAnswer(st, p.unit, perfect ? 'perfect' : ok ? 'ok' : 'wrong');
       S.logDay({ sid: subjectId, unit: p.unit, ok });
-      evToast(EV.addPoints(ok ? EV.POINTS.right : EV.POINTS.wrong));
+      evToast(EV.addAnswer({ sid: subjectId, ok, repeat: !!ss.gf?.repeat }));
       missionToast(M.onAnswer({ sid: subjectId, ok }));
       if (S.countStudyForPuzzle(ok)) setTimeout(() => toast('パズルが1回できるようになりました', 2400), 1200);
       const firstPlay = S.markPlayedToday();
