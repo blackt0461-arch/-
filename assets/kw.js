@@ -49,10 +49,9 @@ function layout() {
   document.querySelectorAll('a.app[data-static]').forEach(a => grid.appendChild(a));
   document.querySelectorAll('.kw-sec').forEach(e => e.remove());
   const pub = [...grid.querySelectorAll('a.app[data-static]')];
-  if (!me) { grid.hidden = false; feat.hidden = false; pub.forEach(a => grid.appendChild(a)); return; }
-  feat.hidden = true; grid.hidden = true;
-  const roomin = { id: 'roomin', c: 'study', href: 'study-room/', icon: 'study-room/icon-192.png', name: 'ROOMIN', desc: '問題を解くと、自分の部屋が育つ', cat: '勉強・パズル' };
-  const all = [roomin, ...pub.map(a => ({ el: a, id: a.dataset.id }))];
+  if (!me) { grid.hidden = false; pub.forEach(a => grid.appendChild(a)); return; }
+  grid.hidden = true;
+  const all = pub.map(a => ({ el: a, id: a.dataset.id }));
   const mine = new Set(me.apps);
   const sec = (title, sub, items, cls) => {
     const s = document.createElement('section'); s.className = 'kw-sec ' + cls;
@@ -68,7 +67,7 @@ function layout() {
   bindApps();
 }
 function bindApps() {
-  document.querySelectorAll('a.app[data-id]').forEach(a => {
+  document.querySelectorAll('a.app[data-id], a.feature[data-id]').forEach(a => {
     if (a._kw) return; a._kw = true;
     a.addEventListener('click', async (e) => {
       const s = session(); if (!s || !me) return;
@@ -162,7 +161,7 @@ function showAccount() {
   const gf = $('.grant-f', el);
   if (gf) gf.onsubmit = async (e) => {
     e.preventDefault(); const on = e.submitter?.dataset.on === '1'; $('.kw-err', gf).textContent = '';
-    try { await rpc('kw_admin_grant', { p_token: s.token, p_username: gf.u.value.trim(), p_app: gf.a.value, p_on: on }); $('.kw-err', gf).textContent = on ? '渡しました' : '取り上げました'; await refresh(); }
+    try { await rpc('kw_admin_grant', { p_token: s.token, p_username: gf.u.value.trim(), p_app: gf.a.value, p_on: on }); await refresh(); $('.kw-err', gf).textContent = on ? '渡しました' : '取り上げました'; }
     catch (er) { $('.kw-err', gf).textContent = say(er); }
   };
   $('.out', el).onclick = async () => { rpc('kw_logout', { p_token: s.token }).catch(() => {}); put(SESSION, null); me = null; closeSheet(); drawButton(); layout(); };
