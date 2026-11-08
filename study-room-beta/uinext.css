@@ -195,7 +195,7 @@
 @media (prefers-reduced-motion: reduce) { .uinext .nx-menu button { animation: none; } }
 
 /* ===== 物理の新しい出し方（1.17.0）：計算・組み立て・並べかえ・グラフ ===== */
-.typed .pt-kind { margin: 0 2px -4px; font-size: 11.5px; letter-spacing: .12em; color: var(--sk-accent, #d8c3a0); font-weight: 700; }
+.typed .pt-kind { margin: 0 2px -4px; font-size: 11.5px; letter-spacing: .12em; color: var(--sk-accent-text, var(--sk-accent, #d8c3a0)); font-weight: 700; }
 .pfig { margin: 0 0 8px; padding: 6px 4px 2px; border-radius: var(--sk-radius, 14px); background: var(--sk-card, rgba(28,28,31,.8)); border: 1px solid var(--sk-card-line, rgba(255,255,255,.08)); }
 .pfig svg { display: block; width: 100%; height: auto; max-height: 34vh; }
 .pfig .pf-ax { stroke: var(--sk-muted, rgba(242,239,233,.74)); stroke-width: 1.2; }
@@ -216,7 +216,7 @@
 .pt-u { font-size: 15px; color: var(--sk-muted, rgba(242,239,233,.74)); white-space: nowrap; }
 .pt-keys { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; }
 .pt-k { padding: 12px 0; border-radius: 12px; font-size: 19px; border: 1px solid var(--sk-card-line, rgba(255,255,255,.08)); background: var(--sk-card, rgba(28,28,31,.8)); color: var(--sk-text, #f2efe9); font-variant-numeric: lining-nums tabular-nums; }
-.pt-k[data-k=exp], .pt-k[data-k=clr], .pt-k[data-k=del], .pt-k[data-k=neg] { font-size: 15px; color: var(--sk-accent, #d8c3a0); }
+.pt-k[data-k=exp], .pt-k[data-k=clr], .pt-k[data-k=del], .pt-k[data-k=neg] { font-size: 15px; color: var(--sk-accent-text, var(--sk-accent, #d8c3a0)); }
 .pt-k.go { background: var(--sk-btn-bg, #f2efe9); color: var(--sk-btn-fg, #17171a); font-weight: 700; font-size: 16px; }
 .pt-k:disabled { opacity: .45; }
 .pt-k:active { transform: scale(.96); }
