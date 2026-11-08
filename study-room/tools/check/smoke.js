@@ -101,7 +101,7 @@ function serve() {
   await page.evaluate(() => document.querySelector('.solve-ring')?.click());
   await page.waitForFunction(() => [...document.querySelectorAll('.subj')].some(b => b.dataset.s === 'bio' && !b.disabled), null, { timeout: 30000 }).catch(() => {});
   const subjList = await page.evaluate(() => [...document.querySelectorAll('.subj')].map(b => b.dataset.s + (b.disabled ? '(×)' : '')).join(' '));
-  check(['bio', 'earth', 'physics4', 'physics'].every(k => subjList.includes(k) && !subjList.includes(k + '(×)')), `生物・地学・物理（4択）・物理（公式）がえらべる：${subjList}`);
+  check(['bio', 'earth', 'physics'].every(k => subjList.includes(k) && !subjList.includes(k + '(×)')) && !subjList.includes('physics4'), `生物・地学・物理（1つにまとめた）がえらべる：${subjList}`);
   await page.screenshot({ path: path.join(OUT, 'smoke-2b-subjects.png') });
   await page.click('.subj[data-s=jp]'); await page.waitForSelector('.sc-list');
   check(await page.locator('.sc-list [data-g]').count() >= 4, `国語のジャンルが出る（${await page.locator('.sc-list [data-g]').count()}つ）`);

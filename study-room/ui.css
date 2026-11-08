@@ -1328,3 +1328,10 @@ body.calc-on .problem .num-tap { font: inherit; }
 .rr-row:not(.got):not(.next) .rr-lv { color: var(--sk-text); opacity: 1; }
 .pr-report { opacity: 1; color: var(--sk-muted, var(--muted)); }
 .gc-it .gc-ok { background: #1f7a48; }
+/* 教科の段位 */
+.dan-h { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 14px 0 6px; font-size: 14px; }
+.dan-h .ic { width: 16px; height: 16px; color: var(--sk-accent-text, var(--sk-accent, #f2b84b)); }
+.dan-h small { width: 100%; font-size: 11.5px; font-weight: 400; color: var(--sk-muted, inherit); }
+.dan-badge { min-width: 44px; text-align: center; padding: 2px 6px; border-radius: 8px; font-size: 12px; font-weight: 800; border: 1px solid var(--sk-card-line, rgba(255,255,255,.15)); color: var(--sk-muted, inherit); }
+.dan-badge.on { border-color: var(--sk-accent-text, var(--sk-accent, #f2b84b)); color: var(--sk-accent-text, var(--sk-accent, #f2b84b)); }
+.dan-row small { color: var(--sk-muted, inherit); }

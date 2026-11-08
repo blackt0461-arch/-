@@ -45,6 +45,13 @@ function serve() {
 const click = (sel) => (p) => p.evaluate((s) => { const e = document.querySelector(s); if (!e) throw new Error('見つからない: ' + s); e.click(); }, sel);
 const waitFor = (sel, t = 20000) => (p) => p.waitForSelector(sel, { state: 'attached', timeout: t });
 const sleep = (ms) => (p) => p.waitForTimeout(ms);
+// 物理の新しい出し方（1.17.0〜）：問題を1つ決めて開く
+const PBANK = (() => { try { return JSON.parse(fs.readFileSync(path.join(ROOT, 'data/bank/physics.json'), 'utf8')); } catch (e) { return []; } })();
+const PQ = { num: PBANK.find(p => p.type === 'num' && !p.fig), build: PBANK.find(p => p.type === 'build' && p.kind !== 'unit'), unit: PBANK.find(p => p.type === 'build' && p.kind === 'unit'), order: PBANK.find(p => p.type === 'order'), graph: PBANK.find(p => p.type === 'num' && p.fig) };
+const openPhys = (q) => [(p) => p.evaluate((id) => { const S = window.__app.S, st = S.subject('physics'); st.scope = null; st.session = { set: [{ id, review: false }], idx: 0, results: [], gained: 0, xp: 0, rankUp: false, startedAt: Date.now(), bonus: false }; S.save(); window.__app.showHome(); }, q && q.id),
+  sleep(400), (p) => p.evaluate(() => document.querySelector('.solve-ring')?.click()), sleep(300), (p) => p.evaluate(() => document.querySelector('.subj[data-s=physics]')?.click()), sleep(300),
+  (p) => p.evaluate(() => document.querySelector('.sc-resume')?.click()), waitFor('.quiz .step', 8000), sleep(800)];
+
 // 教科のあとに出る「ジャンル → 単元」のえらび（1.8.0〜）。出たら、いちばん上をえらぶ
 const pickScope = (sel) => async (p) => { for (let i = 0; i < 3; i++) { await p.waitForSelector(`${sel}, .sc-row`, { timeout: 20000 }); if (await p.locator(sel).count()) return; await p.locator('.sc-row').first().click(); await p.waitForTimeout(300); } await p.waitForSelector(sel, { timeout: 20000 }); };
 const SCREENS = [
@@ -75,6 +82,13 @@ const SCREENS = [
   { id: 'gacha-item', name: '出る家具を3Dで見る', steps: [click('.hotbar [data-t=gacha]'), waitFor('.gc-it'), click('.gc-it'), waitFor('.gi-view'), sleep(1500)] },
   { id: 'missions', name: 'ミッション', steps: [(p) => p.evaluate(() => { const A = window.__app; A.M.adminReset(); A.M.onAnswer({ sid: 'math', ok: true }); A.M.adminCompleteAll(); A.M.claim('daily', A.M.daily()[0].id); A.showMissions(); }), waitFor('.ms-row'), sleep(600)] },
   { id: 'medal-shop', name: 'メダル交換所', steps: [(p) => p.evaluate(() => window.__app.showMedalShop()), waitFor('.ms-shop-list'), sleep(1200)] },
+  { id: 'event', name: 'イベント（物理強化月間）', steps: [(p) => p.evaluate(async () => { const EV = await import('/js/events.js'); EV.setPreview('physics2026'); const ev = EV.EVENTS.find(e => e.id === 'physics2026'); const st = EV.stateOf(ev); st.pts = 120; st.claimed = []; window.__app.showHome(); }), sleep(800), click('.home .evbtn'), waitFor('.ev-sheet'), sleep(800)] },
+  { id: 'dan', name: '教科の段位（プロフィール）', steps: [(p) => p.evaluate(() => window.__app.showProfile()), waitFor('.dan-list'), (p) => p.evaluate(() => document.querySelector('.dan-list')?.scrollIntoView()), sleep(800)] },
+  { id: 'ph-num', name: '物理：計算（テンキー）', steps: openPhys(PQ.num) },
+  { id: 'ph-build', name: '物理：式の組み立て', steps: openPhys(PQ.build) },
+  { id: 'ph-unit', name: '物理：単位の組み立て', steps: openPhys(PQ.unit) },
+  { id: 'ph-order', name: '物理：並べかえ', steps: openPhys(PQ.order) },
+  { id: 'ph-graph', name: '物理：グラフ', steps: openPhys(PQ.graph) },
   { id: 'admin', name: '管理者', steps: [click('.hotbar [data-t=menu]'), waitFor('[data-m=admin]'), click('[data-m=admin]'), waitFor('.acard'), sleep(600)] },
 ];
 
@@ -101,6 +115,7 @@ function collectInPage() {
     const el = n.parentElement;
     if (!el || seen.has(el) || el.closest('script,style,svg,canvas,[aria-hidden="true"]') && !el.closest('.ic')) continue;
     if (!visible(el)) continue;
+    if (el.closest('button:disabled')) continue; // 押せないボタン（入力前の「決定」など）はわざと薄い。WCAG でも対象外
     const range = document.createRange(); range.selectNodeContents(n);
     const r = range.getBoundingClientRect();
     if (!inView(r)) continue;

@@ -1,0 +1,29 @@
+<!doctype html><html><head><meta charset="utf-8"><base href="../../">
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"}}</script>
+<style>body{margin:0;background:#222}canvas{display:block}</style></head><body>
+<script type="module">
+// イベント家具の大きな見本（3D担当）。?t=newtonCradle&time=0.3&dark=1&view=front|side|close
+import * as THREE from 'three';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { buildGacha } from './js/gachafurn.js';
+const q = new URLSearchParams(location.search), W = 640, H = 640;
+const r = new THREE.WebGLRenderer({ antialias: true }); r.setSize(W, H); r.toneMapping = THREE.ACESFilmicToneMapping; r.shadowMap.enabled = true; document.body.append(r.domElement);
+const sc = new THREE.Scene(); const dark = q.get('dark');
+sc.background = new THREE.Color(dark ? '#141218' : '#e9e4da');
+const pm = new THREE.PMREMGenerator(r); sc.environment = pm.fromScene(new RoomEnvironment(), 0.04).texture; sc.environmentIntensity = dark ? 0.12 : 0.8;
+const sun = new THREE.DirectionalLight('#fff3e0', dark ? 0.1 : 1.6); sun.position.set(2, 4, 3); sun.castShadow = true; sc.add(sun);
+const fl = new THREE.Mesh(new THREE.PlaneGeometry(10, 10).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: dark ? '#2a2420' : '#b9a58a', roughness: 0.8 })); fl.receiveShadow = true; sc.add(fl);
+const obj = buildGacha({ type: q.get('t') }); sc.add(obj);
+obj.traverse(o => { if (o.isMesh) { o.castShadow ??= true; } });
+const L = obj.userData.light; if (L) { const pl = new THREE.PointLight(L.color, L.intensity * 2, 3, 2); pl.position.set(0, L.y, 0.05); sc.add(pl); }
+obj.userData.tick?.(+(q.get('time') || 0), 0.016);
+const bb = new THREE.Box3().setFromObject(obj), c = bb.getCenter(new THREE.Vector3()), s = bb.getSize(new THREE.Vector3());
+const big = Math.max(s.x, s.y, s.z), view = q.get('view') || 'front';
+const cam = new THREE.PerspectiveCamera(30, W / H, 0.01, 50);
+const dist = big * (view === 'close' ? 1.1 : 2.3) * (+(q.get('z') || 1));
+const dirs = { front: [0.45, 0.3, 1], side: [1, 0.25, 0.25], close: [0.3, 0.15, 1], top: [0.2, 1.2, 0.8] };
+const d = new THREE.Vector3(...dirs[view]).normalize();
+const tgt = c.clone(); if (q.get('ty')) tgt.y = +q.get('ty');
+cam.position.copy(tgt).addScaledVector(d, dist); cam.lookAt(tgt);
+r.render(sc, cam); window.DONE = 1;
+</script></body></html>

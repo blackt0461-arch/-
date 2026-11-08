@@ -1236,7 +1236,8 @@ export class Room3D {
   updateLights() {
     for (const l of this.lamps) l.parent && l.parent.remove(l);
     this.lamps = [];
-    this.items.children.filter(o => o.userData.kind === 'bareBulb').forEach(o => this.items.remove(o));
+    // はだか電球を作りなおす時は、前の電球の形・材質も返す（部屋をすばやく行き来すると、たまっていた。2026-11-08）
+    this.items.children.filter(o => o.userData.kind === 'bareBulb').forEach(o => { this.items.remove(o); freeTree(o, this.scene); });
     const lit = this.items.children.filter(o => {
       const obj = o.children[0];
       return obj && (obj.userData.light || o.userData.item?.light);

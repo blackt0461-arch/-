@@ -221,7 +221,7 @@ b, strong { font-weight: 700; }
 .profile-card { padding: 12px 14px; }
 /* ガチャ・ログボ・アップデート・タイトルなど「いつも暗い背景」の画面では、
    明るい着せ替えでも文字が見えるよう、色を暗い画面用にもどす */
-.pfx, .lb-screen, .update-ov, .title-screen, .photo-ui, .photo-preview {
+.pfx, .lb-screen, .update-ov, .title-screen, .photo-ui, .photo-preview, .sheet.ev-sheet {
   --sk-text: #f2efe9; --sk-muted: rgba(242, 239, 233, .8);
   --sk-card: rgba(255, 255, 255, .06); --sk-card-line: rgba(255, 255, 255, .12);
   --sk-icon-bg: rgba(255, 255, 255, .08);

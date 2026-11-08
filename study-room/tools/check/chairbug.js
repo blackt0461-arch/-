@@ -43,6 +43,10 @@ const serve = () => new Promise(res => { const srv = http.createServer((req, rsp
   // 部屋を出た時は、ほかで使っていない形はちゃんと返しているか（メモリ）
   const mem = await page.evaluate(async () => { const a = window.__app, r = a.room3d; const i = a.HS().rooms.indexOf(a.curRoom()); const before = r.renderer.info.memory.geometries; await a.switchRoom(i === 0 ? 1 : 0); await new Promise(z => setTimeout(z, 2000)); r.renderer.render(r.scene, r.camera); const after = r.renderer.info.memory.geometries; await a.switchRoom(i); await new Promise(z => setTimeout(z, 2000)); return [before, after]; });
   console.log('  形の数（GPU）リビング ' + mem[0] + ' → ほかの部屋 ' + mem[1]);
+  // すばやく部屋を行き来しても、形の数が増えつづけない（はだか電球の返し忘れ。2026-11-08）
+  const grow = await page.evaluate(async () => { const a = window.__app, r = a.room3d; const i = a.HS().rooms.indexOf(a.curRoom()); const out = []; for (let k = 0; k < 8; k++) { await a.switchRoom(i === 0 ? 1 : 0); await new Promise(z => setTimeout(z, 300)); await a.switchRoom(i); await new Promise(z => setTimeout(z, 400)); r.renderer.render(r.scene, r.camera); out.push(r.renderer.info.memory.geometries); } return out; });
+  const inc = grow.at(-1) - grow[1]; if (inc > 2) bad++;
+  console.log((inc > 2 ? '  × ' : '  ○ ') + 'すばやく8往復した時の形の数 ' + grow.join(' '));
   // 同じイスを2脚置いて、1脚しまう（もう1脚の形を捨てていないか）
   await page.evaluate(async () => { const a = window.__app; const { itemById } = await import('/js/items.js'); await a.putIntoRoom(itemById('hobby-gamechair-black')); const p = a.curRoom().placed.at(-1); a.room3d.removeObject(p.uid); a.curRoom().placed.pop(); a.S.save(); });
   await page.waitForTimeout(1000); await live('remove-one');

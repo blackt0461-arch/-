@@ -203,12 +203,16 @@ add(5, [
 add(4, [
   ['ev-snowman', 'マフラーの雪だるま', 'decor', 'nmr', { gacha: 'snowman' }, 1.2, { series: 'event' }],
   ['ev-gift-pile', 'プレゼントの山', 'decor', 'nmr', { gacha: 'giftPile' }, 0.7, { series: 'event' }],
+  // 物理強化月間（2026年11月）
+  ['ev-newton-cradle', 'ニュートンのゆりかご', 'decor', 'mi', { gacha: 'newtonCradle' }, 0.3, { series: 'event' }],
+  ['ev-pendulum-clock', '振り子の柱時計', 'storage', 'rn', { gacha: 'pendulumClock' }, 1.9, { series: 'event' }],
   // 冬のカフェ（2026年12月）
   ['ev-cocoa-counter', 'ホットチョコのカウンター', 'table', 'nr', { gacha: 'cocoaCounter' }, 1.2, { series: 'event' }],
   ['ev-ginger-house', 'ジンジャークッキーの家', 'decor', 'nr', { gacha: 'gingerHouse' }, 0.4, { series: 'event' }],
   ['ev-snow-garland', '雪の結晶のガーランド', 'wallart', 'nmr', { gacha: 'snowGarland' }, 1.6, { place: 'wall', light: '#dff1ff', series: 'event' }],
 ], {});
 add(5, [
+  ['ev-plasma-lamp', 'プラズマボールのランプ', 'light', 'mi', { gacha: 'plasmaLamp' }, 0.4, { light: '#b48cff', series: 'event' }],
   ['ev-cafe-sign', 'ランタンの冬のカフェ看板', 'wallart', 'nr', { gacha: 'cafeSign' }, 1.0, { place: 'wall', light: '#ffcf8a', series: 'event' }],
 ], {});
 // ───────── 備え付けの豪華な形（★4・★5 恒常）。引くと「模様がえ → 備え付け」で選べる ─────────

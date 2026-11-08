@@ -193,3 +193,54 @@
 @keyframes nmIn { from { opacity: 0; transform: translateY(-10px) scale(.92); } to { opacity: 1; transform: none; } }
 @keyframes nmOut { to { opacity: 0; transform: translateY(-6px); } }
 @media (prefers-reduced-motion: reduce) { .uinext .nx-menu button { animation: none; } }
+
+/* ===== 物理の新しい出し方（1.17.0）：計算・組み立て・並べかえ・グラフ ===== */
+/* 文字は --sk-text、グラフの線は --sk-accent-text（明るい着せ替えでも読める色。ない着せ替えは --sk-accent）。1.17.0 品質担当の指摘 */
+.typed .pt-kind { margin: 0 2px -4px; font-size: 12px; letter-spacing: .12em; color: var(--sk-text, #f2efe9); font-weight: 700; }
+.typed .pt-kind::before { content: ''; display: inline-block; width: 7px; height: 7px; margin-right: 6px; border-radius: 50%; background: var(--sk-accent, #d8c3a0); vertical-align: 1px; }
+.pfig { margin: 0 0 8px; padding: 6px 4px 2px; border-radius: var(--sk-radius, 14px); background: var(--sk-card, rgba(28,28,31,.8)); border: 1px solid var(--sk-card-line, rgba(255,255,255,.08)); }
+.pfig svg { display: block; width: 100%; height: auto; max-height: 34vh; }
+.pfig .pf-ax { stroke: var(--sk-muted, rgba(242,239,233,.74)); stroke-width: 1.2; }
+.pfig .pf-grid { stroke: var(--sk-card-line, rgba(255,255,255,.08)); stroke-width: 1; }
+.pfig .pf-t, .pfig .pf-l { fill: var(--sk-muted, rgba(242,239,233,.74)); font-size: 11px; font-family: var(--sk-font, sans-serif); }
+.pfig .pf-l { fill: var(--sk-text, #f2efe9); font-style: italic; }
+.pfig .pf-line { fill: none; stroke: var(--sk-accent-text, var(--sk-accent, #d8c3a0)); stroke-width: 2.4; stroke-linejoin: round; }
+.pfig .pf-line.dash { stroke-dasharray: 5 4; stroke-width: 1.8; }
+.pfig .pf-fill { fill: var(--sk-accent, #d8c3a0); opacity: .16; }
+.pfig .pf-guide { stroke: var(--sk-muted, rgba(242,239,233,.74)); stroke-dasharray: 3 3; stroke-width: 1; }
+.pfig .pf-dot { fill: var(--sk-accent-text, var(--sk-accent, #d8c3a0)); }
+/* 数値を入れる */
+.pt-tol { display: block; font-size: 11.5px; color: var(--sk-muted, rgba(242,239,233,.74)); font-weight: 400; }
+.pt-ans { display: flex; align-items: baseline; gap: 8px; padding: 10px 14px; margin: 2px 0 10px; border-radius: var(--sk-radius, 14px); border: 1.5px solid var(--sk-accent, #d8c3a0); background: var(--sk-sheet, rgba(20,20,23,.92)); min-height: 30px; }
+.pt-v { font-size: 26px; font-family: var(--sk-num, serif); font-variant-numeric: lining-nums tabular-nums; flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.pt-v .pt-ph { color: var(--sk-text, #f2efe9); opacity: .8; font-style: normal; }
+.pt-e { font-size: .8em; margin-left: 4px; }
+.pt-u { font-size: 15px; color: var(--sk-text, #f2efe9); white-space: nowrap; }
+.pt-keys { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; }
+.pt-k { padding: 12px 0; border-radius: 12px; font-size: 19px; border: 1px solid var(--sk-card-line, rgba(255,255,255,.08)); background: var(--sk-card, rgba(28,28,31,.8)); color: var(--sk-text, #f2efe9); font-variant-numeric: lining-nums tabular-nums; }
+.pt-k[data-k=exp], .pt-k[data-k=clr], .pt-k[data-k=del], .pt-k[data-k=neg] { font-size: 15px; font-weight: 700; color: var(--sk-text, #f2efe9); background: var(--sk-icon-bg, rgba(255,255,255,.06)); }
+.pt-k.go { background: var(--sk-btn-bg, #f2efe9); color: var(--sk-btn-fg, #17171a); font-weight: 700; font-size: 16px; }
+.pt-k:disabled { opacity: .45; }
+.pt-k:active { transform: scale(.96); }
+.quiz.calc-open .pt-keys { display: none; }
+/* 組み立てる */
+.pb-eq { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px 4px; padding: 16px 10px; margin: 2px 0 12px; border-radius: var(--sk-radius, 14px); border: 1px dashed var(--sk-card-line, rgba(255,255,255,.2)); font-family: "Times New Roman", var(--sk-num, serif); font-style: italic; font-size: 24px; min-height: 40px; }
+.pb-eq.unit { font-style: normal; font-family: var(--sk-font, sans-serif); font-size: 20px; }
+.pb-fix { padding: 0 2px; }
+.pb-sup { font-size: .62em; align-self: flex-start; margin-left: -3px; }
+.pb-slot { min-width: 40px; height: 42px; padding: 0 8px; border-radius: 10px; border: 0; border-bottom: 2.5px solid var(--sk-accent, #d8c3a0); background: rgba(255,255,255,.04); color: var(--sk-text, #f2efe9); font: inherit; }
+.pb-slot.set { border: 1px solid var(--sk-accent, #d8c3a0); background: rgba(216,195,160,.14); }
+.pb-pool { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-bottom: 14px; }
+.pb-chip { min-width: 52px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--sk-card-line, rgba(255,255,255,.08)); background: var(--sk-card, rgba(28,28,31,.8)); color: var(--sk-text, #f2efe9); font-family: "Times New Roman", var(--sk-num, serif); font-style: italic; font-size: 21px; }
+.pb-pool.unit .pb-chip { font-style: normal; font-family: var(--sk-font, sans-serif); font-size: 17px; }
+.pb-chip.used { opacity: .25; }
+/* 並べかえ */
+.po-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
+.po-item { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 12px; text-align: left; border: 1px solid var(--sk-card-line, rgba(255,255,255,.08)); background: var(--sk-sheet, rgba(20,20,23,.92)); color: var(--sk-text, #f2efe9); font-size: 15px; line-height: 1.45; }
+.po-item.set { border-color: var(--sk-accent, #d8c3a0); }
+.po-n { flex: none; display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; border: 1px dashed var(--sk-card-line, rgba(255,255,255,.25)); font-variant-numeric: tabular-nums; }
+.po-item.set .po-n { border: 0; background: var(--sk-accent, #d8c3a0); color: var(--sk-btn-fg, #17171a); }
+/* 結果 */
+.pt-mine { display: grid; justify-items: center; color: var(--sk-muted, rgba(242,239,233,.74)); font-size: 14px; }
+.pt-mine small { font-size: 12px; }
+.pt-mine span { text-decoration: line-through; text-decoration-color: rgba(232,120,96,.7); }

@@ -1,4 +1,5 @@
 // 記録の保存。端末の中（すぐ読める控え）とネット上（sync.js が送る）の両方に置く。
+import { PHY_UNIT, OLD_PHY_UNITS } from './physmap.js';
 let KEY = null;
 const DAY_START_HOUR = 6; // 1日の区切りは朝6時
 export const REVIEW_GAPS = [1, 3, 7]; // 正解するごとに 1日後 → 3日後 → 7日後
@@ -83,7 +84,60 @@ function migrate(s) {
     s.house.rooms = (old.rooms || []).map(r => ({ id: r.id, style: STYLE[r.dir] || null, surf: null, placed: [] }));
     s.house.current = Math.min(old.current || 0, Math.max(0, s.house.rooms.length - 1));
   }
+  mergePhysics(s);
   return s;
+}
+// 物理の統合（1.17.0）：「物理（公式）」(physics) と「物理（4択）」(physics4) の記録を、1つの「物理」(physics) にまとめる。
+// 問題の番号は2つでかぶらないので、問題ごとの記録（正解・まちがい・復習・克服）はそのまま足せる。
+// 公式の問題の「単元ごとの数」は、教科書の単元に数えなおす。元の記録は physBackup に残す（1回目だけ）。
+// 古い版の端末が physics4 をまた書いても、次に開いた時に問題ごとの記録だけ足し直す（数は二重に数えない）。
+function mergePhysics(s) {
+  const subs = s.subjects || (s.subjects = {});
+  const p4 = subs.physics4;
+  if (s.physMerged && !p4) return;
+  const ph = subs.physics || (subs.physics = blankSubject());
+  ph.srs = ph.srs || {}; ph.units = ph.units || {};
+  const n = (r) => (r?.rights || 0) + (r?.wrongs || 0);
+  if (!s.physMerged) {
+    try { s.physBackup = JSON.parse(JSON.stringify({ physics: subs.physics || null, physics4: p4 || null, at: Date.now() })); } catch (e) { /* なし */ }
+    // 公式の問題の単元（力学・熱・波動・電磁気）→ 教科書の単元。問題ごとの記録から数えなおす
+    const had = OLD_PHY_UNITS.some(u => ph.units[u]);
+    for (const u of OLD_PHY_UNITS) delete ph.units[u];
+    if (had) for (const [id, r] of Object.entries(ph.srs)) {
+      const g = PHY_UNIT[id]; if (!g || !n(r)) continue;
+      const u = ph.units[g[1]] || (ph.units[g[1]] = { solved: 0, correct: 0, perfect: 0 });
+      u.solved += n(r); u.correct += r.rights || 0; u.perfect += r.rights || 0;
+    }
+    if (p4) for (const [k, v] of Object.entries(p4.units || {})) {
+      const u = ph.units[k] || (ph.units[k] = { solved: 0, correct: 0, perfect: 0 });
+      u.solved += v.solved || 0; u.correct += v.correct || 0; u.perfect += v.perfect || 0;
+    }
+    const ls = s.profile?.lastStudy;
+    if (p4?.scope) ph.scope = p4.scope;
+    else if (ls?.sid === 'physics4' && ls.scope) ph.scope = ls.scope;
+    else if (ph.scope?.unit && OLD_PHY_UNITS.includes(ph.scope.unit)) ph.scope = null;
+    // 毎日の記録・答えた時間・前回のつづき：physics4 → physics
+    for (const e of Object.values(s.log || {})) {
+      for (const k of Object.keys(e.u || {})) if (k.startsWith('physics4|')) {
+        const k2 = 'physics|' + k.slice(9), a = e.u[k2] || (e.u[k2] = [0, 0]);
+        a[0] += e.u[k][0] || 0; a[1] += e.u[k][1] || 0; delete e.u[k];
+      }
+      if (e.t && e.t.physics4) { e.t.physics = (e.t.physics || 0) + e.t.physics4; delete e.t.physics4; }
+    }
+    const q = s.profile?.qtime;
+    if (q) for (const k of Object.keys(q)) {
+      if (k.startsWith('physics4|')) { const k2 = 'physics|' + k.slice(9), a = q[k2] || (q[k2] = [0, 0]); a[0] += q[k][0] || 0; a[1] += q[k][1] || 0; delete q[k]; }
+      else if (k.startsWith('physics|') && OLD_PHY_UNITS.includes(k.slice(8))) { q['physics:f|' + k.slice(8)] = q[k]; delete q[k]; }
+    }
+    if (s.profile?.lastStudy?.sid === 'physics4') s.profile.lastStudy.sid = 'physics';
+    s.physMerged = true;
+  }
+  if (p4) {
+    for (const [id, r] of Object.entries(p4.srs || {})) if (!ph.srs[id] || n(r) > n(ph.srs[id])) ph.srs[id] = r;
+    const live = (x) => x && x.set && x.idx < x.set.length;
+    if (!live(ph.session) && live(p4.session)) ph.session = p4.session;
+    delete subs.physics4;
+  }
 }
 export function house() { return state.house || (state.house = blankHouse()); }
 // ネットから受け取った記録に置きかえる（ネットへは送り返さない）
@@ -257,7 +311,7 @@ function giveRankRewards(from, to) {
 
 // --- プレゼントBOX ---
 // gift = { id, kind: 'ticket'|'ticket4'|'ticket5'|'exchange'|'shards4'|'shards5'|'gauge'|'item', amount, itemId, title, from, at }
-const GIFT_KEY = { ticket: 'rareTickets', ticket4: 'rareTickets4', ticket5: 'rareTickets5', exchange: 'tickets', shards4: 'shards4', shards5: 'shards5', gauge: 'gauge' };
+const GIFT_KEY = { ticket: 'rareTickets', ticket4: 'rareTickets4', ticket5: 'rareTickets5', exchange: 'tickets', shards4: 'shards4', shards5: 'shards5', gauge: 'gauge', medals: 'medals' }; // medals：ミッションのメダル（段位のごほうび）
 export function gifts() { const h = house(); return h.gifts || (h.gifts = []); }
 export function addGift(g) {
   const list = gifts();
@@ -488,7 +542,9 @@ export const GAUGE_PER_SEC = 1.5;
 export const STD_SEC = {
   jp: [15, 20, 30], social: [15, 20, 30], english: [15, 20, 30],
   chem: [25, 35, 50], bio: [25, 35, 50], earth: [25, 35, 50],
-  math: [40, 60, 90], physics4: [40, 60, 90], physics: [60, 90, 120],
+  math: [40, 60, 90], physics4: [40, 60, 90], physics: [40, 60, 90],
+  // 物理は出し方ごと（1.17.0）：公式（文字→公式）・計算（数値を入れる）・組み立て（公式・単位）・並べかえ
+  'physics:f': [60, 90, 120], 'physics:n': [50, 75, 110], 'physics:b': [25, 35, 50], 'physics:o': [25, 35, 50],
 };
 export const FULL_AT = 0.4; // ふつうの時間の4割かければ満額
 export const WRONG_RATE = 0.3;
@@ -562,12 +618,13 @@ export function gaugeFactor({ sid, unit, sub, id, sids }) {
   return { f, mult, decayed: sd < 1 || ud < 1, subjDecayed: sd < 1, unitDecayed: ud < 1, repeat };
 }
 // 答えた時間を記録する（今日の教科ごとの秒数と、単元ごとの合計秒数・問題数）
-export function logTime(sid, unit, secs) {
+// tkey：単元ごとの平均時間を分けて数える時のなまえ（物理の出し方ごと。なければ sid）
+export function logTime(sid, unit, secs, tkey = sid) {
   const t = Math.min(600, Math.max(0, secs || 0));
   const log = state.log || (state.log = {}), d = dayKey();
   const e = log[d] || (log[d] = { n: 0, c: 0, pz: 0, u: {} });
   const tt = e.t || (e.t = {}); tt[sid] = Math.round((tt[sid] || 0) + t);
-  const p = profile(), q = p.qtime || (p.qtime = {}), k = `${sid}|${unit || ''}`, a = q[k] || (q[k] = [0, 0]);
+  const p = profile(), q = p.qtime || (p.qtime = {}), k = `${tkey}|${unit || ''}`, a = q[k] || (q[k] = [0, 0]);
   a[0] = Math.round(a[0] + t); a[1]++;
 }
 
