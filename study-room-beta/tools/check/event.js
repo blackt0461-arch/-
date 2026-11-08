@@ -25,7 +25,9 @@ const serve = () => new Promise(res => { const srv = http.createServer((req, rsp
   // テスト用のイベントを最後に入れて確かめる（しくみの確かめ。管理者の「ためす」は最後のイベント）
   await page.evaluate(async () => { const EV = await import('/js/events.js'); EV.EVENTS.push({ id: 'test-ev', name: 'テストフェス', unit: '雪の結晶', desc: 'テスト用', start: '2099-12-01', end: '2099-12-25', rewards: [{ at: 10, kind: 'ticket', amount: 2 }, { at: 30, kind: 'item', item: 'ev-gift-pile' }, { at: 60, kind: 'ticket4', amount: 1 }, { at: 100, kind: 'item', item: 'ev-snowman' }, { at: 150, kind: 'ticket', amount: 5 }, { at: 200, kind: 'item', item: 'ev-xmas-tree' }] }); });
   console.log('1. 期間の前は出ない → 管理者が「ためす」');
-  check(await page.locator('.home .evbtn').count() === 0, '期間の前は部屋にイベントのボタンが出ない');
+  { const live = await page.evaluate(async () => { const EV = await import('/js/events.js'); const e = EV.activeEvent(); return e && e.id !== 'test-ev' ? e.id : null; });
+    // 本当のイベント（物理強化月間など）の期間中は、そのボタンが出ているのが正しい。テスト用のイベント（2099年）はまだ出ない
+    check(live ? (await page.locator('.home .evbtn').count()) <= 1 : (await page.locator('.home .evbtn').count()) === 0, `期間の前のイベントは部屋に出ない（いま期間中の本物のイベント：${live || 'なし'}）`); }
   await page.evaluate(() => document.querySelector('[data-t=menu]')?.click()); await page.waitForTimeout(400);
   await page.click('.menu-list [data-m=admin]'); await page.waitForSelector('.evpreview[data-ev=test-ev]');
   await page.click('.evpreview[data-ev=test-ev]'); await page.waitForTimeout(500);
@@ -88,7 +90,7 @@ const serve = () => new Promise(res => { const srv = http.createServer((req, rsp
     const EV = await import('/js/events.js'); const { itemById } = await import('/js/items.js'); const G = await import('/js/gacha.js');
     const ev = EV.EVENTS.find(e => e.id === 'physics2026');
     EV.setPreview(null);
-    const dates = [EV.activeEvent('2026-11-09')?.id || null, EV.activeEvent('2026-11-10')?.id || null, EV.activeEvent('2026-11-30')?.id || null, EV.activeEvent('2026-12-01')?.id || null];
+    const dates = [EV.activeEvent('2026-11-07')?.id || null, EV.activeEvent('2026-11-08')?.id || null, EV.activeEvent('2026-11-30')?.id || null, EV.activeEvent('2026-12-01')?.id || null];
     const items = ev.rewards.filter(r => r.kind === 'item').map(r => r.item);
     const ok = items.every(id => itemById(id) && G.gachaById(id)?.reward);
     EV.setPreview('physics2026');
@@ -106,7 +108,7 @@ const serve = () => new Promise(res => { const srv = http.createServer((req, rsp
     window.__app.showHome(); await new Promise(r => setTimeout(r, 300));
     return { wrong: [w1, w2, wsum].join(','), dates: dates.map(String).join(','), ok, items: items.length, pts: [a, b, c, d].join(','), bc: st.bc, ready, got, gift, again, left: EV.bonusLeft(ev) };
   });
-  check(ph.dates === 'null,physics2026,physics2026,wintercafe2026', `11/10〜11/30 で、12/1 から冬のカフェ（${ph.dates}）`);
+  check(ph.dates === 'null,physics2026,physics2026,wintercafe2026', `11/8〜11/30 で、12/1 から冬のカフェ（${ph.dates}）`);
   check(ph.ok && ph.items === 3, `物理の家具3つがそろっている（${ph.items}）`);
   check(ph.pts === '3,1,1,0', `物理の正解3・まちがい1・ほかの教科1・同じ日のくり返し0（${ph.pts}）`);
   check(ph.bc === 100 && ph.ready === 2 && ph.got === 2 && ph.gift === 'ticketx2' && ph.again === 0, `物理の正解100問でレアチケット2枚・2回は受け取れない（${JSON.stringify(ph)}）`);

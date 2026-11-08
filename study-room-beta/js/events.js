@@ -13,7 +13,7 @@ export const EVENTS = [
   // さらに「物理の正解50問ごとにレアチケット1枚」（上限なし。bonus）
   { id: 'physics2026', name: '物理強化月間', unit: '電子', icon: 'magnet', title: 'ev-physics2026',
     desc: '物理を解くほどお得な3週間。物理の正解は電子が3倍、50問ごとにレアチケットも。',
-    start: '2026-11-10', end: '2026-11-30',
+    start: '2026-11-08', end: '2026-11-30',
     rate: { physics: [3, 1], physics4: [3, 1], other: [1, 0] }, noRepeat: true,
     howto: '物理の正解3・まちがい1、ほかの教科の正解1、パズルは★の数',
     bonus: { every: 50, sids: ['physics', 'physics4'], kind: 'ticket', amount: 1, label: '50問ごとにレアチケット', note: '物理の正解' },
