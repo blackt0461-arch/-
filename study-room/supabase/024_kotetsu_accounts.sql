@@ -138,7 +138,6 @@ begin
   if exists (select 1 from kw_links where app = 'roomin' and target = u.id and user_id <> me) then raise exception 'already_linked'; end if;
   insert into kw_links (user_id, app, target) values (me, 'roomin', u.id) on conflict (user_id, app) do update set target = excluded.target, linked_at = now();
   insert into kw_apps (user_id, app) values (me, 'roomin') on conflict do nothing;
-  if u.is_admin then insert into kw_apps (user_id, app) values (me, 'roomin-beta') on conflict do nothing; end if;
   delete from sr_sessions where user_id = u.id;
   tok := encode(gen_random_bytes(32), 'hex');
   insert into sr_sessions (token, user_id) values (tok, u.id);
