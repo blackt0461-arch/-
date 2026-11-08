@@ -1,11 +1,11 @@
 // LYRIC BOOK 本体：画面の切りかえと操作
-import { rpc, LOCAL_TOKEN } from './cloud.js?v=2.3.3';
+import { rpc, LOCAL_TOKEN } from './cloud.js?v=2.3.4';
 import * as N from './notes.js';
 import * as L from './lyrics.js';
 import * as R from './recorder.js';
 import * as A from './analyze.js';
 
-export const APP_VERSION = '2.3.3';
+export const APP_VERSION = '2.3.4';
 const NEED_SERVER = 3; // この版の受け口（server/Code.gs）の番号
 
 // ---------- 小さな道具 ----------
@@ -243,14 +243,17 @@ function savingUi(d) {
   if (savingCount > 0) { el.textContent = '保存中…'; el.className = 'saving show'; }
   else { el.textContent = S.offline ? 'この端末に保存しました' : '保存しました ✓'; el.className = 'saving show done'; el._t = setTimeout(() => { el.className = 'saving'; }, 1300); }
 }
+// 送っている途中の保存の数と、保存した回数（裏での読みこみが古い中身で上書きしないように）
+let savesInFlight = 0, saveGen = 0;
 async function send(name, body) {
   cacheSoon();
   savingUi(1);
+  savesInFlight++; saveGen++;
   try { return await rpc(name, body); }
   catch (e) {
     if (e.code === 'offline' && S.token !== LOCAL_TOKEN) { enqueue(name, body); setOffline(true); return null; }
     throw e;
-  } finally { savingUi(-1); }
+  } finally { savingUi(-1); savesInFlight--; saveGen++; }
 }
 let flushing = false;
 async function flush() {
@@ -630,13 +633,12 @@ async function newArtist() {
 }
 async function createArtist(name, yomi = '') {
   const a = { id: uuid(), data: { name, yomi }, created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
-  try {
-    S.artists.set(a.id, a);
-    const r = await send('lb_save_artist', { p_token: S.token, p_id: a.id, p_data: a.data });
-    if (r) Object.assign(a, r);
-    fetchJacket(a);
-    return a;
-  } catch (e) { S.artists.delete(a.id); fail(e); return null; }
+  S.artists.set(a.id, a);
+  // Google の返事は待たずに先へ進む（保存は裏で）
+  send('lb_save_artist', { p_token: S.token, p_id: a.id, p_data: a.data })
+    .then(r => { if (r) Object.assign(a, r); cacheSoon(); fetchJacket(a); })
+    .catch(e => { S.artists.delete(a.id); fail(e); route(true); });
+  return a;
 }
 async function saveArtist(a) {
   try { const r = await send('lb_save_artist', { p_token: S.token, p_id: a.id, p_data: a.data }); if (r) Object.assign(a, r); }
@@ -948,7 +950,7 @@ async function artistMenu(a) {
       ok: async (_, sh) => {
         const name = $('#ra-name', sh).value.trim(); if (!name) return;
         a.data.name = name; a.data.yomi = $('#ra-yomi', sh).value.trim();
-        closeSheet(); await saveArtist(a); renderArtist(a.id);
+        closeSheet(); renderArtist(a.id); saveArtist(a);
       },
     });
     void sheet;
@@ -958,10 +960,11 @@ async function artistMenu(a) {
     try {
       const at = new Date().toISOString();
       a.data.deleted_at = at;
-      await saveArtist(a);
-      for (const s of songs) { s.data.deleted_at = at; s.data.deleted_with_artist = true; await queueSave(s, true); }
+      for (const s of songs) { s.data.deleted_at = at; s.data.deleted_with_artist = true; }
       toast('「最近消した曲」に移しました');
       go('#/');
+      // 保存は裏で1つずつ（画面は待たない）
+      (async () => { await saveArtist(a); for (const s of songs) await queueSave(s, true); })();
     } catch (e) { fail(e); }
   }
 }
@@ -1144,7 +1147,7 @@ async function deleteSong(s) {
   if (!(await confirmAsk('この曲を消しますか？', '「最近消した曲」に移します。30日たつと消えます。それまでは設定から戻せます。', '消す', true))) return;
   try {
     s.data.deleted_at = new Date().toISOString();
-    await queueSave(s, true);
+    queueSave(s, true); // 保存は裏で（画面は待たない）
     toast('「最近消した曲」に移しました');
     const aid = s.data.artist_id;
     history.replaceState(null, '', s.data.kind === 'real' && alive(S.artists.get(aid)) ? `#/artist/${aid}` : '#/');
@@ -1155,13 +1158,10 @@ async function deleteSong(s) {
 // 同じ曲の保存は1つずつ順番に送る。重なって送ると、前の保存で変わった更新日時を知らないまま送るので、
 // 自分の保存なのに「別の端末で直された」とまちがえてしまう。更新日時（p_base）と中身は、送る直前に読む。
 const songChains = new Map();
-let savesInFlight = 0, saveGen = 0;
 function saveSongInOrder(id, makeBody) {
   const prev = songChains.get(id) || Promise.resolve();
   const p = prev.catch(() => {}).then(async () => {
-    savesInFlight++; saveGen++;
-    try { return await send('lb_save_song', makeBody()); }
-    finally { savesInFlight--; saveGen++; }
+    return send('lb_save_song', makeBody());
   });
   songChains.set(id, p);
   p.catch(() => {}).finally(() => { if (songChains.get(id) === p) songChains.delete(id); });
@@ -1169,10 +1169,11 @@ function saveSongInOrder(id, makeBody) {
 }
 
 // 歌詞の保存（書きこみはまとめて少しあとに）
+const pendingRuns = new Map();
 function queueSave(s, now = false) {
   clearTimeout(S.saveTimers.get(s.id));
   const run = async () => {
-    S.saveTimers.delete(s.id);
+    S.saveTimers.delete(s.id); pendingRuns.delete(s.id);
     let cur = s;
     try {
       const r = await saveSongInOrder(s.id, () => {
@@ -1187,8 +1188,13 @@ function queueSave(s, now = false) {
     }
   };
   if (now) return run();
+  pendingRuns.set(s.id, run);
   S.saveTimers.set(s.id, setTimeout(run, 700));
 }
+// アプリを閉じる・ほかのアプリに切りかえるときは、待っている保存をすぐ送る
+function saveNow() { for (const [id, run] of Array.from(pendingRuns)) { clearTimeout(S.saveTimers.get(id)); run(); } }
+addEventListener('pagehide', saveNow);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') saveNow(); });
 
 // ---------- なぞって書きこむ ----------
 // iPhone の青い「選ぶ印」とコピーのメニューは出さず、アプリの中で文字を選ぶ。
@@ -1394,7 +1400,7 @@ function openKeyEditor(s) {
     <p class="muted" style="font-size:.8rem">音のボタンを押すと鍵盤が出ます。わからない音は「測定不能」のままで大丈夫です。</p>
     <div class="acts"><button class="btn sub" data-s="no">やめる</button><button class="btn" data-s="ok">保存</button></div>`, {
     no: () => closeSheet(),
-    ok: (_, sh) => { s.data.keys = readKeyFields(sh, s.data.keys || {}); closeSheet(); queueSave(s, true).then(() => renderSong(s.id)); },
+    ok: (_, sh) => { s.data.keys = readKeyFields(sh, s.data.keys || {}); closeSheet(); renderSong(s.id); queueSave(s, true); },
   });
   bindNotePreview(sheet);
 }
@@ -1539,12 +1545,16 @@ async function recMenu(songId, id) {
   else if (v === 'rename') {
     const name = await askText({ title: '録音の名前', value: r.name });
     if (!name?.trim()) return;
-    try { await rpc('lb_rename_recording', { p_token: S.token, p_id: id, p_name: name.trim() }); r.name = name.trim().slice(0, 40); refreshRecs(songId); syncInBackground(); }
-    catch (e) { fail(e); }
+    const old = r.name;
+    r.name = name.trim().slice(0, 40); refreshRecs(songId);
+    send('lb_rename_recording', { p_token: S.token, p_id: id, p_name: name.trim() }).then(() => cacheSoon())
+      .catch(e => { r.name = old; refreshRecs(songId); fail(e); });
   } else if (v === 'del') {
     if (!(await confirmAsk(`「${r.name}」を消しますか？`, '元にはもどせません。', '消す', true))) return;
-    try { await rpc('lb_delete_recording', { p_token: S.token, p_id: id }); S.recs = S.recs.filter(x => x.id !== id); stopPlayback(); refreshRecs(songId); }
-    catch (e) { fail(e); }
+    const before = S.recs;
+    S.recs = S.recs.filter(x => x.id !== id); stopPlayback(); refreshRecs(songId);
+    send('lb_delete_recording', { p_token: S.token, p_id: id }).then(() => cacheSoon())
+      .catch(e => { S.recs = before; refreshRecs(songId); fail(e); });
   }
 }
 function refreshRecs(songId) { const b = $('#recsBox'); if (b) { b.innerHTML = recsHtml(songId); } }
@@ -1896,17 +1906,15 @@ function renderEdit(id, q = new URLSearchParams()) {
       const base = s?.updated_at || null;
       obj.data = d;
       S.songs.set(sid, obj);
-      let r;
       clearTimeout(S.saveTimers.get(sid)); S.saveTimers.delete(sid);
-      try { r = await saveSongInOrder(sid, () => ({ p_token: S.token, p_id: sid, p_data: d, p_base: s ? (obj.updated_at || base) : null })); }
-      catch (e) {
-        if (e.code !== 'conflict') throw e;
-        await keepBoth(d);
-        await refresh(true);
-        history.replaceState(null, '', '#/'); route();
-        return;
-      }
-      if (r) Object.assign(obj, r);
+      // Google の返事は待たずに曲のページへ（保存は裏で。同じ曲のあとの保存は、この保存のあとに送られる）
+      saveSongInOrder(sid, () => ({ p_token: S.token, p_id: sid, p_data: obj.data, p_base: s ? (obj.updated_at || base) : null }))
+        .then(r => { if (r) Object.assign(obj, r); cacheSoon(); })
+        .catch(async e => {
+          if (e.code !== 'conflict') { fail(e); return; }
+          await keepBoth(obj.data).catch(fail);
+          await refresh(true);
+        });
       cacheSoon();
       if (!s && d.kind === 'real') { autoEstimate(obj); if (!(d.text || '').trim()) fetchLyrics(obj, true); }
       if (s && navDepth > 0 && location.hash === `#/edit/${sid}`) { navDepth--; history.back(); }
@@ -2271,13 +2279,16 @@ function renderTrash() {
     const x = S.songs.get(b.dataset.back);
     delete x.data.deleted_at; delete x.data.deleted_with_artist;
     const a = S.artists.get(x.data.artist_id);
-    if (a?.data.deleted_at) { delete a.data.deleted_at; await saveArtist(a); }
-    await queueSave(x, true); toast('戻しました'); renderTrash();
+    toast('戻しました'); renderTrash();
+    (async () => { if (a?.data.deleted_at) { delete a.data.deleted_at; await saveArtist(a); } await queueSave(x, true); })();
   });
   $$('[data-kill]', app).forEach(b => b.onclick = async () => {
     const x = S.songs.get(b.dataset.kill);
     if (!(await confirmAsk(`「${x.data.title || '題名なし'}」をすぐに消しますか？`, '録音もいっしょに消えます。元にはもどせません。', '消す', true))) return;
-    try { await send('lb_delete_song', { p_token: S.token, p_id: x.id }); S.songs.delete(x.id); S.recs = S.recs.filter(r => r.song_id !== x.id); cacheSoon(); renderTrash(); } catch (e) { fail(e); }
+    const recs = S.recs;
+    S.songs.delete(x.id); S.recs = S.recs.filter(r => r.song_id !== x.id); renderTrash();
+    send('lb_delete_song', { p_token: S.token, p_id: x.id }).then(() => cacheSoon())
+      .catch(e => { S.songs.set(x.id, x); S.recs = recs; if (S.view === 'trash') renderTrash(); fail(e); });
   });
 }
 // 30日すぎたものを、ほんとうに消す
@@ -2327,8 +2338,8 @@ async function renderShared(ownerId, id) {
     const sid = uuid();
     const obj = { id: sid, data: copy, created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
     S.songs.set(sid, obj);
-    try { const r = await send('lb_save_song', { p_token: S.token, p_id: sid, p_data: copy }); if (r) Object.assign(obj, r); toast('自作のノートにコピーしました'); go(`#/song/${sid}`); }
-    catch (e) { fail(e); }
+    toast('自作のノートにコピーしました'); go(`#/song/${sid}`);
+    saveSongInOrder(sid, () => ({ p_token: S.token, p_id: sid, p_data: obj.data })).then(r => { if (r) Object.assign(obj, r); cacheSoon(); }).catch(fail);
   };
 }
 

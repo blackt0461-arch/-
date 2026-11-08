@@ -34,11 +34,14 @@ async function remote(name, body) {
   if (!SCRIPT_URL) throw new CloudError('missing');
   let res;
   try {
+    const payload = JSON.stringify({ fn: name, args: body });
     res = await fetch(SCRIPT_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // 余分な確認通信をさせない形
-      body: JSON.stringify({ fn: name, args: body }),
+      body: payload,
       redirect: 'follow',
+      // アプリを閉じるところでも送りきれるように（小さい保存だけ。録音などの大きいものはふつうに送る）
+      keepalive: document.visibilityState === 'hidden' && payload.length < 60000,
     });
   } catch (e) { throw new CloudError('offline'); }
   let j = null;
