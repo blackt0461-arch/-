@@ -4,7 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#141236">
-<title>まいにち予定表</title>
+<title>よていパズル</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="よていパズル">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;800&family=DM+Mono:wght@500&display=swap">
@@ -321,14 +328,30 @@ input{font:inherit;font-size:16px}
   }
   setInterval(()=>{ if(screen==='home'&&!$('sheetRoot').innerHTML) renderHome(); },60000);
 
+  // ===== ホーム画面に追加 =====
+  let installEv=null;
+  window.addEventListener('beforeinstallprompt',e=>{ e.preventDefault(); installEv=e; });
+  const standalone=()=>matchMedia('(display-mode: standalone)').matches||navigator.standalone===true;
+  function addToHome(){
+    if(installEv){ const ev=installEv; installEv=null; ev.prompt(); ev.userChoice.then(r=>{ if(r.outcome==='accepted') toast('ホーム画面に追加しました'); }).catch(()=>{}); return; }
+    const ios=/iPhone|iPad|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+    const steps=ios
+      ?['Safari で開く','下の <b>共有ボタン</b>（四角から矢印が出ているマーク）をタップ','<b>「ホーム画面に追加」</b>をえらぶ','右上の <b>「追加」</b>をタップ']
+      :['Chrome で開く','右上の <b>︙</b>（点が3つ）をタップ','<b>「ホーム画面に追加」</b>または<b>「アプリをインストール」</b>をえらぶ','<b>「追加」</b>をタップ'];
+    openSheet('<h2>ホーム画面に追加する</h2><div style="display:flex;gap:12px;align-items:center"><img src="icon-192.png" alt="" width="56" height="56" style="border-radius:14px"><p style="margin:0;font-size:.9rem;color:var(--dim)">追加すると、アイコンからアプリのように開けます。電波がなくても使えます。</p></div>'
+      +'<ol style="margin:0;padding-left:1.4em;display:grid;gap:8px;line-height:1.5">'+steps.map(t=>'<li>'+t+'</li>').join('')+'</ol>'
+      +'<button class="big-btn gold" data-close>わかった</button>');
+  }
+
   // ===== 設定 =====
   function renderSettings(){
     $('app').innerHTML='<div class="scr"><div class="row"><button class="icon" data-back aria-label="もどる">'+ICON.back+'</button><div class="grow ttl" style="font-size:1.15rem">設定</div></div>'
       +'<div class="field"><label for="nameIn">名前（親に送る画像に入ります）</label><input id="nameIn" maxlength="20" placeholder="例：はな" value="'+esc(S.name)+'" autocomplete="off"></div>'
-      +'<div class="setlist"><button data-tut>使い方の案内をもう一度見る</button><button data-reset style="color:#ffb3c7">データをすべて消す</button></div><div id="resetBox"></div></div>';
+      +'<div class="setlist">'+(standalone()?'':'<button data-a2hs>ホーム画面に追加する</button>')+'<button data-tut>使い方の案内をもう一度見る</button><button data-reset style="color:#ffb3c7">データをすべて消す</button></div><div id="resetBox"></div></div>';
     $('nameIn').oninput=e=>{S.name=e.target.value.trim();save();};
     $('app').onclick=e=>{
       if(e.target.closest('[data-back]')){ go('home'); return; }
+      if(e.target.closest('[data-a2hs]')){ addToHome(); return; }
       if(e.target.closest('[data-tut]')){ S.tut={pick:false,board:false}; save(); toast('次に計画をつくるとき、案内が出ます'); return; }
       if(e.target.closest('[data-reset]')){ $('resetBox').innerHTML='<div class="night" style="box-shadow:0 0 0 2px #ff4d6d;background:#3a1530"><div class="grow"><b>ほんとうに全部消しますか？</b><p>予定・作ったブロック・名前が消えます</p></div><button class="sm-btn del-btn" data-reset2>消す</button></div>'; return; }
       if(e.target.closest('[data-reset2]')){ S=defaults(); save(); homeDay=today(); go('home'); toast('すべて消しました'); }
@@ -629,7 +652,7 @@ input{font:inherit;font-size:16px}
     let y=top+(b-a)*HH+60;
     if(tray.length){ c.fillStyle='#1b2430'; c.font=IF(800,28); c.fillText('時間はまだ決めていない予定',60,y+20); y+=44; const cw=(W-120)/2;
       tray.forEach((x,i)=>{ const xx=60+(i%2)*cw, yy=y+Math.floor(i/2)*58; noteBlock(c,xx,yy,cw-12,46,x.c); c.fillStyle='#1b2430'; c.font=IF(800,24); c.fillText(fit(c,x.n,cw-50),xx+22,yy+32); }); }
-    c.fillStyle='#98a1b0'; c.font=IF(500,22); c.textAlign='right'; c.fillText('まいにち予定表',W-60,H-46); c.textAlign='left';
+    c.fillStyle='#98a1b0'; c.font=IF(500,22); c.textAlign='right'; c.fillText('よていパズル',W-60,H-46); c.textAlign='left';
     return cv;
   }
   function drawWeek(){
@@ -647,7 +670,7 @@ input{font:inherit;font-size:16px}
         noteBlock(c,cx+4,y,colW-8,h,z.c);
         if(h>=24){ c.save(); rr(c,cx+4,y,colW-8,h,8); c.clip(); c.fillStyle='#1b2430'; c.font=IF(800,h<40?15:18); c.fillText(fit(c,z.n,colW-34),cx+20,y+(h<40?h/2+6:26)); c.restore(); }
       }); });
-    c.fillStyle='#98a1b0'; c.font=IF(500,22); c.textAlign='right'; c.fillText('まいにち予定表',W-60,H-46); c.textAlign='left';
+    c.fillStyle='#98a1b0'; c.font=IF(500,22); c.textAlign='right'; c.fillText('よていパズル',W-60,H-46); c.textAlign='left';
     return cv;
   }
   async function renderSend(){
@@ -699,6 +722,8 @@ input{font:inherit;font-size:16px}
   }
 
   render();
+  // ホーム画面に追加したとき、電波がなくても開けるように（HTTPS のときだけ動く）
+  if('serviceWorker' in navigator&&window.isSecureContext&&location.protocol!=='file:') navigator.serviceWorker.register('sw.js').catch(()=>{});
 })();
 </script>
 
