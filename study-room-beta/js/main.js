@@ -1782,7 +1782,7 @@ function photoMode() {
 
 // =========================== 更新のお知らせ ===========================
 // このプログラムの版（version.json と同じにする。公開のたびに上げる）
-const APP_VERSION = '1.17.0';
+const APP_VERSION = '1.17.1';
 ERR.setVersion(APP_VERSION);
 // 新しい版が出たら、みんな同じタイミングでそろうように強制で再起動する。
 // 開いた時・画面に戻った時・1分ごとに version.json を見る
@@ -3841,6 +3841,7 @@ function awardResult(st, ss, p, perfect, ok, isReview, secs) {
       pts = Math.round(S.gaugePoints(perfect, ok && !perfect, secs, subjectId, p.level, p.unit) * gf.f);
       if (ss.bonus) pts = Math.round(pts * 1.5);
       ss.gf = gf;
+      const seenToday = st.srs?.[p.id]?.last === S.dayKey(); // イベント：同じ問題をその日に何回まちがえてもポイントは1回だけ
       S.logTime(subjectId, p.unit, secs);
       HS().gauge += pts;
       S.addPoints(pts); // ランキングのポイント
@@ -3850,7 +3851,7 @@ function awardResult(st, ss, p, perfect, ok, isReview, secs) {
       if (mastered) HS().pendingSpecials++;
       xp = S.addAnswer(st, p.unit, perfect ? 'perfect' : ok ? 'ok' : 'wrong');
       S.logDay({ sid: subjectId, unit: p.unit, ok });
-      evToast(EV.addAnswer({ sid: subjectId, ok, repeat: !!ss.gf?.repeat }));
+      evToast(EV.addAnswer({ sid: subjectId, ok, repeat: !!ss.gf?.repeat, seen: seenToday }));
       missionToast(M.onAnswer({ sid: subjectId, ok }));
       if (S.countStudyForPuzzle(ok)) setTimeout(() => toast('パズルが1回できるようになりました', 2400), 1200);
       const firstPlay = S.markPlayedToday();

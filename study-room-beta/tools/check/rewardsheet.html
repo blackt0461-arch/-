@@ -4,7 +4,7 @@
 </head><body><div id="g"></div>
 <script type="module">
 import { renderThumb } from './js/thumbs.js';
-const L = [['akariLamp','格子のあかりの間取りランプ','floor'],['aburiDesk','虫めがねと古い設計図の机','floor'],['rokujoBoard','たたみ六畳のミニチュア棚','floor'],['hikkoshiCrates','積み上げた木箱の棚','floor'],['pzCrown','金のパズルピースのトロフィー','floor'],['streak100','百日の日めくりと金の砂時計','floor'],['bookTower','天井まで届く本の塔','floor'],['legendLaurel','金の月桂樹の飾り額','wall'],['zukan25','回る地球儀ランプ','floor'],['zukan50','ガラスの陳列ケース','floor'],['zukan75','回転する展示台','floor'],['zukan100','金の額のコレクターの間の飾り','wall'],['cocoaCounter','ホットチョコのカウンター','floor'],['gingerHouse','ジンジャークッキーの家','floor'],['cafeSign','ランタンの冬のカフェ看板','wall'],['snowGarland','雪の結晶のガーランド','wall']];
+const L = [['akariLamp','格子のあかりの間取りランプ','floor'],['aburiDesk','虫めがねと古い設計図の机','floor'],['rokujoBoard','たたみ六畳のミニチュア棚','floor'],['hikkoshiCrates','積み上げた木箱の棚','floor'],['pzCrown','金のパズルピースのトロフィー','floor'],['streak100','百日の日めくりと金の砂時計','floor'],['bookTower','天井まで届く本の塔','floor'],['legendLaurel','金の月桂樹の飾り額','wall'],['zukan25','回る地球儀ランプ','floor'],['zukan50','ガラスの陳列ケース','floor'],['zukan75','回転する展示台','floor'],['zukan100','金の額のコレクターの間の飾り','wall'],['cocoaCounter','ホットチョコのカウンター','floor'],['gingerHouse','ジンジャークッキーの家','floor'],['cafeSign','ランタンの冬のカフェ看板','wall'],['snowGarland','雪の結晶のガーランド','wall'],['newtonCradle','ニュートンのゆりかご','floor'],['pendulumClock','振り子の柱時計','floor'],['plasmaLamp','プラズマボールのランプ','floor']];
 const g = document.getElementById('g');
 for (const [t, n, pl] of L) {
   const it = { id: 'test-' + t, name: n, genre: 'decor', place: pl, src: { gacha: t }, size: 1 };

@@ -487,6 +487,214 @@ function snowGarland(s, g) {
 }
 
 // gachafurn.js の BUILDERS に入れる（名前: [作る関数, 置き方]）
+
+// ---------- 11月のイベント「物理強化月間」（理科室の実験道具。きれいで少しレトロに） ----------
+// a から b へ伸びる細い棒（ひも・くさりにも使う）
+function rodAB(a, b, r, mat, seg = 6) {
+  const d = new THREE.Vector3().subVectors(b, a), len = d.length();
+  const m = cy(r, r, len, mat, 0, 0, 0, seg);
+  m.position.copy(a).addScaledVector(d, 0.5);
+  m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize());
+  return m;
+}
+
+// ニュートンのゆりかご：クロームの枠から、鋼の玉5つが2本の糸でつるされている。端の玉が交互にカチカチ揺れる
+function newtonCradle(s, g) {
+  const wd = W('walnut'), chrome = MET('#eef0f2', 0.06), steel = MET('#e9ecef', 0.04), thread = P('#e8e8e8', 0.6);
+  // 台：くるみの木の板に、黒い面取り
+  bx(0.24, 0.022, 0.15, wd, 0, 0, 0, 0.006);
+  bx(0.226, 0.004, 0.136, P('#171514', 0.35), 0, 0.022, 0, 0.002);
+  // 真ちゅうの名札
+  const plate = faceMat('newtonplate', (x, w, h) => { x.fillStyle = '#c9a457'; x.fillRect(0, 0, w, h); x.strokeStyle = '#8a6a2a'; x.lineWidth = 3; x.strokeRect(4, 4, w - 8, h - 8); x.fillStyle = '#5b4314'; x.font = 'bold 22px Georgia'; x.textAlign = 'center'; x.fillText('MOMENTUM', w / 2, h / 2 + 8); }, 192, 48);
+  const pm = new THREE.Mesh(new THREE.PlaneGeometry(0.07, 0.0175), plate); pm.position.set(0, 0.011, 0.0752); g.add(pm);
+  // 枠：前と後ろの、角の丸い門の形（クローム）
+  const H = 0.175, X = 0.105, Z = 0.055, rr = 0.012;
+  for (const z of [-Z, Z]) {
+    tb([[-X, 0.024, z], [-X, H - rr, z], [-X + rr * 0.3, H - rr * 0.3, z], [-X + rr, H, z], [X - rr, H, z], [X - rr * 0.3, H - rr * 0.3, z], [X, H - rr, z], [X, 0.024, z]], 0.0028, chrome, 64, 8);
+    for (const x of [-X, X]) cy(0.006, 0.007, 0.006, chrome, x, 0.024, z, 12);
+  }
+  // 玉：上の棒から2本の糸（V字）でつるす。揺れる軸は、糸の付け根を結ぶ線（z 方向）
+  const r = 0.0125, L = 0.1, balls = [];
+  for (let i = 0; i < 5; i++) {
+    const x = (i - 2) * r * 2.02;
+    const piv = new THREE.Group(); piv.position.set(x, H, 0);
+    const back = pushGroup(piv);
+    const top = new THREE.Vector3(0, -L + r * 0.92, 0);
+    for (const z of [-Z, Z]) rodAB(new THREE.Vector3(0, 0, z), top, 0.00045, thread, 4);
+    cy(0.0016, 0.0016, 0.003, chrome, 0, -L + r * 0.92, 0, 8); // 玉の上の小さな留め金
+    sp(r, steel, 0, -L, 0, 1, 1, 1, 28, 18);
+    back();
+    balls.push(piv);
+  }
+  // 糸の付け根（棒に巻いた小さな輪）
+  for (let i = 0; i < 5; i++) for (const z of [-Z, Z]) cy(0.0034, 0.0034, 0.003, chrome, (i - 2) * r * 2.02, H - 0.0015, z, 10).rotation.z = PI / 2;
+  // 左の玉が当たると右の玉が飛び出す（半周期ずつ交互）。少しずつ弱まって、また大きく
+  const w = TAU / 1.05;
+  g.userData.tick = (t) => {
+    const a = 0.42 * (0.75 + 0.25 * Math.cos(t * 0.21)), sn = Math.sin(t * w);
+    balls[0].rotation.z = a * Math.min(0, sn);
+    balls[4].rotation.z = a * Math.max(0, sn);
+    // まん中の3つも、ほんの少しだけふるえる
+    for (let i = 1; i < 4; i++) balls[i].rotation.z = 0.004 * sn * (i - 2 || 0.5);
+  };
+}
+
+// 振り子の柱時計：くるみの木の背の高い時計。ガラスの扉の中で、真ちゅうの振り子がゆっくり揺れる。針は今の時刻
+function pendulumClock(s, g) {
+  const wd = W('walnut'), dark = P('#3a2618', 0.55), brass = BRASS(), gold = GOLD(), glass = GL('#f2f6f4', 0.14);
+  const Wd = 0.46, D = 0.28, zf = D / 2;
+  // 台座（すそ広がりの段）
+  bx(Wd + 0.08, 0.1, D + 0.06, wd, 0, 0, 0, 0.01);
+  bx(Wd + 0.05, 0.025, D + 0.04, dark, 0, 0.1, 0, 0.004);
+  bx(Wd + 0.02, 0.03, D + 0.02, wd, 0, 0.125, 0, 0.004);
+  for (const x of [-1, 1]) for (const z of [-1, 1]) sp(0.022, wd, x * (Wd / 2 + 0.02), 0.0, z * (D / 2 + 0.01), 1, 0.6, 1, 12, 8);
+  // 胴（長いガラス扉の箱）：y 0.155〜1.36
+  const y0 = 0.155, y1 = 1.36, hh = y1 - y0;
+  bx(Wd, hh, 0.018, wd, 0, y0, -zf + 0.009);           // 背板
+  for (const x of [-1, 1]) bx(0.022, hh, D, wd, x * (Wd / 2 - 0.011), y0, 0); // 側板
+  // 背板の内側：深い赤の布張り（振り子が映える）
+  bx(Wd - 0.06, hh - 0.08, 0.004, CLOTH('#5a1f22'), 0, y0 + 0.04, -zf + 0.02);
+  // 扉の枠とガラス
+  const st = 0.045;
+  for (const x of [-1, 1]) bx(st, hh, 0.03, wd, x * (Wd / 2 - st / 2), y0, zf - 0.015, 0.004);
+  bx(Wd, 0.06, 0.03, wd, 0, y0, zf - 0.015, 0.004);
+  bx(Wd, 0.06, 0.03, wd, 0, y1 - 0.06, zf - 0.015, 0.004);
+  const gp = new THREE.Mesh(new THREE.PlaneGeometry(Wd - st * 2 + 0.01, hh - 0.11), glass); gp.position.set(0, y0 + hh / 2, zf - 0.012); g.add(gp);
+  // 扉の細い飾り溝と、真ちゅうの鍵穴・取っ手
+  for (const x of [-1, 1]) bx(0.004, hh - 0.14, 0.004, dark, x * (Wd / 2 - st / 2), y0 + 0.07, zf + 0.001);
+  cy(0.006, 0.006, 0.01, brass, Wd / 2 - st / 2, y0 + hh * 0.55, zf + 0.004, 10).rotation.x = PI / 2;
+  // 振り子の下の、揺れの大きさを読む目盛り板（理科室らしく）
+  const scale = faceMat('pendscale', (x, w, h) => { x.fillStyle = '#d8b56a'; x.fillRect(0, 0, w, h); x.strokeStyle = '#4a3410'; x.lineWidth = 2; x.beginPath(); x.arc(w / 2, -h * 2.6, h * 3.3, PI * 0.39, PI * 0.61); x.stroke(); for (let i = -6; i <= 6; i++) { const a = PI / 2 + i * 0.018; const r0 = h * 3.3, r1 = r0 + (i % 3 ? 7 : 14); x.beginPath(); x.moveTo(w / 2 + Math.cos(a) * r0, -h * 2.6 + Math.sin(a) * r0); x.lineTo(w / 2 + Math.cos(a) * r1, -h * 2.6 + Math.sin(a) * r1); x.stroke(); } }, 256, 64);
+  const sc = new THREE.Mesh(new THREE.PlaneGeometry(0.2, 0.05), scale); sc.position.set(0, 0.29, -zf + 0.025); g.add(sc);
+  // おもり2本（真ちゅうの筒をくさりでつるす）
+  for (const [x, yb] of [[-0.12, 0.86], [0.12, 0.98]]) {
+    cy(0.026, 0.026, 0.2, brass, x, yb, -0.06, 24);
+    cy(0.028, 0.028, 0.012, gold, x, yb + 0.2, -0.06, 24); cy(0.028, 0.028, 0.012, gold, x, yb - 0.004, -0.06, 24);
+    cy(0.0025, 0.0025, y1 - (yb + 0.21), MET('#b9a06a', 0.4), x, yb + 0.21, -0.06, 6);
+  }
+  // 振り子（上で吊る。棒は木、おもりは真ちゅうのレンズ形）
+  const pend = new THREE.Group(); pend.position.set(0, y1 - 0.02, -0.02);
+  const back = pushGroup(pend);
+  cy(0.005, 0.005, 0.86, P('#2a1c12', 0.5), 0, -0.86, 0, 8);
+  sp(0.085, gold, 0, -0.9, 0, 1, 1, 0.28, 32, 16);
+  to(0.085, 0.004, brass, 0, -0.9, 0, TAU, 6, 40);
+  bx(0.012, 0.03, 0.008, brass, 0, -0.035, 0);
+  back();
+  // 頭（文字盤の箱）：y 1.36〜1.86
+  const hy = y1, hH = 0.5;
+  bx(Wd + 0.03, 0.035, D + 0.03, wd, 0, hy, 0, 0.004);
+  bx(Wd, hH - 0.035, D, wd, 0, hy + 0.035, 0, 0.004);
+  // 柱（両わきの細い円柱と、真ちゅうの頭）
+  for (const x of [-1, 1]) { cy(0.016, 0.016, hH - 0.07, dark, x * (Wd / 2 - 0.005), hy + 0.05, zf + 0.012, 14); cy(0.02, 0.02, 0.012, brass, x * (Wd / 2 - 0.005), hy + hH - 0.032, zf + 0.012, 14); cy(0.02, 0.02, 0.012, brass, x * (Wd / 2 - 0.005), hy + 0.04, zf + 0.012, 14); }
+  // 文字盤（クリーム色の紙にローマ数字）
+  const cyc = hy + 0.035 + (hH - 0.035) / 2, R = 0.16;
+  const dial = faceMat('pendialv2', (x, w, h) => {
+    const c = w / 2; x.fillStyle = '#efe4c8'; x.fillRect(0, 0, w, h);
+    const gr = x.createRadialGradient(c, c, c * 0.2, c, c, c); gr.addColorStop(0, 'rgba(255,250,235,0)'); gr.addColorStop(1, 'rgba(150,120,70,0.25)'); x.fillStyle = gr; x.fillRect(0, 0, w, h);
+    x.strokeStyle = '#2a2018'; x.lineWidth = 3; x.beginPath(); x.arc(c, c, c * 0.93, 0, TAU); x.stroke(); x.lineWidth = 1.5; x.beginPath(); x.arc(c, c, c * 0.84, 0, TAU); x.stroke(); x.beginPath(); x.arc(c, c, c * 0.62, 0, TAU); x.stroke();
+    for (let i = 0; i < 60; i++) { const a = i / 60 * TAU; const r0 = c * (i % 5 ? 0.89 : 0.86), r1 = c * 0.93; x.lineWidth = i % 5 ? 1.5 : 3; x.beginPath(); x.moveTo(c + Math.sin(a) * r0, c - Math.cos(a) * r0); x.lineTo(c + Math.sin(a) * r1, c - Math.cos(a) * r1); x.stroke(); }
+    const ro = ['XII', 'I', 'II', 'III', 'IIII', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI'];
+    x.fillStyle = '#1f1812'; x.font = 'bold 38px Georgia'; x.textAlign = 'center'; x.textBaseline = 'middle';
+    for (let i = 0; i < 12; i++) { const a = i / 12 * TAU; x.save(); x.translate(c + Math.sin(a) * c * 0.73, c - Math.cos(a) * c * 0.73); x.rotate(a); x.fillText(ro[i], 0, 0); x.restore(); }
+    x.font = 'italic 22px Georgia'; x.fillText('Physica', c, c * 1.32);
+  }, 512, 512);
+  const dm = new THREE.Mesh(new THREE.CircleGeometry(R, 64), dial); dm.position.set(0, cyc, zf + 0.002); g.add(dm);
+  // 真ちゅうの縁と、ガラスのふた
+  to(R + 0.008, 0.008, gold, 0, cyc, zf + 0.006, TAU, 10, 64);
+  const cov = new THREE.Mesh(new THREE.CircleGeometry(R + 0.004, 48), GL('#ffffff', 0.08)); cov.position.set(0, cyc, zf + 0.012); g.add(cov);
+  // 文字盤のまわりの四隅の金の飾り（スパンドレル）
+  const fan = new THREE.CircleGeometry(0.05, 12, 0, PI / 2);
+  for (const x of [-1, 1]) for (const y of [-1, 1]) {
+    // 四隅の扇形の金の飾り（角に向かって開く）
+    const f = new THREE.Mesh(fan, gold); f.position.set(x * (Wd / 2 - 0.03), cyc + y * 0.205, zf + 0.001);
+    f.rotation.z = x > 0 ? (y > 0 ? PI : PI / 2) : (y > 0 ? -PI / 2 : 0); g.add(f);
+  }
+  // 針（黒い鉄。時と分）
+  const mkHand = (len, wdt) => { const h = new THREE.Group(); h.position.set(0, cyc, zf + 0.009); const bk = pushGroup(h); bx(wdt, len, 0.002, P('#141210', 0.4, 0.5), 0, -0.02, 0); const tip = bx(wdt * 2.2, wdt * 2.2, 0.002, P('#141210', 0.4, 0.5), 0, len - 0.04, 0); tip.rotation.z = PI / 4; bk(); return h; };
+  const hourH = mkHand(0.1, 0.007), minH = mkHand(0.14, 0.005);
+  cy(0.008, 0.008, 0.006, brass, 0, cyc, zf + 0.011, 12).rotation.x = PI / 2;
+  // 屋根：段になった軒と、まん中の真ちゅうの飾り
+  const ty = hy + hH;
+  bx(Wd + 0.06, 0.03, D + 0.05, wd, 0, ty, 0, 0.004);
+  bx(Wd + 0.02, 0.025, D + 0.02, dark, 0, ty + 0.03, 0, 0.004);
+  bx(Wd - 0.04, 0.02, D - 0.02, wd, 0, ty + 0.055, 0, 0.004);
+  for (const x of [-1, 0, 1]) { cy(0.012, 0.018, 0.02, brass, x * (Wd / 2 - 0.03), ty + 0.075, 0.02, 12); sp(x ? 0.014 : 0.02, gold, x * (Wd / 2 - 0.03), ty + 0.11 + (x ? 0 : 0.006), 0.02, 1, 1.2, 1, 14, 10); }
+  // 動き：振り子は1秒ごとに片道（長さ1mの振り子と同じ）。針は今の時刻
+  g.userData.tick = (t) => {
+    pend.rotation.z = 0.075 * Math.sin(t * PI);
+    const d = new Date(), m = d.getMinutes() + d.getSeconds() / 60, hr = (d.getHours() % 12) + m / 60;
+    minH.rotation.z = -m / 60 * TAU; hourH.rotation.z = -hr / 12 * TAU;
+  };
+  g.userData.tick(0);
+}
+
+// プラズマボールのランプ：黒い台の上のガラス球。まん中の電極から、紫〜青の光の筋がゆらゆら伸びる
+const PLASMA_VS = `uniform float uTime; uniform float uSeed; varying float vY;
+void main() { vec3 p = position; float y = p.y; vY = y;
+  float k = y * (1.15 - y * 0.35);
+  p.x += (sin(y * 11.0 + uTime * 3.7 + uSeed) * 0.010 + sin(y * 27.0 - uTime * 6.3 + uSeed * 2.1) * 0.0035) * k;
+  p.z += (cos(y * 9.0 - uTime * 3.1 + uSeed * 1.7) * 0.010 + cos(y * 23.0 + uTime * 5.9 + uSeed) * 0.0035) * k;
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0); }`;
+const PLASMA_FS = `uniform vec3 uCore; uniform vec3 uTip; uniform float uFlick; varying float vY;
+void main() { vec3 c = mix(uCore, uTip, smoothstep(0.1, 0.95, vY)); float a = (0.55 + 0.45 * vY) * uFlick; gl_FragColor = vec4(c * a, a); }`;
+function plasmaLamp(s, g) {
+  const black = P('#121214', 0.25, 0.2), chrome = MET('#e6e8ea', 0.1);
+  // 台：つややかな黒の、すそ広がりの台。上に細いクロームの輪
+  las([[0.095, 0], [0.098, 0.008], [0.09, 0.03], [0.072, 0.07], [0.062, 0.1], [0.064, 0.112]], black, 0, 0, 0, 40, 24);
+  to(0.064, 0.003, chrome, 0, 0.112, 0, TAU, 8, 40).rotation.x = PI / 2;
+  to(0.094, 0.0025, chrome, 0, 0.012, 0, TAU, 8, 48).rotation.x = PI / 2;
+  // 前の小さなスイッチ
+  const sw = cy(0.008, 0.008, 0.008, chrome, 0, 0.03, 0.088, 14); sw.rotation.x = PI / 2 - 0.5;
+  // ガラス球（まん中が電極）
+  const C = new THREE.Vector3(0, 0.235, 0), Rg = 0.125;
+  sp(Rg, GL('#ece6ff', 0.1), C.x, C.y, C.z, 1, 1, 1, 48, 32);
+  // 球の中のうすい紫のもや
+  const haze = cm2('plasmahaze', () => new THREE.MeshBasicMaterial({ color: '#3a1a6a', transparent: true, opacity: 0.22, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.BackSide }));
+  sp(Rg - 0.004, haze, C.x, C.y, C.z, 1, 1, 1, 32, 20);
+  // 電極（くもりガラスの小さな玉が、中から光る）と、支える黒い軸
+  cy(0.006, 0.009, C.y - 0.112 - 0.02, P('#1b1b22', 0.3), 0, 0.112, 0, 12);
+  sp(0.022, GLOW('#8a4dff', 1.1), C.x, C.y, C.z, 1, 1, 1, 24, 16);
+  const core = new THREE.MeshBasicMaterial({ color: '#c9a2ff', transparent: true, opacity: 0.3, blending: THREE.AdditiveBlending, depthWrite: false });
+  sp(0.032, core, C.x, C.y, C.z, 1, 1, 1, 20, 14);
+  // 光の筋（電極からガラスの内側まで。形はシェーダーでゆらす）
+  const fgeo = new THREE.CylinderGeometry(0.0022, 0.003, 1, 5, 24, true).translate(0, 0.5, 0);
+  const tipGeo = new THREE.SphereGeometry(1, 10, 8);
+  const N = 12, fil = [];
+  for (let i = 0; i < N; i++) {
+    const mat = new THREE.ShaderMaterial({
+      vertexShader: PLASMA_VS, fragmentShader: PLASMA_FS, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+      uniforms: { uTime: { value: 0 }, uSeed: { value: i * 2.37 }, uCore: { value: new THREE.Color('#5a7dff') }, uTip: { value: new THREE.Color(i % 3 ? '#d070ff' : '#ff7ad9') }, uFlick: { value: 1 } },
+    });
+    const m = new THREE.Mesh(fgeo, mat); m.position.copy(C); m.scale.set(1, Rg - 0.004, 1); m.castShadow = false; g.add(m);
+    // ガラスにふれる所の、小さな光の点
+    const tm = new THREE.MeshBasicMaterial({ color: '#f0a8ff', transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, depthWrite: false });
+    const tip = new THREE.Mesh(tipGeo, tm); tip.scale.setScalar(0.0028); tip.castShadow = false; g.add(tip);
+    const a = i / N * TAU + i * 0.4, e = -0.15 + (i * 0.37 % 1) * 1.1;
+    fil.push({ m, mat, tip, tm, a, e, sp: 0.35 + (i * 0.53 % 1) * 0.5 });
+  }
+  const up = new THREE.Vector3(0, 1, 0), dir = new THREE.Vector3();
+  g.userData.tick = (t) => {
+    for (const f of fil) {
+      // 向きをゆっくりさまよわせる（下の台のほうには行かない）
+      const az = f.a + Math.sin(t * f.sp + f.a) * 0.9 + t * 0.12;
+      const el = Math.max(-0.35, Math.min(1.25, f.e + Math.sin(t * f.sp * 1.3 + f.a * 2) * 0.45));
+      dir.set(Math.cos(el) * Math.cos(az), Math.sin(el), Math.cos(el) * Math.sin(az));
+      f.m.quaternion.setFromUnitVectors(up, dir);
+      f.mat.uniforms.uTime.value = t;
+      const fl = 0.75 + 0.25 * Math.sin(t * 17 + f.a * 5) * Math.sin(t * 7.3 + f.a);
+      f.mat.uniforms.uFlick.value = fl;
+      f.tip.position.copy(C).addScaledVector(dir, Rg - 0.004);
+      f.tm.opacity = 0.45 + 0.35 * fl;
+    }
+    core.opacity = 0.25 + 0.08 * Math.sin(t * 9.1);
+  };
+  g.userData.tick(1.5);
+  g.userData.light = { color: '#b48aff', intensity: 0.35, y: C.y };
+}
+// 光の筋ごとの材質は家具ごとに持つ。共有してよい材質だけ、ここで覚えておく
+const CM2 = new Map();
+function cm2(k, make) { let m = CM2.get(k); if (!m) { m = make(); CM2.set(k, m); } return m; }
+
 export const REWARD_BUILDERS = {
   akariLamp: [make(akariLamp), 'floor'],
   aburiDesk: [make(aburiDesk), 'floor'],
@@ -506,6 +714,10 @@ export const REWARD_BUILDERS = {
   gingerHouse: [make(gingerHouse), 'floor'],
   cafeSign: [make(cafeSign), 'wall'],
   snowGarland: [make(snowGarland), 'wall'],
+  // 11月のイベント「物理強化月間」
+  newtonCradle: [make(newtonCradle), 'floor'],
+  pendulumClock: [make(pendulumClock), 'floor'],
+  plasmaLamp: [make(plasmaLamp), 'floor'],
 };
 
 // Poly Haven（CC0）のモデルと自作の形を組み合わせて作る家具（js/compose.js）。gacha.js の src: { gacha: '名前' } のままでよい

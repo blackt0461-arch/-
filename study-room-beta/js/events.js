@@ -71,21 +71,25 @@ export function addPoints(n) {
   return { ev, gained: n, ready: readyCount(ev) - before };
 }
 export const readyCount = (ev) => { const st = stateOf(ev); return ev.rewards.filter((r, i) => st.pts >= r.at && !st.claimed.includes(i)).length + bonusReady(ev); };
-// 1問答えた時のポイント（イベントごとの rate。なければ POINTS）。repeat＝その日もう正解した問題をまた正解（noRepeat のイベントでは0）
-export function answerPoints(ev, { sid, ok, repeat }) {
+// 1問答えた時のポイント（イベントごとの rate。なければ POINTS）。
+// noRepeat のイベント：その日もう正解した問題をまた正解（repeat）は0。まちがいは、その問題にその日はじめて答えた時（!seen）だけ、1日 WRONG_CAP まで
+export const WRONG_CAP = 30;
+export function answerPoints(ev, { sid, ok, repeat, seen }) {
   if (!ev) return 0;
   if (ev.noRepeat && repeat && ok) return 0;
+  if (ev.noRepeat && !ok) { if (seen) return 0; const st = stateOf(ev), d = S.dayKey(); if (st.wd !== d) { st.wd = d; st.wn = 0; } if ((st.wn || 0) >= WRONG_CAP) return 0; }
   const r = ev.rate ? (ev.rate[sid] || ev.rate.other || [0, 0]) : [POINTS.right, POINTS.wrong];
   return ok ? r[0] : r[1];
 }
 // 問題を1問答えた（main.js から）。ポイントと、くり返しのごほうび（bonus）の数を足す
-export function addAnswer({ sid, ok, repeat }) {
+export function addAnswer({ sid, ok, repeat, seen }) {
   const ev = activeEvent();
   if (!ev) return null;
   const st = stateOf(ev), before = readyCount(ev);
-  st.pts += answerPoints(ev, { sid, ok, repeat });
+  const gained = answerPoints(ev, { sid, ok, repeat, seen });
+  st.pts += gained;
+  if (ev.noRepeat && !ok && gained) st.wn = (st.wn || 0) + 1;
   if (ev.bonus && ok && !repeat && ev.bonus.sids.includes(sid)) st.bc = (st.bc || 0) + 1;
-  const gained = answerPoints(ev, { sid, ok, repeat });
   return { ev, gained, ready: readyCount(ev) - before };
 }
 // くり返しのごほうび（例：物理の正解50問ごとにレアチケット・上限なし）
