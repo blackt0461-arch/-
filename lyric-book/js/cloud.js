@@ -1,7 +1,7 @@
 // データのやりとり。グーグルドライブ（Google Apps Script の受け口）と、ためし用（この端末だけ）の2つ。
 // 受け口のURLは公開されても大丈夫（中身はユーザー名とパスワードで守る。登録できるのは1人だけ）。
 // 受け口のコードは server/Code.gs。
-export const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxlhiVsJHhCwa4_5x00uy7KEy-OCqA82oc2yfsfWpoVFFWb-6xUwdIA6wgc7xeeLaQg/exec';
+export const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzN57EXhrxu32rM7Br4RZeXzmDhzZQJE3Ws0oHOGIv2F98fmjaEYW2CMreTRSlrPnMLjA/exec';
 
 const MESSAGES = {
   name_taken: 'そのユーザー名はもう使われています',

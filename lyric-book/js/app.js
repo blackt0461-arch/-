@@ -1,11 +1,11 @@
 // LYRIC BOOK 本体：画面の切りかえと操作
-import { rpc, LOCAL_TOKEN } from './cloud.js';
+import { rpc, LOCAL_TOKEN } from './cloud.js?v=2.3.1';
 import * as N from './notes.js';
 import * as L from './lyrics.js';
 import * as R from './recorder.js';
 import * as A from './analyze.js';
 
-export const APP_VERSION = '2.3.0';
+export const APP_VERSION = '2.3.1';
 const NEED_SERVER = 3; // この版の受け口（server/Code.gs）の番号
 
 // ---------- 小さな道具 ----------
