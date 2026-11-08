@@ -91,8 +91,9 @@ const putRoomin = (r) => put(ROOMIN_SESSION, { token: r.token, id: r.username.no
 // ---------- 右上のアカウント ----------
 function drawButton() {
   const b = $('.acct');
-  b.innerHTML = me ? `<span class="av">${esc([...me.username][0])}</span><span class="nm">${esc(me.username)}</span>`
-    : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg><span class="nm">ログイン</span>`;
+  b.innerHTML = me ? `<span class="av">${esc([...me.username][0].toUpperCase())}</span>`
+    : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>`;
+  b.classList.toggle('in', !!me);
   b.setAttribute('aria-label', me ? `アカウント（${me.username}）` : 'ログイン');
 }
 function openSheet(html) {
@@ -132,7 +133,7 @@ function showLogin(mode = 'login') {
 function showAccount() {
   const linked = me.links?.roomin;
   const el = openSheet(`
-    <div class="kw-me"><span class="av big">${esc([...me.username][0])}</span><div><b>${esc(me.username)}</b><small>KOTETSU WORKS アカウント${me.admin ? '・管理者' : ''}</small></div></div>
+    <div class="kw-me"><span class="av big">${esc([...me.username][0].toUpperCase())}</span><div><b>${esc(me.username)}</b><small>KOTETSU WORKS アカウント${me.admin ? '・管理者' : ''}</small></div></div>
     <h3>つないだアプリ</h3>
     <div class="kw-link">
       <img src="study-room/icon-192.png" alt=""><div class="t"><b>ROOMIN</b><small>${linked ? `「${esc(linked)}」とつないでいます` : 'まだつないでいません'}</small></div>

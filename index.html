@@ -84,9 +84,10 @@
   footer .sp { flex: 1; }
 
   /* KOTETSU WORKS アカウント（右上）とマイアプリ */
-  .brand .acct { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 14px 0 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--card); color: var(--text); font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; flex: none; }
-  .brand .acct svg { width: 20px; height: 20px; flex: none; }
-  .brand .acct .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 96px; }
+  .brand .acct { margin-left: auto; flex: none; display: grid; place-items: center; width: 42px; height: 42px; padding: 0; border-radius: 50%; border: 1px solid var(--line); background: var(--card); color: var(--text); cursor: pointer; }
+  .brand .acct.in { border-color: rgba(230,192,104,.5); }
+  .brand .acct .av { width: 34px; height: 34px; font-size: 15px; }
+  .brand .acct svg { width: 21px; height: 21px; }
   .brand b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
   .av { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; flex: none; background: linear-gradient(135deg, var(--gold), var(--gold2)); color: #1c1a17; font-weight: 800; font-size: 13px; }
   .av.big { width: 52px; height: 52px; font-size: 22px; }
