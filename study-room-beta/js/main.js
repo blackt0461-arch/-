@@ -32,14 +32,15 @@ import * as BGM from './bgm.js';
 import { AVATARS, AVATAR_COLORS, GACHA_AVATARS, NIGHT_COLORS, avatarHTML, avatarItemId, pullRewards } from './avatars.js';
 import { studyParams, puzzleParams, radarSVG, TITLES, titleById, earnedTitles } from './profile.js';
 import * as Calc from './calc.js';
+import * as PT from './phtypes.js';
+import { PHY_UNIT } from './physmap.js';
 
 // bank：data/bank/<科目>.json の問題バンク（教科書に合わせた 教科 → ジャンル → 単元）。あとから読みこむ
 const SUBJECTS = [
   { id: 'jp', name: '国語', bank: true },
   { id: 'math', name: '数学', bank: true },
   { id: 'english', name: '英語', bank: true },
-  { id: 'physics', name: '物理（公式）', ready: true },
-  { id: 'physics4', name: '物理（4択）', bank: true },
+  { id: 'physics', name: '物理', bank: true }, // 1.17.0：「物理（公式）」と「物理（4択）」を1つに。いろいろな出し方がまざって出る
   { id: 'chem', name: '化学', bank: true },
   { id: 'bio', name: '生物', bank: true },
   { id: 'earth', name: '地学', bank: true },
@@ -73,7 +74,8 @@ function regroup(sid, p) {
   return g ? { ...p, genre: g[0], unit: g[1] || p.unit } : p;
 }
 const PROBLEMS = validProblems();
-const ALLP = { physics: PROBLEMS };
+// 公式の問題も、教科書の ジャンル・単元 に入れる（symUnit は文字ボタンのダミーを選ぶための前の分け方）
+const ALLP = { physics: PROBLEMS.map(p => PHY_UNIT[p.id] ? { ...p, symUnit: p.unit, genre: PHY_UNIT[p.id][0], unit: PHY_UNIT[p.id][1] } : p) };
 for (const [sid, list] of Object.entries(SUBJECT_PROBLEMS)) ALLP[sid] = list.map(p => regroup(sid, p));
 const byId = Object.fromEntries(Object.values(ALLP).flat().map(p => [p.id, p]));
 function probs(id = subjectId) { return ALLP[id] || []; }
@@ -83,7 +85,7 @@ function loadBank(sid) {
   if (!SUBJECTS.find(x => x.id === sid)?.bank) return Promise.resolve();
   return bankLoading[sid] ||= fetch(`data/bank/${sid}.json`).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }).then(list => {
     const have = new Set((ALLP[sid] || []).map(p => p.id));
-    const add = list.filter(p => !have.has(p.id) && Array.isArray(p.choices) && p.choices.length === 4 && p.answer >= 0 && p.answer < 4);
+    const add = list.filter(p => !have.has(p.id) && (p.type ? PT.validTyped(p) : Array.isArray(p.choices) && p.choices.length === 4 && p.answer >= 0 && p.answer < 4));
     ALLP[sid] = [...(ALLP[sid] || []), ...add];
     for (const p of add) byId[p.id] = p;
     bankDone[sid] = true;
@@ -1782,7 +1784,7 @@ function photoMode() {
 
 // =========================== 更新のお知らせ ===========================
 // このプログラムの版（version.json と同じにする。公開のたびに上げる）
-const APP_VERSION = '1.17.1';
+const APP_VERSION = '1.18.0';
 ERR.setVersion(APP_VERSION);
 // 新しい版が出たら、みんな同じタイミングでそろうように強制で再起動する。
 // 開いた時・画面に戻った時・1分ごとに version.json を見る
@@ -3636,6 +3638,7 @@ function nextProblem() {
   const item = ss.set[ss.idx];
   const p = byId[item.id];
   if (!p) { ss.idx++; return nextProblem(); }
+  if (p.type && PT.TYPES.includes(p.type)) return runTyped(p, item.review);
   if (p.choices) return runChoice(p, item.review);
   runProblem(p, item.review, false);
 }
@@ -3685,7 +3688,7 @@ function runProblem(p, isReview, retry) {
 
   // 文字ボタン：正解の文字＋ダミー
   const need = [...new Set(order.map(m => m.symbol))];
-  const pool = (SYMBOLS[p.unit] || []).filter(s => !need.includes(s));
+  const pool = (SYMBOLS[p.symUnit || p.unit] || []).filter(s => !need.includes(s));
   const palette = S.shuffle([...need, ...S.shuffle(pool).slice(0, Math.max(2, 7 - need.length))]);
 
   app.innerHTML = '';
@@ -3838,11 +3841,12 @@ function awardResult(st, ss, p, perfect, ok, isReview, secs) {
   let pts = 0, mastered = false, xp = null;
       // 1.13.0：教科の倍率（おすすめ）・同じ教科／単元が続くと減る・その日もう正解した問題は3割
       const gf = S.gaugeFactor({ sid: subjectId, unit: p.unit, sub: st, id: p.id, sids: multSids() });
-      pts = Math.round(S.gaugePoints(perfect, ok && !perfect, secs, subjectId, p.level, p.unit) * gf.f);
+      const tk = subjectId === 'physics' ? PT.timeKey(p) : subjectId; // 物理は出し方ごとに「ふつうの時間」を分ける（1.17.0）
+      pts = Math.round(S.gaugePoints(perfect, ok && !perfect, secs, tk, p.level, p.unit) * gf.f);
       if (ss.bonus) pts = Math.round(pts * 1.5);
       ss.gf = gf;
       const seenToday = st.srs?.[p.id]?.last === S.dayKey(); // イベント：同じ問題をその日に何回まちがえてもポイントは1回だけ
-      S.logTime(subjectId, p.unit, secs);
+      S.logTime(subjectId, p.unit, secs, tk);
       HS().gauge += pts;
       S.addPoints(pts); // ランキングのポイント
       ss.gained += pts;
@@ -3876,8 +3880,62 @@ function awardResult(st, ss, p, perfect, ok, isReview, secs) {
 }
 
 // 関数電卓（1.14.0）：数学・物理の4択で出す。履歴は、アプリを開いている間は問題をまたいで残る
-const CALC_SUBJECTS = ['math', 'physics4'];
+const CALC_SUBJECTS = ['math', 'physics'];
 const calcStore = { hist: [], ans: 0 };
+// 物理の新しい出し方（1.17.0）：数値を入れる計算・公式や単位の組み立て・並べかえ。グラフ（fig）はどれにも付く
+const TYPE_LABEL = { num: '計算', build: '組み立て', order: '並べかえ' };
+function runTyped(p, isReview) {
+  const st = sub(), ss = st.session, t0 = Date.now();
+  const calc = p.type === 'num';
+  app.innerHTML = '';
+  const el = h(`
+    <div class="screen quiz choice typed t-${p.type}">
+      <header class="bar">
+        <button class="icon back" aria-label="部屋にもどる">${icon('x')}</button>
+        ${UINEXT ? `<span class="nx-today">${S.solvedToday() < S.BONUS_PER_DAY ? `今日 ${S.solvedToday()} / ${S.BONUS_PER_DAY}問<small>ボーナス中</small>` : `今日 ${S.solvedToday()}問`}</span>` : `<div class="qprog"><i style="width:${ss.idx / ss.set.length * 100}%"></i></div>`}
+        <span class="tag">${isReview ? `${icon('refresh')}復習` : esc(p.unit)}</span>
+      </header>
+      <p class="pt-kind">${esc(p.kind === 'unit' ? '単位' : TYPE_LABEL[p.type] || '')}</p>
+      <div class="problem">${esc(p.text).replace(/\n/g, '<br>')}</div>
+      ${PT.figSVG(p.fig)}
+      ${calc ? `<div class="calc-row"><button class="calc-btn" aria-label="電卓をひらく">${icon('calc')}電卓</button></div>` : ''}
+      <div class="step"></div>
+    </div>`);
+  app.append(el);
+  el.querySelector('.back').onclick = () => { Calc.closeCalc(); S.save(); showHome(); };
+  el.querySelector('.calc-btn')?.addEventListener('click', (e) => Calc.openCalc({ screen: el, problem: el.querySelector('.problem'), btn: e.currentTarget, store: calcStore }));
+  const stepEl = el.querySelector('.step');
+  const done = (ok, mine) => setTimeout(() => result(ok, mine), ok ? 300 : 450);
+  if (p.type === 'num') PT.mountNum(stepEl, p, done);
+  else if (p.type === 'build') PT.mountBuild(stepEl, p, done);
+  else PT.mountOrder(stepEl, p, done);
+  function result(ok, mine) {
+    Calc.closeCalc();
+    el.querySelector('.calc-row')?.remove();
+    const secs = (Date.now() - t0) / 1000;
+    const { pts, xp, mastered } = awardResult(st, ss, p, ok, ok, isReview, secs);
+    vibrate(ok ? [20, 30, 20] : [60, 40, 60]);
+    el.classList.add('nx-answered');
+    el.querySelector('.problem')?.classList.add('nx-small');
+    stepEl.innerHTML = `
+      <div class="res nx-res ${ok ? 'ok' : 'ng'}">
+        <div class="nx-verdict">${icon(ok ? 'check' : 'x')}<b>${ok ? '正解！' : 'ざんねん、まちがい'}</b>${ok ? '' : '<small>正解と考え方をたしかめよう</small>'}</div>
+        <div class="nx-answer"><small>正解</small><b class="pt-right">${esc(PT.answerText(p))}</b></div>
+        ${!ok && mine ? `<div class="pt-mine"><small>あなたの答え</small><span>${esc(mine)}</span></div>` : ''}
+        ${p.explain ? explainHTML(p.explain) : ''}
+        ${mastered ? `<div class="master">${icon('trophy')}克服しました！ 特別な家具がもらえます</div>` : ''}
+        ${ss.rewards && (ss.rewards.ticket || ss.rewards.ticket4 || ss.rewards.ticket5) ? `<div class="ru-tickets">${['ticket', 'ticket4', 'ticket5'].filter(k => ss.rewards[k]).map(k => `<span>${ticketSVG(k, 'mini')}<b>×${ss.rewards[k]}</b></span>`).join('')}<small class="ru-box">${icon('gift')}プレゼントBOXに届きました</small></div>` : ''}
+        ${gaugeNote(ss)}
+        <p class="nx-gain">${[pts ? `ゲージ +${pts}${ss.bonus ? '（×1.5）' : ''}` : '', xp ? `+${xp.gained} XP` : '', xp?.rankUp ? `<b>Lv${xp.rank}にアップ！</b>` : '', HS().gauge >= S.gaugeMax(HS()) ? `<b>${icon('gift')}家具が買えます</b>` : ''].filter(Boolean).join('<i>・</i>')}</p>
+        <button class="link pr-report">${icon('info')}この問題のまちがいを報告</button>
+      </div>
+      <div class="nx-next"><button class="btn primary big more">${icon('pencil')}次の問題</button><button class="link home">${icon('home')}部屋にもどる</button></div>`;
+    stepEl.querySelector('.home').onclick = () => endOne(true);
+    stepEl.querySelector('.more').onclick = () => endOne(false);
+    stepEl.querySelector('.pr-report').onclick = () => reportProblem(p);
+    bindGaugeNote(stepEl);
+  }
+}
 // 4択の問題（物理以外の教科）
 function runChoice(p, isReview) {
   // テスト勉強の問題集（電子回路など）は、記号を添え字にして・解説を1文ずつにして見やすくする
@@ -3896,6 +3954,7 @@ function runChoice(p, isReview) {
         <span class="tag">${isReview ? `${icon('refresh')}復習` : esc(p.unit)}</span>
       </header>
       <div class="problem ${fx ? 'fx' : ''}">${fm(p.text).replace(/\n/g, '<br>')}</div>
+      ${p.fig ? PT.figSVG(p.fig) : ''}
       ${CALC_SUBJECTS.includes(subjectId) || p.steps ? `<div class="calc-row">${p.steps ? `<button class="calc-btn steps-btn">${icon('level')}段階に分けて解く</button>` : ''}${CALC_SUBJECTS.includes(subjectId) ? `<button class="calc-btn" aria-label="電卓をひらく">${icon('calc')}電卓</button>` : ''}</div>` : ''}
       <div class="step">
         <p class="ask">正しいものを <b>1つ</b> 選ぼう</p>

@@ -56,7 +56,9 @@ export function activeEvent(today = S.dayKey()) {
 export function upcomingEvent(today = S.dayKey()) { return EVENTS.filter(e => e.start > today).sort((a, b) => a.start < b.start ? -1 : 1)[0] || null; }
 export function daysLeft(ev, today = S.dayKey()) {
   const d = (k) => { const [y, m, dd] = k.split('-').map(Number); return Date.UTC(y, m - 1, dd) / 864e5; };
-  return Math.max(0, d(ev.end) - d(today) + 1);
+  // 管理者の「ためす」で期間の前に見ている時は、期間の長さを出す（「のこり 26711日」のようにならないように）
+  const span = d(ev.end) - d(ev.start) + 1;
+  return Math.max(0, Math.min(span, d(ev.end) - d(today) + 1));
 }
 export function stateOf(ev) {
   const p = S.profile(), all = p.events || (p.events = {});

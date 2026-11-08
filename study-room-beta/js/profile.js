@@ -7,7 +7,7 @@ export const STUDY_AXES = [
   { key: 'jp', label: '国語', sids: ['jp'] },
   { key: 'math', label: '数学', sids: ['math'] },
   { key: 'english', label: '英語', sids: ['english'] },
-  { key: 'sci', label: '理科', sids: ['physics', 'physics4', 'chem', 'bio', 'earth'] },
+  { key: 'sci', label: '理科', sids: ['physics', 'chem', 'bio', 'earth'] },
   { key: 'social', label: '社会', sids: ['social'] },
 ];
 export const PUZZLE_AXES = [
