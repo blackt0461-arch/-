@@ -52,6 +52,9 @@ input{font:inherit;font-size:16px}
 .empty{text-align:center;color:var(--dim);padding:36px 0;margin:auto}
 
 /* ホーム */
+.wnav{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:6px;flex:none;margin-bottom:-6px}
+.wnav button{min-height:34px;padding:0 12px;border-radius:11px;background:rgb(255 255 255 / .1);font-size:.8rem;font-weight:800;color:var(--dim)}
+.wnav b{text-align:center;font-size:.85rem}
 .week{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;flex:none}
 .week button{min-height:60px;border-radius:14px;display:grid;justify-items:center;align-content:center;gap:2px;background:rgb(0 0 0 / .22)}
 .week .w{font-size:.68rem;color:var(--dim)}
@@ -301,6 +304,10 @@ input{font:inherit;font-size:16px}
   function openSheet(html,onClick){ $('sheetRoot').innerHTML='<div class="scrim" data-close></div><div class="sheet" role="dialog" aria-modal="true">'+html+'</div>'; $('sheetRoot').onclick=e=>{ if(e.target.closest('[data-close]')){closeSheet();return;} onClick&&onClick(e); }; }
   function closeSheet(){ $('sheetRoot').innerHTML=''; }
   document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ closeSheet(); $('overRoot').innerHTML=''; } });
+  // 週の切りかえ（2026-11-08 本人の希望「来週の予定も立てたい」）
+  function weekNav(mon){ const diff=Math.round((mon-mondayOf(today()))/864e5/7);
+    const lb=diff===0?'今週':diff===1?'来週':diff===-1?'先週':(mon.getMonth()+1)+'/'+mon.getDate()+'〜'+(addDays(mon,6).getMonth()+1)+'/'+addDays(mon,6).getDate();
+    return '<div class="wnav"><button data-wk="-1" aria-label="前の週">‹ 前の週</button><b>'+lb+'</b><button data-wk="1" aria-label="次の週">次の週 ›</button></div>'; }
   const dayWord=d=>{const k=keyOf(d),t=today();return k===keyOf(t)?'今日':k===keyOf(addDays(t,1))?'明日':sd(d);};
   function startMake(d){ cur=d; go(hasPlan(keyOf(d))?'board':'pick',{date:d}); }
 
@@ -322,7 +329,7 @@ input{font:inherit;font-size:16px}
     $('app').innerHTML='<div class="scr">'
       +'<div class="row"><div class="grow"><div class="sub">'+(homeDay.getMonth()+1)+'月'+(S.name?'・'+esc(S.name):'')+'</div><div class="ttl">'+homeDay.getDate()+'日（'+WD[homeDay.getDay()]+'）'+(isToday?'':'')+'</div></div>'
       +(isToday?'':'<button class="sm-btn deep" data-today>今日</button>')+'<button class="icon" data-go="settings" aria-label="設定">'+ICON.gear+'</button></div>'
-      +'<div class="week">'+[...Array(7)].map((_,i)=>{const d=addDays(mon,i),dk=keyOf(d);return '<button data-day="'+dk+'" class="'+(dk===k?'on ':'')+(dk===keyOf(t)?'today':'')+'" aria-label="'+md(d)+'"><span class="w">'+(dk===keyOf(t)?'今日':WD[d.getDay()])+'</span><span class="n">'+d.getDate()+'</span><span class="mk">'+(S.sent[dk]?'送✓':hasPlan(dk)?'●':'')+'</span></button>';}).join('')+'</div>'
+      +weekNav(mon)+'<div class="week">'+[...Array(7)].map((_,i)=>{const d=addDays(mon,i),dk=keyOf(d);return '<button data-day="'+dk+'" class="'+(dk===k?'on ':'')+(dk===keyOf(t)?'today':'')+'" aria-label="'+md(d)+'"><span class="w">'+(dk===keyOf(t)?'今日':WD[d.getDay()])+'</span><span class="n">'+d.getDate()+'</span><span class="mk">'+(S.sent[dk]?'送✓':hasPlan(dk)?'●':'')+'</span></button>';}).join('')+'</div>'
       +(night?(hasPlan(tmk)
           ?'<div class="night ok"><span class="moon"></span><div class="grow"><b>明日の計画はできてるよ</b><p>'+md(tm)+'</p></div><button class="sm-btn deep" data-send="'+tmk+'">送る</button></div>'
           :'<div class="night"><span class="moon"></span><div class="grow"><b>明日の計画をつくろう</b><p>'+md(tm)+'はまだです</p></div><button class="sm-btn gold" data-make="'+tmk+'">つくる</button></div>'):'')
@@ -334,6 +341,7 @@ input{font:inherit;font-size:16px}
     $('app').onclick=e=>{ let el;
       if(el=e.target.closest('[data-day]')){ homeDay=fromKey(el.dataset.day); renderHome(); return; }
       if(e.target.closest('[data-today]')){ homeDay=today(); renderHome(); return; }
+      if(el=e.target.closest('[data-wk]')){ homeDay=addDays(homeDay,7*el.dataset.wk); renderHome(); return; }
       if(el=e.target.closest('[data-make]')){ backTo='home'; startMake(fromKey(el.dataset.make)); return; }
       if(el=e.target.closest('[data-view]')){ go('view',{date:fromKey(el.dataset.view),back:'home'}); return; }
       if(el=e.target.closest('[data-send]')){ go('send',{date:fromKey(el.dataset.send),back:'home'}); return; }
@@ -640,7 +648,7 @@ input{font:inherit;font-size:16px}
   function renderView(){
     const k=keyOf(cur), t=today(), isToday=k===keyOf(t), list=dayOf(k).blocks.slice().sort((a,b)=>a.s-b.s), nm=nowMin(), mon=mondayOf(cur), tray=dayOf(k).tray;
     $('app').innerHTML='<div class="scr"><div class="row"><button class="icon" data-back aria-label="もどる">'+ICON.back+'</button><div class="grow ttl" style="font-size:1.15rem">'+md(cur)+'</div><button class="sm-btn deep" data-send>送る</button></div>'
-      +'<div class="week">'+[...Array(7)].map((_,i)=>{const d=addDays(mon,i),dk=keyOf(d);return '<button data-day="'+dk+'" class="'+(dk===k?'on ':'')+(dk===keyOf(t)?'today':'')+'"><span class="w">'+(dk===keyOf(t)?'今日':WD[d.getDay()])+'</span><span class="n">'+d.getDate()+'</span><span class="mk">'+(S.sent[dk]?'送✓':hasPlan(dk)?'●':'')+'</span></button>';}).join('')+'</div>'
+      +weekNav(mon)+'<div class="week">'+[...Array(7)].map((_,i)=>{const d=addDays(mon,i),dk=keyOf(d);return '<button data-day="'+dk+'" class="'+(dk===k?'on ':'')+(dk===keyOf(t)?'today':'')+'"><span class="w">'+(dk===keyOf(t)?'今日':WD[d.getDay()])+'</span><span class="n">'+d.getDate()+'</span><span class="mk">'+(S.sent[dk]?'送✓':hasPlan(dk)?'●':'')+'</span></button>';}).join('')+'</div>'
       +'<div class="scroll"><div class="list">'+(list.length?list.map(b=>{const on=isToday&&nm>=b.s&&nm<b.s+b.d, past=isToday&&nm>=b.s+b.d;
           return '<button class="ag'+(on?' now':'')+(past?' past':'')+'" data-edit style="--cc:'+b.c+'"><div class="t">'+hm(b.s)+'<small>〜'+hm(b.s+b.d)+'</small></div><span class="bar"></span><div class="grow"><b>'+esc(b.n)+'</b><span class="m">'+len(b.d)+(on?'・いまここ':'')+'</span></div></button>';}).join('')
         :'<div class="empty">'+md(cur)+'の計画はまだありません</div>')
@@ -650,6 +658,7 @@ input{font:inherit;font-size:16px}
     $('app').onclick=e=>{ let el;
       if(e.target.closest('[data-back]')){ go('home'); return; }
       if(el=e.target.closest('[data-day]')){ cur=fromKey(el.dataset.day); renderView(); return; }
+      if(el=e.target.closest('[data-wk]')){ cur=addDays(cur,7*el.dataset.wk); renderView(); return; }
       if(e.target.closest('[data-send]')){ go('send',{back:'view'}); return; }
       if(e.target.closest('[data-make]')||e.target.closest('[data-edit]')){ backTo='view'; startMake(cur); }
     };
