@@ -61,9 +61,14 @@ export function realign(oldAnno, newText) {
           for (let i = x.s; i < x.e; i++) { const n = map(i); if (n == null) continue; if (s == null) s = n; e = n + 1; }
           return s == null ? null : { ...x, s, e };
         }).filter(Boolean),
+        u: (same.a.u || []).map(x => {
+          let s = null, e = null;
+          for (let i = x.s; i < x.e; i++) { const n = map(i); if (n == null) continue; if (s == null) s = n; e = n + 1; }
+          return s == null ? null : { ...x, s, e };
+        }).filter(Boolean),
         memo: same.a.memo || '',
       });
-    } else out.push({ t, m: [], c: [], memo: '' });
+    } else out.push({ t, m: [], c: [], u: [], memo: '' });
   }
   return out;
 }
@@ -133,6 +138,31 @@ export function colorAt(a, i) {
   return k;
 }
 
+// 線（まっすぐな線・波線）：色とは別に、2種類まで同じ文字に重ねられる
+export const LINES = [{ id: 'line', name: '線' }, { id: 'wave', name: '波線' }];
+export function lineAt(a, i, k) {
+  return (a.u || []).some(r => r.k === k && i >= r.s && i < r.e);
+}
+export function toggleLine(anno, from, to, k) {
+  const rangesIn = [];
+  for (let l = from.l; l <= to.l; l++) {
+    const a = anno[l]; if (!a) continue;
+    const s = l === from.l ? from.i : 0;
+    const e = l === to.l ? to.i + 1 : [...a.t].length;
+    if (e > s) rangesIn.push({ a, s, e });
+  }
+  const allHave = rangesIn.length && rangesIn.every(({ a, s, e }) => {
+    for (let i = s; i < e; i++) if (!lineAt(a, i, k)) return false;
+    return true;
+  });
+  for (const { a, s, e } of rangesIn) {
+    const same = (a.u || []).filter(r => r.k === k), other = (a.u || []).filter(r => r.k !== k);
+    const kept = cut(same, s, e);
+    if (!allHave) kept.push({ s, e, k });
+    a.u = [...other, ...kept].sort((x, y) => x.s - y.s);
+  }
+}
+
 // 選んだ範囲の最初の文字に記号をつける／もうついていれば消す
 export function toggleMark(anno, at, k) {
   const a = anno[at.l]; if (!a) return;
@@ -149,6 +179,7 @@ export function clearRange(anno, from, to) {
     const s = l === from.l ? from.i : 0;
     const e = l === to.l ? to.i + 1 : [...a.t].length;
     a.c = cut(a.c || [], s, e);
+    a.u = cut(a.u || [], s, e);
     a.m = (a.m || []).filter(x => x.i < s || x.i >= e);
   }
 }
@@ -176,7 +207,9 @@ export function renderLine(a, l, marks, colors) {
       html += def ? `<span class="col" style="--c:${esc(def.color)}">` : '';
       open = def ? ck : null;
     }
-    const inner = `<span data-l="${l}" data-i="${i}">${esc(ch)}</span>`;
+    let inner = `<span data-l="${l}" data-i="${i}">${esc(ch)}</span>`;
+    if (lineAt(a, i, 'wave')) inner = `<span class="u-wave">${inner}</span>`;
+    if (lineAt(a, i, 'line')) inner = `<span class="u-line">${inner}</span>`;
     html += mk.has(i) ? `<ruby>${inner}<rt>${esc(mk.get(i).join(''))}</rt></ruby>` : inner;
   });
   if (open) html += '</span>';

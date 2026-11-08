@@ -13,7 +13,7 @@
 const ROOT_NAME = 'LYRIC BOOK';
 const DB_NAME = 'データ（さわらないでください）.json';
 const KEEP_DAYS = 30;
-const SERVER_VERSION = 3;
+const SERVER_VERSION = 4;
 
 // ---------- はじめの準備 ----------
 function setup() {
@@ -329,6 +329,42 @@ const API = {
     const bytes = blob.getBytes();
     if (bytes.length > 4000000) throw err_('too_big');
     return { mime: blob.getContentType() || 'audio/mp4', audio: Utilities.base64Encode(bytes) };
+  },
+  // J-Lyric.net から1曲分の歌詞を取る（本人が曲を入れた・ボタンを押したときだけ。まとめて集めない）
+  lb_lyrics(db, a) {
+    who_(db, a.p_token);
+    const title = String(a.p_title || '').trim(), artist = String(a.p_artist || '').trim();
+    if (!title) throw err_('no_lyrics');
+    const opt = { muteHttpExceptions: true, followRedirects: true, headers: { 'User-Agent': 'Mozilla/5.0 (LYRIC BOOK; personal use)' } };
+    const norm = s => String(s || '').normalize('NFKC').toLowerCase().replace(/[\s　・.,'’"“”!！?？~〜-]/g, '');
+    const search = (ct, withArtist) => {
+      const url = 'https://j-lyric.net/search.php?kt=' + encodeURIComponent(title) + '&ct=' + ct + '&ka=' + (withArtist ? encodeURIComponent(artist) : '') + '&ca=2&kl=&cl=0';
+      const res = UrlFetchApp.fetch(url, opt);
+      if (res.getResponseCode() >= 300) return [];
+      const html = res.getContentText('UTF-8');
+      const out = [];
+      const re = /<p class="mid"><a href="(\/artist\/[a-z0-9]+\/l[a-z0-9]+\.html)" title="([^"]*)">([^<]*)<\/a>/g;
+      let m;
+      while ((m = re.exec(html))) out.push({ href: m[1], label: m[2], name: m[3] });
+      return out;
+    };
+    let list = search(2, true);
+    if (!list.length) list = search(0, true);
+    if (!list.length && artist) list = search(2, false).filter(x => norm(x.label).indexOf(norm(artist)) === 0);
+    if (!list.length) throw err_('no_lyrics');
+    const hit = list.find(x => norm(x.name) === norm(title) && norm(x.label).indexOf(norm(artist)) === 0)
+      || list.find(x => norm(x.name) === norm(title)) || list[0];
+    const pageUrl = 'https://j-lyric.net' + hit.href;
+    const page = UrlFetchApp.fetch(pageUrl, opt);
+    if (page.getResponseCode() >= 300) throw err_('no_lyrics');
+    const html = page.getContentText('UTF-8');
+    const m = html.match(/<p id="Lyric">([\s\S]*?)<\/p>/);
+    if (!m) throw err_('no_lyrics');
+    const decode = s => s.replace(/&#(\d+);/g, (_, n) => String.fromCharCode(+n)).replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&');
+    const text = decode(m[1].replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '')).replace(/\r/g, '').trim();
+    if (!text) throw err_('no_lyrics');
+    const pick = k => { const r = html.match(new RegExp(k + '：([^<　]+)')); return r ? decode(r[1]).trim() : ''; };
+    return { text: text, url: pageUrl, name: hit.name, lyricist: pick('作詞'), composer: pick('作曲') };
   },
   lb_get_recording(db, a) {
     const u = who_(db, a.p_token);

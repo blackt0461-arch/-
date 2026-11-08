@@ -415,3 +415,36 @@ body.perform-on { background: #140f0c; }
 
 .keys .est { color: #fff; }
 body:has(.offline) .saving { top: calc(env(safe-area-inset-top, 0px) + 40px); }
+
+
+/* ===== 2.2 で足したもの ===== */
+/* ホームのタブ：横にスクロール */
+.seg { display: flex; overflow-x: auto; scrollbar-width: none; gap: 2px; }
+.seg::-webkit-scrollbar { display: none; }
+.seg button { flex: 1 0 auto; padding-left: 14px; padding-right: 14px; white-space: nowrap; }
+.seg .seg-add { flex: 0 0 auto; color: var(--band-sub); font-size: 1.1rem; padding: 6px 14px; }
+/* 線 */
+.u-wave { text-decoration: underline wavy var(--acc); text-decoration-thickness: 1.3px; text-underline-offset: .42em; text-decoration-skip-ink: none; }
+.u-line { text-decoration: underline solid var(--fg); text-decoration-thickness: 1.6px; text-underline-offset: .66em; text-decoration-skip-ink: none; }
+.lsw { display: inline-block; width: 26px; height: 8px; margin: 5px 0 4px; }
+.lsw.line { border-bottom: 2px solid var(--fg); }
+.lsw.wave { background: radial-gradient(circle at 50% 120%, transparent 3px, var(--acc) 3.5px, var(--acc) 4.5px, transparent 5px) 0 0 / 8px 8px repeat-x; }
+.g .m .lsw { margin: 0; }
+/* 編集：下の大きな保存ボタン */
+.editS .content { padding-bottom: 140px; }
+.save-bar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 6; background: var(--bg); border-top: 1px solid var(--line); padding-bottom: env(safe-area-inset-bottom, 0px); }
+.save-bar .wrap { padding-top: 10px; padding-bottom: 12px; }
+.big-save { width: 100%; font-size: 1.1rem; padding: 15px; }
+/* 歌手の曲の一覧 */
+.as-list { display: flex; flex-direction: column; }
+.as-row { display: grid; grid-template-columns: 48px 1fr auto; gap: 12px; align-items: center; border: 0; border-bottom: 1px solid var(--line); background: none; padding: 8px 2px; text-align: left; width: 100%; }
+.as-art { width: 48px; height: 48px; border-radius: 8px; background: center / cover no-repeat var(--line); }
+.as-t { display: flex; flex-direction: column; min-width: 0; }
+.as-t b { color: var(--title); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; -webkit-text-stroke: .4px currentColor; }
+.as-t i { font-style: normal; font-size: .76rem; color: var(--sub); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.as-k { font-family: var(--gothic); color: var(--acc); font-size: 1.1rem; -webkit-text-stroke: 0; }
+.as-row.on .as-t b { color: var(--acc); }
+
+/* 歌詞の出どころ */
+.src { margin: -6px 0 0; font-size: .74rem; color: var(--sub); -webkit-text-stroke: .1px currentColor; }
+.src a { color: var(--acc); }

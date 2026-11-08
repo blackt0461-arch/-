@@ -32,16 +32,66 @@ export function shiftKey(k, shift) {
 }
 
 // ---- 音を鳴らす（ピアノっぽい音） ----
+// iPhone・iPad で音が鳴らないことへの対策：
+//  1) 最初のタップ（指を離したとき）で音の準備をしておく
+//  2) 消音スイッチが入っていても鳴るように、「再生」として扱ってもらう
+//  3) マイクを使ったあとやアプリを戻したときに止まった音の準備は、作りなおす
 let ctx = null;
-function ac() {
-  if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
-  if (ctx.state === 'suspended') ctx.resume();
+let silentEl = null;
+function newCtx() {
+  try { ctx?.close?.(); } catch (e) { /* もう閉じている */ }
+  ctx = new (window.AudioContext || window.webkitAudioContext)();
   return ctx;
 }
-export function playNote(midi, len = 1.6) {
+function ac() {
+  if (!ctx || ctx.state === 'closed') newCtx();
+  return ctx;
+}
+// 0.2秒の無音の WAV を作る（消音スイッチ対策で、ふつうの「再生」として流す）
+function silentWav() {
+  const rate = 8000, n = 1600, buf = new ArrayBuffer(44 + n * 2), v = new DataView(buf);
+  const w = (o, str) => { for (let i = 0; i < str.length; i++) v.setUint8(o + i, str.charCodeAt(i)); };
+  w(0, 'RIFF'); v.setUint32(4, 36 + n * 2, true); w(8, 'WAVE'); w(12, 'fmt ');
+  v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, rate, true); v.setUint32(28, rate * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+  w(36, 'data'); v.setUint32(40, n * 2, true);
+  return URL.createObjectURL(new Blob([buf], { type: 'audio/wav' }));
+}
+// タップのたびに呼んでよい（すでに準備できていれば何もしない）
+export function unlockAudio() {
+  try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) { /* 古い端末 */ }
+  try {
+    if (!silentEl) {
+      silentEl = new Audio(silentWav());
+      silentEl.loop = true;
+      silentEl.setAttribute('playsinline', '');
+    }
+    if (silentEl.paused) silentEl.play().catch(() => {});
+  } catch (e) { /* 使えない端末 */ }
   try {
     const c = ac();
-    const t = c.currentTime;
+    if (c.state !== 'running') c.resume().catch(() => {});
+    // 無音を1つ鳴らして、準備を終わらせる
+    const b = c.createBuffer(1, 1, 22050), src = c.createBufferSource();
+    src.buffer = b; src.connect(c.destination); src.start(0);
+  } catch (e) { /* 使えない端末 */ }
+}
+// 画面を裏に回したら止める（ロック画面などに出ないように）。戻ったら次のタップでまた準備する
+if (typeof document !== 'undefined') document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') { try { silentEl?.pause(); } catch (e) { /* なし */ } }
+});
+// マイクを使い終わったあとに呼ぶ（次に鳴らすとき、作りなおす）
+export function resetAudio() {
+  try { ctx?.close?.(); } catch (e) { /* もう閉じている */ }
+  ctx = null;
+}
+export async function playNote(midi, len = 1.6) {
+  try {
+    let c = ac();
+    if (c.state !== 'running') { try { await c.resume(); } catch (e) { /* 次で作りなおす */ } }
+    // 戻らないときは作りなおす（iPhone で「interrupted」のままになることがある）
+    if (c.state !== 'running') { c = newCtx(); try { await c.resume(); } catch (e) { /* 鳴らないこともある */ } }
+    const t = c.currentTime + 0.01;
     const f = freq(midi);
     const out = c.createGain();
     out.gain.setValueAtTime(0, t);

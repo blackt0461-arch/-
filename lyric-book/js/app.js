@@ -5,7 +5,7 @@ import * as L from './lyrics.js';
 import * as R from './recorder.js';
 import * as A from './analyze.js';
 
-export const APP_VERSION = '2.0.2';
+export const APP_VERSION = '2.3.0';
 const NEED_SERVER = 3; // この版の受け口（server/Code.gs）の番号
 
 // ---------- 小さな道具 ----------
@@ -75,6 +75,7 @@ const DEFAULTS = {
   myTop: null,
   myLow: null,
   setlists: [],
+  tabs: [],
   lyrSize: 'm',
   hintDone: false,
 };
@@ -96,6 +97,7 @@ const liveSongs = () => Array.from(S.songs.values()).filter(alive);
 const liveArtists = () => Array.from(S.artists.values()).filter(alive);
 const PRAC = { learning: { label: '練習中', color: '#b0803a' }, can: { label: '歌える', color: '#3f7f8c' }, best: { label: '十八番', color: '#b8432f' } };
 const app = $('#app');
+['touchend', 'click', 'keydown'].forEach(ev => document.addEventListener(ev, () => N.unlockAudio(), { passive: true, capture: true }));
 
 // ---------- 知らせ・板 ----------
 let toastTimer;
@@ -168,6 +170,7 @@ function menu(title, items) {
 function mergeSettings(saved) {
   const s = { ...DEFAULTS, ...(saved || {}) };
   for (const k of ['themes', 'marks', 'colors']) if (!Array.isArray(s[k]) || !s[k].length) s[k] = DEFAULTS[k].map(x => ({ ...x }));
+  if (!Array.isArray(s.tabs)) s.tabs = [];
   return s;
 }
 function applyLook() {
@@ -290,7 +293,7 @@ async function keepBoth(data) {
 // ほかの端末の変更を読みこみなおす
 async function refresh(force = false) {
   if (!S.token || S.token === LOCAL_TOKEN) return;
-  if (!force && (S.saveTimers.size || loadQueue().length || S.view === 'edit' || sheetClose || S.sel)) return;
+  if (!force) { syncInBackground(); return; }
   try {
     const d = await rpc('lb_load', { p_token: S.token });
     applyLoad(d); await addPendingRecs(); applyLook(); cacheNow(); setOffline(false);
@@ -305,10 +308,50 @@ document.addEventListener('visibilitychange', () => {
 });
 setInterval(() => { if (navigator.onLine !== false) flushAll(); }, 30000);
 
+// 裏で最新を読みこんで、変わっていたら画面をそっと入れかえる
+const dataKey = d => JSON.stringify([d.settings, d.artists, d.songs, (d.recordings || []).map(r => [r.id, r.updated_at, r.name]), d.is_owner]);
+async function syncInBackground() {
+  if (!S.token || S.token === LOCAL_TOKEN) return;
+  try {
+    await flush();
+    const d = await rpc('lb_load', { p_token: S.token });
+    setOffline(false);
+    S.lastRefresh = Date.now();
+    // 直している途中・送っていない変更があるときは、入れかえない（あとでもう一度読む）
+    if (S.saveTimers.size || loadQueue().length) return;
+    const before = loadCache();
+    const changed = !before || dataKey(before) !== dataKey(d);
+    S.backup = d.backup || S.backup;
+    if (!changed) { cacheNow(); return; }
+    applyLoad(d); await addPendingRecs(); applyLook(); cacheNow();
+    if (S.view === 'edit' || S.view.startsWith('play:') || sheetClose || S.sel) return;
+    const y = window.scrollY;
+    route(true);
+    window.scrollTo(0, y);
+  } catch (e) {
+    if (e.code === 'offline') setOffline(true);
+    else if (e.code === 'bad_token') { lsSet('lb_token', null); lsSet(CACHE_KEY, null); S.token = null; renderLogin(); toast(e.message); }
+  } finally {
+    flushRecs();
+    purgeTrash();
+    pruneAudio();
+  }
+}
+
 // ---------- 読みこみ ----------
 async function boot() {
   S.token = lsGet('lb_token');
   if (!S.token) { renderLogin(); return; }
+  // 端末に前回のデータがあれば、待たずにすぐ出す
+  const c = loadCache();
+  if (c && c.token === S.token && S.token !== LOCAL_TOKEN) {
+    applyLoad(c);
+    await addPendingRecs();
+    applyLook();
+    route();
+    syncInBackground();
+    return;
+  }
   try {
     await flush();
     const d = await rpc('lb_load', { p_token: S.token });
@@ -425,6 +468,8 @@ window.addEventListener('click', e => {
 
 // ---------- ホーム ----------
 function renderHome() {
+  if (S.tab.startsWith('t:') && !S.settings.tabs.some(t => 't:' + t.id === S.tab)) S.tab = 'real';
+  if (S.tab === 'shared' && !S.shared?.length) S.tab = 'real';
   S.view = 'home';
   setBarColor(S.settings.dark ? '#120d0a' : '#4a2c1a');
   app.innerHTML = `<div class="screen home">
@@ -437,7 +482,9 @@ function renderHome() {
       <div class="seg" role="tablist">
         <button data-tab="real" class="${S.tab === 'real' ? 'on' : ''}" role="tab">実在する曲</button>
         <button data-tab="own" class="${S.tab === 'own' ? 'on' : ''}" role="tab">自作</button>
+        ${S.settings.tabs.map(t => `<button data-tab="t:${esc(t.id)}" class="${S.tab === 't:' + t.id ? 'on' : ''}" role="tab">${esc(t.name)}</button>`).join('')}
         ${S.shared?.length ? `<button data-tab="shared" class="${S.tab === 'shared' ? 'on' : ''}" role="tab">みんなの曲</button>` : ''}
+        <button class="seg-add" id="addTab" aria-label="タブを足す">＋</button>
       </div>
     </div></div>
     <div class="wrap content">
@@ -446,10 +493,20 @@ function renderHome() {
     </div>
     <button class="fab" id="fab" aria-label="新しく入れる">${I.plus}</button>
   </div>`;
-  $$('.seg button', app).forEach(b => b.onclick = () => { S.tab = b.dataset.tab; lsSet('lb_tab', S.tab); renderHome(); });
+  $$('.seg button[data-tab]', app).forEach(b => b.onclick = () => { S.tab = b.dataset.tab; lsSet('lb_tab', S.tab); renderHome(); });
+  $('#addTab').onclick = async () => {
+    const name = await askText({ title: '新しいタブの名前', placeholder: '例：バンド', ok: '作る' });
+    if (!name?.trim()) return;
+    const t = { id: 'tb' + Date.now().toString(36), name: name.trim().slice(0, 12) };
+    S.settings.tabs.push(t); saveSettings();
+    S.tab = 't:' + t.id; lsSet('lb_tab', S.tab); renderHome();
+    toast('右下の「＋」で、曲をこのタブに入れられます');
+  };
+  $('.seg .on')?.scrollIntoView({ inline: 'center', block: 'nearest' });
   $('#q').oninput = e => { S.query = e.target.value; renderHomeList(); };
   $('#fab').onclick = () => {
-    if (S.tab === 'real') newArtist();
+    if (S.tab.startsWith('t:')) pickTabSongs(S.tab.slice(2));
+    else if (S.tab === 'real') newArtist();
     else go(`#/new?kind=own${S.themeFilter !== 'all' ? '&theme=' + S.themeFilter : ''}`);
   };
   renderHomeList();
@@ -471,7 +528,7 @@ function songRow(s, showKind = false) {
   const th = d.kind === 'own' ? themeOf(d.theme_id) : null;
   const artist = d.kind === 'real' ? S.artists.get(d.artist_id)?.data.name : '';
   const title = d.title || '題名なし';
-  const sub = [showKind ? (d.kind === 'own' ? '自作' : artist) : '', L.firstLine(d.text) || '（歌詞はまだありません）'].filter(Boolean).join('　');
+  const sub = [showKind ? (d.kind === 'own' ? '自作' : artist) : '', d.release ? d.release + '年' : '', L.firstLine(d.text) || '（歌詞はまだありません）'].filter(Boolean).join('　');
   const k = d.keys || {};
   const keyTxt = k.orig ? `原 ${esc(k.orig)}<br>${k.shift ? (k.shift > 0 ? '+' : '−') + Math.abs(k.shift) : '±0'}` : '';
   const pr = PRAC[d.practice];
@@ -510,6 +567,14 @@ function renderHomeList() {
   if (S.prac !== 'all') {
     const list = liveSongs().filter(s => s.data.practice === S.prac).sort((a, b) => jaCmp(a.data.title || '', b.data.title || ''));
     box.innerHTML = pracChips + (list.length ? `<div class="list">${list.map(s => songRow(s, true)).join('')}</div>` : `<div class="empty">「${PRAC[S.prac].label}」の曲はまだありません。<br>歌詞ページで印をつけられます。</div>`);
+    bindPrac();
+    return;
+  }
+  if (S.tab.startsWith('t:')) {
+    const tid = S.tab.slice(2);
+    const list = liveSongs().filter(s => (s.data.tags || []).includes(tid)).sort((a, b) => jaCmp(a.data.title || '', b.data.title || ''));
+    box.innerHTML = pracChips + (list.length ? `<div class="list">${list.map(s => songRow(s, true)).join('')}</div>`
+      : '<div class="empty">右下の「＋」で、<br>曲をこのタブに入れられます。</div>');
     bindPrac();
     return;
   }
@@ -592,6 +657,46 @@ function jsonp(url) {
 const nkey = x => (x || '').normalize('NFKC').toLowerCase().replace(/[\s　・.]/g, '');
 // その歌手のアルバムのジャケットを集める（歌手を特定してから、その人のアルバムだけ）
 const albumCache = new Map();
+const artistIds = new Map();
+// 曲名の後ろの飾り（(Live)・［TV size］・- Remix - など）をとる
+function baseTitle(t) {
+  let x = String(t || '').trim(), prev;
+  do {
+    prev = x;
+    x = x.replace(/\s*[\(（\[［【〈<][^\(（\[［【〈<]*[\)）\]］】〉>]\s*$/, '')
+      .replace(/\s+[-－–—~〜]\s*[^-－–—~〜]+[-－–—~〜]?\s*$/, m => (/live|ライブ|remix|ver|version|size|edit|mix|instrumental|acoustic|demo|inst|カラオケ|off vocal|remaster/i.test(m) ? '' : m))
+      .trim();
+  } while (x !== prev && x);
+  return x || String(t || '').trim();
+}
+// その歌手の曲（iTunes）。同じ曲名は、いちばん早く出たものを1つ
+async function artistSongs(name) {
+  await artistAlbums(name).catch(() => {});
+  const id = artistIds.get(name);
+  let list = [];
+  if (id) {
+    const r = await jsonp(`https://itunes.apple.com/lookup?id=${id}&entity=song&limit=200&country=JP&lang=ja_jp`);
+    list = (r.results || []).filter(x => x.wrapperType === 'track');
+  }
+  if (!list.length) {
+    const r = await jsonp(`https://itunes.apple.com/search?term=${encodeURIComponent(name)}&country=JP&lang=ja_jp&entity=song&attribute=artistTerm&limit=200`);
+    list = (r.results || []).filter(x => nkey(x.artistName) === nkey(name) || nkey(x.artistName).includes(nkey(name)));
+  }
+  // 「(ライブ)」「(Instrumental)」「- TV size -」などの別バージョンは、元の曲名にまとめる
+  const by = new Map();
+  for (const x of list) {
+    const base = baseTitle(x.trackName);
+    const k = nkey(base);
+    const plain = nkey(x.trackName) === k; // 飾りのない、元の曲
+    const cur = by.get(k);
+    const better = !cur || (plain && !cur.plain) || (plain === cur.plain && String(x.releaseDate || '') < String(cur.x.releaseDate || ''));
+    if (better) by.set(k, { x, plain, base });
+  }
+  return Array.from(by.values()).map(({ x, base }) => ({
+    title: base, year: String(x.releaseDate || '').slice(0, 4), date: x.releaseDate || '',
+    art: (x.artworkUrl100 || '').replace(/\/\d+x\d+bb\./, '/200x200bb.'), preview: x.previewUrl || '', album: x.collectionName || '',
+  }));
+}
 async function artistAlbums(name) {
   if (albumCache.has(name)) return albumCache.get(name);
   const enc = encodeURIComponent(name);
@@ -600,6 +705,7 @@ async function artistAlbums(name) {
     const r1 = await jsonp(`https://itunes.apple.com/search?term=${enc}&country=JP&lang=ja_jp&entity=musicArtist&limit=10`);
     const list = r1.results || [];
     const art = list.find(x => nkey(x.artistName) === nkey(name)) || list.find(x => nkey(x.artistName).includes(nkey(name)));
+    if (art?.artistId) artistIds.set(name, art.artistId);
     if (art?.artistId) {
       const r2 = await jsonp(`https://itunes.apple.com/lookup?id=${art.artistId}&entity=album&limit=100&country=JP&lang=ja_jp`);
       albums = (r2.results || []).filter(x => x.wrapperType === 'collection' && x.artworkUrl100);
@@ -729,6 +835,7 @@ function renderArtist(id) {
     </div></div>
     <div class="wrap content">
       ${extra.length ? `<div class="slides" id="slides">${extra.map(src => `<div class="slide" style="background-image:url('${esc(src)}')"></div>`).join('')}</div>` : ''}
+      <button class="btn sub" id="a-songs">♪ この歌手の曲から選んで入れる</button>
       ${songs.length > 6 ? `<label class="search">${I.search}<input id="aq" type="search" placeholder="この歌手の曲を検索"></label>` : ''}
       <div class="list" id="alist">${rows || '<div class="empty">右下の「＋」から、<br>この歌手の曲を入れましょう。</div>'}</div>
     </div>
@@ -737,6 +844,7 @@ function renderArtist(id) {
   $('#bk').onclick = () => back('#/');
   $('#photo').onclick = () => managePhotos(a);
   $('#amenu').onclick = () => artistMenu(a);
+  $('#a-songs').onclick = () => pickArtistSongs(a);
   startSlides();
   $('#aq')?.addEventListener('input', e => {
     const q = e.target.value.normalize('NFKC').toLowerCase();
@@ -924,13 +1032,15 @@ function renderSong(id) {
       <div class="eyebrow">${th ? `<i class="dot" style="--c:${esc(th.color)}"></i>自作　${esc(th.name)}` : d.kind === 'own' ? '自作' : '実在する曲'}${d.shared ? '　・メンバーに見せています' : ''}</div>
       <h1 class="big">${esc(d.title || '題名なし')}</h1>
       ${artist ? `<button class="artist-link" data-go="#/artist/${artist.id}">${esc(artist.data.name)}</button>` : ''}
-      <div class="meta"><span>作成 ${fmtDate(s.created_at)}</span><span>更新 ${fmtDate(s.updated_at)}</span></div>
+      <div class="meta">${d.release ? `<span>リリース ${esc(d.release)}年</span>` : ''}<span>作成 ${fmtDate(s.created_at)}</span><span>更新 ${fmtDate(s.updated_at)}</span></div>
     </div></div>
     <div class="wrap content">
       <div id="keysBox">${keysBlock({ ...d, _id: id })}</div>
       ${pracBlock(d)}
       ${!hasAnno && !S.settings.hintDone && d.text ? `<div class="hint" id="hint">歌詞の文字を指でなぞって選ぶと、下に記号・色・メモのボタンが出ます。</div>` : ''}
       <div class="lyr" id="lyr">${lyricsHtml(s)}</div>
+      ${d.kind === 'real' && !(d.text || '').trim() ? `<button class="btn sub" id="getLyr">J-Lyric.net から歌詞を取ってくる</button>` : ''}
+      ${d.lyricSource ? `<p class="src">歌詞：<a href="${esc(d.lyricSource.url)}" target="_blank" rel="noopener">${esc(d.lyricSource.site)}</a>${d.credits?.lyricist ? `　作詞 ${esc(d.credits.lyricist)}` : ''}${d.credits?.composer ? `　作曲 ${esc(d.credits.composer)}` : ''}</p>` : ''}
       <div id="recsBox">${recsHtml(id)}</div>
     </div>
     <div class="toolbar"><div class="wrap five">
@@ -946,6 +1056,7 @@ function renderSong(id) {
   $('#tRec').onclick = () => openRecorder(id);
   $('#tKb').onclick = () => openKeyboard();
   $('#tPitch').onclick = () => openPitch(s);
+  $('#getLyr')?.addEventListener('click', () => fetchLyrics(s, false));
   $('#keysBox').onclick = e => {
     if (e.target.closest('[data-go]')) return;
     const p = e.target.closest('[data-play]'); if (p) { N.playNote(+p.dataset.play); return; }
@@ -956,7 +1067,9 @@ function renderSong(id) {
     if (c) { s.data.practice = s.data.practice === c.dataset.pk ? '' : c.dataset.pk; $('#prac').outerHTML = pracBlock(s.data); renderSongPrac(s); queueSave(s); return; }
     if (e.target.closest('[data-score]')) openScores(s);
   };
+  if (d.kind === 'real' && !(d.text || '').trim() && !d.lyricsTried) fetchLyrics(s, true);
   if (d.kind === 'real' && !(d.keys || {}).autoTried) autoEstimate(s);
+  else if (d.kind === 'real' && !d.release && !d.releaseTried) fetchRelease(s);
   showMini();
   $('#lyr').onclick = e => { const m = e.target.closest('[data-memo]'); if (m) editMemo(s, +m.dataset.memo); };
   bindRecs(id);
@@ -1002,15 +1115,18 @@ function refreshLyrics(s) {
 async function songMenu(s) {
   const v = await menu(s.data.title || '題名なし', [
     { label: '編集する', value: 'edit' },
+    { label: 'タブに入れる・はずす', value: 'tab' },
     { label: 'セットリストに入れる', value: 'set' },
-    ...(s.data.kind === 'real' ? [{ label: '原キーとテンポを調べなおす', value: 'est' }] : []),
+    ...(s.data.kind === 'real' ? [{ label: '原キーとテンポを調べなおす', value: 'est' }, { label: '歌詞を取ってきなおす（J-Lyric.net）', value: 'lyr' }] : []),
     { label: s.data.shared ? 'メンバーに見せるのをやめる' : 'メンバーに見せる', value: 'share' },
     { label: '書きこみ（記号・色・メモ）を全部消す', value: 'clear' },
     { label: 'この曲を消す', value: 'del', danger: true },
   ]);
   if (v === 'edit') go(`#/edit/${s.id}`);
   else if (v === 'set') addToSetlist(s);
+  else if (v === 'tab') tabMenu(s);
   else if (v === 'est') { toast('調べています…'); autoEstimate(s, true); }
+  else if (v === 'lyr') fetchLyrics(s, false);
   else if (v === 'share') {
     s.data.shared = !s.data.shared; queueSave(s);
     toast(s.data.shared ? 'メンバーの「みんなの曲」に出るようにしました' : 'メンバーに見せるのをやめました');
@@ -1100,6 +1216,8 @@ function showAnno() {
   bar.innerHTML = `<div class="wrap">
     <div class="lbl"><span>記号（選んだ最初の文字の上につく）</span><button class="icon-btn" data-a="close" aria-label="とじる" style="width:32px;height:32px">${I.close}</button></div>
     <div class="row">${st.marks.map(m => `<button class="tool" data-a="mark" data-k="${esc(m.id)}"><b>${esc(m.label)}</b>${esc(m.name)}</button>`).join('')}</div>
+    <div class="lbl"><span>線（色とは別に2種類まで重ねられる）</span></div>
+    <div class="row">${L.LINES.map(x => `<button class="tool" data-a="line" data-k="${x.id}"><span class="lsw ${x.id}"></span>${x.name}</button>`).join('')}</div>
     <div class="lbl"><span>色・メモ</span></div>
     <div class="row">${st.colors.map(c => `<button class="tool" data-a="color" data-k="${esc(c.id)}"><span class="sw" style="--c:${esc(c.color)}"></span>${esc(c.name)}</button>`).join('')}
       <button class="tool wide" data-a="memo">メモ</button><button class="tool wide" data-a="clear">消す</button></div>
@@ -1115,6 +1233,7 @@ function onAnno(e, s) {
   const { from, to } = S.sel;
   if (a === 'mark') L.toggleMark(anno, from, t.dataset.k);
   else if (a === 'color') L.toggleColor(anno, from, to, t.dataset.k);
+  else if (a === 'line') L.toggleLine(anno, from, to, t.dataset.k);
   else if (a === 'clear') L.clearRange(anno, from, to);
   else if (a === 'memo') { getSelection()?.removeAllRanges(); hideAnno(); editMemo(s, from.l); return; }
   if (!S.settings.hintDone) { S.settings.hintDone = true; saveSettings(); $('#hint')?.remove(); }
@@ -1242,9 +1361,12 @@ async function autoEstimate(s, force = false) {
     const res = await jsonp(`https://itunes.apple.com/search?term=${encodeURIComponent(artist + ' ' + d.title)}&country=JP&lang=ja_jp&entity=song&limit=15`);
     const list = res.results || [];
     const t = nkey(d.title), ar = nkey(artist);
-    const hit = list.find(r => nkey(r.trackName) === t && nkey(r.artistName) === ar)
+    const hit = (d.preview ? { previewUrl: d.preview } : null)
+      || list.find(r => nkey(r.trackName) === t && nkey(r.artistName) === ar)
       || list.find(r => nkey(r.trackName).includes(t) && nkey(r.artistName).includes(ar))
       || list.find(r => nkey(r.trackName).includes(t));
+    const dated = list.find(r => nkey(r.trackName) === t && nkey(r.artistName) === ar) || list.find(r => nkey(r.trackName).includes(t) && r.releaseDate);
+    if (!d.release && dated?.releaseDate) { d.release = String(dated.releaseDate).slice(0, 4); d.releaseTried = true; }
     if (!hit?.previewUrl) { if (force) toast('試聴が見つからず、調べられませんでした'); queueSave(s); return; }
     let buf;
     try { const r = await fetch(hit.previewUrl); if (!r.ok) throw new Error('fetch'); buf = await r.arrayBuffer(); }
@@ -1316,8 +1438,13 @@ async function togglePlay(id) {
       if (p) { url = URL.createObjectURL(R.base64ToBlob(p.audio, p.mime)); blobCache.set(id + r.updated_at, url); }
     }
     if (!url) {
+      const kept = await localAudio(r);
+      if (kept) { url = URL.createObjectURL(R.base64ToBlob(kept.audio, kept.mime)); blobCache.set(id + r.updated_at, url); }
+    }
+    if (!url) {
       if (row) $('.pb', row).innerHTML = '…';
       const d = await rpc('lb_get_recording', { p_token: S.token, p_id: id });
+      keepAudio(r, d.audio, d.mime);
       url = URL.createObjectURL(R.base64ToBlob(d.audio, d.mime));
       blobCache.set(id + r.updated_at, url);
     }
@@ -1360,7 +1487,7 @@ async function recMenu(songId, id) {
   else if (v === 'rename') {
     const name = await askText({ title: '録音の名前', value: r.name });
     if (!name?.trim()) return;
-    try { await rpc('lb_rename_recording', { p_token: S.token, p_id: id, p_name: name.trim() }); r.name = name.trim().slice(0, 40); refreshRecs(songId); }
+    try { await rpc('lb_rename_recording', { p_token: S.token, p_id: id, p_name: name.trim() }); r.name = name.trim().slice(0, 40); refreshRecs(songId); syncInBackground(); }
     catch (e) { fail(e); }
   } else if (v === 'del') {
     if (!(await confirmAsk(`「${r.name}」を消しますか？`, '元にはもどせません。', '消す', true))) return;
@@ -1400,6 +1527,7 @@ function openRecorder(songId, replaceId = null) {
           if (target) {
             r = await rpc('lb_replace_recording', { p_token: S.token, p_id: target.id, p_mime: mime, p_duration: duration, p_audio: audio });
             Object.assign(target, r);
+            keepAudio(target, audio, mime);
           } else {
             const nums = S.recs.filter(x => x.song_id === songId).map(x => +(x.name.match(/^録音 (\d+)$/)?.[1] || 0));
             const name = `録音 ${Math.max(0, ...nums) + 1}`;
@@ -1407,6 +1535,7 @@ function openRecorder(songId, replaceId = null) {
             try {
               r = await rpc('lb_add_recording', { p_token: S.token, p_song_id: songId, p_name: name, p_mime: mime, p_duration: duration, p_audio: audio });
               S.recs.push(r);
+              keepAudio(r, audio, mime);
             } catch (e) {
               if (e.code !== 'offline') throw e;
               const pid = 'pending-' + uuid();
@@ -1424,20 +1553,27 @@ function openRecorder(songId, replaceId = null) {
         } catch (e) { state = 'idle'; closeSheet(); fail(e); }
       }
     },
-  }, () => { if (state === 'rec') rec?.cancel(); });
+  }, () => { if (state === 'rec') rec?.cancel(); N.resetAudio(); });
 }
 
 // ---------- 送信待ちの録音（IndexedDB） ----------
 function idb(op, arg) {
   return new Promise((resolve, reject) => {
     let req;
-    try { req = indexedDB.open('lyricbook', 1); } catch (e) { reject(e); return; }
-    req.onupgradeneeded = () => req.result.createObjectStore('recs', { keyPath: 'id' });
+    try { req = indexedDB.open('lyricbook', 2); } catch (e) { reject(e); return; }
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains('recs')) db.createObjectStore('recs', { keyPath: 'id' });
+      if (!db.objectStoreNames.contains('audio')) db.createObjectStore('audio', { keyPath: 'id' });
+    };
     req.onerror = () => reject(req.error);
     req.onsuccess = () => {
       const db = req.result;
-      const tx = db.transaction('recs', op === 'get' || op === 'all' ? 'readonly' : 'readwrite');
-      const st = tx.objectStore('recs');
+      const store = typeof op === 'string' && op.startsWith('a:') ? 'audio' : 'recs';
+      op = op.replace(/^a:/, '');
+      const tx = db.transaction(store, op === 'get' || op === 'all' || op === 'keys' ? 'readonly' : 'readwrite');
+      const st = tx.objectStore(store);
+      if (op === 'keys') { const r = st.getAllKeys(); r.onsuccess = () => resolve(r.result); r.onerror = () => reject(r.error); tx.oncomplete = () => db.close(); return; }
       const r = op === 'get' ? st.get(arg) : op === 'all' ? st.getAll() : op === 'put' ? st.put(arg) : st.delete(arg);
       r.onsuccess = () => resolve(r.result);
       r.onerror = () => reject(r.error);
@@ -1445,6 +1581,18 @@ function idb(op, arg) {
     };
   });
 }
+// 一度聞いた録音・自分で録った録音を、端末にとっておく（次からすぐ再生できる）
+const audioKey = r => r.id + '@' + (r.updated_at || '');
+async function keepAudio(r, audio, mime) { try { await idb('a:put', { id: audioKey(r), audio, mime }); } catch (e) { /* いっぱいなど */ } }
+async function localAudio(r) { try { return await idb('a:get', audioKey(r)); } catch (e) { return null; } }
+// もう使わない録音のとっておきを消す
+async function pruneAudio() {
+  try {
+    const keep = new Set(S.recs.map(audioKey));
+    for (const k of await idb('a:keys') || []) if (!keep.has(k)) await idb('a:del', k);
+  } catch (e) { /* 使えない端末 */ }
+}
+
 async function addPendingRecs() {
   try {
     const list = await idb('all');
@@ -1461,6 +1609,7 @@ async function flushRecs() {
       if (!S.songs.has(p.song_id)) continue;
       try {
         const r = await rpc('lb_add_recording', { p_token: S.token, p_song_id: p.song_id, p_name: p.name, p_mime: p.mime, p_duration: p.duration, p_audio: p.audio });
+        keepAudio(r, p.audio, p.mime);
         await idb('del', p.id);
         S.recs = S.recs.filter(x => x.id !== p.id);
         S.recs.push(r);
@@ -1493,7 +1642,7 @@ function openPitch(song) {
     mytop: () => { if (hi == null) return toast('まだ音を聞きとれていません'); S.settings.myTop = hi; saveSettings(); toast(`自分の最高音を ${N.noteName(hi)} にしました`); },
     mylow: () => { if (lo == null) return toast('まだ音を聞きとれていません'); S.settings.myLow = lo; saveSettings(); toast(`自分の最低音を ${N.noteName(lo)} にしました`); },
     no: () => closeSheet(),
-  }, () => { cancelAnimationFrame(raf); stream?.getTracks().forEach(t => t.stop()); ctx?.close?.(); });
+  }, () => { cancelAnimationFrame(raf); stream?.getTracks().forEach(t => t.stop()); ctx?.close?.(); N.resetAudio(); });
   function setVal(key, v) {
     if (v == null) { toast('まだ音を聞きとれていません'); return; }
     song.data.keys = { ...k, [key]: v };
@@ -1575,7 +1724,7 @@ function renderEdit(id, q = new URLSearchParams()) {
   const arts = liveArtists().sort((a, b) => jaCmp(a.data.yomi || a.data.name, b.data.yomi || b.data.name));
   const draw = () => {
     app.innerHTML = `<div class="screen lyricS editS">
-      <div class="wrap"><div class="topbar"><button class="icon-btn" id="bk" aria-label="もどる">${I.back}</button><strong style="color:var(--title)">${s ? '編集' : '新しい曲'}</strong><button class="btn small" id="save">保存</button></div></div>
+      <div class="wrap"><div class="topbar"><button class="icon-btn" id="bk" aria-label="もどる">${I.back}</button><strong style="color:var(--title)">${s ? '編集' : '新しい曲'}</strong>${s ? '<button class="btn danger small" id="e-del">この曲を消す</button>' : '<span></span>'}</div></div>
       <div class="wrap content">
         ${s ? '' : `<div class="seg2"><button data-kind="real" class="${d.kind === 'real' ? 'on' : ''}">実在する曲</button><button data-kind="own" class="${d.kind === 'own' ? 'on' : ''}">自作</button></div>`}
         ${d.kind === 'real' ? `
@@ -1613,7 +1762,9 @@ function renderEdit(id, q = new URLSearchParams()) {
           <div id="e-photo-box"></div>
           <span class="muted" style="font-size:.78rem">iPhone・iPad の「テキスト認識表示」を使います。写真は保存されません。</span>
         </div>
-        ${s ? '<button class="btn danger" id="e-del">この曲を消す</button>' : ''}
+        ${S.settings.tabs.length ? `<div class="field"><span>タブ（いくつでも）</span><div class="chips" id="e-tabs">${S.settings.tabs.map(t => `<button class="chip ${(d.tags || []).includes(t.id) ? 'on' : ''}" data-tg="${esc(t.id)}">${esc(t.name)}</button>`).join('')}</div></div>` : ''}
+      </div>
+      <div class="save-bar"><div class="wrap"><button class="btn big-save" id="save">保存する</button></div>
       </div>
     </div>`;
     bind();
@@ -1651,6 +1802,11 @@ function renderEdit(id, q = new URLSearchParams()) {
       inp.click();
     };
     $('#save').onclick = save;
+    $$('#e-tabs [data-tg]').forEach(b => b.onclick = () => {
+      const id = b.dataset.tg; d.tags = d.tags || [];
+      const i = d.tags.indexOf(id); if (i >= 0) d.tags.splice(i, 1); else d.tags.push(id);
+      b.classList.toggle('on', i < 0);
+    });
     $('#e-del')?.addEventListener('click', () => deleteSong(s));
     const counts = () => {
       const box = $('#e-counts');
@@ -1699,7 +1855,7 @@ function renderEdit(id, q = new URLSearchParams()) {
       }
       if (r) Object.assign(obj, r);
       cacheSoon();
-      if (!s && d.kind === 'real') autoEstimate(obj);
+      if (!s && d.kind === 'real') { autoEstimate(obj); if (!(d.text || '').trim()) fetchLyrics(obj, true); }
       if (s && navDepth > 0 && location.hash === `#/edit/${sid}`) { navDepth--; history.back(); }
       else { history.replaceState(null, '', `#/song/${sid}`); route(); }
       toast('保存しました');
@@ -1716,6 +1872,136 @@ function openVersions(d, ta, after) {
     pick: t => { ta.value = list[+t.dataset.i].text; closeSheet(); after(); toast('前の版を入れました。よければ「保存」を押してください'); },
     no: () => closeSheet(),
   });
+}
+
+// ---------- 歌詞を J-Lyric.net から取ってくる（1曲ずつ） ----------
+const lyrBusy = new Set();
+async function fetchLyrics(s, auto = false) {
+  const d = s.data;
+  if (d.kind !== 'real' || lyrBusy.has(s.id) || S.token === LOCAL_TOKEN) return;
+  if (S.serverVersion < 4) { if (!auto) toast('Googleに貼ったコードを新しくすると使えます'); return; }
+  lyrBusy.add(s.id);
+  const artist = S.artists.get(d.artist_id)?.data.name || '';
+  if (!auto) toast('歌詞をさがしています…');
+  try {
+    const r = await rpc('lb_lyrics', { p_token: S.token, p_title: d.title, p_artist: artist });
+    const cur = S.songs.get(s.id)?.data || d;
+    if ((cur.text || '').trim()) {
+      if (auto) return; // 自動のときは、入っている歌詞をさわらない
+      if (!(await confirmAsk('歌詞を入れかえますか？', 'いまの歌詞は「前の版」に残ります（編集画面から戻せます）。', '入れかえる'))) return;
+      cur.versions = [{ text: cur.text, at: s.updated_at || new Date().toISOString() }, ...(cur.versions || [])].slice(0, 20);
+    }
+    cur.text = r.text;
+    cur.anno = L.realign(cur.anno, cur.text);
+    cur.lyricSource = { site: 'J-Lyric.net', url: r.url };
+    if (r.lyricist || r.composer) cur.credits = { lyricist: r.lyricist || '', composer: r.composer || '' };
+    cur.lyricsTried = true;
+    queueSave(s);
+    if (S.view === 'song:' + s.id) renderSong(s.id);
+    if (!auto) toast('歌詞を入れました（J-Lyric.net）');
+  } catch (e) {
+    d.lyricsTried = true; queueSave(s);
+    if (!auto) toast(e.message);
+  } finally { lyrBusy.delete(s.id); }
+}
+
+// ---------- リリース年 ----------
+async function fetchRelease(s) {
+  const d = s.data;
+  d.releaseTried = true;
+  try {
+    const artist = S.artists.get(d.artist_id)?.data.name || '';
+    const res = await jsonp(`https://itunes.apple.com/search?term=${encodeURIComponent(artist + ' ' + d.title)}&country=JP&lang=ja_jp&entity=song&limit=15`);
+    const t = nkey(d.title), ar = nkey(artist);
+    const hits = (res.results || []).filter(r => nkey(r.trackName) === t && (nkey(r.artistName) === ar || nkey(r.artistName).includes(ar)) && r.releaseDate);
+    const first = hits.sort((x, y) => String(x.releaseDate).localeCompare(String(y.releaseDate)))[0];
+    if (first) d.release = String(first.releaseDate).slice(0, 4);
+  } catch (e) { /* 見つからなくてもよい */ }
+  queueSave(s);
+  if (d.release && S.view === 'song:' + s.id) renderSong(s.id);
+}
+
+// ---------- 歌手の曲の一覧から選んで入れる ----------
+async function pickArtistSongs(a) {
+  let list = [], order = 'new', q = '';
+  const mine = () => new Set(liveSongs().filter(x => x.data.artist_id === a.id).map(x => nkey(x.data.title)));
+  const row = x => {
+    const has = mine().has(nkey(x.title));
+    return `<button class="as-row ${has ? 'on' : ''}" data-s="add" data-t="${esc(x.title)}"><span class="as-art" style="background-image:url('${esc(x.art)}')"></span>
+      <span class="as-t"><b>${esc(x.title)}</b><i>${esc([x.year && x.year + '年', x.album].filter(Boolean).join('　'))}</i></span><span class="as-k">${has ? '✓' : '＋'}</span></button>`;
+  };
+  const draw = sh => {
+    const nq = nkey(q);
+    const shown = list.filter(x => !nq || nkey(x.title).includes(nq))
+      .sort((x, y) => order === 'name' ? jaCmp(x.title, y.title) : order === 'old' ? x.date.localeCompare(y.date) : y.date.localeCompare(x.date));
+    $('#as-list', sh).innerHTML = shown.length ? shown.map(row).join('') : '<p class="muted">見つかりませんでした。</p>';
+    $$('[data-o]', sh).forEach(b => b.classList.toggle('on', b.dataset.o === order));
+  };
+  const sheet = openSheet(`<h3>${esc(a.data.name)} の曲</h3>
+    <p class="muted" style="font-size:.82rem">タップした曲が入ります（もう一度タップしても消えません）。入れた曲は、原キーとテンポを自動で調べます。</p>
+    <label class="search">${I.search}<input id="as-q" type="search" placeholder="曲名で探す"></label>
+    <div class="chips"><button class="chip" data-s="ord" data-o="new">新しい順</button><button class="chip" data-s="ord" data-o="old">古い順</button><button class="chip" data-s="ord" data-o="name">名前順</button></div>
+    <div class="as-list" id="as-list"><p class="muted">探しています…</p></div>
+    <button class="btn" data-s="no">できた</button>`, {
+    ord: (t, sh) => { order = t.dataset.o; draw(sh); },
+    add: async (t, sh) => {
+      const x = list.find(z => z.title === t.dataset.t); if (!x) return;
+      if (mine().has(nkey(x.title))) { toast('もう入っています'); return; }
+      const id = uuid();
+      const data = { kind: 'real', artist_id: a.id, title: x.title, yomi: '', text: '', anno: [], keys: {}, release: x.year || '', releaseTried: true, preview: x.preview || '' };
+      const obj = { id, data, created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+      S.songs.set(id, obj);
+      t.outerHTML = row(x);
+      try { const r = await send('lb_save_song', { p_token: S.token, p_id: id, p_data: data }); if (r) Object.assign(obj, r); autoEstimate(obj); fetchLyrics(obj, true); }
+      catch (e) { S.songs.delete(id); fail(e); draw(sh); }
+    },
+    no: () => closeSheet(),
+  }, () => { if (S.view === 'artist:' + a.id) renderArtist(a.id); });
+  $('#as-q', sheet).oninput = e => { q = e.target.value; draw(sheet); };
+  try {
+    list = await artistSongs(a.data.name);
+    if (sheet.isConnected) draw(sheet);
+  } catch (e) { $('#as-list', sheet).innerHTML = '<p class="muted">探せませんでした。電波のよい所でもう一度ためしてください。</p>'; }
+}
+
+// ---------- 自分で足したタブ ----------
+function pickTabSongs(tid) {
+  const tab = S.settings.tabs.find(t => t.id === tid); if (!tab) return;
+  const all = liveSongs().sort((a, b) => jaCmp(a.data.title || '', b.data.title || ''));
+  const has = z => (z.data.tags || []).includes(tid);
+  const row = z => `<button class="item ${has(z) ? 'picked' : ''}" data-s="pick" data-id="${z.id}"><span class="nodot"></span><b>${esc(z.data.title || '題名なし')}</b><span class="k">${has(z) ? '✓' : '＋'}</span><i>${esc(z.data.kind === 'real' ? S.artists.get(z.data.artist_id)?.data.name || '' : '自作')}</i></button>`;
+  const sheet = openSheet(`<h3>「${esc(tab.name)}」に入れる曲</h3><label class="search">${I.search}<input id="tp-q" type="search" placeholder="曲名・歌手で検索"></label>
+    <div class="list" id="tp-list">${all.length ? all.map(row).join('') : '<p class="muted">まだ曲がありません。</p>'}</div><button class="btn" data-s="no">できた</button>`, {
+    pick: t => {
+      const z = S.songs.get(t.dataset.id); if (!z) return;
+      z.data.tags = z.data.tags || [];
+      const i = z.data.tags.indexOf(tid); if (i >= 0) z.data.tags.splice(i, 1); else z.data.tags.push(tid);
+      queueSave(z); t.outerHTML = row(z);
+    },
+    no: () => closeSheet(),
+  }, () => { if (S.view === 'home') renderHomeList(); });
+  $('#tp-q', sheet).oninput = e => {
+    const q = e.target.value.normalize('NFKC').toLowerCase();
+    $$('#tp-list .item', sheet).forEach(it => { it.hidden = q && !it.textContent.normalize('NFKC').toLowerCase().includes(q); });
+  };
+}
+async function tabMenu(s) {
+  const tabs = S.settings.tabs;
+  const tags = s.data.tags || [];
+  const v = await menu('タブに入れる・はずす', [...tabs.map(t => ({ label: `${tags.includes(t.id) ? '✓ ' : ''}${t.name}`, value: t.id })), { label: '＋ 新しいタブを作る', value: '__new' }]);
+  if (!v) return;
+  let id = v;
+  if (v === '__new') {
+    const name = await askText({ title: '新しいタブの名前', placeholder: '例：バンド', ok: '作る' });
+    if (!name?.trim()) return;
+    const t = { id: 'tb' + Date.now().toString(36), name: name.trim().slice(0, 12) };
+    tabs.push(t); saveSettings(); id = t.id;
+  }
+  s.data.tags = s.data.tags || [];
+  const i = s.data.tags.indexOf(id);
+  if (i >= 0) s.data.tags.splice(i, 1); else s.data.tags.push(id);
+  queueSave(s);
+  toast(i >= 0 ? `「${tabs.find(t => t.id === id)?.name}」からはずしました` : `「${tabs.find(t => t.id === id)?.name}」に入れました`);
 }
 
 // ---------- 本番モード ----------
@@ -2004,7 +2290,9 @@ function renderHelp(tab) {
       <div class="card">${st.marks.map(m => `<div class="g"><span class="m">${esc(m.label)}</span><b>${esc(m.name)}</b><i>${esc(m.desc || '')}</i></div>`).join('')}</div>
       <p class="sec-lbl" style="margin:6px 0 -4px">色</p>
       <div class="card">${st.colors.map(c => `<div class="g"><span class="sw" style="--c:${esc(c.color)}"></span><b>${esc(c.name)}</b><i>${esc(c.desc || '選んだ文字がこの色になって、下に線が引かれます')}</i></div>`).join('')}</div>
-      <p class="help-p muted" style="font-size:.8rem">記号や色は、設定から足したり変えたりできます。</p>`;
+      <p class="sec-lbl" style="margin:6px 0 -4px">線</p>
+      <div class="card"><div class="g"><span class="m"><span class="lsw line"></span></span><b>線</b><i>まっすぐな線。意味は自由に（例：大事なところ）</i></div><div class="g"><span class="m"><span class="lsw wave"></span></span><b>波線</b><i>波の線。意味は自由に（例：リズムに注意）</i></div></div>
+      <p class="help-p muted" style="font-size:.8rem">記号や色は、設定から足したり変えたりできます。線は色と同じ文字に重ねられます。</p>`;
   } else if (tab === 'parts') {
     const P = [
       ['🎬', 'イントロ', '#8a6a3e', '歌が始まる前の、楽器だけの部分。歌い出しの音を確かめておくと安心。'],
@@ -2081,6 +2369,9 @@ function renderSettings() {
       <p class="sec-lbl">自作のテーマ</p>
       <div class="card">${st.themes.map((t, i) => `<div class="set-row"><span class="l"><i class="dot" style="--c:${esc(t.color)}"></i>${esc(t.name)}</span><button class="btn sub small" data-ed="themes" data-i="${i}">変える</button></div>`).join('')}
         <div class="set-row"><span class="muted">テーマを足す</span><button class="btn small" data-add="themes">＋ 追加</button></div></div>
+      <p class="sec-lbl">ホームのタブ（「実在する曲」「自作」のほか）</p>
+      <div class="card">${st.tabs.map((t, i) => `<div class="set-row"><span class="l">${esc(t.name)}<span class="muted" style="font-size:.78rem">　${liveSongs().filter(s => (s.data.tags || []).includes(t.id)).length}曲</span></span><button class="btn sub small" data-ed="tabs" data-i="${i}">変える</button></div>`).join('')}
+        <div class="set-row"><span class="muted">タブを足す（例：バンド）</span><button class="btn small" data-add="tabs">＋ 追加</button></div></div>
       <p class="sec-lbl">歌い方の記号</p>
       <div class="card">${st.marks.map((m, i) => `<div class="set-row"><span class="l"><span class="mk-badge">${esc(m.label)}</span>${esc(m.name)}</span><button class="btn sub small" data-ed="marks" data-i="${i}">変える</button></div>`).join('')}
         <div class="set-row"><span class="muted">記号を足す</span><button class="btn small" data-add="marks">＋ 追加</button></div></div>
@@ -2199,19 +2490,19 @@ function editListItem(kind, i) {
   const st = S.settings;
   const list = st[kind];
   const it = i >= 0 ? { ...list[i] } : { id: kind.slice(0, 2) + Date.now().toString(36), name: '', label: '', desc: '', color: SWATCHES[list.length % SWATCHES.length] };
-  const title = { themes: 'テーマ', marks: '歌い方の記号', colors: '色' }[kind];
+  const title = { themes: 'テーマ', marks: '歌い方の記号', colors: '色', tabs: 'タブ' }[kind];
   const sheet = openSheet(`<h3>${i >= 0 ? `${title}を変える` : `${title}を足す`}</h3>
     ${kind === 'marks' ? `<label class="field"><span>歌詞の上に出す文字（1〜2文字）</span><input class="input" id="li-label" maxlength="2" value="${esc(it.label)}" placeholder="例：シ"></label>` : ''}
-    <label class="field"><span>名前</span><input class="input" id="li-name" value="${esc(it.name)}" placeholder="${kind === 'themes' ? '例：友情' : kind === 'marks' ? '例：しゃくり上げ' : '例：ささやく'}"></label>
+    <label class="field"><span>名前</span><input class="input" id="li-name" value="${esc(it.name)}" placeholder="${kind === 'themes' ? '例：友情' : kind === 'marks' ? '例：しゃくり上げ' : kind === 'tabs' ? '例：バンド' : '例：ささやく'}"></label>
     ${kind === 'marks' ? `<label class="field"><span>説明（解説に出ます）</span><input class="input" id="li-desc" value="${esc(it.desc || '')}"></label>` : ''}
-    ${kind !== 'marks' ? `<div class="field"><span>色</span><div class="chips" id="li-colors">${SWATCHES.map(c => `<button class="chip ${c === it.color ? 'on' : ''}" data-s="col" data-c="${c}" aria-label="${c}"><i class="dot" style="--c:${c};width:18px;height:18px"></i></button>`).join('')}</div></div>` : ''}
+    ${kind !== 'marks' && kind !== 'tabs' ? `<div class="field"><span>色</span><div class="chips" id="li-colors">${SWATCHES.map(c => `<button class="chip ${c === it.color ? 'on' : ''}" data-s="col" data-c="${c}" aria-label="${c}"><i class="dot" style="--c:${c};width:18px;height:18px"></i></button>`).join('')}</div></div>` : ''}
     <div class="acts">${i >= 0 ? '<button class="btn danger" data-s="del">消す</button>' : ''}<button class="btn sub" data-s="no">やめる</button><button class="btn" data-s="ok">保存</button></div>`, {
     col: t => { it.color = t.dataset.c; $$('#li-colors .chip', sheet).forEach(c => c.classList.toggle('on', c === t)); },
     no: () => closeSheet(),
     del: async () => {
       closeSheet();
-      if (list.length <= 1) { toast('1つは残してください'); return; }
-      if (!(await confirmAsk(`「${it.name}」を消しますか？`, kind === 'themes' ? 'このテーマの曲は「テーマなし」になります。' : 'この印をつけていた所からも消えます。', '消す', true))) return;
+      if (kind !== 'tabs' && list.length <= 1) { toast('1つは残してください'); return; }
+      if (!(await confirmAsk(`「${it.name}」を消しますか？`, kind === 'tabs' ? 'タブだけ消えます。入れていた曲は消えません。' : kind === 'themes' ? 'このテーマの曲は「テーマなし」になります。' : 'この印をつけていた所からも消えます。', '消す', true))) return;
       list.splice(i, 1); saveSettings(); renderSettings();
     },
     ok: (_, sh) => {
