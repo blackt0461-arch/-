@@ -1,12 +1,12 @@
 // LYRIC BOOK 本体：画面の切りかえと操作
-import { rpc, LOCAL_TOKEN } from './cloud.js?v=2.6.1';
+import { rpc, LOCAL_TOKEN } from './cloud.js?v=2.6.2';
 import * as N from './notes.js';
 import * as L from './lyrics.js';
 import * as R from './recorder.js';
 import * as A from './analyze.js';
 import * as E from './encode.js';
 
-export const APP_VERSION = '2.6.1';
+export const APP_VERSION = '2.6.2';
 const NEED_SERVER = 3; // この版の受け口（server/Code.gs）の番号
 
 // ---------- 小さな道具 ----------
@@ -322,6 +322,13 @@ async function syncInBackground() {
     const d = await rpc('lb_load', { p_token: S.token });
     setOffline(false);
     S.lastRefresh = Date.now();
+    // Google のコードの版は、中身が変わっていなくても毎回新しくする
+    // （端末にとっておいた古い版のままだと、版5 の KEYTUBE などを「まだ使えない」とまちがえる）
+    if (d.server_version && d.server_version !== S.serverVersion) {
+      const was = S.serverVersion;
+      S.serverVersion = d.server_version; cacheSoon();
+      if (was < 5 && d.server_version >= 5 && S.view.startsWith('song:')) { const s = S.songs.get(S.view.slice(5)); if (s) fetchRange(s); }
+    }
     // 直している途中・送っていない変更・送っている途中の保存があるとき、読んでいる間に保存したときは、
     // 入れかえない（古い中身で上書きしてしまうため。あとでもう一度読む）
     if (S.saveTimers.size || saveChains.size || loadQueue().length || savesInFlight || gen !== saveGen) return;
