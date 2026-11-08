@@ -681,20 +681,40 @@ export function mountPuzzle(id, lv, host, cb = {}) {
     // 指でなぞる：さいしょのマスと同じ「たて」か「横」の列だけをぬる（ずれてとなりの列をぬらないように）
     let drag = null;
     const cellAt = (e) => { const t = document.elementFromPoint(e.clientX, e.clientY); const b = t && t.closest && t.closest('.pz-nono .pz-cell'); return b ? [+b.dataset.y, +b.dataset.x] : null; };
+    // 2本指でなぞると、盤が左右に動く（拡大した時）。2本目の指が来たら、1本目のぬるのはやめる（1.16.5）。
+    // そのため、さいしょのマスは「指を動かした・はなした・少し押したまま」のどれかになってからぬる
+    const pts = new Map(); let pan = null;
+    const startPaint = () => { if (!drag || drag.ok !== null) return; clearTimeout(drag.t); drag.ok = act(drag.y, drag.x); };
     board.addEventListener('pointerdown', (e) => {
+      pts.set(e.pointerId, e.clientX);
+      if (pts.size >= 2) { // 2本指：ぬるのをやめて、動かす
+        if (drag) { clearTimeout(drag.t); drag = null; }
+        pan = { x: [...pts.values()].reduce((a, b) => a + b, 0) / pts.size, left: scroller.scrollLeft };
+        e.preventDefault(); return;
+      }
       const c = cellAt(e); if (!c || over) return;
       e.preventDefault();
-      drag = { y: c[0], x: c[1], cy: c[0], cx: c[1], axis: null, ok: act(c[0], c[1]) };
+      drag = { y: c[0], x: c[1], cy: c[0], cx: c[1], axis: null, ok: null };
+      drag.t = setTimeout(startPaint, 140);
       try { board.setPointerCapture(e.pointerId); } catch (er) { /* なし */ }
     });
     board.addEventListener('pointermove', (e) => {
-      if (!drag || !drag.ok) return; const c = cellAt(e); if (!c) return;
+      if (pts.has(e.pointerId)) pts.set(e.pointerId, e.clientX);
+      if (pan) { const ax = [...pts.values()].reduce((a, b) => a + b, 0) / pts.size; scroller.scrollLeft = pan.left - (ax - pan.x); return; }
+      if (!drag) return; const c = cellAt(e); if (!c) return;
+      if (drag.ok === null) { if (c[0] === drag.y && c[1] === drag.x) return; startPaint(); }
+      if (!drag.ok) return;
       if (!drag.axis) { if (c[0] === drag.y && c[1] !== drag.x) drag.axis = 'x'; else if (c[1] === drag.x && c[0] !== drag.y) drag.axis = 'y'; else return; }
       const ty = drag.axis === 'x' ? drag.y : c[0], tx = drag.axis === 'y' ? drag.x : c[1];
       // 間をとばさないよう、1マスずつ
       while ((drag.cy !== ty || drag.cx !== tx) && drag.ok) { drag.cy += Math.sign(ty - drag.cy); drag.cx += Math.sign(tx - drag.cx); drag.ok = act(drag.cy, drag.cx); }
     });
-    const end = () => { drag = null; };
+    const end = (e) => {
+      pts.delete(e.pointerId);
+      if (pan) { if (!pts.size) pan = null; else pan = { x: [...pts.values()].reduce((a, b) => a + b, 0) / pts.size, left: scroller.scrollLeft }; return; }
+      if (drag && drag.ok === null && e.type === 'pointerup') startPaint(); // 1回タップ
+      drag = null;
+    };
     board.addEventListener('pointerup', end); board.addEventListener('pointercancel', end);
     // キーボード・ためし用（指やマウスは pointerdown で受けるので、detail が 0 のクリックだけ）
     board.addEventListener('click', (e) => { if (e.detail !== 0) return; const b = e.target.closest('.pz-cell'); if (b) act(+b.dataset.y, +b.dataset.x); });
@@ -745,7 +765,7 @@ export function mountPuzzle(id, lv, host, cb = {}) {
       // 収まる時は、左の数字の幅ぶん右にもすきまを足して、マスを左右のまん中に
       const cw = +board.dataset.cw, need = cw + 8 + Wn * (cs + gap);
       board.style.paddingRight = 4 + Math.max(0, Math.min(cw, W - need)) + 'px';
-      tip.textContent = zoom ? '数字の所を左右になぞると、盤が動きます' : '指でなぞると、まとめてぬれます';
+      tip.textContent = zoom ? '2本指でなぞると、盤が左右に動きます' : '指でなぞると、まとめてぬれます';
       placeSeps();
     };
     zoomB.onclick = () => { zoom = !zoom; layout(); scroller.scrollLeft = 0; };

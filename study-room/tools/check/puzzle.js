@@ -168,6 +168,17 @@ const serve = () => new Promise(res => { const srv = http.createServer((req, rsp
     await page.mouse.up(); await page.waitForTimeout(200);
     const n = await page.evaluate((seg) => { const cs = document.querySelectorAll('.pz-nono .pz-cell'), N = Math.sqrt(cs.length); let k = 0; for (let x = seg.x; x <= seg.e; x++) if (cs[seg.y * N + x].style.background === 'rgb(43, 42, 51)') k++; return k; }, seg);
     check(n === seg.e - seg.x + 1 && await page.locator('.pz-life i.on').count() === 2, `指でなぞると、まとめてぬれる（${n}マス・まちがいなし）`); }
+  // 2本指でなぞると盤が左右に動き、マスはぬられない（1.16.5）
+  { const r = await page.evaluate(async () => {
+      const sc = document.querySelector('.pz-nscroll'), board = document.querySelector('.pz-nono'); sc.scrollLeft = 0; await new Promise(r => setTimeout(r, 50));
+      const cs = [...document.querySelectorAll('.pz-nono .pz-cell')], dark = () => cs.filter(b => b.style.background === 'rgb(43, 42, 51)' || b.querySelector('.pz-x')).length, d0 = dark();
+      const a = cs[7 * 15 + 8].getBoundingClientRect(), b = cs[9 * 15 + 9].getBoundingClientRect();
+      const ev = (t, id, x, y) => board.dispatchEvent(new PointerEvent(t, { pointerId: id, clientX: x, clientY: y, bubbles: true, cancelable: true, pointerType: 'touch', isPrimary: id === 1 }));
+      ev('pointerdown', 1, a.x + 5, a.y + 5); await new Promise(r => setTimeout(r, 40)); ev('pointerdown', 2, b.x + 5, b.y + 5);
+      for (let k = 1; k <= 6; k++) { ev('pointermove', 1, a.x + 5 - k * 25, a.y + 5); ev('pointermove', 2, b.x + 5 - k * 25, b.y + 5); await new Promise(r => setTimeout(r, 30)); }
+      ev('pointerup', 1, a.x - 145, a.y + 5); ev('pointerup', 2, b.x - 145, b.y + 5); await new Promise(r => setTimeout(r, 200));
+      return { moved: sc.scrollLeft, painted: dark() - d0 }; });
+    check(r.moved > 50 && r.painted === 0 && await page.locator('.pz-life i.on').count() === 2, `2本指でなぞると盤が動き、マスはぬられない（${Math.round(r.moved)}px 動いた・ぬられた ${r.painted}）`); }
   await page.evaluate(() => document.querySelector('.pz-host')._solve()); await page.waitForSelector('.pz-res-sheet', { timeout: 8000 }); await page.waitForTimeout(500);
   check(/あらわれたのは/.test(await page.locator('.pz-res-sheet').textContent()), '★5 の絵をクリアすると、絵の名前が出る');
   await page.evaluate(() => document.querySelector('.pz-res-sheet')?.remove()); await page.waitForTimeout(200);
