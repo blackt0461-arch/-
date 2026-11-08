@@ -1,11 +1,12 @@
 // LYRIC BOOK 本体：画面の切りかえと操作
-import { rpc, LOCAL_TOKEN } from './cloud.js?v=2.3.4';
+import { rpc, LOCAL_TOKEN } from './cloud.js?v=2.6.1';
 import * as N from './notes.js';
 import * as L from './lyrics.js';
 import * as R from './recorder.js';
 import * as A from './analyze.js';
+import * as E from './encode.js';
 
-export const APP_VERSION = '2.3.4';
+export const APP_VERSION = '2.6.1';
 const NEED_SERVER = 3; // この版の受け口（server/Code.gs）の番号
 
 // ---------- 小さな道具 ----------
@@ -323,7 +324,7 @@ async function syncInBackground() {
     S.lastRefresh = Date.now();
     // 直している途中・送っていない変更・送っている途中の保存があるとき、読んでいる間に保存したときは、
     // 入れかえない（古い中身で上書きしてしまうため。あとでもう一度読む）
-    if (S.saveTimers.size || loadQueue().length || savesInFlight || gen !== saveGen) return;
+    if (S.saveTimers.size || saveChains.size || loadQueue().length || savesInFlight || gen !== saveGen) return;
     const before = loadCache();
     const changed = !before || dataKey(before) !== dataKey(d);
     S.backup = d.backup || S.backup;
@@ -346,7 +347,9 @@ async function syncInBackground() {
 // ---------- 読みこみ ----------
 async function boot() {
   S.token = lsGet('lb_token');
-  if (!S.token) { renderLogin(); return; }
+  const inviteParam = new URLSearchParams(location.search).get('invite') || '';
+  if (!S.token) { renderLogin(inviteParam ? 'signup' : 'login', '', inviteParam); return; }
+  if (inviteParam) history.replaceState(null, '', location.pathname + location.hash);
   // 端末に前回のデータがあれば、待たずにすぐ出す
   const c = loadCache();
   if (c && c.token === S.token && S.token !== LOCAL_TOKEN) {
@@ -392,7 +395,7 @@ async function logout(silent) {
 }
 
 // ---------- ログイン ----------
-function renderLogin(mode = 'login', err = '') {
+function renderLogin(mode = 'login', err = '', invite = '') {
   S.view = 'login';
   setBarColor('#4a2c1a');
   document.documentElement.dataset.theme = 'light';
@@ -401,13 +404,14 @@ function renderLogin(mode = 'login', err = '') {
     <h1 class="logo">LYRIC BOOK<small>歌詞と歌い方のノート</small></h1>
     <div class="tabs">${tab('login', 'ログイン')}${tab('signup', 'はじめて')}${tab('reset', '忘れたとき')}</div>
     <label class="field"><span>ユーザー名</span><input class="input" id="lf-user" autocomplete="username" autocapitalize="off" required></label>
-    ${mode === 'signup' ? `<label class="field"><span>招待の合言葉（2人目からいります。はじめての人は空のまま）</span><input class="input" id="lf-inv" autocapitalize="characters" placeholder="ABCD-EFGH"></label>` : ''}
+    ${mode === 'signup' ? `<label class="field"><span>招待の合言葉（2人目からいります。はじめての人は空のまま）</span><input class="input" id="lf-inv" autocapitalize="characters" placeholder="ABCD-EFGH" value="${esc(invite)}"></label>` : ''}
+    ${invite && mode === 'signup' ? '<p class="muted" style="font-size:.82rem;margin:0">招待リンクから開きました。ユーザー名とパスワードを決めて「登録してはじめる」を押してください。</p>' : ''}
     ${mode === 'reset' ? `<label class="field"><span>復活用の合言葉</span><input class="input" id="lf-rec" autocapitalize="characters" placeholder="ABCD-EFGH-JKLM" required></label>` : ''}
     <label class="field"><span>${mode === 'reset' ? '新しいパスワード' : 'パスワード'}</span><input class="input" id="lf-pass" type="password" autocomplete="${mode === 'login' ? 'current-password' : 'new-password'}" required></label>
     <div class="err" role="alert">${esc(err)}</div>
     <button class="btn" type="submit">${{ login: 'ログイン', signup: '登録してはじめる', reset: 'パスワードを作り直す' }[mode]}</button>
   </form></div>`;
-  $$('.tabs button', app).forEach(b => b.onclick = e => { e.preventDefault(); renderLogin(b.dataset.m); });
+  $$('.tabs button', app).forEach(b => b.onclick = e => { e.preventDefault(); renderLogin(b.dataset.m, '', invite); });
   $('#lf').onsubmit = async e => {
     e.preventDefault();
     const btn = $('#lf button[type="submit"]'); btn.disabled = true;
@@ -556,8 +560,10 @@ function renderHomeList() {
   const box = $('#homeList'); if (!box) return;
   if (S.query.trim()) {
     const hits = searchSongs(S.query.trim());
-    box.innerHTML = hits.length ? `<div class="list">${hits.map(s => songRow(s, true)).join('')}</div>`
-      : `<div class="empty">「${esc(S.query)}」は見つかりませんでした</div>`;
+    box.innerHTML = (hits.length ? `<div class="list">${hits.map(s => songRow(s, true)).join('')}</div>`
+      : `<div class="empty" style="padding:20px 10px">ノートの中には「${esc(S.query)}」はありません</div>`)
+      + `<div id="appleSugg"></div>`;
+    appleSuggest(S.query.trim(), $('#appleSugg'));
     return;
   }
   // 練習の印で絞りこみ
@@ -626,7 +632,7 @@ async function newArtist() {
       if (dup) { closeSheet(); go(`#/artist/${dup.id}`); return; }
       const a = await createArtist(name, $('#na-yomi', sh).value.trim());
       closeSheet();
-      if (a) go(`#/artist/${a.id}`);
+      if (a) { go(`#/artist/${a.id}`); setTimeout(() => { if (S.view === 'artist:' + a.id) pickArtistSongs(a); }, 450); }
     },
   });
   $('#na-name', sheet).focus();
@@ -668,7 +674,7 @@ function baseTitle(t) {
   do {
     prev = x;
     x = x.replace(/\s*[\(（\[［【〈<][^\(（\[［【〈<]*[\)）\]］】〉>]\s*$/, '')
-      .replace(/\s+[-－–—~〜]\s*[^-－–—~〜]+[-－–—~〜]?\s*$/, m => (/live|ライブ|remix|ver|version|size|edit|mix|instrumental|acoustic|demo|inst|カラオケ|off vocal|remaster/i.test(m) ? '' : m))
+      .replace(/\s+[-－–—~〜]\s*[^-－–—~〜]+[-－–—~〜]?\s*$/, m => (/live|ライブ|remix|ver|version|size|edit|mix|instrumental|acoustic|demo|inst|カラオケ|off vocal|remaster|first take|from |session|cover|arrange/i.test(m) ? '' : m))
       .trim();
   } while (x !== prev && x);
   return x || String(t || '').trim();
@@ -975,10 +981,11 @@ function keysBlock(d) {
   const k = d.keys || {};
   const sh = +k.shift || 0;
   const est = on => on ? '<small class="est">推定</small>' : '<small>&nbsp;</small>';
+  const kt = k.rangeAuto ? '<small class="est kt">KEYTUBE</small>' : '';
   // 音は「自分のキー」で鳴らす（上げ下げしていれば、そのぶんずらす）
   const note = (label, m) => {
     const has = m != null && m !== '';
-    return `<div>${label}<b>${has ? esc(N.noteName(m)) : NA}</b>${has ? `<button class="play-sm" data-play="${m + sh}">▶ ${sh ? '自分のキー' : '鳴らす'}</button>` : '<small>&nbsp;</small>'}</div>`;
+    return `<div>${label}<b>${has ? esc(N.noteName(m)) : NA}</b>${has ? `<button class="play-sm" data-play="${m + sh}">▶ ${sh ? '自分のキー' : '鳴らす'}</button>` : '<small>&nbsp;</small>'}${has && label !== '歌い出し' ? kt : ''}</div>`;
   };
   const shift = sh ? (sh > 0 ? '+' : '−') + Math.abs(sh) : '±0';
   return `<div class="keys" id="keys">
@@ -986,8 +993,11 @@ function keysBlock(d) {
     <div>自分<b>${shift}</b><small>${k.orig && sh ? esc(N.shiftKey(k.orig, sh)) : '&nbsp;'}</small></div>
     ${note('最高音', k.top)}${note('最低音', k.low)}${note('歌い出し', k.start)}
   </div>
-  <div class="tempo-row"><span>テンポ <b>${k.tempo ? `♩=${esc(k.tempo)}` : '測定不能'}</b>${k.tempo && k.tempoEst ? '<small class="est">推定</small>' : ''}　<span class="muted">1行 ${esc(k.bars || 2)}小節</span></span>
-    <button class="btn small" data-go="#/play/${d._id || ''}">${I.stage}本番モード</button></div>`;
+  <div class="tempo-row"><span>テンポ <b>${k.tempo ? `♩=${esc(k.tempo)}` : '測定不能'}</b>${k.tempo && k.tempoSrc === 'KEYTUBE' ? '<small class="est kt">KEYTUBE</small>' : k.tempo && k.tempoEst ? '<small class="est">推定</small>' : ''}　<span class="muted">1行 ${esc(k.bars || 2)}小節</span></span>
+    <button class="btn small" data-go="#/play/${d._id || ''}">${I.stage}本番モード</button></div>
+  ${recKeyHtml(k)}
+  ${d._id && d.kind === 'real' ? `<button class="btn sub small src-btn" data-src-audio="1">🎵 音源から合わせる</button>` : ''}
+  ${k.rangeFrom ? `<p class="src">最高音・最低音${k.tempoSrc === 'KEYTUBE' ? '・テンポ' : ''}：<a href="${esc(k.rangeFrom.url)}" target="_blank" rel="noopener">KEYTUBE</a>${k.rangeFrom.supervised ? '' : '（監修されていない値）'}</p>` : ''}`;
 }
 
 function pracBlock(d) {
@@ -1030,7 +1040,8 @@ function renderSong(id) {
   setBarColor(S.settings.dark ? '#2c2119' : '#f0dfc6');
   const hasAnno = (d.anno || []).some(a => (a.m || []).length || (a.c || []).length || a.memo);
   app.innerHTML = `<div class="screen lyricS">
-    <div class="head"><div class="wrap">
+    <div class="head ${d.artwork ? 'has-art' : ''}"><div class="wrap">
+      ${d.artwork ? `<img class="song-art" src="${esc(d.artwork)}" alt="">` : ''}
       <div class="topbar"><button class="icon-btn" id="bk" aria-label="もどる">${I.back}</button><div class="acts">
         <button class="icon-btn" data-go="#/edit/${id}" aria-label="編集">${I.edit}</button>
         <button class="icon-btn" id="smenu" aria-label="そのほか">${I.more}</button></div></div>
@@ -1064,6 +1075,10 @@ function renderSong(id) {
   $('#getLyr')?.addEventListener('click', () => fetchLyrics(s, false));
   $('#keysBox').onclick = e => {
     if (e.target.closest('[data-go]')) return;
+    const sh = e.target.closest('[data-setshift]');
+    if (sh) { s.data.keys = { ...(s.data.keys || {}), shift: +sh.dataset.setshift }; queueSave(s); refreshKeys(s); toast('自分のキーを変えました'); return; }
+    if (e.target.closest('[data-src-audio]')) { fromAudio(s); return; }
+    if (e.target.closest('[data-go-settings]')) { go('#/settings'); return; }
     const p = e.target.closest('[data-play]'); if (p) { N.playNote(+p.dataset.play); return; }
     if (e.target.closest('#keys')) openKeyEditor(s);
   };
@@ -1073,6 +1088,7 @@ function renderSong(id) {
     if (e.target.closest('[data-score]')) openScores(s);
   };
   if (d.kind === 'real' && !(d.text || '').trim() && !d.lyricsTried) fetchLyrics(s, true);
+  if (d.kind === 'real' && !(d.keys || {}).rangeTried) fetchRange(s);
   if (d.kind === 'real' && !(d.keys || {}).autoTried) autoEstimate(s);
   else if (d.kind === 'real' && !d.release && !d.releaseTried) fetchRelease(s);
   showMini();
@@ -1121,8 +1137,10 @@ async function songMenu(s) {
   const v = await menu(s.data.title || '題名なし', [
     { label: '編集する', value: 'edit' },
     { label: 'タブに入れる・はずす', value: 'tab' },
+    { label: '音源から合わせる（タイミング・キー・テンポ）', value: 'audio' },
+    { label: 'パートを自動で分ける', value: 'parts' },
     { label: 'セットリストに入れる', value: 'set' },
-    ...(s.data.kind === 'real' ? [{ label: '原キーとテンポを調べなおす', value: 'est' }, { label: '歌詞を取ってきなおす（J-Lyric.net）', value: 'lyr' }] : []),
+    ...(s.data.kind === 'real' ? [{ label: '最高音・最低音・テンポを調べなおす（KEYTUBE）', value: 'rng' }, { label: '原キーを推定しなおす', value: 'est' }, { label: '歌詞を取ってきなおす（J-Lyric.net）', value: 'lyr' }] : []),
     { label: s.data.shared ? 'メンバーに見せるのをやめる' : 'メンバーに見せる', value: 'share' },
     { label: '書きこみ（記号・色・メモ）を全部消す', value: 'clear' },
     { label: 'この曲を消す', value: 'del', danger: true },
@@ -1130,8 +1148,17 @@ async function songMenu(s) {
   if (v === 'edit') go(`#/edit/${s.id}`);
   else if (v === 'set') addToSetlist(s);
   else if (v === 'tab') tabMenu(s);
+  else if (v === 'audio') fromAudio(s);
+  else if (v === 'parts') {
+    const t = L.autoParts(s.data.text);
+    if (t === s.data.text) { toast(/[\[［【]/.test(s.data.text || '') ? 'もうパートに分かれています' : 'くり返す所が見つからず、分けられませんでした'); return; }
+    s.data.versions = [{ text: s.data.text, at: s.updated_at || new Date().toISOString() }, ...(s.data.versions || [])].slice(0, 20);
+    s.data.text = t; s.data.anno = L.realign(s.data.anno, t); queueSave(s); renderSong(s.id);
+    toast('パートを自動で分けました。ちがっていたら編集で直してください');
+  }
   else if (v === 'est') { toast('調べています…'); autoEstimate(s, true); }
   else if (v === 'lyr') fetchLyrics(s, false);
+  else if (v === 'rng') fetchRange(s, true);
   else if (v === 'share') {
     s.data.shared = !s.data.shared; queueSave(s);
     toast(s.data.shared ? 'メンバーの「みんなの曲」に出るようにしました' : 'メンバーに見せるのをやめました');
@@ -1157,35 +1184,34 @@ async function deleteSong(s) {
 
 // 同じ曲の保存は1つずつ順番に送る。重なって送ると、前の保存で変わった更新日時を知らないまま送るので、
 // 自分の保存なのに「別の端末で直された」とまちがえてしまう。更新日時（p_base）と中身は、送る直前に読む。
-const songChains = new Map();
-function saveSongInOrder(id, makeBody) {
-  const prev = songChains.get(id) || Promise.resolve();
-  const p = prev.catch(() => {}).then(async () => {
-    return send('lb_save_song', makeBody());
-  });
-  songChains.set(id, p);
-  p.catch(() => {}).finally(() => { if (songChains.get(id) === p) songChains.delete(id); });
+// 歌詞の保存（書きこみはまとめて少しあとに）
+// 同じ曲の保存は、前の保存が終わってから次を送る（重なると「別の端末で直された」と勘ちがいするため）
+const saveChains = new Map();
+function chainSave(id, job) {
+  const prev = saveChains.get(id) || Promise.resolve();
+  const p = prev.then(job, job);
+  saveChains.set(id, p);
+  p.catch(() => {}).finally(() => { if (saveChains.get(id) === p) saveChains.delete(id); });
   return p;
 }
-
-// 歌詞の保存（書きこみはまとめて少しあとに）
+// 更新日時（p_base）と中身は、送る直前に読む
+function saveSongInOrder(id, makeBody) { return chainSave(id, () => send('lb_save_song', makeBody())); }
 const pendingRuns = new Map();
 function queueSave(s, now = false) {
   clearTimeout(S.saveTimers.get(s.id));
-  const run = async () => {
+  const run = () => {
     S.saveTimers.delete(s.id); pendingRuns.delete(s.id);
-    let cur = s;
-    try {
-      const r = await saveSongInOrder(s.id, () => {
-        cur = S.songs.get(s.id) || s; // 読みこみなおしで入れかわっていても、いまの曲を送る
-        return { p_token: S.token, p_id: s.id, p_data: cur.data, p_base: cur.updated_at || null };
-      });
-      if (r) { Object.assign(cur, r); if (cur !== s) Object.assign(s, r); }
-      cacheSoon();
-    } catch (e) {
-      if (e.code === 'conflict') { await keepBoth(cur.data).catch(fail); await refresh(true); }
-      else fail(e);
-    }
+    return chainSave(s.id, async () => {
+      const cur = S.songs.get(s.id) || s;
+      try {
+        const r = await send('lb_save_song', { p_token: S.token, p_id: cur.id, p_data: cur.data, p_base: cur.updated_at || null });
+        if (r) { Object.assign(cur, r); if (cur !== s) Object.assign(s, r); }
+        cacheSoon();
+      } catch (e) {
+        if (e.code === 'conflict') { await keepBoth(cur.data).catch(fail); await refresh(true); }
+        else fail(e);
+      }
+    });
   };
   if (now) return run();
   pendingRuns.set(s.id, run);
@@ -1316,7 +1342,7 @@ function noteOptions(sel) {
   return o;
 }
 const noteLabel = v => (v != null && v !== '' ? `${N.noteName(v)}（${N.doremi(v)}）` : '測定不能');
-function noteBtn(id, v) { return `<button type="button" class="select note-btn" id="${id}" data-v="${v ?? ''}">${noteLabel(v)}</button>`; }
+function noteBtn(id, v, empty) { return `<button type="button" class="select note-btn" id="${id}" data-v="${v ?? ''}">${v == null || v === '' ? (empty || noteLabel(v)) : noteLabel(v)}</button>`; }
 
 // 鍵盤で音を選ぶ（ほかの板の上に重ねて出す）。決めた音・null（測定不能）・undefined（やめた）を返す
 function pickNote(cur, title) {
@@ -1383,6 +1409,8 @@ function readKeyFields(root, old = {}) {
     orig, shift: +$('#k-shift', root).value || 0, top: num('#k-top'), low: num('#k-low'), start: num('#k-start'),
     tempo, bars: +$('#k-bars', root).value || 2,
     origEst: !!(old.origEst && orig === old.orig), tempoEst: !!(old.tempoEst && tempo === old.tempo),
+    rangeAuto: !!(old.rangeAuto && num('#k-top') === old.top && num('#k-low') === old.low),
+    tempoSrc: tempo === old.tempo ? old.tempoSrc || '' : '',
   };
 }
 function bindNotePreview(root) {
@@ -1425,6 +1453,7 @@ async function autoEstimate(s, force = false) {
       || list.find(r => nkey(r.trackName).includes(t));
     const dated = list.find(r => nkey(r.trackName) === t && nkey(r.artistName) === ar) || list.find(r => nkey(r.trackName).includes(t) && r.releaseDate);
     if (!d.release && dated?.releaseDate) { d.release = String(dated.releaseDate).slice(0, 4); d.releaseTried = true; }
+    if (!d.artwork && dated?.artworkUrl100) d.artwork = dated.artworkUrl100.replace(/\/\d+x\d+bb\./, '/300x300bb.');
     if (!hit?.previewUrl) { if (force) toast('試聴が見つからず、調べられませんでした'); queueSave(s); return; }
     let buf;
     try { const r = await fetch(hit.previewUrl); if (!r.ok) throw new Error('fetch'); buf = await r.arrayBuffer(); }
@@ -1490,22 +1519,8 @@ async function togglePlay(id) {
   const r = S.recs.find(x => x.id === id); if (!r) return;
   const row = $(`[data-rec="${id}"]`);
   try {
-    let url = blobCache.get(id + r.updated_at);
-    if (!url && r.pending) {
-      const p = await idb('get', id);
-      if (p) { url = URL.createObjectURL(R.base64ToBlob(p.audio, p.mime)); blobCache.set(id + r.updated_at, url); }
-    }
-    if (!url) {
-      const kept = await localAudio(r);
-      if (kept) { url = URL.createObjectURL(R.base64ToBlob(kept.audio, kept.mime)); blobCache.set(id + r.updated_at, url); }
-    }
-    if (!url) {
-      if (row) $('.pb', row).innerHTML = '…';
-      const d = await rpc('lb_get_recording', { p_token: S.token, p_id: id });
-      keepAudio(r, d.audio, d.mime);
-      url = URL.createObjectURL(R.base64ToBlob(d.audio, d.mime));
-      blobCache.set(id + r.updated_at, url);
-    }
+    if (row && !blobCache.get(id + r.updated_at)) $('.pb', row).innerHTML = '…';
+    const url = await recUrl(r);
     const audio = new Audio(url);
     player = { id, audio };
     audio.ontimeupdate = () => {
@@ -1675,6 +1690,8 @@ async function flushRecs() {
         await idb('del', p.id);
         S.recs = S.recs.filter(x => x.id !== p.id);
         S.recs.push(r);
+        const sg = S.songs.get(p.song_id);
+        if (sg && sg.data.sourceRec === p.id) { sg.data.sourceRec = r.id; queueSave(sg); }
         if (S.view === 'song:' + p.song_id) refreshRecs(p.song_id);
       } catch (e) { if (e.code === 'offline') break; }
     }
@@ -1684,23 +1701,24 @@ async function flushRecs() {
 
 // ---------- 音程チェック（マイクで声の高さを測る） ----------
 function openPitch(song) {
-  let stream = null, ctx = null, raf = 0, hist = [], hi = null, lo = null, cur = null;
+  let stream = null, ctx = null, raf = 0, hist = [], hi = null, lo = null, cur = null, first = null;
   const k = song?.data.keys || {};
   const sheet = openSheet(`<h3>音程チェック</h3>
     <p class="muted" style="font-size:.82rem">マイクに向かって歌うか、原曲を流すと、いまの音の高さが出ます。</p>
     <div class="pitch-now"><b id="pt-note">—</b><span id="pt-dore">声を出してください</span>
       <div class="cents"><span id="pt-needle"></span></div></div>
-    <div class="pitch-range"><span>いちばん高い <b id="pt-hi">—</b></span><span>いちばん低い <b id="pt-lo">—</b></span><button class="btn sub small" data-s="reset">リセット</button></div>
+    <div class="pitch-range"><span>いちばん高い <b id="pt-hi">—</b></span><span>いちばん低い <b id="pt-lo">—</b></span><span>最初の音 <b id="pt-first">—</b></span><button class="btn sub small" data-s="reset">リセット</button></div>
+    ${song ? '<p class="muted" style="font-size:.78rem;margin:0">原曲の歌い出しから流すと、「最初の音」が歌い出しの音の候補になります。</p>' : ''}
     ${song ? `<div class="acts" style="justify-content:flex-start">
       <button class="btn small" data-s="top">いちばん高い音を「最高音」に</button>
       <button class="btn small" data-s="low">いちばん低い音を「最低音」に</button>
-      <button class="btn sub small" data-s="start">いまの音を「歌い出し」に</button></div>` : ''}
+      <button class="btn small" data-s="start">最初の音を「歌い出し」に</button></div>` : ''}
     <div class="acts" style="justify-content:flex-start">
       <button class="btn sub small" data-s="mytop">「自分の最高音」に</button>
       <button class="btn sub small" data-s="mylow">「自分の最低音」に</button></div>
     <button class="btn sub" data-s="no">とじる</button>`, {
-    reset: () => { hi = lo = null; $('#pt-hi', sheet).textContent = '—'; $('#pt-lo', sheet).textContent = '—'; },
-    top: () => setVal('top', hi), low: () => setVal('low', lo), start: () => setVal('start', cur),
+    reset: () => { hi = lo = first = null; $('#pt-hi', sheet).textContent = '—'; $('#pt-lo', sheet).textContent = '—'; $('#pt-first', sheet).textContent = '—'; },
+    top: () => setVal('top', hi), low: () => setVal('low', lo), start: () => setVal('start', first ?? cur),
     mytop: () => { if (hi == null) return toast('まだ音を聞きとれていません'); S.settings.myTop = hi; saveSettings(); toast(`自分の最高音を ${N.noteName(hi)} にしました`); },
     mylow: () => { if (lo == null) return toast('まだ音を聞きとれていません'); S.settings.myLow = lo; saveSettings(); toast(`自分の最低音を ${N.noteName(lo)} にしました`); },
     no: () => closeSheet(),
@@ -1739,6 +1757,7 @@ function openPitch(song) {
       if (hist.length >= 3 && hist.slice(-3).every(x => Math.round(x) === n)) {
         if (hi == null || n > hi) { hi = n; $('#pt-hi', sheet).textContent = N.noteName(n); }
         if (lo == null || n < lo) { lo = n; $('#pt-lo', sheet).textContent = N.noteName(n); }
+        if (first == null) { first = n; $('#pt-first', sheet).textContent = N.noteName(n); }
       }
     };
     loop();
@@ -1794,7 +1813,8 @@ function renderEdit(id, q = new URLSearchParams()) {
             <option value="">選んでください</option>${arts.map(a => `<option value="${a.id}" ${a.id === d.artist_id ? 'selected' : ''}>${esc(a.data.name)}</option>`).join('')}
             <option value="__new">＋ 新しい歌手</option></select></label>
           <label class="field" id="e-newart" hidden><span>新しい歌手の名前</span><input class="input" id="e-artname" placeholder="例：あいみょん"></label>
-          <label class="field"><span>曲名</span><input class="input" id="e-title" value="${esc(d.title)}"></label>
+          <label class="field"><span>曲名${s ? '' : '（打つと Apple の曲の候補が出ます）'}</span><input class="input" id="e-title" value="${esc(d.title)}" autocomplete="off"></label>
+          ${s ? '' : '<div class="sugg" id="e-sugg"></div>'}
           <label class="field"><span>曲名のよみがな（あいうえお順に使います・なくてもOK）</span><input class="input" id="e-yomi" value="${esc(d.yomi || '')}" placeholder="ひらがなで"></label>`
         : `
           <label class="field"><span>曲名（まだ決まっていなければ空でOK）</span><input class="input" id="e-title" value="${esc(d.title)}" placeholder="題名なし"></label>
@@ -1864,6 +1884,36 @@ function renderEdit(id, q = new URLSearchParams()) {
       inp.click();
     };
     $('#save').onclick = save;
+    // 曲名を打つと候補（新しい実在の曲だけ）
+    const sg = $('#e-sugg');
+    if (sg) {
+      let tmr;
+      $('#e-title').addEventListener('input', e => {
+        clearTimeout(tmr);
+        const q = e.target.value.trim();
+        if (d._picked && d._picked !== q) { d.preview = ''; d.artwork = ''; d.release = ''; d.releaseTried = false; d._picked = ''; }
+        if (q.length < 2) { sg.innerHTML = ''; return; }
+        tmr = setTimeout(async () => {
+          const art = $('#e-artist')?.value && $('#e-artist').value !== '__new' ? S.artists.get($('#e-artist').value)?.data.name || '' : '';
+          let list = [];
+          try { list = await appleSongs((q + ' ' + art).trim(), 8); } catch (er) { return; }
+          if ($('#e-title')?.value.trim() !== q) return;
+          sg.innerHTML = list.length ? list.map((x, i) => `<button class="as-row" data-sg="${i}"><span class="as-art" style="background-image:url('${esc(x.art)}')"></span><span class="as-t"><b>${esc(x.title)}</b><i>${esc([x.artist, x.year && x.year + '年'].filter(Boolean).join('　'))}</i></span><span class="as-k">選ぶ</span></button>`).join('') : '';
+          $$('[data-sg]', sg).forEach(b => b.onclick = () => {
+            const x = list[+b.dataset.sg];
+            $('#e-title').value = x.title;
+            Object.assign(d, { release: x.year || d.release || '', releaseTried: true, preview: x.preview || '', artwork: x.art || '', _picked: x.title });
+            const a = liveArtists().find(z => nkey(z.data.name) === nkey(x.artist));
+            const sel = $('#e-artist');
+            if (sel) {
+              if (a) { sel.value = a.id; $('#e-newart').hidden = true; }
+              else { sel.value = '__new'; $('#e-newart').hidden = false; $('#e-artname').value = x.artist; }
+            }
+            sg.innerHTML = `<p class="muted" style="font-size:.82rem;margin:0">「${esc(x.title)}／${esc(x.artist)}」を選びました。「保存する」を押すと、歌詞・最高音・最低音・テンポ・原キーを自動で入れます。</p>`;
+          });
+        }, 400);
+      });
+    }
     $$('#e-tabs [data-tg]').forEach(b => b.onclick = () => {
       const id = b.dataset.tg; d.tags = d.tags || [];
       const i = d.tags.indexOf(id); if (i >= 0) d.tags.splice(i, 1); else d.tags.push(id);
@@ -1898,15 +1948,18 @@ function renderEdit(id, q = new URLSearchParams()) {
         if (!d.title) { toast('曲名を入れてください'); btn.disabled = false; return; }
         delete d.theme_id;
       } else { delete d.artist_id; delete d.yomi; }
+      delete d._picked;
       d.anno = L.realign(d.anno, d.text);
       // 歌詞を書き直したら、前の版を残す（20個まで）
       if (s && s.data.text && s.data.text !== d.text) d.versions = [{ text: s.data.text, at: s.updated_at || new Date().toISOString() }, ...(s.data.versions || [])].slice(0, 20);
       const sid = s?.id || uuid();
       const obj = s || { id: sid, created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+      clearTimeout(S.saveTimers.get(sid)); S.saveTimers.delete(sid); pendingRuns.delete(sid);
       const base = s?.updated_at || null;
+      // 待っているあいだに自動で入った歌詞・音域などは、こちらにも写す（編集で空のままのとき）
+      if (s) for (const key of ['lyricSource', 'credits', 'release', 'artwork', 'timing', 'sourceRec']) if (d[key] == null && s.data[key] != null) d[key] = s.data[key];
       obj.data = d;
       S.songs.set(sid, obj);
-      clearTimeout(S.saveTimers.get(sid)); S.saveTimers.delete(sid);
       // Google の返事は待たずに曲のページへ（保存は裏で。同じ曲のあとの保存は、この保存のあとに送られる）
       saveSongInOrder(sid, () => ({ p_token: S.token, p_id: sid, p_data: obj.data, p_base: s ? (obj.updated_at || base) : null }))
         .then(r => { if (r) Object.assign(obj, r); cacheSoon(); })
@@ -1916,7 +1969,7 @@ function renderEdit(id, q = new URLSearchParams()) {
           await refresh(true);
         });
       cacheSoon();
-      if (!s && d.kind === 'real') { autoEstimate(obj); if (!(d.text || '').trim()) fetchLyrics(obj, true); }
+      if (!s && d.kind === 'real') { autoEstimate(obj); fetchRange(obj); if (!(d.text || '').trim()) fetchLyrics(obj, true); }
       if (s && navDepth > 0 && location.hash === `#/edit/${sid}`) { navDepth--; history.back(); }
       else { history.replaceState(null, '', `#/song/${sid}`); route(); }
       toast('保存しました');
@@ -1933,6 +1986,324 @@ function openVersions(d, ta, after) {
     pick: t => { ta.value = list[+t.dataset.i].text; closeSheet(); after(); toast('前の版を入れました。よければ「保存」を押してください'); },
     no: () => closeSheet(),
   });
+}
+
+// ---------- Apple の曲の候補 ----------
+async function appleSongs(term, limit = 10) {
+  const r = await jsonp(`https://itunes.apple.com/search?term=${encodeURIComponent(term)}&country=JP&lang=ja_jp&entity=song&limit=${limit * 2}`);
+  const seen = new Set(), out = [];
+  for (const x of r.results || []) {
+    const title = baseTitle(x.trackName);
+    const k = nkey(title) + '|' + nkey(x.artistName);
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push({ title, artist: x.artistName, year: String(x.releaseDate || '').slice(0, 4), art: (x.artworkUrl100 || '').replace(/\/\d+x\d+bb\./, '/300x300bb.'), preview: x.previewUrl || '' });
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+// ホームの検索：ノートにない曲を、Apple の曲から入れる
+let appleTimer;
+function appleSuggest(q, box) {
+  clearTimeout(appleTimer);
+  if (!box || q.length < 2) return;
+  appleTimer = setTimeout(async () => {
+    let list = [];
+    try { list = await appleSongs(q, 8); } catch (e) { return; }
+    if (S.query.trim() !== q || !box.isConnected) return;
+    const has = x => liveSongs().some(z => z.data.kind === 'real' && nkey(z.data.title) === nkey(x.title) && nkey(S.artists.get(z.data.artist_id)?.data.name) === nkey(x.artist));
+    const shown = list.filter(x => !has(x));
+    if (!shown.length) return;
+    box.innerHTML = `<p class="sec-lbl" style="margin:14px 0 4px">Apple の曲から入れる</p><div class="as-list">${shown.map((x, i) => `<button class="as-row" data-ap="${i}"><span class="as-art" style="background-image:url('${esc(x.art)}')"></span><span class="as-t"><b>${esc(x.title)}</b><i>${esc([x.artist, x.year && x.year + '年'].filter(Boolean).join('　'))}</i></span><span class="as-k">＋</span></button>`).join('')}</div>`;
+    $$('[data-ap]', box).forEach(b => b.onclick = () => addAppleSong(shown[+b.dataset.ap]));
+  }, 450);
+}
+async function addAppleSong(x) {
+  try {
+    let a = liveArtists().find(z => nkey(z.data.name) === nkey(x.artist));
+    if (!a) a = await createArtist(x.artist);
+    if (!a) return;
+    const id = uuid();
+    const data = { kind: 'real', artist_id: a.id, title: x.title, yomi: '', text: '', anno: [], keys: {}, release: x.year || '', releaseTried: true, preview: x.preview || '', artwork: x.art || '' };
+    const obj = { id, data, created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+    S.songs.set(id, obj);
+    // Google の返事は待たずに曲のページへ（あとの自動の保存は、この保存のあとに送られる）
+    saveSongInOrder(id, () => ({ p_token: S.token, p_id: id, p_data: obj.data }))
+      .then(r => { if (r) Object.assign(obj, r); cacheSoon(); })
+      .catch(e => { S.songs.delete(id); fail(e); route(true); });
+    S.query = '';
+    toast('入れました。歌詞・最高音・最低音・テンポを自動で調べています');
+    go(`#/song/${id}`);
+  } catch (e) { fail(e); }
+}
+
+// ---------- 自分に合うキー ----------
+function recommendShift(k) {
+  const myTop = S.settings.myTop, myLow = S.settings.myLow;
+  if (k.top == null || myTop == null) return null;
+  for (const s of [0, -1, 1, -2, 2, -3, 3, -4, 4, -5, 5, -6, 6, -7, 7]) {
+    if (k.top + s <= myTop && (myLow == null || k.low == null || k.low + s >= myLow)) return { s, fit: true };
+  }
+  return { s: Math.max(-7, Math.min(7, myTop - k.top)), fit: false };
+}
+function recKeyHtml(k) {
+  const fmt = s => (s ? (s > 0 ? '+' : '−') + Math.abs(s) : '±0');
+  if (k.top == null) return '';
+  if (S.settings.myTop == null) return `<p class="src">設定で「自分の最高音・最低音」を入れると、おすすめのキーが出ます　<button class="linkish" data-go-settings="1">設定へ</button></p>`;
+  const r = recommendShift(k);
+  if (!r) return '';
+  const now = +k.shift || 0;
+  return `<div class="rec-key"><span>あなたにおすすめ：<b>${fmt(r.s)}</b>${k.orig ? `（${esc(N.shiftKey(k.orig, r.s))}）` : ''}<br><span class="muted" style="font-size:.76rem">${r.fit ? '自分の音域に、曲の最高音・最低音がおさまるキー' : '曲の音域が広いので、最高音を自分の最高音に合わせたキー'}</span></span>${r.s !== now ? `<button class="btn small" data-setshift="${r.s}">これにする</button>` : '<span class="muted" style="font-size:.8rem">いまのキー</span>'}</div>`;
+}
+
+// ---------- おまかせセットリスト ----------
+async function autoSetlist() {
+  const v = await menu('おまかせで作る', [
+    { label: '十八番から5曲', value: 'best' },
+    { label: '歌える曲から5曲', value: 'can' },
+    { label: '自分の音域で歌える曲（いまのキーのまま）', value: 'range' },
+    { label: 'ぜんぶの曲からランダムに5曲', value: 'any' },
+  ]);
+  if (!v) return;
+  const shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+  let pool = liveSongs(), name;
+  if (v === 'best' || v === 'can') { pool = pool.filter(z => z.data.practice === v); name = v === 'best' ? '十八番' : '歌える曲'; }
+  else if (v === 'range') {
+    const myTop = S.settings.myTop, myLow = S.settings.myLow;
+    if (myTop == null) { toast('設定で「自分の最高音」を入れてください'); return; }
+    pool = pool.filter(z => { const k = z.data.keys || {}; const sh = +k.shift || 0; return k.top != null && k.top + sh <= myTop && (myLow == null || k.low == null || k.low + sh >= myLow); });
+    name = '音域で歌える曲';
+  } else name = 'ランダム';
+  if (!pool.length) { toast('当てはまる曲がありませんでした'); return; }
+  const pick = shuffle(pool.slice()).slice(0, v === 'range' ? 10 : 5);
+  const d = new Date();
+  const x = { id: 'sl' + Date.now().toString(36), name: `おまかせ：${name}（${d.getMonth() + 1}/${d.getDate()}）`, songs: pick.map(z => z.id) };
+  setlists().push(x); saveSettings(); go(`#/setlist/${x.id}`);
+  toast(`${pick.length}曲で作りました`);
+}
+
+// ---------- 音源から合わせる（音源は、えらべば軽くしてドライブに保存） ----------
+// タップの仕方は2つ。「行が終わったら」（おすすめ）：歌い出しで1回、あとは行を歌い終えるたびに1回。
+// 「行が始まったら」：行の頭でタップ。どちらも d.timing = { mode, lines, times(始まり), ends(終わり) } に入れる。
+function timingFromTaps(mode, taps, lines) {
+  const n = lines.length;
+  if (mode !== 'end') return { times: lines.map((_, i) => taps[i] ?? null), ends: null };
+  const ends = lines.map((_, i) => taps[i + 1] ?? null);
+  const times = lines.map((_, i) => (i === 0 ? taps[0] ?? null : ends[i - 1]));
+  // 間奏をはさんだ行は、前の行の終わりから始めると早すぎるので、文字の数から始まりを決める
+  const rates = [];
+  for (let i = 0; i < n; i++) if (times[i] != null && ends[i] != null) rates.push((ends[i] - times[i]) / Math.max(1, L.charCount(lines[i].t)));
+  rates.sort((a, b) => a - b);
+  const rate = rates.length ? rates[rates.length >> 1] : 0.3;
+  for (let i = 1; i < n; i++) {
+    if (times[i] == null || ends[i] == null) continue;
+    const need = rate * Math.max(1, L.charCount(lines[i].t)) * 1.3 + 0.8;
+    if (ends[i] - times[i] > need + 3) times[i] = +(ends[i] - need).toFixed(2);
+  }
+  return { times, ends };
+}
+const SRC_NAME = '原曲の音源';
+function fromAudio(s) {
+  const d = s.data;
+  const lines = timeline(d).filter(it => it.type === 'line');
+  if (!lines.length) { toast('先に歌詞を入れてください'); return; }
+  const inp = document.createElement('input');
+  inp.type = 'file'; inp.accept = 'audio/*,video/*';
+  inp.onchange = async () => {
+    const f = inp.files?.[0]; if (!f) return;
+    let pcm = null, mono = null, url = URL.createObjectURL(f), taps = [], audio = null, raf = 0, done = false;
+    let mode = lsGet('lb_tap_mode') === 'start' ? 'start' : 'end';
+    const keepDefault = lsGet('lb_keep_src') !== '0';
+    const need = () => (mode === 'end' ? lines.length + 1 : lines.length);
+    const sheet = openSheet(`<h3>音源から合わせる</h3>
+      <p class="muted" id="fa-msg" style="font-size:.85rem">音を読みこんでいます…</p>
+      <div class="fa-box" id="fa-box" hidden>
+        <div class="fa-mode" role="group" aria-label="タップの仕方">
+          <button class="chip" data-s="mEnd" id="fa-m-end">行が終わったらタップ</button>
+          <button class="chip" data-s="mStart" id="fa-m-start">行が始まったらタップ</button>
+        </div>
+        <div class="fa-now"><span class="muted" id="fa-pos"></span><b id="fa-line"></b><span class="muted" id="fa-next"></span></div>
+        <div class="fa-time" id="fa-time">0:00</div>
+        <button class="btn fa-tap" data-s="tap" id="fa-tap" disabled>まず「▶ 流す」を押してください</button>
+        <div class="fa-acts"><button class="btn sub small" data-s="play" id="fa-play">▶ 流す</button><button class="btn sub small" data-s="undo">1つもどる</button><button class="btn sub small" data-s="redo">最初から</button></div>
+        <label class="fa-keep"><input type="checkbox" id="fa-keep" ${keepDefault ? 'checked' : ''}><span>この音源も保存する<small>軽くしてドライブに入れます。本番モードで、どの端末でも歌詞といっしょに流せます</small></span></label>
+      </div>
+      <div class="acts"><button class="btn sub" data-s="no">やめる</button><button class="btn" data-s="save" id="fa-save" disabled>保存する</button></div>`, {
+      play: () => { if (!audio) return; if (audio.paused) audio.play().catch(() => {}); else audio.pause(); },
+      tap: () => { if (!audio || audio.paused || taps.length >= need()) return; taps.push(+audio.currentTime.toFixed(2)); navigator.vibrate?.(8); show(); },
+      undo: () => { taps.pop(); if (audio) audio.currentTime = Math.max(0, (taps.length ? taps[taps.length - 1] : 0) - 1.5); show(); },
+      redo: () => { taps = []; if (audio) audio.currentTime = 0; show(); },
+      mEnd: () => setMode('end'),
+      mStart: () => setMode('start'),
+      save: () => finish(),
+      no: () => closeSheet(),
+    }, () => { cancelAnimationFrame(raf); audio?.pause(); URL.revokeObjectURL(url); });
+    const setMode = m => {
+      if (m === mode) return;
+      if (taps.length) { toast('「最初から」を押してから変えてください'); return; }
+      mode = m; lsSet('lb_tap_mode', m === 'start' ? 'start' : null); taps = []; show();
+    };
+    const show = () => {
+      $('#fa-m-end', sheet).classList.toggle('on', mode === 'end');
+      $('#fa-m-start', sheet).classList.toggle('on', mode === 'start');
+      const playing = audio && !audio.paused;
+      $('#fa-play', sheet).textContent = playing ? '❚❚ 止める' : '▶ 流す';
+      const full = taps.length >= need();
+      const tapBtn = $('#fa-tap', sheet);
+      tapBtn.disabled = !playing || full;
+      // いま歌っている行
+      const i = mode === 'end' ? Math.max(0, taps.length - 1) : Math.min(taps.length, lines.length - 1);
+      if (full) {
+        $('#fa-pos', sheet).textContent = `全部の行（${lines.length}行）を合わせました`;
+        $('#fa-line', sheet).textContent = '「保存する」を押してください';
+        $('#fa-next', sheet).textContent = '';
+        tapBtn.textContent = 'おわり';
+      } else if (mode === 'end' && !taps.length) {
+        $('#fa-pos', sheet).textContent = '最初の行';
+        $('#fa-line', sheet).textContent = lines[0].t;
+        $('#fa-next', sheet).textContent = '歌い出しで1回タップ。そのあとは、行を歌い終えるたびにタップ';
+        tapBtn.textContent = playing ? '歌い出しでタップ' : 'まず「▶ 流す」を押してください';
+      } else {
+        $('#fa-pos', sheet).textContent = `${i + 1} / ${lines.length}`;
+        $('#fa-line', sheet).textContent = lines[i].t;
+        $('#fa-next', sheet).textContent = lines[i + 1] ? '次：' + lines[i + 1].t : '（最後の行）';
+        tapBtn.textContent = !playing ? (taps.length ? '止まっています。「▶ 流す」で続き' : 'まず「▶ 流す」を押してください') : mode === 'end' ? 'この行が終わったらタップ' : 'この行が始まったらタップ';
+      }
+      $('#fa-save', sheet).disabled = !mono && !taps.length;
+    };
+    const finish = async () => {
+      if (done) return; done = true;
+      const keep = !!$('#fa-keep', sheet)?.checked && !!pcm;
+      lsSet('lb_keep_src', $('#fa-keep', sheet)?.checked ? null : '0');
+      const cur = S.songs.get(s.id) || s, cd = cur.data;
+      const k = cd.keys || (cd.keys = {});
+      const msg = [];
+      const usable = mode === 'end' ? Math.max(0, taps.length - 1) : taps.length;
+      if (usable) {
+        const { times, ends } = timingFromTaps(mode, taps, lines);
+        cd.timing = { mode, lines: lines.map(it => it.t), times, ...(ends ? { ends } : {}), at: new Date().toISOString() };
+        msg.push(`タイミング ${usable}行`);
+      }
+      const t0 = taps[0];
+      if (mono && t0 != null && (k.start == null || k.startEst)) {
+        const n = A.startNote(mono, t0, t0 + 1.6);
+        if (n != null) { k.start = n; k.startEst = true; msg.push(`歌い出し ${N.noteName(n)}（推定）`); }
+      }
+      if (mono) {
+        try {
+          const est = A.estimateFromMono(mono);
+          if (est.key && (!k.orig || k.origEst)) { k.orig = est.key; k.origEst = true; msg.push(`原キー ${est.key}`); }
+          if (est.tempo && k.tempoSrc !== 'KEYTUBE' && (!k.tempo || k.tempoEst)) { k.tempo = est.tempo; k.tempoEst = true; msg.push(`テンポ ${est.tempo}`); }
+        } catch (e) { /* 分析できなくてもタイミングは残す */ }
+      }
+      queueSave(cur);
+      const keepPcm = keep ? pcm : null;
+      pcm = null; mono = null;
+      closeSheet();
+      if (S.view === 'song:' + s.id) renderSong(s.id);
+      if (keepPcm) { toast((msg.length ? msg.join('・') + 'を入れました。' : '') + '音源を保存しています…'); saveSource(s.id, keepPcm); }
+      else toast(msg.length ? msg.join('・') + 'を入れました' : '変えたところはありません');
+    };
+    try {
+      pcm = await E.decodeMono(await f.arrayBuffer());
+      mono = E.half(pcm);
+    } catch (e) {
+      pcm = null; mono = null;
+      $('#fa-msg', sheet).textContent = 'この音源は分析・保存ができませんでした（タイミングのタップだけできます）。音声ファイルにするとうまくいくことがあります。';
+      const kp = $('#fa-keep', sheet); if (kp) { kp.checked = false; kp.disabled = true; kp.closest('label').classList.add('off'); }
+    }
+    if (!sheet.isConnected) return;
+    if (mono) $('#fa-msg', sheet).textContent = '▶ で流して、大きいボタンをタップしていきます。タップしなくても「保存する」でキーとテンポだけ入れられます。';
+    audio = new Audio(url);
+    audio.setAttribute('playsinline', '');
+    audio.onplay = audio.onpause = audio.onended = () => show();
+    $('#fa-box', sheet).hidden = false;
+    show();
+    const tick = () => { raf = requestAnimationFrame(tick); const t = $('#fa-time', sheet); if (t && audio) t.textContent = R.fmtTime(audio.currentTime); };
+    tick();
+  };
+  inp.click();
+}
+// 音源を軽くして「原曲の音源」という録音として保存する（前のがあれば入れかえ）
+async function saveSource(songId, pcm) {
+  savingUi(1);
+  try {
+    const { blob, mime, duration } = await E.encodeForSave(pcm);
+    const audio = await R.blobToBase64(blob);
+    const s = S.songs.get(songId); if (!s) return;
+    const old = S.recs.find(x => x.id === s.data.sourceRec && x.song_id === songId);
+    let r;
+    try {
+      if (old && !old.pending) {
+        r = await rpc('lb_replace_recording', { p_token: S.token, p_id: old.id, p_mime: mime, p_duration: duration, p_audio: audio });
+        Object.assign(old, r); r = old;
+      } else {
+        r = await rpc('lb_add_recording', { p_token: S.token, p_song_id: songId, p_name: SRC_NAME, p_mime: mime, p_duration: duration, p_audio: audio });
+        S.recs.push(r);
+      }
+      keepAudio(r, audio, mime);
+    } catch (e) {
+      if (e.code !== 'offline') throw e;
+      const pid = 'pending-' + uuid(), at = new Date().toISOString();
+      await idb('put', { id: pid, song_id: songId, name: SRC_NAME, mime, duration, audio, created_at: at });
+      r = { id: pid, song_id: songId, name: SRC_NAME, mime, duration, size: audio.length, created_at: at, updated_at: at, pending: true };
+      S.recs.push(r);
+      setOffline(true);
+    }
+    const cur = S.songs.get(songId);
+    if (cur && cur.data.sourceRec !== r.id) { cur.data.sourceRec = r.id; queueSave(cur); }
+    cacheSoon();
+    if (S.view === 'song:' + songId) refreshRecs(songId);
+    toast(r.pending ? '電波がないので、音源はこの端末に残しました。つながったら送ります' : '音源を保存しました。本番モードでいっしょに流せます');
+  } catch (e) { fail(e); }
+  finally { savingUi(-1); }
+}
+// 録音の音を、端末のとっておき → ドライブ の順で探して、再生できるURLにする
+async function recUrl(r) {
+  let url = blobCache.get(r.id + r.updated_at);
+  if (url) return url;
+  let got = null;
+  if (r.pending) got = await idb('get', r.id).catch(() => null);
+  if (!got) got = await localAudio(r);
+  if (!got) { got = await rpc('lb_get_recording', { p_token: S.token, p_id: r.id }); keepAudio(r, got.audio, got.mime); }
+  url = URL.createObjectURL(R.base64ToBlob(got.audio, got.mime));
+  blobCache.set(r.id + r.updated_at, url);
+  return url;
+}
+
+// ---------- 最高音・最低音・テンポを KEYTUBE から取ってくる（1曲ずつ） ----------
+const NOTE_IDX = { C: 0, 'C#': 1, D: 2, 'D#': 3, E: 4, F: 5, 'F#': 6, G: 7, 'G#': 8, A: 9, 'A#': 10, B: 11 };
+const sciToMidi = x => { const m = /^([A-G]#?)(-?\d)$/.exec(x || ''); return m ? (+m[2] + 1) * 12 + NOTE_IDX[m[1]] : null; };
+const rangeBusy = new Set();
+async function fetchRange(s, force = false) {
+  const d = s.data;
+  if (d.kind !== 'real' || rangeBusy.has(s.id) || S.token === LOCAL_TOKEN) return;
+  const k = d.keys || (d.keys = {});
+  if (!force && k.rangeTried) return;
+  if (S.serverVersion < 5) { if (force) toast('Googleに貼ったコードを新しくすると使えます'); return; }
+  rangeBusy.add(s.id);
+  k.rangeTried = true;
+  if (force) toast('KEYTUBE で調べています…');
+  try {
+    const artist = S.artists.get(d.artist_id)?.data.name || '';
+    const r = await rpc('lb_range', { p_token: S.token, p_title: d.title, p_artist: artist });
+    const kk = (S.songs.get(s.id)?.data || d).keys || k;
+    const lo = sciToMidi(r.low), hi = sciToMidi(r.high);
+    let set = false;
+    // 自分で入れた値はさわらない（「調べなおす」のときは入れかえる）
+    if (lo != null && (force || kk.low == null || kk.rangeAuto)) { kk.low = lo; set = true; }
+    if (hi != null && (force || kk.top == null || kk.rangeAuto)) { kk.top = hi; set = true; }
+    if (set) kk.rangeAuto = true;
+    if (r.bpm && (force || !kk.tempo || kk.tempoEst || kk.tempoSrc === 'KEYTUBE')) { kk.tempo = r.bpm; kk.tempoEst = false; kk.tempoSrc = 'KEYTUBE'; }
+    kk.rangeFrom = { site: 'KEYTUBE', url: r.url, supervised: !!r.supervised };
+    if (!d.release && r.release) d.release = r.release;
+    queueSave(s);
+    refreshKeys(s);
+    if (force) toast(`最高音 ${hi != null ? N.noteName(hi) : '測定不能'}・最低音 ${lo != null ? N.noteName(lo) : '測定不能'}${r.bpm ? `・テンポ ${r.bpm}` : ''}（KEYTUBE）`);
+  } catch (e) {
+    queueSave(s);
+    if (force) toast(e.message);
+  } finally { rangeBusy.delete(s.id); }
 }
 
 // ---------- 歌詞を J-Lyric.net から取ってくる（1曲ずつ） ----------
@@ -1952,7 +2323,7 @@ async function fetchLyrics(s, auto = false) {
       if (!(await confirmAsk('歌詞を入れかえますか？', 'いまの歌詞は「前の版」に残ります（編集画面から戻せます）。', '入れかえる'))) return;
       cur.versions = [{ text: cur.text, at: s.updated_at || new Date().toISOString() }, ...(cur.versions || [])].slice(0, 20);
     }
-    cur.text = r.text;
+    cur.text = L.autoParts(r.text);
     cur.anno = L.realign(cur.anno, cur.text);
     cur.lyricSource = { site: 'J-Lyric.net', url: r.url };
     if (r.lyricist || r.composer) cur.credits = { lyricist: r.lyricist || '', composer: r.composer || '' };
@@ -1977,6 +2348,7 @@ async function fetchRelease(s) {
     const hits = (res.results || []).filter(r => nkey(r.trackName) === t && (nkey(r.artistName) === ar || nkey(r.artistName).includes(ar)) && r.releaseDate);
     const first = hits.sort((x, y) => String(x.releaseDate).localeCompare(String(y.releaseDate)))[0];
     if (first) d.release = String(first.releaseDate).slice(0, 4);
+    if (first?.artworkUrl100 && !d.artwork) d.artwork = first.artworkUrl100.replace(/\/\d+x\d+bb\./, '/300x300bb.');
   } catch (e) { /* 見つからなくてもよい */ }
   queueSave(s);
   if (d.release && S.view === 'song:' + s.id) renderSong(s.id);
@@ -2009,11 +2381,11 @@ async function pickArtistSongs(a) {
       const x = list.find(z => z.title === t.dataset.t); if (!x) return;
       if (mine().has(nkey(x.title))) { toast('もう入っています'); return; }
       const id = uuid();
-      const data = { kind: 'real', artist_id: a.id, title: x.title, yomi: '', text: '', anno: [], keys: {}, release: x.year || '', releaseTried: true, preview: x.preview || '' };
+      const data = { kind: 'real', artist_id: a.id, title: x.title, yomi: '', text: '', anno: [], keys: {}, release: x.year || '', releaseTried: true, preview: x.preview || '', artwork: x.art || '' };
       const obj = { id, data, created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
       S.songs.set(id, obj);
       t.outerHTML = row(x);
-      try { const r = await saveSongInOrder(id, () => ({ p_token: S.token, p_id: id, p_data: data })); if (r) Object.assign(obj, r); autoEstimate(obj); fetchLyrics(obj, true); }
+      try { const r = await saveSongInOrder(id, () => ({ p_token: S.token, p_id: id, p_data: data })); if (r) Object.assign(obj, r); autoEstimate(obj); fetchRange(obj); fetchLyrics(obj, true); }
       catch (e) { S.songs.delete(id); fail(e); draw(sh); }
     },
     no: () => closeSheet(),
@@ -2070,6 +2442,7 @@ let perf = null; // { raf, wake, ... }
 function stopPerform() {
   if (!perf) return;
   cancelAnimationFrame(perf.raf);
+  if (perf.audio) { perf.audio.pause(); if (perf.ownAudio) try { URL.revokeObjectURL(perf.audio.src); } catch (e) { /* なし */ } }
   perf.wake?.release?.().catch(() => {});
   document.body.classList.remove('perform-on');
   perf = null;
@@ -2096,8 +2469,21 @@ function renderPerform(id, q) {
   const set = setId ? (S.settings.setlists || []).find(x => x.id === setId) : null;
   const setIdx = set ? set.songs.indexOf(id) : -1;
   const nextId = set ? set.songs.slice(setIdx + 1).find(x => alive(S.songs.get(x))) : null;
-  const items = timeline(d);
+  let items = timeline(d);
   const anno = L.ensureAnno(d);
+  // タップで合わせた時間があり、歌詞が変わっていなければ、その時間で進む
+  const lineItems = items.filter(it => it.type === 'line');
+  const tm = d.timing;
+  const timed = !!(tm && tm.times?.length && tm.lines?.length === lineItems.length && tm.lines.every((t, i) => t === lineItems[i].t) && lsGet('lb_play_mode') !== 'tempo');
+  const timingStale = !!(tm && tm.times?.length && !(tm.lines?.length === lineItems.length && tm.lines.every((t, i) => t === lineItems[i].t)));
+  if (timed) items = lineItems.map((it, i) => ({ ...it, at: tm.times[i] == null ? Infinity : tm.times[i], end: tm.ends?.[i] ?? null }));
+  // ドライブに保存した「原曲の音源」
+  const srcRec = timed ? S.recs.find(x => x.id === d.sourceRec && x.song_id === id) : null;
+  const srcOn = !!srcRec && lsGet('lb_play_src') !== '0';
+  // 文字の多い行は長く、少ない行は短く（平均を 1 として 0.6〜1.7 倍）
+  const cnts = items.filter(it => it.type === 'line').map(it => L.charCount(it.t)).filter(Boolean);
+  const avg = cnts.length ? cnts.reduce((a, b) => a + b, 0) / cnts.length : 1;
+  items.forEach(it => { if (it.type === 'line') it.w = Math.min(1.7, Math.max(0.6, (L.charCount(it.t) || avg) / avg)); });
   app.innerHTML = `<div class="screen playS">
     <div class="wrap play-top"><button class="icon-btn" id="bk" aria-label="とじる">${I.close}</button>
       <div class="play-title"><b>${esc(d.title || '題名なし')}</b><span>${set ? `${esc(set.name)}　${setIdx + 1}/${set.songs.length}` : ''}</span></div><span></span></div>
@@ -2110,13 +2496,17 @@ function renderPerform(id, q) {
       <div class="play-pad"></div>
     </div>
     <div class="play-ctl"><div class="wrap">
-      ${k.tempo ? '' : '<div class="play-warn">テンポが入っていません。下で入れてください（キーの「テンポ」でも入れられます）</div>'}
+      ${timed ? '' : k.tempo ? '' : '<div class="play-warn">テンポが入っていません。下で入れてください（キーの「テンポ」でも入れられます）</div>'}
+      ${timingStale ? '<div class="play-warn">歌詞が変わったので、タップの時間は使えません。「音源から合わせる」でもう一度合わせてください</div>' : ''}
+      ${tm && tm.times?.length && !timingStale ? `<div class="play-row small"><button class="chip ${timed ? 'on' : ''}" id="pm-time">タップの時間で進む</button><button class="chip ${timed ? '' : 'on'}" id="pm-tempo">テンポで進む</button></div>` : ''}
       <div class="play-row">
         <button class="icon-btn" id="pv" aria-label="前の行">${I.up}</button>
         <button class="play-big" id="pp" aria-label="スタート">${PLAY}</button>
         <button class="icon-btn" id="pn" aria-label="次の行">${I.down}</button>
       </div>
-      <div class="play-row small">
+      ${timed ? `<div class="play-row small"><button class="btn sub small" id="nudge-back">−0.5秒</button><span class="bpm" id="clock">0:00</span><button class="btn sub small" id="nudge-fwd">＋0.5秒</button></div>
+      <div class="play-row small">${srcRec ? `<button class="chip ${srcOn ? 'on' : ''}" id="psrc">${srcOn ? '🎵 原曲を流す：読みこみ中…' : '🎵 原曲を流さない'}</button>` : ''}<button class="chip" id="pa">${srcRec ? 'ほかの音源' : '🎵 音源を選んで流す'}</button></div>` : ''}
+      <div class="play-row small" ${timed ? 'hidden' : ''}>
         <button class="btn sub small" id="slow">遅く</button>
         <span class="bpm">♩=<input id="bpm" type="number" inputmode="numeric" min="30" max="300" value="${esc(k.tempo || '')}" placeholder="?"></span>
         <button class="btn sub small" id="fast">速く</button>
@@ -2127,7 +2517,10 @@ function renderPerform(id, q) {
   document.body.classList.add('perform-on');
   perf = { i: -1, t: 0, playing: false, last: 0, raf: 0, wake: null, items };
   const lineSec = () => (+$('#bpm').value ? (+$('#bars').value || 2) * 4 * 60 / +$('#bpm').value : 0);
-  const itemSec = it => (it.type === 'wait' ? it.bars * 4 * 60 / (+$('#bpm').value || 120) : lineSec());
+  const itemSec = it => (it.type === 'wait' ? it.bars * 4 * 60 / (+$('#bpm').value || 120) : lineSec() * (it.w || 1));
+  // タップの時間で進むとき：時計（音源を流していれば、その再生位置）
+  perf.clock = 0; perf.audio = null;
+  const lineAt = c => { let j = -1; items.forEach((it, i) => { if (it.at <= c) j = i; }); return j; };
   const focus = (i, smooth = true) => {
     perf.i = Math.max(0, Math.min(items.length, i)); perf.t = 0;
     $$('.pl.cur', app).forEach(x => x.classList.remove('cur'));
@@ -2146,6 +2539,19 @@ function renderPerform(id, q) {
     perf.raf = requestAnimationFrame(tick);
     const dt = perf.last ? (now - perf.last) / 1000 : 0;
     perf.last = now;
+    if (timed) {
+      if (perf.playing) perf.clock = perf.audio ? perf.audio.currentTime : perf.clock + dt;
+      const ck = $('#clock'); if (ck) ck.textContent = R.fmtTime(perf.clock);
+      const j = lineAt(perf.clock);
+      if (j >= 0 && j !== perf.i) focus(j);
+      const it2 = items[perf.i], nx = items[perf.i + 1];
+      const el2 = $(`.pl[data-i="${perf.i}"]`, app);
+      const b2 = el2 && $('.pl-bar', el2);
+      const stop2 = it2?.end ?? (nx && isFinite(nx.at) ? nx.at : it2?.at + 4);
+      if (b2 && it2) b2.style.width = Math.min(100, Math.max(0, (perf.clock - it2.at) / Math.max(0.5, stop2 - it2.at) * 100)) + '%';
+      if (perf.playing && perf.audio?.ended) setPlaying(false);
+      return;
+    }
     if (!perf.playing || perf.i >= items.length) return;
     const it = items[perf.i];
     const len = itemSec(it);
@@ -2165,18 +2571,64 @@ function renderPerform(id, q) {
     if (t !== (k.tempo || null) || b !== (k.bars || 2)) { d.keys = { ...k, tempo: t, bars: b, tempoEst: t === k.tempo ? k.tempoEst : false }; Object.assign(k, d.keys); queueSave(s); }
   };
   $('#pp').onclick = () => {
+    if (timed) {
+      const on = !perf.playing;
+      if (perf.audio) { if (on) perf.audio.play().catch(() => {}); else perf.audio.pause(); }
+      perf.last = 0; setPlaying(on); return;
+    }
     if (!+$('#bpm').value) { toast('テンポ（♩=いくつ）を入れてください'); $('#bpm').focus(); return; }
     if (perf.i < 0 || perf.i >= items.length) focus(0);
     perf.last = 0; setPlaying(!perf.playing);
   };
-  $('#pv').onclick = () => focus(Math.max(0, perf.i - 1));
-  $('#pn').onclick = () => focus(perf.i + 1);
+  const seek = i => { const it = items[Math.max(0, Math.min(items.length - 1, i))]; if (!it || !isFinite(it.at)) return; perf.clock = it.at; if (perf.audio) perf.audio.currentTime = it.at; focus(items.indexOf(it)); };
+  $('#pv').onclick = () => (timed ? seek(perf.i - 1) : focus(Math.max(0, perf.i - 1)));
+  $('#pn').onclick = () => (timed ? seek(perf.i + 1) : focus(perf.i + 1));
+  if (timed) {
+    $('#nudge-back').onclick = () => { perf.clock = Math.max(0, perf.clock - 0.5); if (perf.audio) perf.audio.currentTime = perf.clock; };
+    $('#nudge-fwd').onclick = () => { perf.clock += 0.5; if (perf.audio) perf.audio.currentTime = perf.clock; };
+    const useAudio = (a, own) => {
+      if (perf.audio) { perf.audio.pause(); if (perf.ownAudio) URL.revokeObjectURL(perf.audio.src); }
+      perf.audio = a; perf.ownAudio = own;
+      if (a) { a.setAttribute('playsinline', ''); a.preload = 'auto'; try { a.currentTime = perf.clock; } catch (e) { /* 読みこみ前 */ } }
+      if (perf.playing) { perf.last = 0; if (a) a.play().catch(() => {}); }
+    };
+    const loadSrc = async () => {
+      const b = $('#psrc'); const me = perf;
+      try {
+        const u = await recUrl(srcRec);
+        if (perf !== me || lsGet('lb_play_src') === '0') return;
+        useAudio(new Audio(u), false);
+        if (b) b.textContent = '🎵 原曲を流す';
+      } catch (e) { if (b) { b.textContent = '🎵 原曲を読みこめませんでした'; b.classList.remove('on'); } }
+    };
+    if (srcOn) loadSrc();
+    $('#psrc')?.addEventListener('click', () => {
+      const on = lsGet('lb_play_src') === '0';
+      lsSet('lb_play_src', on ? null : '0');
+      $('#psrc').classList.toggle('on', on);
+      if (on) { $('#psrc').textContent = '🎵 原曲を流す：読みこみ中…'; loadSrc(); }
+      else { $('#psrc').textContent = '🎵 原曲を流さない'; useAudio(null, false); }
+    });
+    $('#pa').onclick = () => {
+      const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'audio/*,video/*';
+      inp.onchange = () => {
+        const f = inp.files?.[0]; if (!f) return;
+        useAudio(new Audio(URL.createObjectURL(f)), true);
+        const b = $('#psrc'); if (b) { b.classList.remove('on'); b.textContent = '🎵 原曲を流さない'; }
+        toast('▶ を押すと、選んだ音源と歌詞がいっしょに進みます（この音源は保存しません）');
+      };
+      inp.click();
+    };
+  }
+  $('#pm-time')?.addEventListener('click', () => { lsSet('lb_play_mode', null); renderPerform(id, q); });
+  $('#pm-tempo')?.addEventListener('click', () => { lsSet('lb_play_mode', 'tempo'); renderPerform(id, q); });
   $('#slow').onclick = () => { $('#bpm').value = Math.max(30, (+$('#bpm').value || 120) - 4); save(); };
   $('#fast').onclick = () => { $('#bpm').value = Math.min(300, (+$('#bpm').value || 120) + 4); save(); };
   $('#bpm').onchange = save; $('#bars').onchange = save;
   $('#pbody').onclick = e => {
     if (e.target.closest('[data-go]')) return;
     const el = e.target.closest('.pl'); if (!el) return;
+    if (timed) { seek(+el.dataset.i); return; }
     focus(+el.dataset.i); // タップした行（間奏ならその次）から
     if (items[perf.i]?.type === 'wait' && el.classList.contains('cur') && perf.playing) focus(perf.i + 1);
   };
@@ -2198,8 +2650,10 @@ function renderSetlists() {
       <p class="muted" style="font-size:.85rem;margin:0">「今日のカラオケ」のように、歌う曲を順番に並べておけます。本番モードで続けて通せます。</p>
       ${list.length ? `<div class="list">${list.map(x => `<button class="item" data-go="#/setlist/${x.id}"><span class="nodot"></span><b>${esc(x.name)}</b><span class="k">${x.songs.filter(id => alive(S.songs.get(id))).length}曲</span><i>${esc(x.songs.map(id => S.songs.get(id)).filter(alive).map(z => z.data.title || '題名なし').join('・'))}</i></button>`).join('')}</div>` : '<div class="empty">まだセットリストはありません。</div>'}
       <button class="btn" id="sl-new">＋ 新しいセットリスト</button>
+      <button class="btn sub" id="sl-auto">おまかせで作る</button>
     </div></div>`;
   $('#bk').onclick = () => back('#/');
+  $('#sl-auto').onclick = () => autoSetlist();
   $('#sl-new').onclick = async () => {
     const name = await askText({ title: 'セットリストの名前', placeholder: '例：今日のカラオケ', ok: '作る' });
     if (!name?.trim()) return;
@@ -2388,6 +2842,8 @@ function renderHelp(tab) {
       ['🎹', 'キーと音の高さ', ['歌詞ページのキーの表をタップすると直せる', '音のボタンを押すと鍵盤が出るので、タップして選ぶ', '▶ を押すと、自分のキー（上げ下げしたぶん）で音が鳴る'], 'わからない音は「測定不能」のままで大丈夫です。'],
       ['🎤', '音程チェック', ['歌詞ページの下の「音程」を押す', 'マイクに向かって歌うか、原曲を流す', '出た音を「最高音」「最低音」などにボタンで入れられる'], '設定の「自分の最高音・最低音」もここから入れられます。'],
       ['🎬', '本番モード', ['歌詞ページの「本番」を押す', 'テンポ（♩=いくつ）を確かめて ▶', '歌詞が自動で進む。速く・遅く、1行の小節数で合わせる。行をタップするとそこへ飛ぶ'], '本番中は画面が暗くなりにくいようにしています。'],
+      ['🎵', '音源から合わせる', ['曲の「…」→「音源から合わせる」で、画面録画の動画や音声ファイルを選ぶ', '▶ で流して、歌い出しで1回タップ。あとは行を歌い終えるたびにタップ（「行が始まったらタップ」にも切りかえられる）', '「保存する」で、本番モードが音源の時間どおりに進む。原キー・テンポ・歌い出しも自動で入る'], '「この音源も保存する」にチェックを入れておくと、音を軽くしてドライブに入れます（録音の欄に「原曲の音源」として出ます）。本番モードで、どの端末でも歌詞といっしょに流せます。'],
+      ['✨', '曲をかんたんに入れる', ['新しい曲の画面で曲名を打つと、候補が出るので選ぶ', 'ホームの検索で見つからない曲は「Apple の曲から入れる」から', '入れると、歌詞（J-Lyric.net）・最高音・最低音・テンポ（KEYTUBE）が自動で入る'], '歌詞はくり返す所を見て、パートも自動で分けます。'],
       ['🔴', '録音', ['歌詞ページの下の「録音」→ 赤いボタンで開始・停止', '録音は何個でも残せる。長押しで上書き・名前・削除', '再生中は下に小さなバーが出るので、歌詞を見ながら聞ける'], '電波がないときは端末に残して、つながったら送ります。'],
       ['📋', 'セットリスト・練習の記録', ['ホームの「セットリスト」で、歌う曲を順番に並べる', '「本番モードで通す」で続けて歌える', '歌詞ページで「練習中・歌える・十八番」の印や、点数を記録できる'], 'ホームの印のボタンで、印のついた曲だけを出せます。'],
       ['📷', '写真の歌詞を文字にする', ['編集画面の「写真を選ぶ」で歌詞の写真を出す', '写真の文字を長押し →「すべてを選択」→「コピー」', '歌詞の欄を長押しして「ペースト」'], 'iPhone・iPad の「テキスト認識表示」を使います。'],
@@ -2426,8 +2882,8 @@ function renderSettings() {
       <div class="card">
         <div class="set-row"><span>夜用の暗い画面</span><button class="switch ${st.dark ? 'on' : ''}" id="sw-dark" aria-pressed="${st.dark}" aria-label="夜用の暗い画面"></button></div>
         <div class="set-row"><span>歌詞の文字の大きさ</span><div class="chips">${[['s', '小'], ['m', '中'], ['l', '大']].map(([k, n]) => `<button class="chip ${st.lyrSize === k ? 'on' : ''}" data-size="${k}">${n}</button>`).join('')}</div></div>
-        <div class="set-row"><span>自分の最高音</span><span style="min-width:150px">${noteBtn('my-top', st.myTop)}</span></div>
-        <div class="set-row"><span>自分の最低音</span><span style="min-width:150px">${noteBtn('my-low', st.myLow)}</span></div>
+        <div class="set-row"><span>自分の最高音</span><span style="min-width:150px">${noteBtn('my-top', st.myTop, 'まだ入れていません')}</span></div>
+        <div class="set-row"><span>自分の最低音</span><span style="min-width:150px">${noteBtn('my-low', st.myLow, 'まだ入れていません')}</span></div>
         <div class="set-row"><span class="muted" style="font-size:.8rem">歌詞ページの「音程」で、歌って測ることもできます。</span></div>
       </div>
       <p class="sec-lbl">自作のテーマ</p>
@@ -2477,11 +2933,15 @@ async function loadMembers() {
   catch (e) { box.innerHTML = `<div class="set-row"><span class="muted">${esc(e.message)}</span></div>`; return; }
   if (!$('#members')) return;
   box.innerHTML = `<div class="set-row"><span>招待の合言葉<br><b class="invite">${esc(d.invite)}</b><br><span class="muted" style="font-size:.78rem">使ってほしい人にだけ教えてください。登録のときに入れてもらいます。</span></span>
-      <span style="display:flex;flex-direction:column;gap:6px"><button class="btn small" id="inv-copy">コピー</button><button class="btn sub small" id="inv-new">作りなおす</button></span></div>
+      <span style="display:flex;flex-direction:column;gap:6px"><button class="btn small" id="inv-link">招待リンクをコピー</button><button class="btn sub small" id="inv-copy">合言葉だけコピー</button><button class="btn sub small" id="inv-new">作りなおす</button></span></div>
     ${d.members.length ? d.members.map(m => `<div class="set-row"><span>${esc(m.username)}<br><span class="muted" style="font-size:.78rem">曲 ${m.songs}・録音 ${m.recordings}${m.changed_at ? `・最後に使った日 ${fmtDate(m.changed_at, false)}` : ''}</span></span><button class="btn danger small" data-out="${esc(m.id)}" data-nm="${esc(m.username)}">外す</button></div>`).join('')
       : '<div class="set-row"><span class="muted">まだメンバーはいません。招待の合言葉を教えると、その人が「はじめて」から登録できます。</span></div>'}
     <div class="set-row"><span class="muted" style="font-size:.78rem">メンバーの歌詞や録音も、あなたのドライブの「LYRIC BOOK / メンバー」に保存されます。</span></div>`;
   $('#inv-copy').onclick = () => navigator.clipboard?.writeText(d.invite).then(() => toast('コピーしました'), () => toast('長押しでコピーしてください'));
+  $('#inv-link').onclick = () => {
+    const url = location.origin + location.pathname + '?invite=' + encodeURIComponent(d.invite);
+    navigator.clipboard?.writeText(url).then(() => toast('招待リンクをコピーしました。LINEなどで送ってください'), () => askText({ title: '招待リンク（長押しでコピー）', value: url, ok: 'とじる' }));
+  };
   $('#inv-new').onclick = async () => {
     if (!(await confirmAsk('招待の合言葉を作りなおしますか？', '前の合言葉では登録できなくなります。登録ずみのメンバーはそのまま使えます。', '作りなおす'))) return;
     try { await rpc('lb_new_invite', { p_token: S.token }); loadMembers(); } catch (e) { fail(e); }

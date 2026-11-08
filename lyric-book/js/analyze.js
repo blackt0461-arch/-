@@ -24,7 +24,7 @@ function fft(re, im) {
 }
 
 // 音を 11025Hz のモノラルにする
-async function toMono(arrayBuffer) {
+export async function toMono(arrayBuffer) {
   const Ctx = window.OfflineAudioContext || window.webkitOfflineAudioContext;
   const tmp = new (window.AudioContext || window.webkitAudioContext)();
   const buf = await new Promise((res, rej) => tmp.decodeAudioData(arrayBuffer.slice(0), res, rej));
@@ -51,7 +51,10 @@ function corr(a, b) {
 
 // 試聴の音から { key: 'E♭', tempo: 128, keyScore, tempoScore } を出す
 export async function estimateKeyTempo(arrayBuffer) {
-  const { data, rate } = await toMono(arrayBuffer);
+  return estimateFromMono(await toMono(arrayBuffer));
+}
+// すでに 11025Hz のモノラルにした音から（曲まるごとでも使える）
+export function estimateFromMono({ data, rate }) {
   const N = 4096, hop = 1024;
   const chroma = new Array(12).fill(0);
   const win = new Float32Array(N).map((_, i) => 0.5 - 0.5 * Math.cos(2 * Math.PI * i / N));
@@ -140,3 +143,24 @@ export function detectPitch(buf, rate) {
   return rate / (lag + (isFinite(shift) ? shift : 0));
 }
 export function freqToMidi(f) { return 69 + 12 * Math.log2(f / 440); }
+
+// 歌い出しの音を推定する：t0 秒から t1 秒のあいだで、声の高さ（110〜1000Hz）が
+// 同じ音で4回つづいた最初の音。見つからなければ、その区間でいちばん多い音。楽器にまぎれるので「推定」。
+export function startNote({ data, rate }, t0, t1) {
+  const N = 1024, hop = 256;
+  const from = Math.max(0, Math.floor(t0 * rate)), to = Math.min(data.length - N, Math.floor(t1 * rate));
+  const notes = [];
+  for (let s = from; s < to; s += hop) {
+    const f = detectPitch(data.subarray(s, s + N), rate);
+    notes.push(f && f >= 110 && f <= 1000 ? Math.round(freqToMidi(f)) : null);
+  }
+  for (let i = 0; i + 3 < notes.length; i++) {
+    const n = notes[i];
+    if (n != null && notes[i + 1] === n && notes[i + 2] === n && notes[i + 3] === n) return n;
+  }
+  const count = new Map();
+  for (const n of notes) if (n != null) count.set(n, (count.get(n) || 0) + 1);
+  let best = null, c = 0;
+  for (const [n, k] of count) if (k > c) { best = n; c = k; }
+  return best;
+}

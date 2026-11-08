@@ -13,7 +13,7 @@
 const ROOT_NAME = 'LYRIC BOOK';
 const DB_NAME = 'データ（さわらないでください）.json';
 const KEEP_DAYS = 30;
-const SERVER_VERSION = 4;
+const SERVER_VERSION = 5;
 
 // ---------- はじめの準備 ----------
 function setup() {
@@ -137,7 +137,7 @@ function userByName_(db, name) {
 function userRoot_(u) { return u.owner ? root_() : folder_(folder_(root_(), 'メンバー'), safe_(u.username)); }
 function recFolder_(u) { return folder_(userRoot_(u), '録音'); }
 function removedFolder_(u) { return folder_(recFolder_(u), '消した録音'); }
-function extOf_(mime) { return /mp4|aac|m4a/.test(mime) ? 'm4a' : /ogg/.test(mime) ? 'ogg' : 'webm'; }
+function extOf_(mime) { return /mpeg|mp3/.test(mime) ? 'mp3' : /wav/.test(mime) ? 'wav' : /mp4|aac|m4a/.test(mime) ? 'm4a' : /ogg/.test(mime) ? 'ogg' : 'webm'; }
 function writeAudio_(u, r, b64) {
   const song = u.songs[r.song_id];
   const name = safe_(song && song.data.title || '題名なし') + '　' + safe_(r.name) + '　' + r.id.slice(0, 8) + '.' + extOf_(r.mime);
@@ -365,6 +365,44 @@ const API = {
     if (!text) throw err_('no_lyrics');
     const pick = k => { const r = html.match(new RegExp(k + '：([^<　]+)')); return r ? decode(r[1]).trim() : ''; };
     return { text: text, url: pageUrl, name: hit.name, lyricist: pick('作詞'), composer: pick('作曲') };
+  },
+  // KEYTUBE から1曲分の最高音・最低音・テンポなどを取る（運営の方の許可ずみ。曲を入れたとき・ボタンを押したときだけ）
+  lb_range(db, a) {
+    who_(db, a.p_token);
+    const title = String(a.p_title || '').trim(), artist = String(a.p_artist || '').trim();
+    if (!title) throw err_('no_range');
+    const opt = { muteHttpExceptions: true, followRedirects: true, headers: { 'User-Agent': 'Mozilla/5.0 (LYRIC BOOK; personal use)' } };
+    const norm = s => String(s || '').normalize('NFKC').toLowerCase().replace(/[\s　・.,'’"“”!！?？~〜-]/g, '');
+    const decode = s => String(s || '').replace(/&#(\d+);/g, (_, n) => String.fromCharCode(+n)).replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&');
+    const res = UrlFetchApp.fetch('https://keytube.net/search/?word=' + encodeURIComponent((title + ' ' + artist).trim()), opt);
+    if (res.getResponseCode() >= 300) throw err_('no_range');
+    const html = res.getContentText('UTF-8');
+    const rows = [];
+    const re = /<h2 class="song-row__title[^"]*"><a href="(\/song\/detail\/\d+)">([^<]*)<\/a><\/h2>\s*<p class="song-row__artist[^"]*"><a [^>]*>([^<]*)<\/a><\/p>\s*<p class="song-row__compact-meta">([\s\S]*?)<\/p>/g;
+    let m;
+    while ((m = re.exec(html))) {
+      const lo = m[4].match(/scale-value--low"[^>]*data-range-note="([A-G]#?\d)"/);
+      const hi = m[4].match(/scale-value--high"[^>]*data-range-note="([A-G]#?\d)"/);
+      rows.push({ href: m[1], name: decode(m[2]), artist: decode(m[3]), low: lo ? lo[1] : '', high: hi ? hi[1] : '' });
+    }
+    const hit = rows.find(x => norm(x.name) === norm(title) && norm(x.artist) === norm(artist))
+      || rows.find(x => norm(x.name) === norm(title) && (!artist || norm(x.artist).indexOf(norm(artist)) >= 0 || norm(artist).indexOf(norm(x.artist)) >= 0));
+    if (!hit) throw err_('no_range');
+    const out = { url: 'https://keytube.net' + hit.href, name: hit.name, artist: hit.artist, low: hit.low, high: hit.high, avg: '', mode: '', bpm: null, release: '', supervised: false };
+    const page = UrlFetchApp.fetch(out.url, opt);
+    if (page.getResponseCode() < 300) {
+      const t = decode(page.getContentText('UTF-8').replace(/<script[\s\S]*?<\/script>/g, '').replace(/<style[\s\S]*?<\/style>/g, '').replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ');
+      const note = k => { const r = t.match(new RegExp(k + ' \\S+ \\(([A-G]#?\\d)\\)')); return r ? r[1] : ''; };
+      out.low = out.low || note('最低音');
+      out.high = out.high || note('最高音');
+      out.avg = note('平均値');
+      out.mode = note('最頻音');
+      const b = t.match(/BPM (\d{2,3})/); if (b) out.bpm = +b[1];
+      const r = t.match(/発売日\(配信日\) (\d{4})\/\d{2}\/\d{2}/); if (r) out.release = r[1];
+      out.supervised = t.indexOf('監修されていません') < 0;
+    }
+    if (!out.low && !out.high) throw err_('no_range');
+    return out;
   },
   lb_get_recording(db, a) {
     const u = who_(db, a.p_token);

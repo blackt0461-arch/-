@@ -234,3 +234,46 @@ export function kanaRow(s) {
   }
   return 'その他';
 }
+
+// 空行で分かれているだけの歌詞に、パート名を自動で入れる。
+// 同じ書き出しのかたまりがいちばん多く出てくるもの＝サビ。サビの前のかたまりは Aメロ・Bメロ、
+// 2回目のサビのあとにだけ出てくるかたまりは Cメロ、最後のサビのあとの短いかたまりはアウトロ。
+// サビが見つからないときや、もうパート名があるときは、そのまま返す。
+export function autoParts(text) {
+  const src = String(text || '').replace(/\r/g, '');
+  if (src.split('\n').some(l => PART_RE.test(l))) return src;
+  const blocks = src.split(/\n[ \t　]*\n+/).map(b => b.replace(/^\n+|\n+$/g, '')).filter(b => b.trim());
+  if (blocks.length < 3) return src;
+  const key = b => b.split('\n')[0].normalize('NFKC').replace(/[\s　、。，．！？!?・「」『』（）()…ー〜~,.\-]/g, '');
+  const groups = blocks.map(key);
+  const count = new Map();
+  groups.forEach(g => count.set(g, (count.get(g) || 0) + 1));
+  let chorus = null, best = 1;
+  for (const [g, c] of count) {
+    const len = blocks[groups.indexOf(g)].length;
+    if (c > best || (c === best && c > 1 && chorus && len > blocks[groups.indexOf(chorus)].length)) { chorus = g; best = c; }
+  }
+  if (!chorus) return src;
+  const labels = new Array(blocks.length);
+  const known = new Map();
+  let seen = 0, pending = [];
+  const lastChorus = groups.lastIndexOf(chorus);
+  const flush = (end) => {
+    const fresh = pending.filter(i => !known.has(groups[i]));
+    pending.forEach(i => {
+      if (known.has(groups[i])) { labels[i] = known.get(groups[i]); return; }
+      let lb;
+      if (end) lb = blocks[i].split('\n').length <= 2 ? 'アウトロ' : 'Cメロ';
+      else if (seen >= 2) lb = 'Cメロ';
+      else lb = fresh.length > 1 && i === fresh[fresh.length - 1] ? 'Bメロ' : 'Aメロ';
+      labels[i] = lb; known.set(groups[i], lb);
+    });
+    pending = [];
+  };
+  blocks.forEach((b, i) => {
+    if (groups[i] === chorus) { flush(false); labels[i] = 'サビ'; seen++; }
+    else pending.push(i);
+  });
+  flush(lastChorus < blocks.length - 1);
+  return blocks.map((b, i) => `[${labels[i]}]\n${b}`).join('\n\n');
+}

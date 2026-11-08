@@ -56,7 +56,7 @@ await p.click('#save'); await p.waitForSelector('#lyr');
 // 線をつける
 // 2.3.3 から、文字は横になぞって選ぶ（iPhone の選ぶ印は使わない）
 const sel = async (a, z) => {
-  const bb = async i => (await p.$(`[data-l="0"][data-i="${i}"]`)).boundingBox();
+  const bb = async i => { const el = await p.$(`[data-l="0"][data-i="${i}"]`); await el.evaluate(e => e.scrollIntoView({ block: 'center' })); await p.waitForTimeout(150); return el.boundingBox(); };
   const A = await bb(a), Z = await bb(z);
   await p.mouse.move(A.x + A.width / 2, A.y + A.height / 2); await p.mouse.down();
   for (let k = 1; k <= 6; k++) await p.mouse.move(A.x + A.width / 2 + (Z.x - A.x) * k / 6, A.y + A.height / 2);

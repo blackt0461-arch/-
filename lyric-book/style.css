@@ -449,3 +449,38 @@ body:has(.offline) .saving { top: calc(env(safe-area-inset-top, 0px) + 40px); }
 /* 歌詞の出どころ */
 .src { margin: -6px 0 0; font-size: .74rem; color: var(--sub); -webkit-text-stroke: .1px currentColor; }
 .src a { color: var(--acc); }
+
+/* KEYTUBE の印 */
+.est.kt { background: #6e3b1c; font-size: .5rem; letter-spacing: .02em; }
+.keys > div .est.kt { margin-top: 1px; }
+
+/* ===== 2.5 で足したもの ===== */
+.sugg { display: flex; flex-direction: column; margin-top: -10px; }
+.sugg:empty { display: none; }
+.lyricS .head.has-art .wrap { position: relative; }
+.song-art { position: absolute; right: max(18px, env(safe-area-inset-right, 0px)); top: calc(env(safe-area-inset-top, 0px) + 66px); width: 84px; height: 84px; border-radius: 12px; object-fit: cover; box-shadow: 0 10px 22px -12px var(--shadow); }
+.lyricS .head.has-art h1.big, .lyricS .head.has-art .eyebrow, .lyricS .head.has-art .artist-link { padding-right: 100px; }
+.rec-key { display: flex; justify-content: space-between; align-items: center; gap: 10px; background: var(--card); border: 1px dashed var(--acc); border-radius: 12px; padding: 10px 12px; font-size: .9rem; }
+.rec-key b { color: var(--title); font-size: 1.1rem; }
+.linkish { border: 0; background: none; color: var(--acc); text-decoration: underline; padding: 0; font-size: inherit; }
+.src-btn { align-self: flex-start; }
+#keysBox { display: flex; flex-direction: column; gap: 10px; }
+.fa-box { display: flex; flex-direction: column; gap: 10px; }
+.fa-now { display: flex; flex-direction: column; gap: 4px; background: var(--bg); border-radius: 14px; padding: 14px; text-align: center; }
+.fa-now b { font-size: 1.3rem; color: var(--title); -webkit-text-stroke: .6px currentColor; }
+.fa-time { text-align: center; font-size: 1.4rem; color: var(--sub); }
+.fa-tap { padding: 26px 14px; font-size: 1.15rem; }
+
+.src-btn { white-space: normal; text-align: left; }
+.fa-acts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.fa-acts .btn { white-space: normal; padding: 8px 6px; }
+
+/* ---- 2.6 音源の保存・タップの仕方 ---- */
+.fa-mode { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.fa-mode .chip { white-space: normal; text-align: center; justify-content: center; padding: 8px 6px; line-height: 1.35; }
+.fa-tap:disabled { opacity: .55; }
+.fa-keep { display: flex; gap: 10px; align-items: flex-start; background: var(--bg); border-radius: 14px; padding: 12px 14px; cursor: pointer; }
+.fa-keep input { width: 20px; height: 20px; margin: 2px 0 0; accent-color: var(--acc); flex: none; }
+.fa-keep span { display: flex; flex-direction: column; gap: 2px; font-weight: 600; color: var(--title); }
+.fa-keep small { font-weight: 400; color: var(--sub); font-size: .78rem; line-height: 1.5; }
+.fa-keep.off { opacity: .5; }
