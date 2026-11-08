@@ -547,7 +547,7 @@ function pendulumClock(s, g) {
   bx(Wd + 0.08, 0.1, D + 0.06, wd, 0, 0, 0, 0.01);
   bx(Wd + 0.05, 0.025, D + 0.04, dark, 0, 0.1, 0, 0.004);
   bx(Wd + 0.02, 0.03, D + 0.02, wd, 0, 0.125, 0, 0.004);
-  for (const x of [-1, 1]) for (const z of [-1, 1]) sp(0.022, wd, x * (Wd / 2 + 0.02), 0.0, z * (D / 2 + 0.01), 1, 0.6, 1, 12, 8);
+  for (const x of [-1, 1]) for (const z of [-1, 1]) sp(0.022, wd, x * (Wd / 2 + 0.02), 0.0133, z * (D / 2 + 0.01), 1, 0.6, 1, 12, 8);
   // 胴（長いガラス扉の箱）：y 0.155〜1.36
   const y0 = 0.155, y1 = 1.36, hh = y1 - y0;
   bx(Wd, hh, 0.018, wd, 0, y0, -zf + 0.009);           // 背板
@@ -631,7 +631,7 @@ function pendulumClock(s, g) {
 // プラズマボールのランプ：黒い台の上のガラス球。まん中の電極から、紫〜青の光の筋がゆらゆら伸びる
 const PLASMA_VS = `uniform float uTime; uniform float uSeed; varying float vY;
 void main() { vec3 p = position; float y = p.y; vY = y;
-  float k = y * (1.15 - y * 0.35);
+  float k = 2.6 * y * (1.0 - y); // 根もと（電極）と先（ガラスの内側）は動かさず、まん中だけゆらす
   p.x += (sin(y * 11.0 + uTime * 3.7 + uSeed) * 0.010 + sin(y * 27.0 - uTime * 6.3 + uSeed * 2.1) * 0.0035) * k;
   p.z += (cos(y * 9.0 - uTime * 3.1 + uSeed * 1.7) * 0.010 + cos(y * 23.0 + uTime * 5.9 + uSeed) * 0.0035) * k;
   gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0); }`;
@@ -665,7 +665,7 @@ function plasmaLamp(s, g) {
       vertexShader: PLASMA_VS, fragmentShader: PLASMA_FS, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
       uniforms: { uTime: { value: 0 }, uSeed: { value: i * 2.37 }, uCore: { value: new THREE.Color('#5a7dff') }, uTip: { value: new THREE.Color(i % 3 ? '#d070ff' : '#ff7ad9') }, uFlick: { value: 1 } },
     });
-    const m = new THREE.Mesh(fgeo, mat); m.position.copy(C); m.scale.set(1, Rg - 0.004, 1); m.castShadow = false; g.add(m);
+    const m = new THREE.Mesh(fgeo, mat); m.position.copy(C); m.scale.set(1, Rg - 0.006, 1); m.castShadow = false; g.add(m);
     // ガラスにふれる所の、小さな光の点
     const tm = new THREE.MeshBasicMaterial({ color: '#f0a8ff', transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, depthWrite: false });
     const tip = new THREE.Mesh(tipGeo, tm); tip.scale.setScalar(0.0028); tip.castShadow = false; g.add(tip);
@@ -683,7 +683,7 @@ function plasmaLamp(s, g) {
       f.mat.uniforms.uTime.value = t;
       const fl = 0.75 + 0.25 * Math.sin(t * 17 + f.a * 5) * Math.sin(t * 7.3 + f.a);
       f.mat.uniforms.uFlick.value = fl;
-      f.tip.position.copy(C).addScaledVector(dir, Rg - 0.004);
+      f.tip.position.copy(C).addScaledVector(dir, Rg - 0.006);
       f.tm.opacity = 0.45 + 0.35 * fl;
     }
     core.opacity = 0.25 + 0.08 * Math.sin(t * 9.1);

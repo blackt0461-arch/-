@@ -1,4 +1,4 @@
-// 関数電卓（1.14.0）の確かめ：物理（4択）で電卓を開く→問題の数字をタップ→計算→履歴→答えるととじる。使い方：node tools/check/calc.js
+// 関数電卓（1.14.0）の確かめ：物理の4択で電卓を開く→問題の数字をタップ→計算→履歴→答えるととじる。使い方：node tools/check/calc.js
 const http = require('http'), fs = require('fs'), path = require('path');
 const { chromium } = require('playwright');
 const mock = require('./mock.js');
@@ -20,13 +20,15 @@ const serve = () => new Promise(res => { const srv = http.createServer((req, rsp
   await page.waitForSelector('.mode-sheet [data-m=study]', { timeout: 60000 }); await page.click('.mode-sheet [data-m=study]');
   await page.waitForTimeout(1500);
   await page.evaluate(() => { document.querySelector('.nx-welcome')?.remove(); window.__app.showHome(); }); await page.waitForTimeout(500);
-  console.log('1. 物理（4択）の問題に「電卓」がある');
+  console.log('1. 物理の4択の問題に「電卓」がある');
   await page.evaluate(() => document.querySelector('.solve-ring')?.click());
-  await page.waitForFunction(() => { const b = document.querySelector('.subj[data-s=physics4]'); return b && !b.disabled; }, null, { timeout: 30000 });
-  await page.click('.subj[data-s=physics4]'); await page.waitForTimeout(400);
-  await page.evaluate(() => (document.querySelector('.sc-list [data-all]') || document.querySelector('.sc-list [data-gall]'))?.click()); await page.waitForSelector('.fcard');
+  await page.waitForFunction(() => { const b = document.querySelector('.subj[data-s=physics]'); return b && !b.disabled; }, null, { timeout: 30000 });
+  // 1.17.0：物理はいろいろな出し方がまざるので、4択の問題を1つ決めて出す
+  await page.evaluate(async () => { const a = await (await fetch('/data/bank/physics.json')).json(); const p = a.find(x => x.choices && !x.type); const S = window.__app.S, st = S.subject('physics'); st.session = { set: [{ id: p.id, review: false }], idx: 0, results: [], gained: 0, xp: 0, rankUp: false, startedAt: Date.now(), bonus: false }; S.save(); });
+  await page.click('.subj[data-s=physics]'); await page.waitForTimeout(400);
+  await page.evaluate(() => document.querySelector('.sc-resume')?.click()); await page.waitForSelector('.fcard');
   // 数字の多い問題にさしかえる（9.8 をふくむ問題）
-  await page.evaluate(async () => { const r = await fetch('/data/bank/physics4.json'); const a = await r.json(); const p = a.find(x => /9\.8/.test(x.text) && /5\.0|2\.0/.test(x.text)); const pr = document.querySelector('.problem'); pr.textContent = p.text; });
+  await page.evaluate(async () => { const r = await fetch('/data/bank/physics.json'); const a = await r.json(); const p = a.find(x => x.choices && /9\.8/.test(x.text) && /5\.0|2\.0/.test(x.text)); const pr = document.querySelector('.problem'); pr.textContent = p.text; });
   check(await page.locator('.calc-btn').count() === 1, '問題の下に「電卓」ボタンがある');
   console.log('2. 開くと下半分に電卓、上に問題と選択肢が残る');
   await page.click('.calc-btn'); await page.waitForSelector('.calc .ck'); await page.waitForTimeout(300);
