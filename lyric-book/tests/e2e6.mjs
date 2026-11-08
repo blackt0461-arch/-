@@ -54,11 +54,14 @@ await p.fill('#e-text', '[サビ]\n線を引いてみる歌詞');
 await shot('2-edit');
 await p.click('#save'); await p.waitForSelector('#lyr');
 // 線をつける
-const sel = async (a, z) => p.evaluate(([a, z]) => {
-  const sp = [...document.querySelectorAll('[data-l="0"][data-i]')];
-  const r = document.createRange(); r.setStart(sp[a].firstChild, 0); r.setEnd(sp[z].firstChild, 1);
-  getSelection().removeAllRanges(); getSelection().addRange(r);
-}, [a, z]);
+// 2.3.3 から、文字は横になぞって選ぶ（iPhone の選ぶ印は使わない）
+const sel = async (a, z) => {
+  const bb = async i => (await p.$(`[data-l="0"][data-i="${i}"]`)).boundingBox();
+  const A = await bb(a), Z = await bb(z);
+  await p.mouse.move(A.x + A.width / 2, A.y + A.height / 2); await p.mouse.down();
+  for (let k = 1; k <= 6; k++) await p.mouse.move(A.x + A.width / 2 + (Z.x - A.x) * k / 6, A.y + A.height / 2);
+  await p.mouse.up();
+};
 await sel(0, 3); await p.waitForSelector('#annobar'); await p.click('[data-a="line"][data-k="line"]');
 await sel(2, 6); await p.waitForSelector('#annobar'); await p.click('[data-a="line"][data-k="wave"]');
 await sel(5, 8); await p.waitForSelector('#annobar'); await p.click('[data-a="color"][data-k="strong"]');

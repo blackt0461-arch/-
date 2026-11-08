@@ -1,11 +1,11 @@
 // LYRIC BOOK 本体：画面の切りかえと操作
-import { rpc, LOCAL_TOKEN } from './cloud.js?v=2.3.1';
+import { rpc, LOCAL_TOKEN } from './cloud.js?v=2.3.3';
 import * as N from './notes.js';
 import * as L from './lyrics.js';
 import * as R from './recorder.js';
 import * as A from './analyze.js';
 
-export const APP_VERSION = '2.3.1';
+export const APP_VERSION = '2.3.3';
 const NEED_SERVER = 3; // この版の受け口（server/Code.gs）の番号
 
 // ---------- 小さな道具 ----------
@@ -314,11 +314,13 @@ async function syncInBackground() {
   if (!S.token || S.token === LOCAL_TOKEN) return;
   try {
     await flush();
+    const gen = saveGen;
     const d = await rpc('lb_load', { p_token: S.token });
     setOffline(false);
     S.lastRefresh = Date.now();
-    // 直している途中・送っていない変更があるときは、入れかえない（あとでもう一度読む）
-    if (S.saveTimers.size || loadQueue().length) return;
+    // 直している途中・送っていない変更・送っている途中の保存があるとき、読んでいる間に保存したときは、
+    // 入れかえない（古い中身で上書きしてしまうため。あとでもう一度読む）
+    if (S.saveTimers.size || loadQueue().length || savesInFlight || gen !== saveGen) return;
     const before = loadCache();
     const changed = !before || dataKey(before) !== dataKey(d);
     S.backup = d.backup || S.backup;
@@ -1037,7 +1039,7 @@ function renderSong(id) {
     <div class="wrap content">
       <div id="keysBox">${keysBlock({ ...d, _id: id })}</div>
       ${pracBlock(d)}
-      ${!hasAnno && !S.settings.hintDone && d.text ? `<div class="hint" id="hint">歌詞の文字を指でなぞって選ぶと、下に記号・色・メモのボタンが出ます。</div>` : ''}
+      ${!hasAnno && !S.settings.hintDone && d.text ? `<div class="hint" id="hint">歌詞の文字をタップ（続けて選ぶときは横になぞる）すると、下に記号・色・メモのボタンが出ます。</div>` : ''}
       <div class="lyr" id="lyr">${lyricsHtml(s)}</div>
       ${d.kind === 'real' && !(d.text || '').trim() ? `<button class="btn sub" id="getLyr">J-Lyric.net から歌詞を取ってくる</button>` : ''}
       ${d.lyricSource ? `<p class="src">歌詞：<a href="${esc(d.lyricSource.url)}" target="_blank" rel="noopener">${esc(d.lyricSource.site)}</a>${d.credits?.lyricist ? `　作詞 ${esc(d.credits.lyricist)}` : ''}${d.credits?.composer ? `　作曲 ${esc(d.credits.composer)}` : ''}</p>` : ''}
@@ -1150,17 +1152,37 @@ async function deleteSong(s) {
   } catch (e) { fail(e); }
 }
 
+// 同じ曲の保存は1つずつ順番に送る。重なって送ると、前の保存で変わった更新日時を知らないまま送るので、
+// 自分の保存なのに「別の端末で直された」とまちがえてしまう。更新日時（p_base）と中身は、送る直前に読む。
+const songChains = new Map();
+let savesInFlight = 0, saveGen = 0;
+function saveSongInOrder(id, makeBody) {
+  const prev = songChains.get(id) || Promise.resolve();
+  const p = prev.catch(() => {}).then(async () => {
+    savesInFlight++; saveGen++;
+    try { return await send('lb_save_song', makeBody()); }
+    finally { savesInFlight--; saveGen++; }
+  });
+  songChains.set(id, p);
+  p.catch(() => {}).finally(() => { if (songChains.get(id) === p) songChains.delete(id); });
+  return p;
+}
+
 // 歌詞の保存（書きこみはまとめて少しあとに）
 function queueSave(s, now = false) {
   clearTimeout(S.saveTimers.get(s.id));
   const run = async () => {
     S.saveTimers.delete(s.id);
+    let cur = s;
     try {
-      const r = await send('lb_save_song', { p_token: S.token, p_id: s.id, p_data: s.data, p_base: s.updated_at || null });
-      if (r) Object.assign(s, r);
+      const r = await saveSongInOrder(s.id, () => {
+        cur = S.songs.get(s.id) || s; // 読みこみなおしで入れかわっていても、いまの曲を送る
+        return { p_token: S.token, p_id: s.id, p_data: cur.data, p_base: cur.updated_at || null };
+      });
+      if (r) { Object.assign(cur, r); if (cur !== s) Object.assign(s, r); }
       cacheSoon();
     } catch (e) {
-      if (e.code === 'conflict') { await keepBoth(s.data).catch(fail); await refresh(true); }
+      if (e.code === 'conflict') { await keepBoth(cur.data).catch(fail); await refresh(true); }
       else fail(e);
     }
   };
@@ -1169,30 +1191,60 @@ function queueSave(s, now = false) {
 }
 
 // ---------- なぞって書きこむ ----------
-let selRaf = 0;
-document.addEventListener('selectionchange', () => {
-  if (!S.view.startsWith('song:')) return;
-  cancelAnimationFrame(selRaf);
-  selRaf = requestAnimationFrame(readSelection);
-});
-function readSelection() {
-  const sel = getSelection();
-  if (!sel || sel.isCollapsed || !sel.rangeCount) return;
-  const lyr = $('#lyr'); if (!lyr) return;
-  const range = sel.getRangeAt(0);
-  if (!lyr.contains(range.commonAncestorContainer) && !range.intersectsNode(lyr)) return;
-  let from = null, to = null;
-  for (const sp of $$('[data-i]', lyr)) {
-    if (!range.intersectsNode(sp)) continue;
-    // 端の文字が「ふれているだけ」のときは入れない
-    const p = { l: +sp.dataset.l, i: +sp.dataset.i };
-    if (!from) from = p;
-    to = p;
-  }
-  if (!from) return;
-  S.sel = { from, to };
-  showAnno();
+// iPhone の青い「選ぶ印」とコピーのメニューは出さず、アプリの中で文字を選ぶ。
+// タップ＝1文字。横になぞる＝続けて選ぶ（なぞり始めたら下の行へも広げられる）。縦に動かしたときはふつうにスクロール。
+let pick = null;
+const posOf = sp => ({ l: +sp.dataset.l, i: +sp.dataset.i });
+const cmpPos = (a, b) => a.l - b.l || a.i - b.i;
+function markPick() {
+  $$('#lyr .pick').forEach(x => x.classList.remove('pick'));
+  if (!S.sel) return;
+  const { from, to } = S.sel;
+  for (const sp of $$('#lyr [data-i]')) { const p = posOf(sp); if (cmpPos(p, from) >= 0 && cmpPos(p, to) <= 0) sp.classList.add('pick'); }
 }
+function setPick(a, b) {
+  const [from, to] = cmpPos(a, b) <= 0 ? [a, b] : [b, a];
+  S.sel = { from, to };
+  markPick();
+}
+document.addEventListener('pointerdown', e => {
+  pick = null;
+  if (!S.view.startsWith('song:') || (e.pointerType === 'mouse' && e.button !== 0)) return;
+  const sp = e.target.closest?.('#lyr [data-i]'); if (!sp) return;
+  pick = { id: e.pointerId, x: e.clientX, y: e.clientY, start: posOf(sp), on: false };
+});
+document.addEventListener('pointermove', e => {
+  if (!pick || e.pointerId !== pick.id) return;
+  const dx = e.clientX - pick.x, dy = e.clientY - pick.y;
+  if (!pick.on) {
+    if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+    if (Math.abs(dy) > Math.abs(dx)) { pick = null; return; } // 縦はスクロール
+    pick.on = true;
+  }
+  const sp = document.elementFromPoint(e.clientX, e.clientY)?.closest?.('#lyr [data-i]');
+  if (sp) setPick(pick.start, posOf(sp));
+});
+// なぞっている間は画面を動かさない
+document.addEventListener('touchmove', e => { if (pick?.on) e.preventDefault(); }, { passive: false });
+// なぞったときは指をはなしたときにボタンを出す。タップのときは click で出す
+// （指をはなした時点で出すと、あとから来る click が、出てきたボタンを押してしまう）
+let dragEnd = 0;
+document.addEventListener('pointerup', e => {
+  if (!pick || e.pointerId !== pick.id) return;
+  const p = pick; pick = null;
+  if (p.on) { dragEnd = Date.now(); showAnno(); }
+});
+document.addEventListener('click', e => {
+  if (!S.view.startsWith('song:') || Date.now() - dragEnd < 500) return;
+  const sp = e.target.closest?.('#lyr [data-i]'); if (!sp) return;
+  setPick(posOf(sp), posOf(sp));
+  showAnno();
+});
+document.addEventListener('pointercancel', e => {
+  if (!pick || e.pointerId !== pick.id) return;
+  const on = pick.on; pick = null;
+  if (on) showAnno();
+});
 function showAnno() {
   const s = S.songs.get(S.view.slice(5)); if (!s) return;
   let bar = $('#annobar');
@@ -1223,7 +1275,7 @@ function showAnno() {
       <button class="tool wide" data-a="memo">メモ</button><button class="tool wide" data-a="clear">消す</button></div>
   </div>`;
 }
-function hideAnno() { $('#annobar')?.remove(); S.sel = null; document.body.classList.remove('anno-open'); }
+function hideAnno() { $('#annobar')?.remove(); S.sel = null; markPick(); document.body.classList.remove('anno-open'); }
 function onAnno(e, s) {
   const t = e.target.closest('[data-a]'); if (!t) return;
   const a = t.dataset.a;
@@ -1845,7 +1897,8 @@ function renderEdit(id, q = new URLSearchParams()) {
       obj.data = d;
       S.songs.set(sid, obj);
       let r;
-      try { r = await send('lb_save_song', { p_token: S.token, p_id: sid, p_data: d, p_base: base }); }
+      clearTimeout(S.saveTimers.get(sid)); S.saveTimers.delete(sid);
+      try { r = await saveSongInOrder(sid, () => ({ p_token: S.token, p_id: sid, p_data: d, p_base: s ? (obj.updated_at || base) : null })); }
       catch (e) {
         if (e.code !== 'conflict') throw e;
         await keepBoth(d);
@@ -1952,7 +2005,7 @@ async function pickArtistSongs(a) {
       const obj = { id, data, created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
       S.songs.set(id, obj);
       t.outerHTML = row(x);
-      try { const r = await send('lb_save_song', { p_token: S.token, p_id: id, p_data: data }); if (r) Object.assign(obj, r); autoEstimate(obj); fetchLyrics(obj, true); }
+      try { const r = await saveSongInOrder(id, () => ({ p_token: S.token, p_id: id, p_data: data })); if (r) Object.assign(obj, r); autoEstimate(obj); fetchLyrics(obj, true); }
       catch (e) { S.songs.delete(id); fail(e); draw(sh); }
     },
     no: () => closeSheet(),
@@ -2286,7 +2339,7 @@ function renderHelp(tab) {
   const st = S.settings;
   let body = '';
   if (tab === 'marks') {
-    body = `<p class="help-p">歌詞の文字をなぞって選ぶと、下にボタンが出ます。記号は選んだ最初の文字の上に、色は選んだ文字全部につきます。同じボタンをもう一度押すと消えます。</p>
+    body = `<p class="help-p">歌詞の文字をタップ（続けて選ぶときは横になぞる）すると、下にボタンが出ます。記号は選んだ最初の文字の上に、色は選んだ文字全部につきます。同じボタンをもう一度押すと消えます。</p>
       <div class="card">${st.marks.map(m => `<div class="g"><span class="m">${esc(m.label)}</span><b>${esc(m.name)}</b><i>${esc(m.desc || '')}</i></div>`).join('')}</div>
       <p class="sec-lbl" style="margin:6px 0 -4px">色</p>
       <div class="card">${st.colors.map(c => `<div class="g"><span class="sw" style="--c:${esc(c.color)}"></span><b>${esc(c.name)}</b><i>${esc(c.desc || '選んだ文字がこの色になって、下に線が引かれます')}</i></div>`).join('')}</div>
@@ -2320,7 +2373,7 @@ function renderHelp(tab) {
     const H = [
       ['🎵', '曲を入れる', ['ホームの「実在する曲」で歌手を選ぶ（いなければ「＋ 歌手を追加」）', '右下の「＋」→ 曲名と歌詞を入れて「保存」', '自作の曲は「自作」→ 右下の「＋」'], '実在する曲は、原キーとテンポを試聴から自動で推定します（「推定」と出ます）。'],
       ['✂️', 'パートに分ける', ['編集画面で、区切りたい場所にカーソルを置く', '「Aメロ」「サビ」などのボタンを押す', '「[間奏 8]」のように数字を書くと、本番モードでその小節ぶん待つ'], 'パートの意味は「パート」のタブで見られます。'],
-      ['🖍️', '歌い方を書きこむ', ['歌詞の文字を指でなぞって選ぶ', '下に出たボタンで、記号（ブレスなど）や色（強く・やさしく）をつける', '同じボタンをもう一度押すと消える。「メモ」で行ごとのメモも書ける'], '記号の意味は「記号と色」のタブで見られます。'],
+      ['🖍️', '歌い方を書きこむ', ['歌詞の文字をタップする（続けて選ぶときは横になぞる。長押しはいらない）', '下に出たボタンで、記号（ブレスなど）や色（強く・やさしく）をつける', '同じボタンをもう一度押すと消える。「メモ」で行ごとのメモも書ける'], '記号の意味は「記号と色」のタブで見られます。'],
       ['🎹', 'キーと音の高さ', ['歌詞ページのキーの表をタップすると直せる', '音のボタンを押すと鍵盤が出るので、タップして選ぶ', '▶ を押すと、自分のキー（上げ下げしたぶん）で音が鳴る'], 'わからない音は「測定不能」のままで大丈夫です。'],
       ['🎤', '音程チェック', ['歌詞ページの下の「音程」を押す', 'マイクに向かって歌うか、原曲を流す', '出た音を「最高音」「最低音」などにボタンで入れられる'], '設定の「自分の最高音・最低音」もここから入れられます。'],
       ['🎬', '本番モード', ['歌詞ページの「本番」を押す', 'テンポ（♩=いくつ）を確かめて ▶', '歌詞が自動で進む。速く・遅く、1行の小節数で合わせる。行をタップするとそこへ飛ぶ'], '本番中は画面が暗くなりにくいようにしています。'],

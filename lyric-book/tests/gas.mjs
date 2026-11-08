@@ -4,7 +4,7 @@ import fs from 'fs';
 import crypto from 'crypto';
 import { execFileSync } from 'child_process';
 
-export function makeGas(codePath) {
+export function makeGas(codePath, opts = {}) {
   let nextId = 1;
   const items = new Map(); // id -> {type, name, parent, content(Buffer), mime, created, trashed}
   const mk = (type, name, parent, content = Buffer.alloc(0), mime = '') => {
@@ -58,6 +58,7 @@ export function makeGas(codePath) {
     ContentService: { MimeType: { JSON: 'json' }, createTextOutput: s => ({ text: s, setMimeType() { return this; } }) },
     ScriptApp: { getProjectTriggers: () => [], deleteTrigger() {}, newTrigger: () => ({ timeBased: () => ({ everyMinutes: () => ({ create() {} }) }) }) },
     UrlFetchApp: { fetch: (url, opt = {}) => {
+      if (opts.fetch) return opts.fetch(url, opt);
       const out = execFileSync('curl', ['-sL', '-A', (opt.headers || {})['User-Agent'] || 'Mozilla/5.0', '-w', '\n%{http_code}', url], { maxBuffer: 1 << 24 }).toString('utf8');
       const i = out.lastIndexOf('\n'); const body = out.slice(0, i), code = +out.slice(i + 1);
       return { getResponseCode: () => code, getContentText: () => body, getBlob: () => Blob(Buffer.from(body), 'text/html') };
