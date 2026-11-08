@@ -120,6 +120,11 @@ input{font:inherit;font-size:16px}
 .gcolors{display:flex;gap:6px;flex-wrap:wrap}
 .gcolors button{width:34px;height:34px;border-radius:10px;background:var(--cc);box-shadow:inset 0 2px 0 rgb(255 255 255 / .35),inset 0 -3px 0 rgb(0 0 0 / .25)}
 .gcolors button.on{outline:3px solid #fff;outline-offset:2px}
+.colrow{display:grid;gap:8px}
+.colrow>span{font-size:.75rem;font-weight:800;color:var(--dim)}
+.colpick{position:relative;width:34px;height:34px;border-radius:10px;background:conic-gradient(#ff5d7a,#ffb627,#84cc16,#2fd69a,#38bdf8,#6366f1,#c084fc,#ff5d7a);display:grid;place-items:center;font-weight:800;font-size:1rem;color:#fff;text-shadow:0 1px 2px rgb(0 0 0 / .5);overflow:hidden}
+.colpick.on{outline:3px solid #fff;outline-offset:2px}
+.colpick input{position:absolute;inset:0;width:100%;height:100%;opacity:0;border:0;padding:0;cursor:pointer}
 
 /* ② 置く */
 .zoom{display:flex;background:rgb(0 0 0 / .3);border-radius:12px;padding:3px;gap:2px}
@@ -138,7 +143,7 @@ input{font:inherit;font-size:16px}
 .tray{border-radius:16px;background:rgb(0 0 0 / .28);padding:6px;display:flex;flex-direction:column;gap:6px;overflow-y:auto;scrollbar-width:none;min-height:0}
 .tray::-webkit-scrollbar{display:none}
 .tray.drop{box-shadow:inset 0 0 0 2px var(--gold1)}
-.chip{min-height:46px;border-radius:11px;padding:6px 7px;font-weight:800;font-size:.78rem;word-break:break-all;display:flex;flex-direction:column;justify-content:center;touch-action:none;cursor:grab;line-height:1.25;flex:none}
+.chip{min-height:46px;border-radius:11px;padding:6px 7px;font-weight:800;font-size:.78rem;word-break:break-all;display:flex;flex-direction:column;justify-content:center;touch-action:pan-y;cursor:grab;line-height:1.25;flex:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;transition:transform .15s,filter .15s}
 .chip small{font-family:var(--mono);font-size:9px;font-weight:500;opacity:.85}
 .chip.free{background:transparent;border:2px dashed rgb(255 255 255 / .3);box-shadow:none;color:var(--dim);text-shadow:none}
 .chip.more{background:rgb(255 255 255 / .1);box-shadow:none;text-shadow:none;align-items:center;font-size:.74rem;color:var(--dim);touch-action:auto;cursor:pointer;min-height:44px}
@@ -150,7 +155,9 @@ input{font:inherit;font-size:16px}
 .ln.half{border-top:1px dashed rgb(255 255 255 / .05)}
 .lab{position:absolute;left:2px;width:32px;text-align:right;font-family:var(--mono);font-size:10px;color:rgb(255 255 255 / .55);transform:translateY(-50%);pointer-events:none}
 .nowl{position:absolute;left:36px;right:0;height:2px;background:var(--now);pointer-events:none;z-index:1}
-.blk{position:absolute;left:44px;right:6px;border-radius:10px;touch-action:none;cursor:grab;transition:top .14s ease,height .14s ease}
+.blk{position:absolute;left:44px;right:6px;border-radius:10px;touch-action:pan-y;cursor:grab;transition:top .14s ease,height .14s ease,transform .15s,filter .15s;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+.blk.hold,.chip.hold{transform:scale(1.05);filter:brightness(1.15);z-index:4}
+.hd.hold::after{background:var(--gold1);transform:scale(1.25)}
 .blk .in{position:absolute;inset:0;border-radius:inherit;overflow:hidden;display:flex;flex-direction:column;padding:5px 9px;line-height:1.25;font-weight:800;font-size:.86rem}
 .blk .in small{font-family:var(--mono);font-size:10px;font-weight:500;opacity:.85}
 .blk.mid .in{flex-direction:row;align-items:center;gap:6px;padding:0 9px;font-size:.78rem;white-space:nowrap}
@@ -163,7 +170,7 @@ input{font:inherit;font-size:16px}
 .blk.pushed .in{outline:2px solid rgb(255 255 255 / .5);outline-offset:-2px}
 .blk.pop{animation:pop .34s cubic-bezier(.3,1.6,.5,1)}
 @keyframes pop{0%{transform:scale(.86)}60%{transform:scale(1.06)}100%{transform:scale(1)}}
-.hd{position:absolute;left:50%;transform:translateX(-50%);bottom:-11px;width:64px;height:22px;touch-action:none;cursor:ns-resize;z-index:3;display:grid;place-items:center}
+.hd{position:absolute;left:50%;transform:translateX(-50%);bottom:-11px;width:64px;height:22px;touch-action:pan-y;cursor:ns-resize;z-index:3;display:grid;place-items:center}
 .hd::after{content:"";width:34px;height:6px;border-radius:3px;background:#fff;box-shadow:0 1px 3px rgb(0 0 0 / .4)}
 .bubble{position:fixed;z-index:60;background:#fff;color:#1d1a4a;font-family:var(--mono);font-weight:800;font-size:12px;border-radius:9px;padding:3px 9px;pointer-events:none;white-space:nowrap;box-shadow:0 4px 12px rgb(0 0 0 / .3)}
 .float{position:fixed;z-index:50;pointer-events:none;border-radius:10px;font-weight:800;font-size:.86rem;padding:5px 9px;transform:rotate(-2deg) scale(1.04);box-shadow:inset 0 3px 0 rgb(255 255 255 / .35),inset 0 -5px 0 rgb(0 0 0 / .22),0 18px 30px rgb(0 0 0 / .45)!important;display:flex;flex-direction:column;line-height:1.25;overflow:hidden}
@@ -258,6 +265,13 @@ input{font:inherit;font-size:16px}
 
   // ===== 保存 =====
   const GPAL=['#38bdf8','#f472b6','#34d399','#fbbf24','#a78bfa','#fb923c','#f87171','#2dd4bf'];
+  const BPAL=['#ff5d7a','#ff8a3d','#ffb627','#84cc16','#2fd69a','#22c3b5','#38bdf8','#6366f1','#a26bff','#e879f9','#ff7eb6','#94a3b8'];
+  // ブロックの色を変える：その種類（例「宿題」）の色を、選ぶ画面・手持ち・どの日のブロックもまとめて変える
+  function setKindColor(pid,col){
+    const p=S.presets.find(x=>x.id===pid); if(p) p.c=col;
+    Object.values(S.days).forEach(d=>{ d.blocks.forEach(b=>{ if(b.pid===pid&&!b.free) b.c=col; }); d.tray.forEach(t=>{ if(t.pid===pid) t.c=col; }); });
+    save();
+  }
   function defaults(){
     return {name:'',view:'tile',zoom:2,tut:{pick:false,board:false},sent:{},days:{},
       genres:[{id:'school',n:'学校・勉強',c:'#2fd69a'},{id:'life',n:'生活',c:'#ffb627'},{id:'free',n:'自由',c:'#c084fc'},{id:'other',n:'そのほか',c:'#94a3b8'}],
@@ -411,7 +425,8 @@ input{font:inherit;font-size:16px}
   }
 
   // ===== ② 置く =====
-  const FROM=0, TO=1440, ZOOMS=[6,9,13,18,26];
+  const FROM=0, TO=1440, ZOOMS=[6,9,13,18,26]; // ZOOMS：15分あたりの高さ(px)
+  const STEP=5, MAG=10; // 5分ごとに動く（2026-11-08 本人の希望）。前後のブロックと10分以内ならくっつく
   const FREE={pid:'free',n:'自由時間',c:'#a78bfa',free:true};
   function insertAt(list,item,s,snap){
     list=list.filter(b=>b.id!==item.id).map(b=>({...b}));
@@ -419,11 +434,11 @@ input{font:inherit;font-size:16px}
       const hit=list.find(b=>b.s<s&&s<b.s+b.d);
       if(hit) s=(s-hit.s<hit.d/2)?hit.s:hit.s+hit.d;
       const prevEnd=list.filter(b=>b.s+b.d<=s).reduce((a,b)=>Math.max(a,b.s+b.d),-1);
-      if(prevEnd>=0&&s-prevEnd>0&&s-prevEnd<=30) s=prevEnd;
+      if(prevEnd>=0&&s-prevEnd>0&&s-prevEnd<=MAG) s=prevEnd;
       const nextStart=list.filter(b=>b.s>=s).reduce((a,b)=>Math.min(a,b.s),1e9);
-      if(nextStart<1e9&&nextStart-(s+item.d)>0&&nextStart-(s+item.d)<=30&&!(prevEnd>=0&&s===prevEnd)) s=nextStart-item.d;
+      if(nextStart<1e9&&nextStart-(s+item.d)>0&&nextStart-(s+item.d)<=MAG&&!(prevEnd>=0&&s===prevEnd)) s=nextStart-item.d;
     }
-    s=Math.max(FROM,Math.min(TO-15,s));
+    s=Math.max(FROM,Math.min(TO-STEP,s));
     const it={...item,s};
     return settle(list.concat(it).sort((a,b)=>a.s-b.s||(a.id===it.id?-1:b.id===it.id?1:0)));
   }
@@ -433,8 +448,8 @@ input{font:inherit;font-size:16px}
   const adjOf=(list,b)=>{const n=list.find(x=>x.id!==b.id&&x.s===b.s+b.d);return n?n.id:null;};
   function resizeEdge(list,id,newEnd,adjId){
     const arr=list.map(c=>({...c})), b=arr.find(x=>x.id===id);
-    if(adjId){ const n=arr.find(x=>x.id===adjId), e2=n.s+n.d; newEnd=Math.max(b.s+15,Math.min(e2-15,newEnd)); n.s=newEnd; n.d=e2-newEnd; }
-    else { const lim=arr.filter(x=>x.id!==id&&x.s>=b.s+b.d).reduce((a,x)=>Math.min(a,x.s),TO); newEnd=Math.max(b.s+15,Math.min(lim,newEnd)); }
+    if(adjId){ const n=arr.find(x=>x.id===adjId), e2=n.s+n.d; newEnd=Math.max(b.s+STEP,Math.min(e2-STEP,newEnd)); n.s=newEnd; n.d=e2-newEnd; }
+    else { const lim=arr.filter(x=>x.id!==id&&x.s>=b.s+b.d).reduce((a,x)=>Math.min(a,x.s),TO); newEnd=Math.max(b.s+STEP,Math.min(lim,newEnd)); }
     b.d=newEnd-b.s;
     return {arr:arr.sort((a,c)=>a.s-c.s),ok:true,pushed:new Set(adjId?[adjId]:[])};
   }
@@ -482,7 +497,7 @@ input{font:inherit;font-size:16px}
     if(prevScroll!=null) bs.scrollTop=prevScroll; else { const first=D.blocks.length?Math.min(...D.blocks.map(b=>b.s)):(k===keyOf(today())?Math.max(0,nowMin()-60):7*60); bs.scrollTop=px(Math.max(0,first-60))-PAD; }
     const commit=()=>{ D.blocks.sort((a,b)=>a.s-b.s); save(); };
     const yIn=e=>e.clientY-track.getBoundingClientRect().top;
-    const toMin=y=>FROM+Math.round((y-PAD)/U)*15;
+    const toMin=y=>FROM+Math.round((y-PAD)/U*15/STEP)*STEP;
     const inBoard=e=>{const r=bs.getBoundingClientRect();return e.clientX>r.left-12&&e.clientX<r.right+12&&e.clientY>r.top-12&&e.clientY<r.bottom+12;};
     const inTray=e=>{const r=trayEl.getBoundingClientRect();return e.clientX>r.left&&e.clientX<r.right&&e.clientY>r.top&&e.clientY<r.bottom;};
     function bubble(t,e){let b=document.querySelector('.bubble');if(!b){b=document.createElement('div');b.className='bubble';document.body.appendChild(b);}b.textContent=t;b.style.left=Math.max(8,Math.min(e.clientX+14,innerWidth-b.offsetWidth-8))+'px';b.style.top=(e.clientY-42)+'px';}
@@ -491,12 +506,15 @@ input{font:inherit;font-size:16px}
     function makeFloat(item){ const f=document.createElement('div'); f.className='float '+(item.free?'':'glossy'); if(item.free) f.style.background='rgb(167 139 250 / .5)'; f.style.setProperty('--cc',item.c);
       f.innerHTML=esc(item.n)+'<small>'+len(item.d)+'</small>'; const r=bs.getBoundingClientRect(); f.style.width=(r.width-50)+'px'; f.style.height=Math.max(item.d/15*U-2,24)+'px'; document.body.appendChild(f); return f; }
     function newItem(t){ if(t==='free') return {id:'f'+uid(),...FREE,d:60}; const x=D.tray[+t]; return {id:x.pid+'_'+uid(),pid:x.pid,n:x.n,c:x.c,d:x.d,trayIndex:+t}; }
+    const HOLD=300; // タッチは0.3秒長押しで持ち上がる
+    function clearPress(){ if(press){ clearTimeout(press.timer); if(press.el) press.el.classList.remove('hold'); } press=null; }
     function startDrag(e){
-      const p=press; press=null;
+      const p=press; clearTimeout(p.timer); press=null;
       if(p.kind==='resize'){ const b=D.blocks.find(x=>x.id===p.id); drag={kind:'resize',b,od:b.d,adj:adjOf(D.blocks,b)}; }
       else { const item=p.kind==='block'?D.blocks.find(x=>x.id===p.id):newItem(p.t);
         const off=p.kind==='block'?(p.y0-px(item.s)):Math.min(item.d/15*U/2,22);
         drag={kind:'move',from:p.kind==='block'?'board':'tray',item,off:Math.max(4,off),f:makeFloat(item)}; }
+      drag.long=!!p.long; drag.x0=p.x; drag.y0=p.y;
       lastKey=null; raf=requestAnimationFrame(autoscroll); onMove(e);
     }
     function autoscroll(){ if(!drag) return; if(lastEv){ const r=bs.getBoundingClientRect(); let mv=0;
@@ -505,7 +523,7 @@ input{font:inherit;font-size:16px}
       raf=requestAnimationFrame(autoscroll); }
     function onMove(e,auto){
       if(!auto) lastEv=e;
-      if(press){ if(Math.hypot(e.clientX-press.x,e.clientY-press.y)>6) startDrag(e); return; }
+      if(press){ if(Math.hypot(e.clientX-press.x,e.clientY-press.y)>8){ if(press.pt==='mouse') startDrag(e); else clearPress(); } return; }
       if(!drag) return;
       if(drag.kind==='resize'){
         const b=drag.b, r=resizeEdge(D.blocks,b.id,toMin(yIn(e)),drag.adj), nb=r.arr.find(x=>x.id===b.id);
@@ -526,20 +544,22 @@ input{font:inherit;font-size:16px}
       bubble(res.ok?hm(it.s)+'–'+hm(it.s+it.d)+(res.pushed.size?'（うしろを押す）':''):'24時をこえちゃう',e);
     }
     function up(e){
-      if(press){ const p=press; press=null; if(p.kind==='block') openBlock(p.id); else if(p.kind==='tray') tapChip(p.t); return; }
-      if(!drag) return; const d=drag; drag=null; cancelAnimationFrame(raf); clearFx();
+      if(press){ const p=press; clearPress(); if(p.kind==='block') openBlock(p.id); else if(p.kind==='tray') tapChip(p.t); return; }
+      if(!drag) return;
+      if(drag.long&&Math.hypot(e.clientX-drag.x0,e.clientY-drag.y0)<8){ cancel(); return; } // 長押ししただけで動かさなかった
+      const d=drag; drag=null; cancelAnimationFrame(raf); clearFx();
       if(d.kind==='resize'){ if(d.res) D.blocks=d.res.arr; commit(); draw(); return; }
       d.f.remove();
       if(d.res&&d.res.ok){ D.blocks=d.res.arr.map(({trayIndex,...b})=>b); if(d.from==='tray'&&d.item.trayIndex!=null) D.tray.splice(d.item.trayIndex,1); commit(); draw(null,{pop:d.item.id}); buzz(); }
       else if(d.from==='board'&&(inTray(e)||!inBoard(e))){ backToTray(d.item.id); toast('手持ちにもどしました'); }
       else draw();
     }
-    function cancel(){ press=null; if(drag){ if(drag.f) drag.f.remove(); drag=null; clearFx(); draw(); } }
+    function cancel(){ clearPress(); if(drag){ cancelAnimationFrame(raf); if(drag.f) drag.f.remove(); drag=null; clearFx(); draw(); } }
     function backToTray(id){ const b=D.blocks.find(x=>x.id===id); D.blocks=D.blocks.filter(x=>x.id!==id); if(b&&!b.free) D.tray.push({pid:b.pid,n:b.n,c:b.c,d:b.d}); commit(); draw(); }
     function tapChip(t){
       const item=newItem(t); delete item.trayIndex;
-      const end=D.blocks.length?Math.max(...D.blocks.map(b=>b.s+b.d)):(k===keyOf(today())?Math.ceil(nowMin()/15)*15:7*60);
-      if(end+15>TO){ toast('24時までうまっています'); return; }
+      const end=D.blocks.length?Math.max(...D.blocks.map(b=>b.s+b.d)):(k===keyOf(today())?Math.ceil(nowMin()/STEP)*STEP:7*60);
+      if(end+STEP>TO){ toast('24時までうまっています'); return; }
       item.d=Math.min(item.d,TO-end);
       D.blocks=settle(D.blocks.concat({...item,s:end}).sort((a,b)=>a.s-b.s)).arr;
       if(t!=='free') D.tray.splice(+t,1);
@@ -550,28 +570,37 @@ input{font:inherit;font-size:16px}
     function openBlock(id){
       const b=D.blocks.find(x=>x.id===id); if(!b) return;
       openSheet('<h2 style="--cc:'+b.c+'"><i></i>'+esc(b.n)+'</h2>'
-        +'<div class="st"><span>はじまり</span><button data-ss="-15" aria-label="15分はやく">−</button><b>'+hm(b.s)+'</b><button data-ss="15" aria-label="15分おそく">＋</button></div>'
-        +'<div class="st"><span>長さ</span><button data-dd="-15" aria-label="15分みじかく">−</button><b>'+len(b.d)+'</b><button data-dd="15" aria-label="15分ながく">＋</button></div>'
+        +'<div class="st"><span>はじまり</span><button data-ss="-5" aria-label="5分はやく">−</button><b>'+hm(b.s)+'</b><button data-ss="5" aria-label="5分おそく">＋</button></div>'
+        +'<div class="st"><span>長さ</span><button data-dd="-5" aria-label="5分みじかく">−</button><b>'+len(b.d)+'</b><button data-dd="5" aria-label="5分ながく">＋</button></div>'
+        +(b.free?'':(()=>{ const hex=solid(b.c), inPal=BPAL.includes(hex.toLowerCase());
+          return '<div class="colrow"><span>色（「'+esc(b.n)+'」の色がぜんぶ変わります）</span><div class="gcolors">'+BPAL.map(c=>'<button type="button" data-col="'+c+'" class="'+(c===hex.toLowerCase()?'on':'')+'" style="--cc:'+c+'" aria-label="色 '+c+'"></button>').join('')
+            +'<label class="colpick'+(inPal?'':' on')+'" aria-label="好きな色をえらぶ">＋<input type="color" data-colin value="'+hex+'"></label></div></div>'; })())
         +'<div class="r2"><button class="big-btn deep" data-backtray>'+(b.free?'はずす':'手持ちにもどす')+'</button><button class="big-btn deep del-btn" data-del>'+(delAsk===id?'本当に消す？':'消す')+'</button></div>'
         +'<button class="big-btn gold" data-close>できた</button>',
         e=>{
           if(e.target.closest('[data-backtray]')){ closeSheet(); delAsk=null; backToTray(id); return; }
           if(e.target.closest('[data-del]')){ if(delAsk!==id){ delAsk=id; openBlock(id); return; } delAsk=null; closeSheet(); D.blocks=D.blocks.filter(x=>x.id!==id); commit(); draw(); buzz(); toast('「'+b.n+'」を消しました'); return; }
+          const cb=e.target.closest('[data-col]'); if(cb){ setKindColor(b.pid,cb.dataset.col); buzz(); draw(); openBlock(id); return; }
           const ss=e.target.closest('[data-ss]'), dd=e.target.closest('[data-dd]');
           if(ss){ const r=insertAt(D.blocks,b,b.s+ +ss.dataset.ss,false); if(r.ok) D.blocks=r.arr; else toast('24時をこえちゃう'); }
           if(dd){ const r=resizeEdge(D.blocks,id,b.s+b.d+ +dd.dataset.dd,adjOf(D.blocks,b)); const nb=r.arr.find(x=>x.id===id); if(nb.d===b.d) toast(+dd.dataset.dd>0?'これ以上のばせません':'これ以上ちぢめられません'); D.blocks=r.arr; }
           if(ss||dd){ buzz(); commit(); draw(); openBlock(id); }
         });
       $('sheetRoot').querySelector('[data-close]').addEventListener('click',()=>{delAsk=null;});
+      const ci=$('sheetRoot').querySelector('[data-colin]');
+      if(ci){ ci.addEventListener('input',()=>{ setKindColor(b.pid,ci.value); draw(); const h=$('sheetRoot').querySelector('h2'); if(h) h.style.setProperty('--cc',ci.value); });
+        ci.addEventListener('change',()=>{ setKindColor(b.pid,ci.value); draw(); openBlock(id); }); }
     }
     board={k,scroll:()=>bs.scrollTop,down(e){
         if(e.target.closest('#sheetRoot,#overRoot,#mini')) return;
         const hd=e.target.closest('[data-hd]'), bl=e.target.closest('[data-b]'), ch=e.target.closest('[data-t]');
         if(!hd&&!bl&&!ch) return;
-        e.preventDefault();
-        press={x:e.clientX,y:e.clientY,y0:yIn(e),kind:hd?'resize':bl?'block':'tray',id:(hd||bl)?(hd||bl).closest('[data-b]').dataset.b:null,t:ch?ch.dataset.t:null};
-        if(press.kind==='resize') startDrag(e);
-      },move:onMove,up,cancel};
+        clearPress();
+        press={x:e.clientX,y:e.clientY,y0:yIn(e),pt:e.pointerType,kind:hd?'resize':bl?'block':'tray',id:(hd||bl)?(hd||bl).closest('[data-b]').dataset.b:null,t:ch?ch.dataset.t:null,el:hd||bl||ch};
+        if(e.pointerType==='mouse'){ e.preventDefault(); if(press.kind==='resize') startDrag(e); return; }
+        // タッチ：すぐには動かさない。指を動かさずに長押ししたら持ち上げる（それまでは時間表をスクロールできる）
+        press.timer=setTimeout(()=>{ if(!press) return; press.long=true; press.el.classList.add('hold'); buzz(); startDrag({clientX:press.x,clientY:press.y}); },HOLD);
+      },move:onMove,up,cancel,dragging:()=>!!drag};
     $('app').onclick=e=>{ let el;
       if(e.target.closest('[data-back]')){ go(backTo==='view'?'view':'home'); return; }
       if(e.target.closest('[data-done]')){ homeDay=cur; go('home'); toast(D.tray.length?'保存しました（手持ちが '+D.tray.length+'こ のこっています）':'保存しました'); return; }
@@ -587,9 +616,9 @@ input{font:inherit;font-size:16px}
       }
     };
     if(!S.tut.board) setTimeout(()=>coach([
-      {sel:'#tray .chip',msg:'手持ちのブロックを、右の時間表へドラッグしてね',fx:150,fy:40},
+      {sel:'#tray .chip',msg:'手持ちのブロックを<b>長押し</b>して、右の時間表へドラッグしてね',fx:150,fy:40},
       {sel:'#tray .chip',msg:'タップするだけでも、いちばん後ろにくっついて置けるよ',fx:0,fy:0},
-      {sel:'#bs',msg:'置いたブロックの下のつまみを引くと、長さが変わるよ。タップすると直したり消したりできるよ',fx:0,fy:30},
+      {sel:'#bs',msg:'置いたブロックも長押しで動かせるよ。下のつまみを長押しして引くと長さが変わるよ。タップすると色や時間を直せるよ',fx:0,fy:30},
       {sel:'#mini',msg:'右のバーをなぞると、時間表を上下に動かせるよ',fx:0,fy:80},
       {sel:'.zoom',msg:'＋−で時間表を大きく・小さくできるよ',fx:0,fy:0}
     ],()=>{S.tut.board=true;save();}),300);
@@ -598,6 +627,14 @@ input{font:inherit;font-size:16px}
   window.addEventListener('pointermove',e=>{ if(screen==='board'&&board) board.move(e); });
   window.addEventListener('pointerup',e=>{ if(screen==='board'&&board) board.up(e); });
   window.addEventListener('pointercancel',()=>{ if(screen==='board'&&board) board.cancel(); });
+  // 持ち上げている間は、画面がスクロールしないように
+  // （持ち上げた時に描き直すと指の下の部品が消えて window まで届かないので、触った部品そのものにも付ける）
+  const stopScroll=e=>{ if(screen==='board'&&board&&board.dragging()) e.preventDefault(); };
+  window.addEventListener('touchmove',stopScroll,{passive:false});
+  window.addEventListener('touchstart',e=>{ if(screen!=='board') return; const t=e.target;
+    const off=()=>{ t.removeEventListener('touchmove',stopScroll); t.removeEventListener('touchend',off); t.removeEventListener('touchcancel',off); };
+    t.addEventListener('touchmove',stopScroll,{passive:false}); t.addEventListener('touchend',off); t.addEventListener('touchcancel',off); },{passive:true});
+  window.addEventListener('contextmenu',e=>{ if(screen==='board'&&e.target.closest('.blk,.chip')) e.preventDefault(); });
 
   // ===== 見る（リスト） =====
   function renderView(){
