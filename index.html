@@ -110,21 +110,20 @@
   </nav>
 
   <div class="grid">
-    <a class="app" data-c="study" href="test-study/"><img src="test-study/icon-192.png" alt=""><span class="t"><b>テスト勉強</b><small>大学の中間・期末テストの勉強</small></span><span class="cat">勉強</span></a>
-    <a class="app" data-c="study" href="class-reminder"><span class="ph" style="background:linear-gradient(135deg,#1fd469,#06a94d)">授</span><span class="t"><b>授業リマインダー</b><small>課題の締切・テスト・出席を LINE でお知らせ</small></span><span class="cat">勉強</span></a>
     <a class="app" data-c="study" href="フーリエ解析計算機.html"><span class="ph" style="background:linear-gradient(135deg,#7aa9e6,#4d7fc4)">∫</span><span class="t"><b>フーリエ解析計算機</b><small>レポート用の計算</small></span><span class="cat">勉強</span></a>
     <a class="app" data-c="music" href="lyric-book/"><img src="lyric-book/icon-192.png" alt=""><span class="t"><b>LYRIC BOOK</b><small>歌詞と歌い方のノート</small></span><span class="cat">音楽</span></a>
     <a class="app" data-c="music" href="chord-analyzer/"><img src="chord-analyzer/icon-192.png" alt=""><span class="t"><b>ギターコード解析</b><small>曲のコードを調べる</small></span><span class="cat">音楽</span></a>
-    <a class="app" data-c="life" href="alarm/"><img src="alarm/icon-192.png" alt=""><span class="t"><b>目覚まし管理</b><small>起きる時間を決めて、iPhone のアラームに入れる</small></span><span class="cat">くらし</span></a>
     <a class="app" data-c="life" href="smagro-memory/"><img src="smagro-memory/icon-192.png" alt=""><span class="t"><b>スマグロ さいてきか</b><small>スマッシュグロウの、いちばん強い組み合わせ探し</small></span><span class="cat">ゲーム</span></a>
   </div>
+
+  <!-- 自分用：自分の端末だけに出る（/me/ を開いた端末。/me/ は Cloudflare Access で本人だけ） -->
+  <a class="app mine" href="me/" hidden><span class="ph" style="background:linear-gradient(135deg,#6b6f7a,#3d4049)">私</span><span class="t"><b>自分用</b><small>自分だけのアプリ</small></span><span class="cat">自分</span></a>
 
   <footer>
     <span>© KOTETSU WORKS</span>
     <span class="sp"></span>
     <a href="study-room/legal/terms.html">利用規約</a>
     <a href="study-room/legal/privacy.html">プライバシー</a>
-    <a href="study-room-beta/">管理者用</a>
   </footer>
 </main>
 <script>
@@ -133,6 +132,7 @@
     document.querySelectorAll('.tabs button').forEach(x => x.classList.toggle('on', x === b));
     document.querySelectorAll('a.app').forEach(a => { a.hidden = !!b.dataset.c && a.dataset.c !== b.dataset.c; });
   }));
+  try { if (localStorage.getItem('kw.owner') === '1') document.querySelector('a.mine').hidden = false; } catch (e) { /* なし */ }
 </script>
 </body>
 </html>

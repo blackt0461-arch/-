@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="robots" content="noindex">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>自分用 | KOTETSU WORKS</title>
+<meta name="description" content="KOTETSU WORKS がつくっているアプリの入口。勉強・音楽・くらしの小さな道具。">
+<meta name="theme-color" content="#121216">
+<link rel="icon" href="../assets/icon.svg" type="image/svg+xml">
+<link rel="icon" href="../assets/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="../assets/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-title" content="KOTETSU WORKS">
+<meta property="og:title" content="KOTETSU WORKS">
+<meta property="og:description" content="勉強・音楽・くらしの小さな道具をつくっています。">
+<meta property="og:image" content="https://kotetsuworks.com/assets/icon-512.png">
+<meta property="og:url" content="https://kotetsuworks.com/">
+<style>
+  :root {
+    --bg: #121216; --bg2: #1a1a20; --card: rgba(255,255,255,.045); --card-hi: rgba(255,255,255,.075);
+    --line: rgba(255,255,255,.08); --text: #f2efe9; --muted: rgba(242,239,233,.58); --gold: #e6c068; --gold2: #f0a83a;
+    --safe-t: env(safe-area-inset-top, 0px); --safe-b: env(safe-area-inset-bottom, 0px);
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--bg); }
+  body { margin: 0; color: var(--text); background:
+      radial-gradient(1200px 520px at 85% -10%, rgba(240,168,58,.10), transparent 60%),
+      radial-gradient(900px 500px at -10% 10%, rgba(255,255,255,.04), transparent 60%), var(--bg);
+    font-family: "Hiragino Sans", "Noto Sans JP", "Yu Gothic", system-ui, sans-serif; -webkit-font-smoothing: antialiased; min-height: 100vh; }
+  a { color: inherit; }
+  main { max-width: 760px; margin: 0 auto; padding: calc(var(--safe-t) + 28px) 16px calc(var(--safe-b) + 40px); }
+
+  /* 上の帯：ロゴ */
+  .brand { display: flex; align-items: center; gap: 12px; }
+  .brand img { width: 40px; height: 40px; border-radius: 11px; box-shadow: 0 6px 18px rgba(0,0,0,.4); }
+  .brand b { font-size: 15px; letter-spacing: .22em; font-weight: 800; }
+
+  /* 見出し */
+  .hero { margin: 44px 0 30px; }
+  .hero h1 { margin: 0; font-size: clamp(30px, 8.5vw, 44px); line-height: 1.15; font-weight: 800; letter-spacing: .01em; }
+  .hero h1 em { font-style: normal; background: linear-gradient(90deg, var(--gold), var(--gold2)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .hero p { margin: 14px 0 0; color: var(--muted); font-size: 14.5px; line-height: 1.8; }
+
+  /* いちばん大きいカード：ROOMIN */
+  .feature { position: relative; display: block; overflow: hidden; border-radius: 26px; padding: 22px; text-decoration: none;
+    background: linear-gradient(135deg, #2b2218 0%, #1b1712 55%, #141210 100%); border: 1px solid rgba(230,192,104,.22);
+    box-shadow: 0 18px 40px rgba(0,0,0,.35); transition: transform .15s ease; }
+  .feature:active { transform: scale(.985); }
+  .feature::after { content: ""; position: absolute; right: -60px; top: -60px; width: 240px; height: 240px; border-radius: 50%;
+    background: radial-gradient(circle, rgba(240,168,58,.28), transparent 65%); pointer-events: none; }
+  .feature .top { display: flex; align-items: center; gap: 14px; position: relative; z-index: 1; }
+  .feature img { width: 64px; height: 64px; border-radius: 17px; box-shadow: 0 8px 20px rgba(0,0,0,.45); }
+  .feature .eyebrow { font-size: 11px; font-weight: 800; letter-spacing: .18em; color: var(--gold); }
+  .feature h2 { margin: 2px 0 0; font-size: 24px; letter-spacing: .04em; }
+  .feature p { position: relative; z-index: 1; margin: 16px 0 18px; color: rgba(242,239,233,.75); font-size: 14px; line-height: 1.75; }
+  .feature .go { position: relative; z-index: 1; display: inline-flex; align-items: center; gap: 8px; padding: 11px 18px; border-radius: 999px;
+    background: var(--gold); color: #1c1a17; font-weight: 800; font-size: 14px; }
+  .feature .go svg { width: 16px; height: 16px; }
+
+  /* 分類のタブ */
+  .tabs { display: flex; gap: 8px; margin: 34px 0 14px; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tabs button { flex: none; border: 1px solid var(--line); background: var(--card); color: var(--muted); font: inherit; font-size: 13px; font-weight: 700;
+    padding: 8px 14px; border-radius: 999px; cursor: pointer; }
+  .tabs button.on { background: var(--text); color: #121216; border-color: transparent; }
+
+  /* アプリの一覧 */
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 330px), 1fr)); gap: 10px; }
+  a.app { display: flex; align-items: center; gap: 14px; padding: 14px 14px 14px 14px; border-radius: 20px; background: var(--card); border: 1px solid var(--line);
+    text-decoration: none; min-height: 78px; transition: background .15s ease, transform .12s ease; }
+  a.app:active { transform: scale(.985); }
+  @media (hover: hover) { a.app:hover { background: var(--card-hi); } .feature:hover { transform: translateY(-2px); } }
+  a.app img, a.app .ph { width: 50px; height: 50px; border-radius: 14px; flex: none; object-fit: cover; box-shadow: 0 4px 12px rgba(0,0,0,.35); }
+  a.app .ph { display: grid; place-items: center; font-weight: 800; font-size: 21px; color: #fff; }
+  a.app .t { flex: 1; min-width: 0; }
+  a.app b { display: block; font-size: 15.5px; }
+  a.app small { display: block; margin-top: 3px; color: var(--muted); font-size: 12.5px; line-height: 1.5; }
+  a.app .cat { flex: none; font-size: 10.5px; font-weight: 700; color: var(--muted); border: 1px solid var(--line); padding: 3px 8px; border-radius: 999px; }
+  a.app[hidden] { display: none; }
+
+  footer { margin-top: 44px; padding-top: 20px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; }
+  footer a { color: var(--muted); text-decoration: none; }
+  footer a:hover { color: var(--text); }
+  footer .sp { flex: 1; }
+</style>
+</head>
+<body>
+<main>
+  <header class="brand"><a href="../" style="display:flex;align-items:center;gap:10px;color:inherit;text-decoration:none"><img src="../assets/icon-192.png" alt=""><b>KOTETSU WORKS</b></a></header>
+  <section class="hero"><h1>自分用</h1><p>ここは自分だけのページです。このページを開いた端末では、トップに「自分用」が出ます。</p></section>
+  <div class="grid">
+    <a class="app" href="../test-study/"><img src="../test-study/icon-192.png" alt=""><span class="t"><b>テスト勉強</b><small>大学の中間・期末テストの勉強</small></span><span class="cat">勉強</span></a>
+    <a class="app" href="../class-reminder"><span class="ph" style="background:linear-gradient(135deg,#1fd469,#06a94d)">授</span><span class="t"><b>授業リマインダー</b><small>課題の締切・テスト・出席を LINE でお知らせ</small></span><span class="cat">勉強</span></a>
+    <a class="app" href="../alarm/"><img src="../alarm/icon-192.png" alt=""><span class="t"><b>目覚まし管理</b><small>起きる時間を決めて、iPhone のアラームに入れる</small></span><span class="cat">くらし</span></a>
+    <a class="app" href="../study-room-beta/"><img src="../study-room-beta/icon-beta-192.png" alt=""><span class="t"><b>ROOMIN テスト版</b><small>管理者用</small></span><span class="cat">管理者</span></a>
+  </div>
+  <footer><span>© KOTETSU WORKS</span></footer>
+</main>
+<script>try { localStorage.setItem('kw.owner', '1'); } catch (e) { /* なし */ }</script>
+</body>
+</html>
