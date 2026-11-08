@@ -1781,7 +1781,7 @@ function photoMode() {
 
 // =========================== 更新のお知らせ ===========================
 // このプログラムの版（version.json と同じにする。公開のたびに上げる）
-const APP_VERSION = '1.16.5';
+const APP_VERSION = '1.16.6';
 ERR.setVersion(APP_VERSION);
 // 新しい版が出たら、みんな同じタイミングでそろうように強制で再起動する。
 // 開いた時・画面に戻った時・1分ごとに version.json を見る
@@ -3181,6 +3181,24 @@ async function leaveVisit(goBack) {
 }
 
 // =========================== 管理者 ===========================
+// 管理者：パスワードを忘れた人の「復元コード」を作る（1.16.6）。本人に伝えると、ログイン画面の「パスワードを忘れた」から自分で新しいパスワードにできる
+function adminRecovery(name) {
+  const el = sheet(`
+    <div class="sh-head"><span class="sh-ic">${icon('lock')}</span><div><h3>${esc(name)}さんの復元コード</h3><p>パスワードを忘れた人に伝えるコードを作ります。前に作ったコードは使えなくなります</p></div></div>
+    <div class="rec-out"></div>
+    <button class="btn primary big rec-go">${icon('lock')}コードを作る</button>
+    <button class="btn ghost close">とじる</button>`, 'rec-sheet');
+  el.querySelector('.close').onclick = () => el.remove();
+  el.querySelector('.rec-go').onclick = async (e) => {
+    e.currentTarget.disabled = true;
+    try {
+      const r = await rpc('sr_admin_recovery_make', { p_token: Auth.currentUser()?.token, p_username: name });
+      el.querySelector('.rec-out').innerHTML = `<p class="rc-code">${esc(r.code)}</p>
+        <p class="note">本人に、ログイン画面の「パスワードを忘れた」で、ユーザー名「${esc(name)}」とこのコードを入れてもらってください（1回だけ使えます）。</p>`;
+      el.querySelector('.rec-go').remove();
+    } catch (er) { toast(er.message); e.currentTarget.disabled = false; }
+  };
+}
 async function showAdmin() {
   if (!isAdmin()) return showMenu();
   const el = screenWithTabs('admin', `<button class="icon back">${icon('back')}</button><h2>管理者</h2><span></span>`, 'menu', `<button class="btn ghost big betasw">${icon(BETA ? 'home' : 'flask')}${BETA ? 'いつもの版にもどる' : 'テスト版を開く'}</button><div class="row2 admin-btns"><button class="btn primary compose">${icon('bell')}お知らせを書く</button><button class="btn ghost inbox">${icon('chat')}要望・バグを見る</button></div><button class="btn ghost big sendgift">${icon('gift')}みんなにプレゼントを送る</button><button class="btn ghost big errlog">${icon('info')}エラーの記録を見る</button><div class="row2 admin-btns"><button class="btn ghost msdone">${icon('mission')}ミッションを全部達成に</button><button class="btn ghost msreset">${icon('refresh')}ミッションを最初から</button></div>${EV.EVENTS.length ? `<button class="btn ghost big evpreview">${icon('snow')}${EV.previewing() ? 'イベントのためしをやめる' : `イベントをためす（${esc(EV.EVENTS.at(-1).name)}）`}</button>` : ''}<div class="alist"><p class="empty">読み込み中…</p></div>`);
@@ -3205,11 +3223,12 @@ async function showAdmin() {
       <div class="ac-mode">${(() => { const sd = s.side || s.mode; return `<span class="mode-tag ${sd || 'none'}">${icon(sd === 'puzzle' ? 'grid' : sd === 'study' ? 'pencil' : 'info')}${sd === 'puzzle' ? 'パズルサイド' : sd === 'study' ? 'スタディサイド' : 'まだ選んでいない'}</span>${s.puzzle ? `<small>パズル ${s.puzzle}回</small>` : ''}<button class="btn ghost sm ac-mode-btn" data-u="${esc(a.username)}" data-m="${sd || ''}">${icon('refresh')}サイドを変える</button>`; })()}</div>
       <div class="ac-stats"><span>${icon('pencil')}${s.solved || 0}問</span><span>${icon('check')}${s.solved ? Math.round((s.correct || 0) / s.solved * 100) : 0}%</span><span>${icon('flame')}${s.streak || 0}日（合計${s.days || 0}日）</span></div>
       <div class="ac-units">${UNITS.map(un => `<span>${un} ${units[un]?.solved || 0}問</span>`).join('')}</div>
-      <div class="ac-foot"><small>登録 ${day(a.created_at)} ・ 最後 ${day(a.last_login)}</small><span class="ac-btns"><button class="btn ghost sm visit" data-u="${esc(a.username)}">${icon('eye')}部屋</button><button class="btn ghost sm ac-comp" data-u="${esc(a.username)}" data-lv="${S.rankInfo(s.xp || 0).rank}">${icon('gift')}補填</button><button class="btn ghost sm ac-restore" data-u="${esc(a.username)}">${icon('refresh')}戻す</button>${Object.keys(packCode).length ? `<button class="btn ghost sm ac-give" data-u="${esc(a.username)}">${icon('gift')}問題集</button>` : ''}${a.username !== u.name ? `<button class="btn ghost sm ac-del" data-u="${esc(a.username)}" aria-label="${esc(a.username)}のアカウントを消す">${icon('trash')}消す</button>` : ''}</span></div>
+      <div class="ac-foot"><small>登録 ${day(a.created_at)} ・ 最後 ${day(a.last_login)}</small><span class="ac-btns"><button class="btn ghost sm visit" data-u="${esc(a.username)}">${icon('eye')}部屋</button><button class="btn ghost sm ac-comp" data-u="${esc(a.username)}" data-lv="${S.rankInfo(s.xp || 0).rank}">${icon('gift')}補填</button><button class="btn ghost sm ac-restore" data-u="${esc(a.username)}">${icon('refresh')}戻す</button><button class="btn ghost sm ac-rec" data-u="${esc(a.username)}">${icon('lock')}復元コード</button>${Object.keys(packCode).length ? `<button class="btn ghost sm ac-give" data-u="${esc(a.username)}">${icon('gift')}問題集</button>` : ''}${a.username !== u.name ? `<button class="btn ghost sm ac-del" data-u="${esc(a.username)}" aria-label="${esc(a.username)}のアカウントを消す">${icon('trash')}消す</button>` : ''}</span></div>
     </div>`;
   }).join('');
   el.querySelectorAll('.visit').forEach(b => b.onclick = () => visitFriend(b.dataset.u, showAdmin));
   el.querySelectorAll('.ac-del').forEach(b => b.onclick = () => confirmDeleteUser(b.dataset.u));
+  el.querySelectorAll('.ac-rec').forEach(b => b.onclick = () => adminRecovery(b.dataset.u));
   el.querySelectorAll('.ac-give').forEach(b => b.onclick = () => givePack(b.dataset.u));
   el.querySelectorAll('.ac-mode-btn').forEach(b => b.onclick = () => changeMode(b.dataset.u, b.dataset.m));
   el.querySelectorAll('.ac-comp').forEach(b => b.onclick = () => compensate(b.dataset.u, +b.dataset.lv || 1));

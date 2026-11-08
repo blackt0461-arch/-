@@ -24,6 +24,7 @@ module.exports = async function mock(ctx, db = { users: {} }, opts = {}) {
     if (name === 'sr_delete_me') { if (!db.users[un]) return ng('bad_token'); if (un === 'admin') return ng('cannot_delete_admin'); if (body.p_password !== 'test1234') return ng('bad_login'); delete db.users[un]; return ok({ deleted: un }); }
     if (name === 'sr_recovery_make') { const code = 'ABCD-EFGH-JKLM'; if (db.users[un]) db.users[un].recovery = code.replace(/-/g, ''); return ok({ code }); }
     if (name === 'sr_recovery_status') return ok({ has: !!db.users[un]?.recovery });
+    if (name === 'sr_admin_recovery_make') { const u = db.users[body.p_username]; if (!u) return ng('not_found'); const code = 'WXYZ-2345-6789'; u.recovery = code.replace(/-/g, ''); return ok({ code, username: body.p_username }); }
     if (name === 'sr_password_reset') { const u = db.users[body.p_username]; if (!u || !u.recovery || u.recovery !== String(body.p_code).toUpperCase().replace(/[^A-Z0-9]/g, '')) return ng('bad_code'); u.recovery = null; u.pw = body.p_new; return ok({ ok: true, username: body.p_username }); }
     if (name === 'sr_block') { ((db.blocks ||= {})[un] ||= []).push(body.p_username); return ok({ blocked: body.p_username }); }
     if (name === 'sr_unblock') { db.blocks[un] = (db.blocks?.[un] || []).filter(n => n !== body.p_username); return ok({ ok: true }); }
