@@ -56,7 +56,8 @@ function faceMat(key, draw, w = 128, h = 128) { return canvasMat('f' + key, w, h
 
 // ---------- 形 ----------
 const GC = new Map();
-const cg = (k, make) => { let g = GC.get(k); if (!g) { g = make(); GC.set(k, g); } return g; };
+// 作った形はほかの家具と共有する（shared の印：サムネイルなどの片付けで捨てない）
+const cg = (k, make) => { let g = GC.get(k); if (!g) { g = make(); g.userData.shared = true; GC.set(k, g); } return g; };
 const r4 = (v) => Math.round(v * 10000);
 let G = null; // 今つくっている物
 function add(geo, mat, x, y, z) {

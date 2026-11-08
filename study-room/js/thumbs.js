@@ -512,7 +512,8 @@ async function drawItem(item, opts = {}) {
     stage.remove(obj);
     if (lamp) { obj.remove(lamp); lamp.dispose(); }
     obj.traverse((o) => {
-      if (o.isMesh && disposeGeo) o.geometry?.dispose();
+      // 共有の形（部屋に置いた家具も使っている）は捨てない。捨てると iPhone で部屋の家具の部品が消えることがあった（2026-11-08）
+      if (o.isMesh && disposeGeo && !o.geometry?.userData.shared) o.geometry?.dispose();
     });
     for (const m of own) {
       // 自分で複製した材質だけ捨てる（fitMaterial で複製したテクスチャも）
@@ -668,7 +669,7 @@ export async function spinViewer(host, item) {
       const { obj, own, disposeGeo, kind } = made;
       pivot.remove(obj);
       if (lamp) { obj.remove(lamp); lamp.dispose(); }
-      obj.traverse((o) => { if (o.isMesh && disposeGeo) o.geometry?.dispose(); });
+      obj.traverse((o) => { if (o.isMesh && disposeGeo && !o.geometry?.userData.shared) o.geometry?.dispose(); });
       for (const m of own) { if (kind === 'swatch') for (const k of ['map', 'normalMap', 'roughnessMap']) m[k]?.dispose(); m.dispose(); }
     }
     ground.geometry.dispose(); ground.material.dispose();

@@ -76,12 +76,19 @@ const MAX_LIGHTS = 4;
 // 部屋を出る・作りなおす時に、前の物のメモリ（形・材質・絵）を返す（1.12.0）。
 // 前は返していなかったため、部屋を行き来するたびにメモリがたまり、スマホでアプリが強制終了されることがあった。
 // three.js は、返した物をまた使うと自動で作りなおすので、同じ家具が次の部屋にあっても大丈夫。
-function freeTree(root) {
+// ただし、まだ部屋（keep）のどこかで使っている形・材質は捨てない（2026-11-08）。
+// 同じ形を何個もの家具で共有しているので、1つしまった時にほかの家具の形まで捨てると、iPhone で部品が消えて
+// イスがばらけて見えることがあった（ゲーミングチェアの背もたれ・ひじかけが消えて、残りが浮いて見えた）。
+function freeTree(root, keep) {
   if (!root) return;
   const mats = new Set(), geos = new Set();
   root.traverse(o => {
     if (o.geometry) geos.add(o.geometry);
     const m = o.material; if (m) (Array.isArray(m) ? m : [m]).forEach(x => mats.add(x));
+  });
+  keep?.traverse(o => {
+    if (o.geometry) geos.delete(o.geometry);
+    const m = o.material; if (m) (Array.isArray(m) ? m : [m]).forEach(x => mats.delete(x));
   });
   for (const g of geos) g.dispose?.();
   for (const m of mats) {
@@ -90,7 +97,7 @@ function freeTree(root) {
     m.dispose?.();
   }
 }
-function clearFree(group) { const kids = [...group.children]; group.clear(); for (const k of kids) freeTree(k); }
+function clearFree(group, keep) { const kids = [...group.children]; group.clear(); for (const k of kids) freeTree(k, keep); }
 export class Room3D {
   constructor(canvas) {
     this.canvas = canvas;
@@ -570,8 +577,8 @@ export class Room3D {
     return id ? itemById(id) : null;
   }
   async placeAll(token = this.token) {
-    clearFree(this.items);
-    if (this.blobs) clearFree(this.blobs);
+    clearFree(this.items, this.scene);
+    if (this.blobs) clearFree(this.blobs, this.scene);
     this.lamps = [];
     this.objByUid = {};
     const placed = this.st.placed || [];
@@ -1555,9 +1562,9 @@ export class Room3D {
   }
   removeObject(uid) {
     const o = this.objByUid?.[uid];
-    if (o) { this.items.remove(o); freeTree(o); }
+    if (o) { this.items.remove(o); freeTree(o, this.scene); }
     const b = this.blobs?.children.find(x => x.userData.uid === uid);
-    if (b) { this.blobs.remove(b); freeTree(b); }
+    if (b) { this.blobs.remove(b); freeTree(b, this.scene); }
     delete this.objByUid[uid];
     if (this.selected === uid) this.select(null);
     this.updateLights();
@@ -1772,7 +1779,7 @@ export class Room3D {
     const wallV = { name: darkWall ? '黒' : '' };
 
     const g = this.shell;
-    clearFree(g);
+    clearFree(g, this.scene);
     const box = (w, h, d, x, y, z, mat, fw, fh) => {
       const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), fitMaterial(mat, fw ?? w, fh ?? h));
       m.position.set(x, y, z);
@@ -1921,7 +1928,7 @@ export class Room3D {
       const mood = this.mood;
       buildExterior(mood, level, home).then((ext) => {
         if (this.extKey !== key) return;
-        if (this.exterior) { this.scene.remove(this.exterior.world); freeTree(this.exterior.world); }
+        if (this.exterior) { this.scene.remove(this.exterior.world); freeTree(this.exterior.world, this.scene); }
         this.exterior = ext;
         this.scene.add(ext.world);
         placeExt();
@@ -2004,7 +2011,7 @@ export class Room3D {
   }
 
   makeRays() {
-    clearFree(this.fx);
+    clearFree(this.fx, this.scene);
     const d = this.sunDir;
     const HD = this.sh.hd;
     const WINDOW = this.sh.windows[0];

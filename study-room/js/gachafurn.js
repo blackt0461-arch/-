@@ -218,7 +218,8 @@ const gem = c => cm('gem' + c, () => phys({ color: c, roughness: 0, metalness: 0
 
 // ---------- 形（使い回す） ----------
 const GC = new Map();
-const cg = (k, make) => { let g = GC.get(k); if (!g) { g = make(); GC.set(k, g); } return g; };
+// 作った形はほかの家具と共有する（shared の印：サムネイルなどの片付けで捨てない）
+const cg = (k, make) => { let g = GC.get(k); if (!g) { g = make(); g.userData.shared = true; GC.set(k, g); } return g; };
 const r4 = v => Math.round(v * 10000);
 // 面の向きに合わせて、メートル単位の UV を作る
 function worldUV(g, scale = 1) {
