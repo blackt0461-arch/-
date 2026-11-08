@@ -5,6 +5,11 @@ import crypto from 'crypto';
 import { execFileSync } from 'child_process';
 
 export function makeGas(codePath, opts = {}) {
+  // テストは「親フォルダに lyric-book と tests を並べる」形でも、リポジトリの lyric-book/tests のままでも動くように
+  if (!fs.existsSync(codePath)) {
+    const alt = new URL('../server/Code.gs', import.meta.url).pathname;
+    if (fs.existsSync(alt)) codePath = alt;
+  }
   let nextId = 1;
   const items = new Map(); // id -> {type, name, parent, content(Buffer), mime, created, trashed}
   const mk = (type, name, parent, content = Buffer.alloc(0), mime = '') => {
