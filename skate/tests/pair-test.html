@@ -1,0 +1,17 @@
+<!doctype html>
+<meta charset="utf-8">
+<video id="v" muted playsinline></video>
+<script type="module">
+// 2つのコマを直接重ねる試験：?src=&a=秒&b=秒
+import { grabGray, estimate, I3 } from '../motion.js';
+import { seekTo } from '../vision.js';
+self.MOTION_DEBUG = 1;
+const q = new URLSearchParams(location.search), v = document.getElementById('v');
+v.src = URL.createObjectURL(await (await fetch(q.get('src'))).blob());
+await new Promise(r => v.onloadedmetadata = r);
+const W = v.videoWidth, H = v.videoHeight;
+await seekTo(v, +q.get('a')); const A = grabGray(v, W, H);
+await seekTo(v, +q.get('b')); const B = grabGray(v, W, H);
+const r = estimate(A, B, I3(), [], true);
+window.result = r ? { inl: r.inl, ratio: r.ratio, H: r.H.map(x => +x.toFixed(3)) } : 'fail';
+</script>

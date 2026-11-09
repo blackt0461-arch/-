@@ -1,0 +1,36 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>motion test</title>
+<video id="v" muted playsinline></video>
+<canvas id="c"></canvas>
+<script type="module">
+// 画面の動きの試験：?src=動画&t0=基準の秒&x=&y=（基準のコマでの 0〜1 の点）
+import { grabGray, MotionChain, LineAnchor, apply, inv3, mul3 } from '../motion.js';
+import { seekTo } from '../vision.js';
+const q = new URLSearchParams(location.search);
+const v = document.getElementById('v'), c = document.getElementById('c'), cx = c.getContext('2d');
+v.src = URL.createObjectURL(await (await fetch(q.get('src'))).blob()); // 送り先が途中から読めなくても動くように
+await new Promise(r => v.onloadedmetadata = r);
+const W = v.videoWidth, H = v.videoHeight; c.width = W / 2; c.height = H / 2;
+const chain = new MotionChain(), out = [];
+const t0 = +q.get('t0') || 0, t1 = +q.get('t1') || v.duration, step = +q.get('step') || 0.1;
+let T0 = null; const shots = (q.get('shots') || '').split(',').map(Number);
+const start = performance.now();
+for (let t = t0; t < t1; t += step) {
+  const mt = await seekTo(v, t);
+  const P = grabGray(v, W, H);
+  const T = chain.step(P, []);
+  if (!T0) { T0 = T; window.anchor = new LineAnchor(P, [[+q.get('x'), +q.get('y')], [+q.get('x'), +q.get('y') + 0.1]]); }
+  // 線を合わせたコマに直接重ねる。重ならなければ、首振りのつながりで予想（参考）
+  const loc = window.anchor.locate(P, T, []);
+  const p = loc ? loc.line[0] : apply(inv3(T), +q.get('x'), +q.get('y'));
+  if (!loc) p.push('chain');
+  out.push([+mt.toFixed(3), +p[0].toFixed(4), +p[1].toFixed(4), loc ? loc.inl : 'x']);
+  if (shots.some(s => Math.abs(s - t) < step / 2)) {
+    cx.drawImage(v, 0, 0, c.width, c.height);
+    cx.strokeStyle = loc ? '#0f0' : '#f0f'; cx.lineWidth = 3; cx.beginPath(); cx.arc(p[0] * c.width, p[1] * c.height, 12, 0, 7); cx.stroke();
+    window['shot_' + Math.round(t * 10)] = c.toDataURL('image/jpeg', 0.7);
+  }
+}
+window.result = { out, ms: (performance.now() - start) / out.length, lost: chain.lost };
+</script>

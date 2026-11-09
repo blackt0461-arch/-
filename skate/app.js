@@ -1,4 +1,5 @@
 // スケートラップ：画面と記録
+import { grabGray, LineAnchor, MotionChain, apply, inv3 } from './motion.js';
 import { loadDetector, usedDelegate, scanVideo, seekTo, findRedLine, trackCrossings, refineCrossing, interpBox, groupTracks, Tracker, detectFrame, grabSmall, liveCrossing, histSim, normHist } from './vision.js';
 
 const $ = id => document.getElementById(id);
@@ -74,7 +75,7 @@ async function openLine() {
   S.line = lsGet(S.live ? 'skate-line-live' : 'skate-line', null) || lsGet('skate-line', null);
   $('optTiles').checked = lsGet('skate-tiles', 1) === 2;
   $('lineTime').classList.toggle('hide', S.live);
-  $('lineNote').textContent = S.live ? 'スマホを置いて動かさないでください。動くとラインがずれます。線は置き場所ごとに覚えます。' : '人が線に重なっていない場面を選ぶと合わせやすいです。線は置き場所ごとに覚えます。';
+  $('lineNote').textContent = S.live ? '赤いラインが写る向きで線を合わせてください。撮影中に選手を追って首を振っても大丈夫です（立つ場所は変えないでください）。' : '下の帯を動かして、赤いラインがはっきり見えて人が重なっていない場面を選んでください。カメラが動く動画でも大丈夫です。';
   $('startScan').textContent = S.live ? '⏺ この線で撮影スタート' : 'この線で解析する';
   if (!S.live) await seekTo(v, 0.5);
   if (!S.line) S.line = findRedLine(v, v.videoWidth, v.videoHeight) || [[0.3, 0.75], [0.7, 0.6]];
@@ -111,6 +112,10 @@ $('startScan').onclick = async () => {
   if (S.live) return startLive();
   lsSet('skate-line', S.line);
   const tiles = $('optTiles').checked ? 2 : 1; lsSet('skate-tiles', tiles);
+  // 線を合わせたコマを覚える（カメラが動いても、毎回このコマに重ねて線の位置を求める）
+  const lw = $('vWork');
+  if (!S.lineK) { S.lineK = grabGray(lw, lw.videoWidth, lw.videoHeight); S.lineImg = frameImage(lw); }
+  const anchor = new LineAnchor(S.lineK, S.line.map(p => p.slice()));
   go('sScan'); stopFlag = false;
   $('scanInfo').textContent = '準備しています…'; $('scanBar').style.width = '0%'; $('scanPct').textContent = '0%';
   let wake = null; try { wake = await navigator.wakeLock?.request('screen'); } catch {}
@@ -119,14 +124,13 @@ $('startScan').onclick = async () => {
     await loadDetector();
     const W = v.videoWidth, H = v.videoHeight; cv.width = W; cv.height = H;
     const t0 = performance.now();
-    const { tracks, frames } = await scanVideo(v, {
-      tiles,
+    const { tracks, frames, motion } = await scanVideo(v, {
+      tiles, anchor,
       isStopped: () => stopFlag,
       onProgress: p => { const n = Math.min(100, Math.round(p * 100)); $('scanBar').style.width = n + '%'; $('scanPct').textContent = n + '%'; },
-      onFrame: (t, dets, rate) => {
+      onFrame: (t, dets, rate, ln) => {
         cx.clearRect(0, 0, W, H);
-        cx.lineWidth = Math.max(3, W / 300); cx.strokeStyle = '#ff3b4f';
-        cx.beginPath(); cx.moveTo(S.line[0][0] * W, S.line[0][1] * H); cx.lineTo(S.line[1][0] * W, S.line[1][1] * H); cx.stroke();
+        if (ln) { cx.lineWidth = Math.max(3, W / 300); cx.strokeStyle = '#ff3b4f'; cx.beginPath(); cx.moveTo(ln[0][0] * W, ln[0][1] * H); cx.lineTo(ln[1][0] * W, ln[1][1] * H); cx.stroke(); }
         cx.strokeStyle = '#3fb4ff'; cx.lineWidth = Math.max(2, W / 500);
         for (const d of dets) cx.strokeRect(d.x1 * W, d.y1 * H, (d.x2 - d.x1) * W, (d.y2 - d.y1) * H);
         $('scanInfo').textContent = `${rate ? rate.toFixed(2).replace(/0$/, '') + '倍' : 'コマ送り'}で解析中（${usedDelegate() === 'GPU' ? '速いモード' : 'ふつうモード'}）`;
@@ -135,22 +139,57 @@ $('startScan').onclick = async () => {
     const sec = (performance.now() - t0) / 1000;
     $('scanInfo').textContent = 'まとめています…';
     await new Promise(r => setTimeout(r, 30));
-    const s = buildSession(tracks, W, H, v.duration, tiles);
+    const s = buildSession(tracks, W, H, v.duration, tiles, null, motion);
     s.scanStats = { frames, sec: Math.round(sec), delegate: usedDelegate(), stopped: stopFlag };
     await saveSession(s); S.session = s;
     toast(`解析が終わりました（${Math.round(sec)}秒）`);
     showResult();
   } catch (err) {
     console.error(err); toast('解析できませんでした：' + (err.message || err)); go('sHome'); showHome();
-  } finally { try { wake?.release(); } catch {} }
+  } finally { try { wake?.release(); } catch {} S.lineK = null; }
 };
+// 線を合わせたコマを、記録に残せる小さい写真にする
+function frameImage(v) {
+  const c = document.createElement('canvas'); c.width = 640; c.height = Math.round(640 * v.videoHeight / v.videoWidth);
+  c.getContext('2d').drawImage(v, 0, 0, c.width, c.height); return c.toDataURL('image/jpeg', 0.85);
+}
+// 各コマの「いま→線のコマ」の変換から、その時刻のコマでの線の位置を出す
+function makeLineAt(s) {
+  const map = new Map(), rows = s.motion || [];
+  for (const r of rows) map.set(Math.round(r[0] * 1000), r);
+  const lineOf = r => { if (!r || !r[10]) return null; const Hi = inv3(r.slice(11, 20)); return s.line.map(p => apply(Hi, p[0], p[1])); };
+  const near = (t, tol) => { // 近い時刻のコマ（二分探索）
+    if (!rows.length) return null;
+    let lo = 0, hi = rows.length - 1;
+    while (hi - lo > 1) { const m = (lo + hi) >> 1; if (rows[m][0] <= t) lo = m; else hi = m; }
+    const r = Math.abs(rows[lo][0] - t) <= Math.abs(rows[hi][0] - t) ? rows[lo] : rows[hi];
+    return Math.abs(r[0] - t) <= tol ? r : null;
+  };
+  const hkOf = r => r && r[10] ? r.slice(11, 20) : null;
+  if (!rows.length) return { exact: () => s.line, near: () => s.line, Hk: () => null, toK: () => [1, 0, 0, 0, 1, 0, 0, 0, 1] };
+  return {
+    toK: t => hkOf(map.get(Math.round(t * 1000)) || near(t, 0.002)),
+    exact: t => lineOf(map.get(Math.round(t * 1000)) || near(t, 0.002)),
+    near: (t, tol = 0.2) => lineOf(near(t, tol)),
+    Hk: t => { const r = near(t, 0.6); return r && r[10] ? r.slice(11, 20) : null; },
+  };
+}
+async function lineKOf(s) {
+  if (!s.lineImg) return null;
+  if (S.kCache && S.kCache.id === s.id) return S.kCache.K;
+  const im = new Image(); im.src = s.lineImg; await im.decode();
+  const K = grabGray(im, im.naturalWidth, im.naturalHeight); S.kCache = { id: s.id, K }; return K;
+}
 
-function buildSession(rawTracks, W, H, duration, tiles, preset) {
+function buildSession(rawTracks, W, H, duration, tiles, preset, motion) {
   const line = S.line;
+  const r5 = x => Math.round(x * 1e5) / 1e5;
+  const mrows = (motion || []).map(([t, T, Hk]) => [r5(t), ...T.map(r5), Hk ? 1 : 0, ...(Hk ? Hk.map(r5) : [])]);
+  const toK = makeLineAt({ line, motion: mrows }).toK;
   // 短すぎる切れはし（見まちがい）は外す。ただしラインを越えたものは残す
   const tracks = [], crossings = [];
   for (const tr of rawTracks) {
-    const cr = trackCrossings(tr, line, W, H);
+    const cr = trackCrossings(tr, toK, line, W, H);
     const dur = tr.s[tr.s.length - 1][0] - tr.s[0][0];
     if (!cr.length && (tr.s.length < 4 || dur < 0.5)) continue;
     crossings.push(...cr);
@@ -166,7 +205,7 @@ function buildSession(rawTracks, W, H, duration, tiles, preset) {
     groups.push(...groupTracks(tracks.filter(t => !used.has(t.id)).map(t => ({ ...t, hist: Float32Array.from(t.hist) }))));
   } else groups = groupTracks(tracks.map(t => ({ ...t, hist: Float32Array.from(t.hist) })));
   const s = {
-    id: 's' + Date.now(), date: Date.now(), videoName: S.videoFile.name, videoSize: S.videoFile.size, duration, W, H, line, tiles, dir,
+    id: 's' + Date.now(), date: Date.now(), videoName: S.videoFile.name, videoSize: S.videoFile.size, duration, W, H, line, tiles, dir, motion: mrows, lineImg: S.lineImg,
     minLap: lsGet('skate-minlap', 15), tracks, crossings, persons: groups.map(ids => ({ id: 'p' + ids[0], name: '', tracks: ids })),
   };
   // 名前の仮番号：ラインを越えた回数が多い順
@@ -233,7 +272,7 @@ $('minLap').onchange = async e => { const s = S.session; s.minLap = Math.max(3, 
 const P = { mode: 'chase', shape: 'v', rate: 1, path: null, raf: 0, refining: false, check: null };
 const playCv = $('playCv'), playCx = playCv.getContext('2d');
 function openPerson(p) {
-  S.person = p; go('sPerson');
+  S.person = p; go('sPerson'); P.lineAt = null;
   $('pName').textContent = p.name || '（名前なし）';
   P.path = buildPath(S.session, p);
   renderLaps(); renderScenes();
@@ -259,12 +298,13 @@ async function refinePerson(p) {
   P.refining = true; info.classList.remove('hide');
   try {
     await loadDetector();
-    const v = $('vWork');
+    const v = $('vWork'), la = makeLineAt(s);
+    const ctx = { line: s.line, K: await lineKOf(s), HkNear: la.Hk, toK: la.toK, tiles: s.tiles };
     for (let i = 0; i < todo.length; i++) {
       if (S.person !== p) break;
       info.textContent = `ラップを細かく見直しています… ${i + 1}/${todo.length}`;
       const c = todo[i], tr = trackById(s, c.track);
-      const nc = await refineCrossing(v, c, tr, s.line, s.tiles);
+      const nc = await refineCrossing(v, c, tr, ctx);
       Object.assign(c, nc);
       renderLaps();
     }
@@ -397,7 +437,8 @@ function drawFrame() {
     c.drawImage(v, 0, 0, ow, oh);
     const sx = ow, sy = oh;
     c.lineWidth = Math.max(2, ow / 400); c.strokeStyle = '#ff3b4f';
-    c.beginPath(); c.moveTo(s.line[0][0] * sx, s.line[0][1] * sy); c.lineTo(s.line[1][0] * sx, s.line[1][1] * sy); c.stroke();
+    const ln = (P.lineAt || (P.lineAt = makeLineAt(s))).near(t);
+    if (ln) { c.beginPath(); c.moveTo(ln[0][0] * sx, ln[0][1] * sy); c.lineTo(ln[1][0] * sx, ln[1][1] * sy); c.stroke(); }
     const b = interpBox(P.path.all, t, 1.0);
     if (b) {
       c.strokeStyle = '#3fb4ff'; c.lineWidth = Math.max(3, ow / 300); c.strokeRect(b.x1 * sx, b.y1 * sy, (b.x2 - b.x1) * sx, (b.y2 - b.y1) * sy);
@@ -508,6 +549,10 @@ async function startLive() {
   L.rec = new MediaRecorder(S.stream, L.type ? { mimeType: L.type, videoBitsPerSecond: 6e6 } : {});
   L.chunks = []; L.rec.ondataavailable = e => e.data.size && L.chunks.push(e.data);
   L.tracker = new Tracker(W, H); L.persons = []; L.byTrack = new Map(); L.crossings = []; L.lastDet = 0;
+  // いま写っているコマを「線のコマ」にする。首を振っても、毎回このコマに重ねて線の位置を求める
+  S.lineImg = frameImage(v);
+  L.anchor = new LineAnchor(grabGray(v, W, H), S.line.map(p => p.slice())); L.chain = new MotionChain(); L.motion = []; L.toK = new Map();
+  const toK = t => L.toK.get(Math.round(t * 1000)) || null;
   L.minLap = lsGet('skate-minlap', 15); L.tiles = lsGet('skate-tiles', 1);
   await new Promise(r => { L.rec.onstart = r; L.rec.start(1000); });
   L.t0 = performance.now();
@@ -523,11 +568,14 @@ async function startLive() {
       if (t >= 0) {
         grabSmall(v, W, H);
         const dets = detectFrame(v, W, H, L.tiles);
-        L.tracker.update(t, dets, v);
-        for (const tr of L.tracker.active) { const c = liveCrossing(tr, S.line, W, H); if (c) onLiveCross(c, tr); }
+        const P = grabGray(v, W, H), T = L.chain.step(P, dets), loc = L.anchor.locate(P, T, dets);
+        L.motion.push([t, T, loc ? loc.H : null]); if (loc) L.toK.set(Math.round(t * 1000), loc.H);
+        L.tracker.update(t, dets, v, T);
+        for (const tr of L.tracker.active) { const c = liveCrossing(tr, toK, S.line, W, H); if (c) onLiveCross(c, tr); }
         if ($('dark').classList.contains('hide')) {
           cx.clearRect(0, 0, W, H); cx.lineWidth = Math.max(3, W / 300); cx.strokeStyle = '#ff3b4f';
-          cx.beginPath(); cx.moveTo(S.line[0][0] * W, S.line[0][1] * H); cx.lineTo(S.line[1][0] * W, S.line[1][1] * H); cx.stroke();
+          const ln = loc ? loc.line : null;
+          if (ln) { cx.beginPath(); cx.moveTo(ln[0][0] * W, ln[0][1] * H); cx.lineTo(ln[1][0] * W, ln[1][1] * H); cx.stroke(); }
           cx.strokeStyle = '#3fb4ff'; cx.lineWidth = Math.max(2, W / 500);
           for (const d of dets) cx.strokeRect(d.x1 * W, d.y1 * H, (d.x2 - d.x1) * W, (d.y2 - d.y1) * H);
         }
@@ -597,7 +645,7 @@ $('stopLive').onclick = async () => {
   L.rec = null; stopCamera(); $('stopLive').disabled = false;
   try { await setVideo(file); } catch (e) { toast('撮った動画を開けませんでした'); }
   const vd = $('vWork').duration;
-  const s = buildSession(L.tracker.finish(), W, H, isFinite(vd) && vd > 0 ? vd : dur, L.tiles, L.persons.map(p => p.tracks));
+  const s = buildSession(L.tracker.finish(), W, H, isFinite(vd) && vd > 0 ? vd : dur, L.tiles, L.persons.map(p => p.tracks), L.motion);
   // その場で付けた名前（A・B…）を引きつぐ
   for (const lp of L.persons) { const sp = s.persons.find(x => x.tracks.includes(lp.tracks[0])); if (sp) sp.name = lp.name; }
   s.live = true; s.title = name.replace(/\.\w+$/, '');
@@ -614,6 +662,7 @@ $('deepScan').onclick = async () => {
   if (!S.session) return;
   if (!confirm('撮った動画を最初から解析し直します（数分かかります）。新しい記録として追加されます。')) return;
   S.line = S.session.line; S.live = false;
+  S.lineK = await lineKOf(S.session); S.lineImg = S.session.lineImg;
   $('startScan').onclick();
 };
 

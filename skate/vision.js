@@ -1,5 +1,6 @@
 // スケートラップ：人を見つける・追いかける・赤いラインの通過を測る（すべて端末の中で計算）
 // 座標はすべて 0〜1（動画の幅・高さを1とする）で持つ。
+import { grabGray, MotionChain, estimate, apply, inv3, mul3, I3 } from './motion.js';
 const MP = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14';
 const MODEL = new URL('./models/efficientdet_lite0.tflite', import.meta.url).href;
 
@@ -96,12 +97,14 @@ export function histSim(a, b) { // 1 に近いほど似ている（胴と脚の�
 // ---------- 追いかけ ----------
 export class Tracker {
   constructor(W, H) { this.W = W; this.H = H; this.aspect = W / H; this.active = []; this.done = []; this.next = 1; }
-  update(t, dets, src) {
+  // T：いまのコマ→基準 の変換（カメラが動いても、人の動きだけを比べるため）。動かないカメラなら null
+  update(t, dets, src, T) {
     const A = this.aspect, cand = [];
+    const rds = dets.map(d => T ? mapBox(T, d) : d);
     for (const tr of this.active) {
-      const L = tr.s[tr.s.length - 1], dt = t - L[0];
+      const L = tr.r[tr.r.length - 1], dt = t - L[0];
       const lh = L[4] - L[2], cx = (L[1] + L[3]) / 2 + tr.vx * dt, cy = (L[2] + L[4]) / 2 + tr.vy * dt;
-      dets.forEach((d, j) => {
+      rds.forEach((d, j) => {
         const dh = d.y2 - d.y1, r = dh / lh;
         if (r < 0.55 || r > 1.8) return;
         const dx = ((d.x1 + d.x2) / 2 - cx) * A, dy = (d.y1 + d.y2) / 2 - cy;
@@ -113,28 +116,29 @@ export class Tracker {
     const usedT = new Set(), usedD = new Set();
     for (const [, tr, j] of cand) {
       if (usedT.has(tr) || usedD.has(j)) continue;
-      usedT.add(tr); usedD.add(j); this._add(tr, t, dets[j], src);
+      usedT.add(tr); usedD.add(j); this._add(tr, t, dets[j], rds[j], src);
     }
     dets.forEach((d, j) => {
       if (usedD.has(j)) return;
       // 周りの人の枠と大きく重なる新しい枠は、重なりの見まちがいとして作らない
-      if (this.active.some(tr => usedT.has(tr) && iou(lastBox(tr), d) > 0.5)) return;
-      const tr = { id: this.next++, s: [], vx: 0, vy: 0, hist: new Float32Array(NB), hn: 0, thumbArea: 0, thumb: null };
-      this.active.push(tr); this._add(tr, t, d, src);
+      if (this.active.some(tr => usedT.has(tr) && iou(lastBox(tr), rds[j]) > 0.5)) return;
+      const tr = { id: this.next++, s: [], r: [], vx: 0, vy: 0, hist: new Float32Array(NB), hn: 0, thumbArea: 0, thumb: null };
+      this.active.push(tr); this._add(tr, t, d, rds[j], src);
     });
     this.active = this.active.filter(tr => {
       if (t - tr.s[tr.s.length - 1][0] > 0.8) { this.done.push(tr); return false; }
       return true;
     });
   }
-  _add(tr, t, d, src) {
-    const p = tr.s[tr.s.length - 1];
+  _add(tr, t, d, rd, src) {
+    const p = tr.r[tr.r.length - 1];
     if (p) {
       const dt = Math.max(1e-3, t - p[0]);
-      const vx = ((d.x1 + d.x2) / 2 - (p[1] + p[3]) / 2) / dt, vy = ((d.y1 + d.y2) / 2 - (p[2] + p[4]) / 2) / dt;
-      tr.vx = tr.s.length > 1 ? tr.vx * 0.5 + vx * 0.5 : vx; tr.vy = tr.s.length > 1 ? tr.vy * 0.5 + vy * 0.5 : vy;
+      const vx = ((rd.x1 + rd.x2) / 2 - (p[1] + p[3]) / 2) / dt, vy = ((rd.y1 + rd.y2) / 2 - (p[2] + p[4]) / 2) / dt;
+      tr.vx = tr.r.length > 1 ? tr.vx * 0.5 + vx * 0.5 : vx; tr.vy = tr.r.length > 1 ? tr.vy * 0.5 + vy * 0.5 : vy;
     }
     tr.s.push([t, d.x1, d.y1, d.x2, d.y2, d.score]);
+    tr.r.push([t, rd.x1, rd.y1, rd.x2, rd.y2]);
     const h = colorHist(d);
     if (h) { for (let i = 0; i < NB; i++) tr.hist[i] += h[i]; tr.hn++; }
     const area = (d.x2 - d.x1) * (d.y2 - d.y1) * d.score;
@@ -142,7 +146,12 @@ export class Tracker {
   }
   finish() { this.done.push(...this.active); this.active = []; return this.done; }
 }
-const lastBox = tr => { const L = tr.s[tr.s.length - 1]; return { x1: L[1], y1: L[2], x2: L[3], y2: L[4] }; };
+const lastBox = tr => { const L = tr.r[tr.r.length - 1]; return { x1: L[1], y1: L[2], x2: L[3], y2: L[4] }; };
+function mapBox(T, d) {
+  const ps = [apply(T, d.x1, d.y1), apply(T, d.x2, d.y1), apply(T, d.x1, d.y2), apply(T, d.x2, d.y2)];
+  const xs = ps.map(p => p[0]), ys = ps.map(p => p[1]);
+  return { x1: Math.min(...xs), y1: Math.min(...ys), x2: Math.max(...xs), y2: Math.max(...ys), score: d.score };
+}
 function cropThumb(src, d, W, H) {
   const cv = document.createElement('canvas'); cv.width = 96; cv.height = 128;
   const bw = (d.x2 - d.x1) * W, bh = (d.y2 - d.y1) * H, s = Math.max(bw / 96, bh / 128) * 1.1;
@@ -154,9 +163,11 @@ function cropThumb(src, d, W, H) {
 
 // ---------- 動画を流しながら解析する ----------
 // onFrame(t, dets) は画面の表示用。速さは検出にかかる時間に合わせて 1〜4 倍で自動調整。
-export async function scanVideo(video, { tiles = 1, onFrame, onProgress, isStopped }) {
+// anchor：線を合わせたコマ（LineAnchor）。毎回そのコマに重ねて、いまのコマでの線の位置を求める。
+// motion：各コマの [時刻, いまのコマ→基準(9), いまのコマ→線のコマ(9 または null)]
+export async function scanVideo(video, { tiles = 1, anchor, onFrame, onProgress, isStopped }) {
   const W = video.videoWidth, H = video.videoHeight;
-  const tracker = new Tracker(W, H);
+  const tracker = new Tracker(W, H), chain = new MotionChain(), motion = [];
   await seekTo(video, 0);
   video.muted = true;
   let rate = 2; video.playbackRate = rate;
@@ -164,7 +175,10 @@ export async function scanVideo(video, { tiles = 1, onFrame, onProgress, isStopp
   const work = t => {
     grabSmall(video, W, H);
     const dets = detectFrame(video, W, H, tiles);
-    tracker.update(t, dets, video);
+    const P = grabGray(video, W, H), T = chain.step(P, dets);
+    const loc = anchor ? anchor.locate(P, T, dets) : null;
+    motion.push([t, T, loc ? loc.H : null]);
+    tracker.update(t, dets, video, T);
     frames++;
     if (lastT >= 0 && !slow) {
       gaps.push(t - lastT);
@@ -177,7 +191,7 @@ export async function scanVideo(video, { tiles = 1, onFrame, onProgress, isStopp
       }
     }
     lastT = t;
-    onFrame && onFrame(t, dets, slow ? 0 : rate);
+    onFrame && onFrame(t, dets, slow ? 0 : rate, loc ? loc.line : null);
     onProgress && onProgress(t / video.duration);
   };
   let from = 0;
@@ -204,7 +218,7 @@ export async function scanVideo(video, { tiles = 1, onFrame, onProgress, isStopp
     const mt = await seekTo(video, t); work(mt);
   }
   video.onended = null; video.playbackRate = 1;
-  return { tracks: tracker.finish(), frames };
+  return { tracks: tracker.finish(), frames, motion };
 }
 
 // 決まった時刻へ移動し、本当に出ているコマの時刻を返す
@@ -262,6 +276,11 @@ export function lineMetric(line, W, H, x1, y2, x2) {
   const px = (x1 + x2) / 2 * W, py = y2 * H, dx = bx - ax, dy = by - ay, L2 = dx * dx + dy * dy, L = Math.sqrt(L2);
   return { s: ((px - ax) * dy - (py - ay) * dx) / L, u: ((px - ax) * dx + (py - ay) * dy) / L2 };
 }
+// 足もとを「線のコマ」の位置に置き直してから比べる（カメラが振れても、止まっている人は線を越えない）
+function footMetric(line, W, H, Hk, x1, y2, x2) {
+  const q = apply(Hk, (x1 + x2) / 2, y2);
+  return lineMetric(line, W, H, q[0], q[1], q[0]);
+}
 // 直線を当てはめて s=0 の時刻を求める
 function fitZero(pts) {
   const n = pts.length;
@@ -272,8 +291,10 @@ function fitZero(pts) {
   if (!den || !num) return null;
   const b = num / den; return mt - ms / b;
 }
-export function trackCrossings(tr, line, W, H) {
-  const m = tr.s.map(r => ({ t: r[0], ...lineMetric(line, W, H, r[1], r[4], r[3]) }));
+// toK(t)：その時刻のコマ→線のコマ の変換。線のコマに重ならない（線が写っていない）コマは null
+export function trackCrossings(tr, toK, line, W, H) {
+  const m = [];
+  for (const r of tr.s) { const Hk = toK(r[0]); if (Hk) m.push({ t: r[0], ...footMetric(line, W, H, Hk, r[1], r[4], r[3]) }); }
   const out = [];
   for (let i = 0; i + 1 < m.length; i++) {
     const a = m[i], b = m[i + 1];
@@ -289,7 +310,8 @@ export function trackCrossings(tr, line, W, H) {
   return out;
 }
 // 選手を開いた時に、通過の前後をコマ送りで見直してさらに正確にする
-export async function refineCrossing(video, cr, tr, line, tiles = 1) {
+// ctx：{ line（線のコマでの線）, K（線のコマの白黒ピラミッド）, HkNear(t)（近いコマの いま→線のコマ の変換。予想用）, toK(t), tiles }
+export async function refineCrossing(video, cr, tr, ctx) {
   const W = video.videoWidth, H = video.videoHeight;
   const boxAt = t => interpBox(tr.s, t, 0.8);
   const pts = [], seen = new Set();
@@ -297,13 +319,24 @@ export async function refineCrossing(video, cr, tr, line, tiles = 1) {
     const mt = await seekTo(video, cr.t + k / 30);
     const key = Math.round(mt * 1000); if (seen.has(key)) continue; seen.add(key);
     const ref = boxAt(mt); if (!ref) continue;
-    const dets = detectFrame(video, W, H, tiles);
+    const dets = detectFrame(video, W, H, ctx.tiles || 1);
     let best = null, bi = 0.3;
     for (const d of dets) { const v = iou(d, ref); if (v > bi) { bi = v; best = d; } }
-    if (best) pts.push([mt, lineMetric(line, W, H, best.x1, best.y2, best.x2).s]);
+    if (!best) continue;
+    // このコマを線のコマに直接重ねて、このコマでの線の位置を求める
+    let Hk = null;
+    if (ctx.K) {
+      const P = grabGray(video, W, H), init = ctx.HkNear(mt);
+      const r = estimate(P, ctx.K, init || I3(), dets, !init);
+      if (r && r.inl >= 20 && r.ratio >= 0.3) Hk = r.H;
+    } else Hk = I3();
+    if (Hk) pts.push([mt, footMetric(ctx.line, W, H, Hk, best.x1, best.y2, best.x2).s]);
   }
   // 解析の時に取れた位置も合わせる（見直しで見失ったコマを補う）
-  for (const r of tr.s) if (Math.abs(r[0] - cr.t) < 0.35 && !pts.some(p => Math.abs(p[0] - r[0]) < 0.012)) pts.push([r[0], lineMetric(line, W, H, r[1], r[4], r[3]).s]);
+  for (const r of tr.s) {
+    if (Math.abs(r[0] - cr.t) >= 0.35 || pts.some(p => Math.abs(p[0] - r[0]) < 0.012)) continue;
+    const Hk = ctx.toK(r[0]); if (Hk) pts.push([r[0], footMetric(ctx.line, W, H, Hk, r[1], r[4], r[3]).s]);
+  }
   pts.sort((a, b) => a[0] - b[0]);
   if (self.SKATE_DEBUG) console.log('refine', cr.t.toFixed(3), seen.size, JSON.stringify(pts.map(p => [+p[0].toFixed(3), +p[1].toFixed(1)])));
   // 符号が変わる所（いちばん元の時刻に近い所）の前後 4 コマずつで直線を当てはめる
@@ -347,11 +380,12 @@ function norm(h, n) { const o = new Float32Array(NB); for (let i = 0; i < NB; i+
 
 // ---------- その場で測る（撮影しながら）----------
 // 追いかけ中の人の、いちばん新しい2つの位置の間でラインを越えたかを調べる。越えていれば通過を返す。
-export function liveCrossing(tr, line, W, H) {
+export function liveCrossing(tr, toK, line, W, H) {
   const n = tr.s.length; if (n < 2) return null;
   const A = tr.s[n - 2], B = tr.s[n - 1];
   if (B[0] - A[0] > 0.6) return null;
-  const a = lineMetric(line, W, H, A[1], A[4], A[3]), b = lineMetric(line, W, H, B[1], B[4], B[3]);
+  const HA = toK(A[0]), HB = toK(B[0]); if (!HA || !HB) return null;
+  const a = footMetric(line, W, H, HA, A[1], A[4], A[3]), b = footMetric(line, W, H, HB, B[1], B[4], B[3]);
   if (!(a.s < 0 && b.s >= 0) && !(a.s > 0 && b.s <= 0)) return null;
   const um = (a.u + b.u) / 2; if (um < -0.15 || um > 1.15) return null;
   const t = A[0] + (B[0] - A[0]) * (a.s / (a.s - b.s));
