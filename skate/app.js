@@ -370,7 +370,7 @@ function autoChain(s) {
     follow(s, p, { model });
   }
   const top = topPersons(s)[0];
-  if (top && !top.follow) follow(s, top, {});
+  if (top && !top.follow) follow(s, top, { fromCenter: true }); // カメラが追っていた人：まずまん中だけで選び、その色を覚えて選び直す
   topPersons(s).forEach((p, i) => { if (!p.member) p.name = `選手${i + 1}`; });
 }
 
@@ -397,7 +397,8 @@ function followPath(s, { model, pins = [], bans = [] }) {
   const PLc = new Map(), PL = (a, b) => { if (a === b) return 1; const k = a < b ? a + ',' + b : b + ',' + a; if (!PLc.has(k)) PLc.set(k, looks(hist.get(a), hist.get(b))); return PLc.get(k); };
   let path = null;
   for (let it = 0; it < 3; it++) {
-    const em = fr.map(cs => cs.map(c => (1 - Math.abs(c.cx - 0.5) * 2.2) + (model ? 6 * (looks(hist.get(c.tr), model) - 0.88) : 0) + (pinTr.has(c.tr) ? 1.5 : 0)));
+    // まん中に近い（×2）＋ この人らしい色（×6）。この人らしい人がいないコマは、だれも選ばない（-0.6）
+    const em = fr.map(cs => cs.map(c => 2 * (1 - Math.abs(c.cx - 0.5) * 2.2) + (model ? 6 * (looks(hist.get(c.tr), model) - 0.88) - 0.6 : 0) + (pinTr.has(c.tr) ? 1.5 : 0)));
     const best = em.map(r => r.slice()), back = fr.map(cs => cs.map(() => null));
     const forced = new Set(); for (const pn of pins) fr.forEach((cs, k) => { if (cs.length === 1 && cs[0].tr === pn.tr && Math.abs(cs[0].t - pn.t) < 0.06) forced.add(k); });
     for (let i = 1; i < fr.length; i++) for (let j = 0; j < fr[i].length; j++) {
@@ -411,10 +412,11 @@ function followPath(s, { model, pins = [], bans = [] }) {
           const p = fr[k][m]; let cost;
           if (p.tr === q.tr) cost = skip * MISS;
           else {
+            // 別の枠へ移る：遠すぎる時だけ禁止し、あとは距離と色の違いを少しずつ重く見る（厳しすぎると正しい枠へ移れない）
             const d = Math.hypot((p.cx - q.cx) * A, p.y2 - q.y2) / Math.max(p.h, q.h, 0.03);
-            if (d > 1.2 + dt * 1.5) continue;
-            const pl = PL(p.tr, q.tr); if (pl < 0.8) continue;
-            cost = 0.3 + d * 0.5 + (0.95 - pl) * 8 + skip * MISS;
+            if (d > 4 + dt * 2) continue;
+            const pl = PL(p.tr, q.tr);
+            cost = 0.5 + d * 0.3 + Math.max(0, 0.92 - pl) * 4 + skip * MISS;
           }
           const v = best[k][m] - cost + em[i][j];
           if (v > best[i][j]) { best[i][j] = v; back[i][j] = [k, m]; }
@@ -435,9 +437,9 @@ function followPath(s, { model, pins = [], bans = [] }) {
   }
   return { path, model };
 }
-function follow(s, person, { model = null, pins = person.pins || [], bans = person.bans || [] }) {
+function follow(s, person, { model = null, pins = person.pins || [], bans = person.bans || [], fromCenter = false }) {
   if (!model && person.model) model = Float32Array.from(person.model);
-  if (!model) { // この人のいちばん長い切れはしの色から始める
+  if (!model && !fromCenter) { // この人のいちばん長い切れはしの色から始める
     const own = person.tracks.map(id => trackById(s, id)).filter(t => t && t.hn && !t.virtual).sort((a, b) => b.s.length - a.s.length)[0];
     if (own) model = Float32Array.from(own.hist, v => v / own.hn);
   }
