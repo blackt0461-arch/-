@@ -65,11 +65,18 @@ async function showHome() {
 async function setVideo(file) {
   if (S.videoURL) URL.revokeObjectURL(S.videoURL);
   S.videoFile = file; S.videoURL = URL.createObjectURL(file);
-  for (const v of [$('vScan'), $('vPlay'), $('vWork')]) v.src = S.videoURL;
-  await new Promise((res, rej) => { const v = $('vWork'); if (v.readyState >= 1) return res(); v.onloadedmetadata = res; v.onerror = () => rej(new Error('この動画は開けませんでした')); });
+  const v = $('vWork');
+  const ready = new Promise((res, rej) => {
+    v.onloadedmetadata = () => res(); v.onerror = () => rej(new Error('この動画は開けませんでした'));
+    setTimeout(() => rej(new Error('動画を読みこめませんでした（時間切れ）。もう一度選んでください')), 20000);
+  });
+  for (const x of [$('vScan'), $('vPlay'), v]) { x.preload = 'auto'; x.src = S.videoURL; try { x.load(); } catch {} }
+  await ready;
+  if (!v.videoWidth) await new Promise(r => { v.onloadeddata = r; setTimeout(r, 3000); });
 }
 $('file').onchange = async e => {
   const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  toast('動画を読みこんでいます…');
   try { await setVideo(f); } catch (err) { return toast(err.message); }
   S.session = null; S.live = false; S.recBlob = null;
   openLine();
@@ -926,6 +933,10 @@ $('deepScan').onclick = async () => {
   S.lineK = await lineKOf(S.session); S.lineImg = S.session.lineImg;
   $('startScan').onclick();
 };
+
+// ---------- 思わぬエラーを画面に出す（スクショで原因が分かるように）----------
+window.addEventListener('error', e => toast('エラー：' + (e.message || e.error)));
+window.addEventListener('unhandledrejection', e => toast('エラー：' + ((e.reason && e.reason.message) || e.reason)));
 
 // ---------- はじめ ----------
 showHome();
