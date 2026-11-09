@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Salon Mimosa｜ヘア＆フェイシャル（見本サイト）</title>
+<meta name="description" content="駅から徒歩3分、ひとりひとりの髪と肌に合わせるプライベートサロン。※KOTETSU WORKS の制作見本（架空のお店）です。">
+<meta name="robots" content="noindex">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;1,500&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #faf6ef; --bg2: #f1ebe0; --ink: #3b3530; --muted: #8a8077; --accent: #b98b5e; --sage: #8fa38a; --line: #e4dbcd; --white: #fffdf9;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: "Zen Kaku Gothic New", "Hiragino Sans", sans-serif; line-height: 1.85; letter-spacing: .04em; }
+  a { color: inherit; text-decoration: none; }
+  img, svg { display: block; max-width: 100%; }
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 0 20px; }
+  .demo { background: var(--ink); color: #f3ede4; font-size: 12px; text-align: center; padding: 6px 12px; }
+  .demo a { text-decoration: underline; }
+
+  header { position: sticky; top: 0; z-index: 10; background: rgba(250,246,239,.92); backdrop-filter: blur(8px); border-bottom: 1px solid var(--line); }
+  .nav { display: flex; align-items: center; justify-content: space-between; height: 64px; }
+  .logo { font-family: "Cormorant Garamond", serif; font-size: 26px; letter-spacing: .12em; }
+  .logo small { font-family: "Zen Kaku Gothic New"; font-size: 10px; letter-spacing: .2em; color: var(--muted); margin-left: 8px; }
+  .nav ul { display: flex; gap: 26px; list-style: none; margin: 0; padding: 0; font-size: 14px; }
+  .btn { display: inline-block; background: var(--accent); color: #fff; padding: 12px 26px; border-radius: 999px; font-size: 14px; font-weight: 500; transition: .2s; border: 0; cursor: pointer; font-family: inherit; letter-spacing: .08em; }
+  .btn:hover { background: #a3764b; }
+  .btn.ghost { background: transparent; border: 1px solid var(--accent); color: var(--accent); }
+  .nav .btn { padding: 9px 20px; }
+
+  .hero { position: relative; overflow: hidden; padding: 90px 0 110px; }
+  .hero .wrap { display: grid; grid-template-columns: 1.1fr 1fr; gap: 40px; align-items: center; }
+  .hero .en { font-family: "Cormorant Garamond", serif; font-style: italic; color: var(--accent); font-size: 20px; }
+  .hero h1 { font-size: clamp(30px, 5vw, 46px); line-height: 1.5; margin: 10px 0 20px; font-weight: 500; }
+  .hero p { color: var(--muted); margin: 0 0 30px; }
+  .hero .art { aspect-ratio: 4/5; border-radius: 200px 200px 24px 24px; background: linear-gradient(160deg, #e9dcc6, #d5c0a1 60%, #c2a985); position: relative; overflow: hidden; }
+  .hero .art svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .badges { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 26px; }
+  .badges span { font-size: 12px; border: 1px solid var(--line); background: var(--white); padding: 4px 12px; border-radius: 999px; color: var(--muted); }
+
+  section { padding: 90px 0; }
+  .ttl { text-align: center; margin-bottom: 50px; }
+  .ttl .en { font-family: "Cormorant Garamond", serif; font-size: 40px; letter-spacing: .1em; line-height: 1; }
+  .ttl h2 { font-size: 14px; font-weight: 500; color: var(--muted); margin: 10px 0 0; letter-spacing: .2em; }
+
+  .concept { background: var(--white); }
+  .concept .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 28px; }
+  .card { background: var(--bg); border-radius: 18px; padding: 30px 26px; }
+  .card .num { font-family: "Cormorant Garamond", serif; color: var(--accent); font-size: 30px; }
+  .card h3 { font-size: 17px; margin: 6px 0 10px; font-weight: 700; }
+  .card p { margin: 0; font-size: 14px; color: var(--muted); }
+
+  .tabs { display: flex; justify-content: center; gap: 10px; margin-bottom: 30px; flex-wrap: wrap; }
+  .tabs button { font-family: inherit; font-size: 14px; padding: 8px 22px; border-radius: 999px; border: 1px solid var(--line); background: var(--white); color: var(--ink); cursor: pointer; }
+  .tabs button[aria-selected="true"] { background: var(--ink); color: #fff; border-color: var(--ink); }
+  .menu-list { max-width: 680px; margin: 0 auto; }
+  .menu-item { display: flex; justify-content: space-between; gap: 16px; padding: 18px 4px; border-bottom: 1px dashed var(--line); }
+  .menu-item b { font-weight: 500; }
+  .menu-item small { display: block; color: var(--muted); font-size: 12px; }
+  .menu-item .price { font-family: "Cormorant Garamond", serif; font-size: 22px; white-space: nowrap; }
+  .note { text-align: center; font-size: 12px; color: var(--muted); margin-top: 20px; }
+
+  .staff { background: var(--bg2); }
+  .staff .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 28px; }
+  .person { text-align: center; }
+  .person .face { width: 150px; height: 150px; border-radius: 50%; margin: 0 auto 16px; display: grid; place-items: center; font-family: "Cormorant Garamond", serif; font-size: 44px; color: #fff; }
+  .person h3 { margin: 0; font-size: 17px; }
+  .person .role { font-size: 12px; color: var(--accent); letter-spacing: .15em; }
+  .person p { font-size: 13px; color: var(--muted); margin: 10px 0 0; }
+
+  .voice .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 24px; }
+  .voice blockquote { margin: 0; background: var(--white); border-radius: 18px; padding: 26px; font-size: 14px; position: relative; }
+  .voice blockquote::before { content: "“"; font-family: "Cormorant Garamond", serif; font-size: 70px; color: var(--line); position: absolute; top: -6px; left: 16px; line-height: 1; }
+  .voice cite { display: block; font-style: normal; font-size: 12px; color: var(--muted); margin-top: 10px; }
+  .stars { color: var(--accent); letter-spacing: 2px; }
+
+  .reserve { background: var(--ink); color: #f3ede4; }
+  .reserve .ttl h2 { color: #c9bfb3; }
+  .reserve form { max-width: 560px; margin: 0 auto; display: grid; gap: 16px; }
+  .reserve label { font-size: 13px; display: grid; gap: 6px; }
+  .reserve input, .reserve select, .reserve textarea { font: inherit; padding: 12px 14px; border-radius: 10px; border: 1px solid #5a524b; background: #463f39; color: #fff; }
+  .reserve .row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .reserve .msg { text-align: center; background: #463f39; border-radius: 12px; padding: 20px; display: none; }
+
+  .access .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; align-items: center; }
+  .map { aspect-ratio: 4/3; border-radius: 18px; background: var(--bg2); position: relative; overflow: hidden; }
+  dl { margin: 0; display: grid; grid-template-columns: 90px 1fr; gap: 12px 10px; font-size: 14px; }
+  dt { color: var(--muted); }
+  dd { margin: 0; }
+
+  footer { text-align: center; padding: 40px 20px 100px; font-size: 12px; color: var(--muted); border-top: 1px solid var(--line); }
+  .sp-bar { display: none; }
+
+  @media (max-width: 760px) {
+    .nav ul { display: none; }
+    .hero { padding: 50px 0 70px; }
+    .hero .wrap, .concept .grid, .staff .grid, .voice .grid, .access .grid { grid-template-columns: 1fr; }
+    .hero .art { max-width: 300px; margin: 0 auto; order: -1; }
+    section { padding: 64px 0; }
+    .reserve .row { grid-template-columns: 1fr; }
+    .sp-bar { display: grid; grid-template-columns: 1fr 1fr; position: fixed; bottom: 0; left: 0; right: 0; z-index: 20; }
+    .sp-bar a { text-align: center; padding: 14px; font-size: 14px; font-weight: 700; }
+    .sp-bar a:first-child { background: var(--white); border-top: 1px solid var(--line); }
+    .sp-bar a:last-child { background: var(--accent); color: #fff; }
+  }
+</style>
+</head>
+<body>
+<div class="demo">これは KOTETSU WORKS の制作見本です（お店・人物・口コミはすべて架空です）。<a href="../../">ほかの見本を見る</a></div>
+
+<header>
+  <div class="wrap nav">
+    <a class="logo" href="#">Mimosa<small>HAIR &amp; FACIAL</small></a>
+    <ul>
+      <li><a href="#concept">こだわり</a></li>
+      <li><a href="#menu">メニュー</a></li>
+      <li><a href="#staff">スタッフ</a></li>
+      <li><a href="#access">アクセス</a></li>
+    </ul>
+    <a class="btn" href="#reserve">ご予約</a>
+  </div>
+</header>
+
+<section class="hero">
+  <div class="wrap">
+    <div>
+      <div class="en">private salon</div>
+      <h1>髪と肌に、<br>ていねいな時間を。</h1>
+      <p>完全予約制・席は2つだけの小さなサロンです。<br>カウンセリングに時間をかけて、毎朝のお手入れがラクになる髪型をご提案します。</p>
+      <a class="btn" href="#reserve">空き状況を見て予約する</a>
+      <div class="badges"><span>駅から徒歩3分</span><span>個室あり</span><span>キッズスペース</span><span>カード・QR決済OK</span></div>
+    </div>
+    <div class="art" aria-hidden="true">
+      <svg viewBox="0 0 400 500" preserveAspectRatio="xMidYMid slice">
+        <circle cx="300" cy="120" r="70" fill="#f3e3b0" opacity=".8"/>
+        <g fill="#8fa38a" opacity=".85">
+          <path d="M60 520 C 90 380, 140 300, 210 250 C 160 330, 130 420, 120 520 Z"/>
+          <path d="M210 250 c 30 -20 60 -10 70 10 c -30 10 -55 5 -70 -10 Z"/>
+          <path d="M170 300 c 10 -35 45 -50 65 -40 c -15 25 -40 40 -65 40 Z"/>
+          <path d="M140 370 c -5 -35 20 -60 45 -60 c -5 30 -25 50 -45 60 Z"/>
+        </g>
+        <g fill="#f2d16b">
+          <circle cx="215" cy="245" r="9"/><circle cx="232" cy="236" r="7"/><circle cx="226" cy="258" r="8"/>
+          <circle cx="245" cy="252" r="6"/><circle cx="180" cy="290" r="8"/><circle cx="196" cy="282" r="6"/>
+          <circle cx="150" cy="352" r="7"/><circle cx="165" cy="342" r="6"/>
+        </g>
+      </svg>
+    </div>
+  </div>
+</section>
+
+<section class="concept" id="concept">
+  <div class="wrap">
+    <div class="ttl"><div class="en">Concept</div><h2>Mimosa のこだわり</h2></div>
+    <div class="grid">
+      <div class="card"><div class="num">01</div><h3>はじめに20分の相談</h3><p>なりたい雰囲気だけでなく、朝かけられる時間やお仕事の決まりまで伺ってから切ります。</p></div>
+      <div class="card"><div class="num">02</div><h3>髪にやさしい薬剤</h3><p>カラーやパーマは、頭皮への刺激が少ない薬剤を髪の状態に合わせて選びます。</p></div>
+      <div class="card"><div class="num">03</div><h3>はじめから終わりまで同じ人</h3><p>担当がとちゅうで変わらないので、細かいご希望もそのまま伝わります。</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="menu">
+  <div class="wrap">
+    <div class="ttl"><div class="en">Menu</div><h2>メニューと料金</h2></div>
+    <div class="tabs" role="tablist">
+      <button role="tab" aria-selected="true" data-tab="cut">カット</button>
+      <button role="tab" aria-selected="false" data-tab="color">カラー・パーマ</button>
+      <button role="tab" aria-selected="false" data-tab="facial">フェイシャル</button>
+    </div>
+    <div class="menu-list" data-panel="cut">
+      <div class="menu-item"><div><b>カット</b><small>シャンプー・ブロー込み</small></div><div class="price">¥5,500</div></div>
+      <div class="menu-item"><div><b>前髪カット</b><small>10分ほど</small></div><div class="price">¥1,100</div></div>
+      <div class="menu-item"><div><b>学生カット</b><small>高校生・大学生</small></div><div class="price">¥4,400</div></div>
+      <div class="menu-item"><div><b>キッズカット</b><small>小学生まで</small></div><div class="price">¥3,300</div></div>
+    </div>
+    <div class="menu-list" data-panel="color" hidden>
+      <div class="menu-item"><div><b>カット＋カラー</b><small>髪にやさしい薬剤</small></div><div class="price">¥11,000</div></div>
+      <div class="menu-item"><div><b>根元だけカラー</b><small>2cmまで</small></div><div class="price">¥6,600</div></div>
+      <div class="menu-item"><div><b>カット＋デジタルパーマ</b><small>朝のお手入れがラクに</small></div><div class="price">¥14,300</div></div>
+      <div class="menu-item"><div><b>髪質改善トリートメント</b><small>まとまりとツヤ</small></div><div class="price">¥8,800</div></div>
+    </div>
+    <div class="menu-list" data-panel="facial" hidden>
+      <div class="menu-item"><div><b>ベーシックフェイシャル</b><small>60分・洗顔〜保湿</small></div><div class="price">¥7,700</div></div>
+      <div class="menu-item"><div><b>毛穴ケアコース</b><small>75分</small></div><div class="price">¥9,900</div></div>
+      <div class="menu-item"><div><b>はじめての方 お試し</b><small>45分・初回だけ</small></div><div class="price">¥4,980</div></div>
+    </div>
+    <p class="note">料金はすべて税込です。髪の長さによって追加料金がかかることがあります。</p>
+  </div>
+</section>
+
+<section class="staff" id="staff">
+  <div class="wrap">
+    <div class="ttl"><div class="en">Staff</div><h2>スタッフ紹介</h2></div>
+    <div class="grid">
+      <div class="person"><div class="face" style="background:#c9a77f">A</div><div class="role">OWNER / STYLIST</div><h3>青山 みどり</h3><p>美容師歴15年。くせ毛をいかしたショートが得意です。</p></div>
+      <div class="person"><div class="face" style="background:#8fa38a">S</div><div class="role">STYLIST</div><h3>佐倉 ゆう</h3><p>カラーの色づくりが好きです。白髪ぼかしもご相談ください。</p></div>
+      <div class="person"><div class="face" style="background:#b98b9a">K</div><div class="role">ESTHETICIAN</div><h3>小川 かなえ</h3><p>エステ歴8年。肌の悩みをていねいに伺います。</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="voice">
+  <div class="wrap">
+    <div class="ttl"><div class="en">Voice</div><h2>お客さまの声</h2></div>
+    <div class="grid">
+      <blockquote><div class="stars">★★★★★</div>朝のセットが5分で終わるようになりました。相談の時間が長くて、ちゃんと話を聞いてもらえるのがうれしいです。<cite>30代・会社員の方</cite></blockquote>
+      <blockquote><div class="stars">★★★★★</div>子どもを連れて行けるサロンを探していました。キッズスペースがあって安心です。<cite>40代・子育て中の方</cite></blockquote>
+    </div>
+  </div>
+</section>
+
+<section class="reserve" id="reserve">
+  <div class="wrap">
+    <div class="ttl"><div class="en">Reservation</div><h2>ご予約</h2></div>
+    <form id="form">
+      <div class="row">
+        <label>お名前<input required name="name" placeholder="山田 花子"></label>
+        <label>電話番号<input required name="tel" type="tel" placeholder="090-0000-0000"></label>
+      </div>
+      <div class="row">
+        <label>ご希望の日<input required name="date" type="date" id="date"></label>
+        <label>時間<select name="time"><option>10:00</option><option>11:30</option><option>13:00</option><option>14:30</option><option>16:00</option><option>17:30</option></select></label>
+      </div>
+      <label>メニュー<select name="menu"><option>カット</option><option>カット＋カラー</option><option>カット＋デジタルパーマ</option><option>フェイシャル</option><option>まだ決めていない</option></select></label>
+      <label>ご要望（なくても大丈夫です）<textarea name="note" rows="3"></textarea></label>
+      <button class="btn" type="submit">この内容で送る</button>
+      <div class="msg" id="msg">ありがとうございます。<br>（見本のため、実際には送信されません）</div>
+    </form>
+  </div>
+</section>
+
+<section class="access" id="access">
+  <div class="wrap">
+    <div class="ttl"><div class="en">Access</div><h2>アクセス・営業時間</h2></div>
+    <div class="grid">
+      <div class="map" aria-label="地図（見本）">
+        <svg viewBox="0 0 400 300" width="100%" height="100%">
+          <rect width="400" height="300" fill="#efe7da"/>
+          <path d="M0 200 H400" stroke="#fff" stroke-width="22"/><path d="M140 0 V300" stroke="#fff" stroke-width="16"/>
+          <path d="M0 80 C 120 90, 260 60, 400 110" stroke="#fff" stroke-width="10" fill="none"/>
+          <rect x="30" y="215" width="80" height="34" rx="6" fill="#8fa38a"/><text x="70" y="237" font-size="13" text-anchor="middle" fill="#fff">○○駅</text>
+          <circle cx="230" cy="160" r="14" fill="#b98b5e"/><text x="230" y="135" font-size="13" text-anchor="middle" fill="#3b3530">Mimosa</text>
+          <path d="M110 232 C 170 232, 190 175, 222 165" stroke="#b98b5e" stroke-dasharray="5 5" stroke-width="2" fill="none"/>
+        </svg>
+      </div>
+      <dl>
+        <dt>住所</dt><dd>〒000-0000 ○○市△△町1-2-3 ミモザビル2階</dd>
+        <dt>アクセス</dt><dd>○○駅 東口から徒歩3分</dd>
+        <dt>営業時間</dt><dd>10:00〜19:00（最終受付 17:30）</dd>
+        <dt>定休日</dt><dd>毎週火曜日・第3水曜日</dd>
+        <dt>電話</dt><dd>000-000-0000</dd>
+        <dt>駐車場</dt><dd>近くのコインパーキングをご利用ください</dd>
+      </dl>
+    </div>
+  </div>
+</section>
+
+<footer>© Salon Mimosa（架空） ／ 制作見本：KOTETSU WORKS</footer>
+
+<div class="sp-bar"><a href="tel:0000000000">電話する</a><a href="#reserve">予約する</a></div>
+
+<script>
+  document.querySelectorAll('.tabs button').forEach(b => b.addEventListener('click', () => {
+    document.querySelectorAll('.tabs button').forEach(x => x.setAttribute('aria-selected', x === b));
+    document.querySelectorAll('[data-panel]').forEach(p => p.hidden = p.dataset.panel !== b.dataset.tab);
+  }));
+  const d = document.getElementById('date'); const t = new Date(); t.setDate(t.getDate() + 1);
+  d.min = t.toISOString().slice(0, 10);
+  document.getElementById('form').addEventListener('submit', e => {
+    e.preventDefault(); document.getElementById('msg').style.display = 'block'; e.target.querySelector('button').disabled = true;
+  });
+</script>
+</body>
+</html>

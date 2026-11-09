@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>制作見本｜KOTETSU WORKS</title>
+<meta name="description" content="KOTETSU WORKS のホームページ制作見本。美容サロン・整体院・こども教室。">
+<meta name="robots" content="noindex">
+<link rel="icon" href="../assets/icon.svg" type="image/svg+xml">
+<style>
+  :root { --bg: #121216; --card: rgba(255,255,255,.05); --line: rgba(255,255,255,.09); --text: #f2efe9; --muted: rgba(242,239,233,.6); --gold: #e6c068; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: radial-gradient(1000px 480px at 85% -10%, rgba(240,168,58,.10), transparent 60%), var(--bg); color: var(--text); font-family: "Hiragino Sans", "Noto Sans JP", system-ui, sans-serif; min-height: 100vh; }
+  a { color: inherit; text-decoration: none; }
+  main { max-width: 900px; margin: 0 auto; padding: 32px 16px 60px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 800; letter-spacing: .2em; font-size: 14px; }
+  .brand img { width: 34px; height: 34px; border-radius: 9px; }
+  h1 { font-size: clamp(26px, 6vw, 38px); margin: 36px 0 8px; }
+  .sub { color: var(--muted); margin: 0 0 30px; line-height: 1.8; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 16px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 18px; overflow: hidden; transition: .2s; display: block; }
+  .card:hover { transform: translateY(-3px); border-color: rgba(230,192,104,.5); }
+  .thumb { height: 140px; display: grid; place-items: center; font-size: 22px; font-weight: 800; }
+  .body { padding: 16px 18px 18px; }
+  .body h2 { margin: 0 0 6px; font-size: 17px; }
+  .body p { margin: 0; font-size: 13px; color: var(--muted); line-height: 1.7; }
+  .tags { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 6px; }
+  .tags span { font-size: 11px; border: 1px solid var(--line); border-radius: 999px; padding: 2px 9px; color: var(--muted); }
+  .note { margin-top: 30px; font-size: 12px; color: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+  <a class="brand" href="../"><img src="../assets/icon.svg" alt="">KOTETSU WORKS</a>
+  <h1>ホームページ制作見本</h1>
+  <p class="sub">小さなお店・教室向けのホームページの見本です。スマホでもパソコンでも見やすく作っています。</p>
+  <div class="grid">
+    <a class="card" href="samples/salon/">
+      <div class="thumb" style="background:linear-gradient(160deg,#faf6ef,#d5c0a1);color:#3b3530;font-family:serif;letter-spacing:.12em">Mimosa</div>
+      <div class="body"><h2>美容サロン</h2><p>落ち着いた雰囲気のヘア＆フェイシャルサロン。メニュー切りかえ・予約フォームつき。</p><div class="tags"><span>メニュー表</span><span>予約フォーム</span><span>スタッフ紹介</span></div></div>
+    </a>
+    <a class="card" href="samples/seitai/">
+      <div class="thumb" style="background:linear-gradient(180deg,#fff4d9,#e7f3ec);color:#3f8f6b">ひだまり整体院</div>
+      <div class="body"><h2>整体院</h2><p>悩みチェック・料金プラン・はじめての流れ・よくある質問。電話とLINEにすぐつながる作り。</p><div class="tags"><span>お悩みチェック</span><span>受付時間表</span><span>よくある質問</span></div></div>
+    </a>
+    <a class="card" href="samples/school/">
+      <div class="thumb" style="background:linear-gradient(160deg,#dbeafe,#fdf2f8);color:#24324a">そらいろ こども教室</div>
+      <div class="body"><h2>こども教室</h2><p>月の料金をその場で計算できるしくみと、カレンダーから選べる体験予約つき。</p><div class="tags"><span>料金の自動計算</span><span>予約カレンダー</span><span>コース紹介</span></div></div>
+    </a>
+  </div>
+  <p class="note">見本のお店・人物・口コミはすべて架空です。イラストはこのために描いたもので、写真は使っていません。</p>
+</main>
+</body>
+</html>

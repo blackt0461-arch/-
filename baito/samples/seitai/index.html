@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ひだまり整体院｜肩こり・腰痛・姿勢の相談（見本サイト）</title>
+<meta name="description" content="肩こり・腰痛・猫背のお悩みに。痛くない整体で、家でできるケアまでお伝えします。※KOTETSU WORKS の制作見本（架空の院）です。">
+<meta name="robots" content="noindex">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;500;700;800&display=swap" rel="stylesheet">
+<style>
+  :root { --bg: #fffdf7; --ink: #2f3a33; --muted: #6b766f; --green: #3f8f6b; --green2: #e7f3ec; --sun: #f5b942; --sun2: #fff4d9; --line: #e6ebe4; }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: "M PLUS Rounded 1c", "Hiragino Maru Gothic ProN", sans-serif; line-height: 1.8; }
+  a { color: inherit; text-decoration: none; }
+  .wrap { max-width: 1000px; margin: 0 auto; padding: 0 20px; }
+  .demo { background: var(--ink); color: #eef3ee; font-size: 12px; text-align: center; padding: 6px 12px; }
+  .demo a { text-decoration: underline; }
+
+  header { background: #fff; border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 10; }
+  .nav { display: flex; align-items: center; justify-content: space-between; height: 66px; gap: 12px; }
+  .logo { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 20px; }
+  .logo .sun { width: 34px; height: 34px; border-radius: 50%; background: radial-gradient(circle at 40% 40%, #ffd67a, var(--sun)); box-shadow: 0 0 0 5px var(--sun2); }
+  .tel { text-align: right; line-height: 1.3; }
+  .tel b { font-size: 22px; color: var(--green); letter-spacing: .02em; }
+  .tel small { display: block; font-size: 11px; color: var(--muted); }
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; background: var(--green); color: #fff; font-weight: 700; padding: 14px 28px; border-radius: 14px; box-shadow: 0 4px 0 #2d6d50; transition: .15s; border: 0; font-family: inherit; font-size: 16px; cursor: pointer; }
+  .btn:active { transform: translateY(3px); box-shadow: 0 1px 0 #2d6d50; }
+  .btn.line { background: #06c755; box-shadow: 0 4px 0 #04963f; }
+
+  .hero { background: linear-gradient(180deg, var(--sun2), var(--bg)); padding: 60px 0 70px; overflow: hidden; }
+  .hero .wrap { display: grid; grid-template-columns: 1.15fr .85fr; gap: 30px; align-items: center; }
+  .hero .tag { display: inline-block; background: #fff; border: 2px solid var(--sun); color: #a8721a; font-weight: 700; font-size: 13px; padding: 2px 14px; border-radius: 999px; }
+  .hero h1 { font-size: clamp(28px, 5vw, 44px); line-height: 1.45; margin: 14px 0 16px; font-weight: 800; }
+  .hero h1 em { font-style: normal; color: var(--green); background: linear-gradient(transparent 65%, #ffe39b 65%); }
+  .hero p { color: var(--muted); margin: 0 0 24px; }
+  .hero .cta { display: flex; gap: 12px; flex-wrap: wrap; }
+  .offer { margin-top: 22px; background: #fff; border-radius: 16px; padding: 14px 18px; display: inline-flex; gap: 14px; align-items: center; border: 2px dashed var(--sun); }
+  .offer b { font-size: 28px; color: #d9822b; }
+  .offer s { color: var(--muted); font-size: 13px; }
+
+  section { padding: 80px 0; }
+  h2 { text-align: center; font-size: clamp(22px, 4vw, 30px); margin: 0 0 40px; font-weight: 800; }
+  h2 small { display: block; font-size: 13px; color: var(--green); letter-spacing: .2em; font-weight: 700; }
+
+  .worry { background: #fff; }
+  .checks { max-width: 640px; margin: 0 auto; display: grid; gap: 12px; }
+  .checks label { display: flex; gap: 12px; align-items: center; background: var(--bg); border: 2px solid var(--line); border-radius: 14px; padding: 14px 16px; cursor: pointer; font-weight: 500; transition: .15s; }
+  .checks input { width: 22px; height: 22px; accent-color: var(--green); }
+  .checks label:has(input:checked) { border-color: var(--green); background: var(--green2); }
+  .result { text-align: center; margin-top: 24px; font-weight: 700; min-height: 1.8em; color: var(--green); }
+
+  .reasons .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; }
+  .reason { background: #fff; border-radius: 20px; padding: 28px 22px; border: 1px solid var(--line); text-align: center; }
+  .reason .ic { width: 70px; height: 70px; border-radius: 50%; background: var(--green2); margin: 0 auto 14px; display: grid; place-items: center; }
+  .reason h3 { margin: 0 0 8px; font-size: 18px; }
+  .reason p { margin: 0; font-size: 14px; color: var(--muted); text-align: left; }
+
+  .price { background: var(--green2); }
+  .plans { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+  .plan { background: #fff; border-radius: 20px; padding: 28px 22px; text-align: center; position: relative; }
+  .plan.best { outline: 3px solid var(--sun); }
+  .plan.best::before { content: "いちばん人気"; position: absolute; top: -14px; left: 50%; transform: translateX(-50%); background: var(--sun); color: #fff; font-size: 12px; font-weight: 700; padding: 2px 14px; border-radius: 999px; }
+  .plan h3 { margin: 0; font-size: 17px; }
+  .plan .yen { font-size: 34px; font-weight: 800; color: var(--green); margin: 8px 0; }
+  .plan .yen small { font-size: 14px; color: var(--muted); }
+  .plan ul { text-align: left; font-size: 14px; color: var(--muted); padding-left: 1.2em; margin: 0; }
+
+  .flow ol { list-style: none; padding: 0; margin: 0 auto; max-width: 700px; counter-reset: s; }
+  .flow li { position: relative; padding: 0 0 30px 70px; counter-increment: s; }
+  .flow li::before { content: counter(s); position: absolute; left: 0; top: 0; width: 46px; height: 46px; border-radius: 50%; background: var(--green); color: #fff; font-weight: 800; display: grid; place-items: center; font-size: 20px; }
+  .flow li:not(:last-child)::after { content: ""; position: absolute; left: 22px; top: 50px; bottom: 4px; width: 2px; background: var(--line); }
+  .flow h3 { margin: 6px 0 4px; font-size: 17px; }
+  .flow p { margin: 0; color: var(--muted); font-size: 14px; }
+
+  .faq { background: #fff; }
+  .faq details { max-width: 700px; margin: 0 auto 12px; border: 2px solid var(--line); border-radius: 14px; padding: 4px 18px; }
+  .faq summary { cursor: pointer; font-weight: 700; padding: 12px 0; list-style: none; display: flex; justify-content: space-between; }
+  .faq summary::after { content: "＋"; color: var(--green); }
+  .faq details[open] summary::after { content: "－"; }
+  .faq p { margin: 0 0 14px; color: var(--muted); font-size: 14px; }
+
+  .info .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; background: #fff; border-radius: 14px; overflow: hidden; }
+  th, td { border: 1px solid var(--line); padding: 8px; text-align: center; }
+  th { background: var(--green2); }
+  .ok { color: var(--green); font-weight: 800; }
+  .ng { color: #c0c6c2; }
+  .addr p { margin: 0 0 10px; font-size: 15px; }
+
+  .cta-band { background: var(--green); color: #fff; text-align: center; padding: 50px 20px; }
+  .cta-band p { margin: 0 0 18px; font-size: 18px; font-weight: 700; }
+  .cta-band .btn { background: #fff; color: var(--green); box-shadow: 0 4px 0 #2d6d50; }
+
+  footer { text-align: center; padding: 30px 20px 100px; font-size: 12px; color: var(--muted); }
+  .sp-bar { display: none; }
+
+  @media (max-width: 760px) {
+    .tel { display: none; }
+    .hero .wrap, .reasons .grid, .plans, .info .grid { grid-template-columns: 1fr; }
+    .hero .art { max-width: 260px; margin: 0 auto; }
+    section { padding: 60px 0; }
+    .plans { gap: 26px; }
+    .sp-bar { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; position: fixed; bottom: 0; left: 0; right: 0; padding: 8px; background: rgba(255,255,255,.95); border-top: 1px solid var(--line); z-index: 20; }
+    .sp-bar .btn { padding: 12px; font-size: 15px; }
+  }
+</style>
+</head>
+<body>
+<div class="demo">これは KOTETSU WORKS の制作見本です（院・人物・口コミはすべて架空です）。<a href="../../">ほかの見本を見る</a></div>
+
+<header>
+  <div class="wrap nav">
+    <a class="logo" href="#"><span class="sun"></span>ひだまり整体院</a>
+    <div class="tel"><small>お電話でのご予約（9:00〜20:00）</small><b>000-000-0000</b></div>
+  </div>
+</header>
+
+<section class="hero">
+  <div class="wrap">
+    <div>
+      <span class="tag">○○駅 徒歩5分・土日もあいています</span>
+      <h1>つらい肩こり・腰痛、<br><em>痛くない整体</em>で<br>ほぐしませんか。</h1>
+      <p>ボキボキしない、やさしい整体です。<br>体のくせを調べて、家でできる簡単なケアまでお伝えします。</p>
+      <div class="cta">
+        <a class="btn" href="#info">ネットで予約する</a>
+        <a class="btn line" href="#info">LINEで相談する</a>
+      </div>
+      <div class="offer"><span>はじめての方<br><s>通常 ¥6,600</s></span><b>¥3,980</b><span style="font-size:12px;color:#6b766f">毎月<br>先着10名</span></div>
+    </div>
+    <svg class="art" viewBox="0 0 300 300" aria-hidden="true">
+      <circle cx="150" cy="150" r="140" fill="#fff"/>
+      <circle cx="230" cy="70" r="34" fill="#f5b942"/>
+      <g stroke="#f5b942" stroke-width="6" stroke-linecap="round"><path d="M230 18v12M230 110v12M178 70h12M270 70h12M193 33l8 8M259 99l8 8M193 107l8-8M259 41l8-8"/></g>
+      <rect x="40" y="200" width="220" height="22" rx="11" fill="#cfe5d8"/>
+      <rect x="60" y="222" width="10" height="40" fill="#cfe5d8"/><rect x="230" y="222" width="10" height="40" fill="#cfe5d8"/>
+      <circle cx="80" cy="185" r="20" fill="#f6d7b8"/>
+      <path d="M100 190 C 140 175, 190 178, 235 192 L 235 202 L 100 202 Z" fill="#3f8f6b"/>
+      <circle cx="160" cy="120" r="18" fill="#f6d7b8"/>
+      <path d="M140 140 h40 l8 50 h-56 z" fill="#fff" stroke="#3f8f6b" stroke-width="3"/>
+      <path d="M150 165 L 125 182 M170 165 L 195 182" stroke="#f6d7b8" stroke-width="10" stroke-linecap="round"/>
+    </svg>
+  </div>
+</section>
+
+<section class="worry">
+  <div class="wrap">
+    <h2><small>CHECK</small>こんなお悩みはありませんか？</h2>
+    <div class="checks" id="checks">
+      <label><input type="checkbox">朝起きると、首や肩がこっている</label>
+      <label><input type="checkbox">長く座っていると腰が重くなる</label>
+      <label><input type="checkbox">猫背だと言われる・写真で姿勢が気になる</label>
+      <label><input type="checkbox">マッサージに行っても、すぐ元に戻る</label>
+      <label><input type="checkbox">頭が重い日が多い</label>
+    </div>
+    <p class="result" id="result">あてはまるものを押してみてください</p>
+  </div>
+</section>
+
+<section class="reasons">
+  <div class="wrap">
+    <h2><small>REASON</small>ひだまり整体院が選ばれる3つの理由</h2>
+    <div class="grid">
+      <div class="reason"><div class="ic"><svg width="38" height="38" viewBox="0 0 24 24" fill="none" stroke="#3f8f6b" stroke-width="2" stroke-linecap="round"><path d="M12 21s-7-4.5-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 11c0 5.5-7 10-7 10z"/></svg></div><h3>痛くない・ボキボキしない</h3><p>強くもんだり、骨を鳴らしたりしません。力をぬいたまま受けられるので、整体がはじめての方も安心です。</p></div>
+      <div class="reason"><div class="ic"><svg width="38" height="38" viewBox="0 0 24 24" fill="none" stroke="#3f8f6b" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg></div><h3>原因をいっしょに確かめる</h3><p>姿勢や体の動きを見て、どこに負担がかかっているかを写真で見ながらご説明します。</p></div>
+      <div class="reason"><div class="ic"><svg width="38" height="38" viewBox="0 0 24 24" fill="none" stroke="#3f8f6b" stroke-width="2" stroke-linecap="round"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg></div><h3>家でできるケアつき</h3><p>1日3分でできるストレッチを、紙と動画でお渡しします。通う回数を少なくすることを目指します。</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="price" id="price">
+  <div class="wrap">
+    <h2><small>PRICE</small>料金</h2>
+    <div class="plans">
+      <div class="plan"><h3>はじめての方</h3><div class="yen">¥3,980<small>／60分</small></div><ul><li>くわしい相談と体のチェック</li><li>整体（40分ほど）</li><li>家でできるケアのご説明</li></ul></div>
+      <div class="plan best"><h3>2回目以降</h3><div class="yen">¥6,600<small>／50分</small></div><ul><li>前回からの変化を確かめる</li><li>整体</li><li>回数券（5回）は ¥29,700</li></ul></div>
+      <div class="plan"><h3>じっくりコース</h3><div class="yen">¥8,800<small>／80分</small></div><ul><li>全身をていねいに</li><li>デスクワークの方に人気</li><li>頭のほぐしつき</li></ul></div>
+    </div>
+    <p style="text-align:center;font-size:12px;color:#6b766f;margin-top:20px">料金はすべて税込です。現金・カード・QR決済が使えます。</p>
+  </div>
+</section>
+
+<section class="flow">
+  <div class="wrap">
+    <h2><small>FLOW</small>はじめての方の流れ</h2>
+    <ol>
+      <li><h3>ご予約</h3><p>ネット・LINE・お電話から。当日のご予約もあいていればOKです。</p></li>
+      <li><h3>相談・体のチェック（15分）</h3><p>お悩みやお仕事の様子を伺い、姿勢を写真で確かめます。</p></li>
+      <li><h3>整体（40分）</h3><p>着がえをご用意しています。お仕事帰りでも大丈夫です。</p></li>
+      <li><h3>ご説明とケアのお渡し</h3><p>体の変化を確かめ、家でのストレッチをお伝えします。無理に次の予約をおすすめすることはありません。</p></li>
+    </ol>
+  </div>
+</section>
+
+<section class="faq">
+  <div class="wrap">
+    <h2><small>FAQ</small>よくあるご質問</h2>
+    <details><summary>どんな服で行けばいいですか？</summary><p>動きやすい服がおすすめです。院にも着がえ（無料）があります。</p></details>
+    <details><summary>どのくらいの間隔で通えばいいですか？</summary><p>体の状態によりますが、はじめは1〜2週間に1回、楽になってきたら月に1回ほどが目安です。</p></details>
+    <details><summary>子ども連れでも大丈夫ですか？</summary><p>はい。ベビーカーのまま入れます。ご予約のときにお知らせください。</p></details>
+    <details><summary>健康保険は使えますか？</summary><p>整体は保険の対象ではないため、自費となります。</p></details>
+  </div>
+</section>
+
+<section class="info" id="info">
+  <div class="wrap">
+    <h2><small>ACCESS</small>受付時間・アクセス</h2>
+    <div class="grid">
+      <table>
+        <tr><th>時間</th><th>月</th><th>火</th><th>水</th><th>木</th><th>金</th><th>土</th><th>日</th></tr>
+        <tr><td>9:00〜13:00</td><td class="ok">●</td><td class="ok">●</td><td class="ng">－</td><td class="ok">●</td><td class="ok">●</td><td class="ok">●</td><td class="ok">●</td></tr>
+        <tr><td>14:00〜20:00</td><td class="ok">●</td><td class="ok">●</td><td class="ng">－</td><td class="ok">●</td><td class="ok">●</td><td class="ok">●</td><td class="ng">－</td></tr>
+      </table>
+      <div class="addr">
+        <p><b>住所</b>　〒000-0000 ○○市□□町4-5-6 ひなたビル1階</p>
+        <p><b>アクセス</b>　○○駅 南口から徒歩5分（コンビニのとなり）</p>
+        <p><b>駐車場</b>　院の前に2台分あります</p>
+        <p><b>定休日</b>　水曜日・日曜の午後</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="cta-band">
+  <p>まずは、お気軽にご相談ください。</p>
+  <a class="btn" href="tel:0000000000">📞 000-000-0000</a>
+</div>
+
+<footer>© ひだまり整体院（架空） ／ 制作見本：KOTETSU WORKS</footer>
+
+<div class="sp-bar"><a class="btn" href="tel:0000000000">電話で予約</a><a class="btn line" href="#info">LINEで相談</a></div>
+
+<script>
+  const boxes = document.querySelectorAll('#checks input'); const r = document.getElementById('result');
+  boxes.forEach(b => b.addEventListener('change', () => {
+    const n = [...boxes].filter(x => x.checked).length;
+    r.textContent = n === 0 ? 'あてはまるものを押してみてください'
+      : n < 3 ? `${n}つあてはまりました。早めのケアで楽になりやすい段階です。`
+      : `${n}つあてはまりました。体に負担がたまっているかもしれません。一度ご相談ください。`;
+  }));
+</script>
+</body>
+</html>
