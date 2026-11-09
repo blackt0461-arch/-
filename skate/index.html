@@ -81,6 +81,12 @@ table.laps tr.total td{font-weight:800;border-top:2px solid var(--dim)}
 .scene{flex:0 0 auto;width:84px;text-align:center;font-size:12px;color:var(--dim)}
 .scene img{width:84px;height:112px;object-fit:cover;border-radius:10px;display:block}
 .scene button{margin-top:4px;width:100%;min-height:32px;border-radius:8px;background:var(--card);font-size:12px}
+.mem{display:flex;gap:10px;align-items:center;padding:8px;border-radius:14px;background:var(--ice2);margin:6px 0;border:1px solid var(--line)}
+.mem img{width:36px;height:48px;object-fit:cover;border-radius:8px}
+.mem .t{flex:1;min-width:0}
+.mem .t span{font-size:12px;color:var(--dim)}
+.mem button{min-width:36px;min-height:36px;border-radius:8px;background:var(--card)}
+.face .star{position:absolute;top:10px;left:10px;background:var(--blue);color:#fff;font-size:11px;font-weight:800;border-radius:999px;padding:2px 6px}
 .toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:#fff;color:#0b2240;padding:10px 16px;border-radius:999px;font-weight:700;font-size:14px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:9}
 .toast.on{opacity:1}
 .grid.live{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}
@@ -109,6 +115,9 @@ dialog::backdrop{background:rgb(0 0 0 / .6)}
   <label class="btn blue" for="file">🎥 撮った動画を入れる</label>
   <input type="file" id="file" accept="video/*" class="hide">
   <p class="note">動画はこのスマホの中だけで計算します。どこにも送りません。<br>「その場で撮る」は、撮りながらラップだけを測ります。追いかけ動画は撮り終わってから作ります。</p>
+  <h2 style="font-size:16px;margin:22px 0 6px">登録した部員</h2>
+  <div id="memList"></div>
+  <p class="note" id="memEmpty">選手の画面の「部員に登録」から登録できます。登録すると、次から自動で名前が付き、撮影中に自動で追いかけられます。</p>
   <h2 style="font-size:16px;margin:22px 0 6px">これまでの記録</h2>
   <div id="recList"></div>
   <p class="note" id="recEmpty">まだ記録はありません。</p>
@@ -123,6 +132,11 @@ dialog::backdrop{background:rgb(0 0 0 / .6)}
   <div class="row">
     <button class="btn small" id="lineAuto">赤い線を自動で探す</button>
     <label class="row note" style="margin:0"><input type="checkbox" id="optTiles"> 遠くの人も探す（ゆっくり）</label>
+  </div>
+  <div class="card hide" id="standCard">
+    <div class="row"><b class="grow">自動で追いかける</b><span class="note" id="standState" style="margin:0">台なし</span></div>
+    <p class="note">登録した部員を見つけて、自分 → 部員の順でまん中に向けます。台がない時は、画面の矢印の向きに手で向けてください。</p>
+    <button class="btn small" id="standBtn">📡 自動の台につなぐ</button>
   </div>
   <div style="height:12px"></div>
   <button class="btn main" id="startScan" style="width:100%">この線で解析する</button>
@@ -165,17 +179,28 @@ dialog::backdrop{background:rgb(0 0 0 / .6)}
     <p class="note" style="margin-top:0">撮った動画はまだ端末に保存されていません。あとで見返すなら保存してください。</p>
     <div class="row"><button class="btn blue grow" id="saveRec">撮った動画を保存</button><button class="btn grow" id="deepScan">くわしく解析し直す</button></div>
   </div>
-  <p class="note">見たい選手をタップ。赤い数字は周の数です。</p>
+  <p class="note">まん中に長く写っていた人から並んでいます。赤い数字は周の数です。</p>
   <div class="grid" id="faces"></div>
-  <details class="card"><summary>ほかの人（ラインを越えていない人）</summary><div class="grid" id="facesOther"></div></details>
+  <details class="card"><summary>ほかの人</summary><div class="grid" id="facesOther"></div></details>
   <details class="card"><summary>設定</summary>
     <div class="row" style="margin-top:10px"><span class="grow">これより短い間の通過は同じ周とみなす</span><input type="number" id="minLap" min="3" max="120" step="1" style="width:80px"> 秒</div>
   </details>
 </section>
 
+<!-- マップの設定 -->
+<section class="scr" id="sMapSet">
+  <header class="top"><button class="back" data-go="sPerson">‹</button><h1>マップの設定<small>氷の上の四角い範囲の4つの角に、丸を合わせます</small></h1></header>
+  <div class="stage"><canvas id="mapSetCv"></canvas></div>
+  <p class="note">例：赤いラインと青いラインの間で、壁から壁まで。①奥の左 ②奥の右 ③手前の右 ④手前の左 の順です。長さが分かれば入れてください（分からなければ空のままで大丈夫。位置関係だけ出します）。</p>
+  <div class="row"><span>横（奥の辺）</span><input type="number" id="mapW" min="1" step="0.1" style="width:90px" placeholder="m"><span>m</span></div>
+  <div class="row" style="margin-top:6px"><span>縦（奥から手前）</span><input type="number" id="mapH" min="1" step="0.1" style="width:90px" placeholder="m"><span>m</span></div>
+  <div style="height:12px"></div>
+  <button class="btn main" id="mapSave" style="width:100%">この四角でマップを作る</button>
+</section>
+
 <!-- 選手 -->
 <section class="scr" id="sPerson">
-  <header class="top"><button class="back" data-go="sResult">‹</button><h1 id="pName">選手</h1><button class="btn small" id="rename">名前</button></header>
+  <header class="top"><button class="back" data-go="sResult">‹</button><h1 id="pName">選手</h1><button class="btn small" id="regBtn">部員に登録</button><button class="btn small" id="rename">名前</button></header>
   <div class="stage" id="playStage"><canvas id="playCv"></canvas></div>
   <div class="row" style="margin-top:8px">
     <button class="btn small" id="playBtn" style="width:56px">▶</button>
@@ -183,9 +208,13 @@ dialog::backdrop{background:rgb(0 0 0 / .6)}
     <span class="note" id="tNow" style="margin:0;font-family:var(--mono)">0:00</span>
   </div>
   <div class="row" style="margin-top:8px">
-    <div class="seg grow" id="modeSeg"><button data-v="chase" class="on">追いかけ</button><button data-v="full">全体</button></div>
+    <div class="seg grow" id="modeSeg"><button data-v="chase" class="on">追いかけ</button><button data-v="full">全体</button><button data-v="map">マップ</button></div>
     <div class="seg" id="shapeSeg"><button data-v="v" class="on">縦</button><button data-v="h">横</button></div>
     <div class="seg" id="rateSeg"><button data-v="1" class="on">1×</button><button data-v="0.5">½</button><button data-v="0.25">¼</button></div>
+  </div>
+  <div id="mapBox" class="hide">
+    <div class="stage" style="margin-top:8px;background:#0b2240"><canvas id="mapCv"></canvas></div>
+    <div class="row" style="margin-top:6px"><span class="note grow" id="mapNote" style="margin:0">上から見た図です。点が選手（黄色がこの人）、赤い線がゴールのラインです。</span><button class="btn small" id="mapSetBtn">マップの設定</button></div>
   </div>
   <label class="row note"><input type="checkbox" id="onlyMe" checked> この人が写っている所だけ続けて再生</label>
   <p class="note hide" id="refineInfo"></p>
@@ -203,6 +232,19 @@ dialog::backdrop{background:rgb(0 0 0 / .6)}
 </section>
 
 </div>
+
+<dialog id="regDlg">
+  <b>部員に登録</b>
+  <p class="note">この人の服とヘルメットの色を覚えます。同じ人を何回か登録すると、見分けが正確になります。</p>
+  <div id="regExisting"></div>
+  <div class="card">
+    <b style="font-size:14px">新しく登録</b>
+    <div class="row" style="margin-top:8px"><input id="regName" placeholder="名前" class="grow" style="padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--ice);color:var(--text)"></div>
+    <div class="seg" id="regKind" style="margin-top:8px"><button data-v="me">自分</button><button data-v="mate" class="on">部員</button></div>
+    <button class="btn blue" id="regNew" style="width:100%;margin-top:8px">登録する</button>
+  </div>
+  <div class="row"><button class="btn grow" id="regCancel">やめる</button></div>
+</dialog>
 
 <dialog id="mergeDlg">
   <b>同じ人を選んでください</b>

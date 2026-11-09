@@ -234,3 +234,15 @@ export class LineAnchor {
     return { line: this.line.map(p => apply(Hi, p[0], p[1])), H: r.H, inl: r.inl };
   }
 }
+
+// 4つの点の組から、変換をちょうど求める（マップの設定用。src→dst）
+export function homFrom4(src, dst) {
+  const M = [], v = [];
+  for (let i = 0; i < 4; i++) {
+    const [x, y] = src[i], [X, Y] = dst[i];
+    M.push([x, y, 1, 0, 0, 0, -x * X, -y * X]); v.push(X);
+    M.push([0, 0, 0, x, y, 1, -x * Y, -y * Y]); v.push(Y);
+  }
+  const h = solve(M, v);
+  return h ? [h[0], h[1], h[2], h[3], h[4], h[5], h[6], h[7], 1] : null;
+}

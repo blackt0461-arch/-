@@ -1,13 +1,15 @@
 // スケートラップ：画面と記録
-import { grabGray, LineAnchor, MotionChain, apply, inv3 } from './motion.js';
-import { loadDetector, usedDelegate, scanVideo, seekTo, findRedLine, trackCrossings, refineCrossing, interpBox, groupTracks, Tracker, detectFrame, grabSmall, liveCrossing, histSim, normHist } from './vision.js';
+import * as stand from './stand.js';
+import { loadMembers, saveMembers, matchMember, addMember, addSample, priorityOf } from './members.js';
+import { grabGray, LineAnchor, MotionChain, apply, inv3, homFrom4 } from './motion.js';
+import { loadDetector, usedDelegate, scanVideo, seekTo, findRedLine, trackCrossings, refineCrossing, interpBox, groupTracks, Tracker, detectFrame, grabSmall, liveCrossing, histSim, headSim, normHist } from './vision.js';
 
 const $ = id => document.getElementById(id);
 const S = { session: null, videoURL: null, videoFile: null, person: null, line: null, live: false, stream: null, recBlob: null };
 
 // ---------- 小さな道具 ----------
 function go(id) { document.querySelectorAll('.scr').forEach(s => s.classList.toggle('on', s.id === id)); window.scrollTo(0, 0); if (id !== 'sPerson') stopPlayer(); if (id !== 'sLine' && id !== 'sLive') stopCamera(); }
-document.querySelectorAll('[data-go]').forEach(b => b.onclick = () => { if (b.dataset.go === 'sResult') showResult(); else { go(b.dataset.go); if (b.dataset.go === 'sHome') showHome(); } });
+document.querySelectorAll('[data-go]').forEach(b => b.onclick = () => { if (b.dataset.go === 'sPerson') openPerson(S.person); else if (b.dataset.go === 'sResult') showResult(); else { go(b.dataset.go); if (b.dataset.go === 'sHome') showHome(); } });
 let toastTm; function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(toastTm); toastTm = setTimeout(() => t.classList.remove('on'), 2200); }
 const fmt = s => { if (s == null || !isFinite(s)) return '—'; const m = Math.floor(s / 60), r = s - m * 60; return m ? `${m}:${r.toFixed(2).padStart(5, '0')}` : r.toFixed(2); };
 const clock = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
@@ -26,7 +28,23 @@ const allSessions = () => dbDo('readonly', st => st.getAll());
 const delSession = id => dbDo('readwrite', st => st.delete(id));
 
 // ---------- ホーム ----------
+function showMembers() {
+  const list = loadMembers().sort((a, b) => priorityOf(a) - priorityOf(b)), box = $('memList');
+  $('memEmpty').classList.toggle('hide', list.length > 0);
+  box.innerHTML = '';
+  list.forEach((m, i) => {
+    const el = document.createElement('div'); el.className = 'mem';
+    el.innerHTML = `<img alt=""><div class="t"><b></b><br><span>${m.kind === 'me' ? '自分' : '部員'}・覚えた回数 ${m.samples.length}</span></div><button aria-label="上へ">↑</button><button aria-label="消す">🗑</button>`;
+    el.querySelector('img').src = m.thumb || 'icon.svg'; el.querySelector('b').textContent = m.name;
+    const [up, del] = el.querySelectorAll('button');
+    up.disabled = i === 0;
+    up.onclick = () => { const all = loadMembers(), me = all.find(x => x.id === m.id), prev = all.find(x => x.id === list[i - 1].id); [me.order, prev.order] = [prev.order, me.order]; if (me.kind !== prev.kind) [me.kind, prev.kind] = [prev.kind, me.kind]; saveMembers(all); showMembers(); };
+    del.onclick = () => { if (confirm(`${m.name} の登録を消しますか？`)) { saveMembers(loadMembers().filter(x => x.id !== m.id)); showMembers(); } };
+    box.append(el);
+  });
+}
 async function showHome() {
+  showMembers();
   const list = (await allSessions()).sort((a, b) => b.date - a.date);
   $('recEmpty').classList.toggle('hide', list.length > 0);
   const box = $('recList'); box.innerHTML = '';
@@ -77,6 +95,7 @@ async function openLine() {
   $('lineTime').classList.toggle('hide', S.live);
   $('lineNote').textContent = S.live ? '赤いラインが写る向きで線を合わせてください。撮影中に選手を追って首を振っても大丈夫です（立つ場所は変えないでください）。' : '下の帯を動かして、赤いラインがはっきり見えて人が重なっていない場面を選んでください。カメラが動く動画でも大丈夫です。';
   $('startScan').textContent = S.live ? '⏺ この線で撮影スタート' : 'この線で解析する';
+  $('standCard').classList.toggle('hide', !S.live);
   if (!S.live) await seekTo(v, 0.5);
   if (!S.line) S.line = findRedLine(v, v.videoWidth, v.videoHeight) || [[0.3, 0.75], [0.7, 0.6]];
   drawLine();
@@ -193,7 +212,7 @@ function buildSession(rawTracks, W, H, duration, tiles, preset, motion) {
     const dur = tr.s[tr.s.length - 1][0] - tr.s[0][0];
     if (!cr.length && (tr.s.length < 4 || dur < 0.5)) continue;
     crossings.push(...cr);
-    tracks.push({ id: tr.id, s: tr.s.map(r => r.map(x => Math.round(x * 10000) / 10000)), hist: Array.from(tr.hist), hn: tr.hn, thumbArea: tr.thumbArea, thumb: tr.thumb ? tr.thumb.toDataURL('image/jpeg', 0.8) : null });
+    tracks.push({ id: tr.id, mv: moveRate(tr), s: tr.s.map(r => r.map(x => Math.round(x * 10000) / 10000)), hist: Array.from(tr.hist), hn: tr.hn, thumbArea: tr.thumbArea, thumb: tr.thumb ? tr.thumb.toDataURL('image/jpeg', 0.8) : null });
   }
   // 前向き＝いちばん多い通過の向き
   const plus = crossings.filter(c => c.dir > 0).length, dir = plus >= crossings.length - plus ? 1 : -1;
@@ -211,7 +230,37 @@ function buildSession(rawTracks, W, H, duration, tiles, preset, motion) {
   // 名前の仮番号：ラインを越えた回数が多い順
   topPersons(s).forEach((p, i) => p.name = `選手${i + 1}`);
   s.persons.forEach(p => { if (!p.name) p.name = ''; });
+  applyMembers(s);
   return s;
+}
+
+// ---------- 登録した部員を見つけて名前を付ける ----------
+function personHist(s, p) {
+  let out = null, n = 0;
+  for (const id of p.tracks) {
+    const t = trackById(s, id); if (!t || !t.hn || !t.hist) continue;
+    if (!out) out = new Float32Array(t.hist.length);
+    for (let i = 0; i < out.length; i++) out[i] += t.hist[i]; n += t.hn;
+  }
+  if (!out || !n) return null;
+  for (let i = 0; i < out.length; i++) out[i] /= n;
+  return out;
+}
+function spansOverlap(s, a, b) {
+  const sp = p => p.tracks.map(id => trackById(s, id)).filter(Boolean).map(t => [t.s[0][0], t.s[t.s.length - 1][0]]);
+  return sp(a).some(x => sp(b).some(y => Math.min(x[1], y[1]) - Math.max(x[0], y[0]) > 0.2));
+}
+function applyMembers(s) {
+  const members = loadMembers(); if (!members.length) return;
+  const byMember = new Map();
+  for (const p of s.persons) {
+    const m = matchMember(personHist(s, p), members); if (!m) continue;
+    const prev = byMember.get(m.member.id);
+    if (prev && !spansOverlap(s, prev, p)) { prev.tracks.push(...p.tracks); p.tracks = []; continue; } // 分かれていた同じ人をまとめる
+    if (prev) continue; // 同じ時に2人いる：似ているだけの別の人
+    p.member = m.member.id; p.name = m.member.name; byMember.set(m.member.id, p);
+  }
+  s.persons = s.persons.filter(p => p.tracks.length);
 }
 
 // ---------- ラップの計算 ----------
@@ -233,9 +282,34 @@ function personThumb(s, p) {
   return best ? best.thumb : 'icon.svg';
 }
 function personTime(s, p) { return p.tracks.reduce((a, id) => { const t = trackById(s, id); return a + (t ? t.s[t.s.length - 1][0] - t.s[0][0] : 0); }, 0); }
+// 滑っている速さ（自分の背の高さの何倍/秒）。立っている人は小さい。カメラの動きは差し引いた座標（r）で測る
+function moveRate(tr) {
+  const r = tr.r || tr.s, v = [];
+  for (let i = 1; i < r.length; i++) {
+    const a = r[i - 1], b = r[i], dt = b[0] - a[0], h = (b[4] - b[2]) || 1e-3;
+    if (dt > 0 && dt < 0.5) v.push(Math.hypot((a[1] + a[3]) / 2 - (b[1] + b[3]) / 2, (a[2] + a[4]) / 2 - (b[2] + b[4]) / 2) / h / dt);
+  }
+  if (!v.length) return 0;
+  v.sort((x, y) => x - y); return Math.round(v[v.length >> 1] * 100) / 100;
+}
+// 「まん中に長く写っていた」度合い（カメラが追いかけていた人ほど大きい）。立ち止まっている人は小さく数える
+function personFocus(s, p) {
+  let f = 0;
+  for (const id of p.tracks) {
+    const t = trackById(s, id); if (!t) continue;
+    const w = t.mv == null ? 1 : Math.min(1, Math.max(0.1, (t.mv - 0.3) / 1.0));
+    for (let i = 1; i < t.s.length; i++) {
+      const r = t.s[i], dt = Math.min(0.3, r[0] - t.s[i - 1][0]), cx = (r[1] + r[3]) / 2;
+      f += dt * w * Math.max(0.1, 1 - Math.abs(cx - 0.5) * 2);
+    }
+  }
+  return f;
+}
+// 一覧に出す人：まん中に長く写っていた人（上位）と、ラインを越えた人。まん中に長く写っていた順
 function topPersons(s) {
-  return s.persons.map(p => ({ p, n: personCrossings(s, p).length, tm: personTime(s, p) }))
-    .filter(x => x.n > 0).sort((a, b) => b.n - a.n || b.tm - a.tm).map(x => x.p);
+  const all = s.persons.map(p => ({ p, n: personCrossings(s, p).length, f: personFocus(s, p) })).sort((a, b) => b.f - a.f);
+  const fmax = all.length ? all[0].f : 0;
+  return all.filter((x, i) => x.n > 0 || (i < 6 && x.f >= Math.max(1, fmax * 0.15))).map(x => x.p);
 }
 const countMain = s => topPersons(s).length;
 
@@ -252,14 +326,14 @@ function showResult() {
   const others = s.persons.filter(p => !mainSet.has(p)).sort((a, b) => personTime(s, b) - personTime(s, a)).slice(0, 60);
   fillFaces($('faces'), s, main, p => openPerson(p));
   fillFaces($('facesOther'), s, others, p => openPerson(p));
-  if (!main.length) $('faces').innerHTML = '<p class="note">ラインを越えた人が見つかりませんでした。赤い線の位置を確かめてください。</p>';
+  if (!main.length) $('faces').innerHTML = '<p class="note">人が見つかりませんでした。</p>';
 }
 function fillFaces(box, s, list, onTap) {
   box.innerHTML = '';
   for (const p of list) {
     const el = document.createElement('button'); el.className = 'face';
     const n = Math.max(0, personCrossings(s, p).length - 1);
-    el.innerHTML = `<img alt=""><b></b>${n ? `<span class="laps">${n}周</span>` : ''}`;
+    el.innerHTML = `<img alt=""><b></b>${n ? `<span class="laps">${n}周</span>` : ''}${p.member ? '<span class="star">部員</span>' : ''}`;
     el.querySelector('img').src = personThumb(s, p);
     el.querySelector('b').textContent = p.name || '（名前なし）';
     el.onclick = () => onTap(p);
@@ -272,7 +346,7 @@ $('minLap').onchange = async e => { const s = S.session; s.minLap = Math.max(3, 
 const P = { mode: 'chase', shape: 'v', rate: 1, path: null, raf: 0, refining: false, check: null };
 const playCv = $('playCv'), playCx = playCv.getContext('2d');
 function openPerson(p) {
-  S.person = p; go('sPerson'); P.lineAt = null;
+  S.person = p; go('sPerson'); P.lineAt = null; P.map = null; if (P.mode === 'map') setTimeout(prepMap);
   $('pName').textContent = p.name || '（名前なし）';
   P.path = buildPath(S.session, p);
   renderLaps(); renderScenes();
@@ -354,6 +428,28 @@ function renderScenes() {
     box.append(el);
   }
 }
+$('regBtn').onclick = () => {
+  const s = S.session, p = S.person, h = personHist(s, p);
+  if (!h || h.length !== 93) return toast('この記録は古い形なので登録できません。動画を解析し直してください');
+  const box = $('regExisting'); box.innerHTML = '';
+  for (const m of loadMembers().sort((a, b) => priorityOf(a) - priorityOf(b))) {
+    const b = document.createElement('button'); b.className = 'mem'; b.style.width = '100%';
+    b.innerHTML = '<img alt=""><div class="t" style="text-align:left"><b></b><br><span>この人に追加して覚える</span></div>';
+    b.querySelector('img').src = m.thumb || 'icon.svg'; b.querySelector('b').textContent = m.name;
+    b.onclick = async () => { addSample(m.id, h, personThumb(s, p)); p.member = m.id; p.name = m.name; await saveSession(s); $('regDlg').close(); toast(`${m.name} として覚えました`); openPerson(p); };
+    box.append(b);
+  }
+  $('regName').value = /^選手\d+$/.test(p.name) ? '' : p.name;
+  $('regDlg').showModal();
+};
+$('regKind').querySelectorAll('button').forEach(b => b.onclick = () => $('regKind').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)));
+$('regNew').onclick = async () => {
+  const name = $('regName').value.trim(); if (!name) return toast('名前を入れてください');
+  const kind = $('regKind').querySelector('.on').dataset.v;
+  const s = S.session, p = S.person, m = addMember({ name, kind, hist: personHist(s, p), thumb: personThumb(s, p) });
+  p.member = m.id; p.name = name; await saveSession(s); $('regDlg').close(); toast(`${name} を登録しました`); openPerson(p);
+};
+$('regCancel').onclick = () => $('regDlg').close();
 $('mergeBtn').onclick = () => {
   const s = S.session, me = S.person;
   const list = [...topPersons(s), ...s.persons.filter(x => !topPersons(s).includes(x)).sort((a, b) => personTime(s, b) - personTime(s, a)).slice(0, 40)].filter(x => x !== me);
@@ -374,12 +470,12 @@ function buildPath(s, p) {
   const segs = [];
   let cur = null;
   for (const r of all) {
-    if (!cur || r[0] - cur.last > 1.0) { cur = { s: [], last: r[0] }; segs.push(cur); }
+    if (!cur || r[0] - cur.last > 0.4) { cur = { s: [], last: r[0] }; segs.push(cur); }
     cur.s.push(r); cur.last = r[0];
   }
   return {
     all, segs: segs.map(g => {
-      const a = Math.max(0, g.s[0][0] - 0.4), b = Math.min(s.duration, g.last + 0.4), n = Math.max(1, Math.ceil((b - a) / STEP));
+      const a = Math.max(0, g.s[0][0] - 0.15), b = Math.min(s.duration, g.last + 0.15), n = Math.max(1, Math.ceil((b - a) / STEP));
       const cx = new Float32Array(n), cy = new Float32Array(n), h = new Float32Array(n);
       for (let i = 0; i < n; i++) {
         const t = a + i * STEP, bx = interpBox(g.s, Math.min(Math.max(t, g.s[0][0]), g.last), 1.0) || boxOf(g.s[0]);
@@ -445,6 +541,7 @@ function drawFrame() {
       c.fillStyle = '#ffe14d'; c.beginPath(); c.arc((b.x1 + b.x2) / 2 * sx, b.y2 * sy, Math.max(4, ow / 160), 0, 7); c.fill();
     }
   }
+  if (P.mode === 'map') drawMap(t);
   // いまの周と時間
   const { cs, L } = laps(s, S.person);
   if (cs.length && t >= cs[0].t) {
@@ -476,7 +573,7 @@ function segBtns(id, key, after) {
     P[key] = key === 'rate' ? +b.dataset.v : b.dataset.v; after && after();
   });
 }
-segBtns('modeSeg', 'mode', () => $('shapeSeg').classList.toggle('hide', P.mode !== 'chase'));
+segBtns('modeSeg', 'mode', () => { $('shapeSeg').classList.toggle('hide', P.mode !== 'chase'); $('mapBox').classList.toggle('hide', P.mode !== 'map'); if (P.mode === 'map') prepMap(); });
 segBtns('shapeSeg', 'shape');
 segBtns('rateSeg', 'rate', () => { $('vPlay').playbackRate = P.rate; });
 async function checkCrossing(t) {
@@ -486,6 +583,110 @@ async function checkCrossing(t) {
   P.check = { end: t + 0.8 }; v.playbackRate = 0.25; v.play();
   $('playStage').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
+
+// ---------- マップ（上から見た図）----------
+// 線を合わせたコマ（K）の上で、氷の上の四角の4つの角を決めておき、K → 上から見た図 の変換を作る。
+// 選手の足もとを、各コマ → K → 上から見た図 と置きかえて点にする。
+const MAP_COLORS = ['#3fb4ff', '#3ee08f', '#ff8a3d', '#c77dff', '#ff5fa2', '#4dd9e8', '#b5e550', '#f2f2f2'];
+function mapRect(cal) { const w = cal.w || 1, h = cal.h || (cal.w ? cal.w * 0.5 : 0.5); return [[0, 0], [w, 0], [w, h], [0, h]]; }
+function prepMap() {
+  const s = S.session; if (!s) return;
+  if (!s.mapCal) {
+    const last = lsGet('skate-mapcal', null);
+    if (last) { s.mapCal = last; saveSession(s); } else { $('mapNote').textContent = 'はじめに「マップの設定」で、氷の上の四角の4つの角を合わせてください。'; P.map = null; return; }
+  }
+  const cal = s.mapCal, Hm = homFrom4(cal.quad, mapRect(cal)); if (!Hm) return;
+  const la = makeLineAt(s), persons = topPersons(s).slice(0, MAP_COLORS.length);
+  if (!persons.includes(S.person)) persons.unshift(S.person);
+  const paths = persons.map((p, i) => {
+    const pts = [];
+    for (const id of p.tracks) { const tr = trackById(s, id); if (!tr) continue;
+      for (const r of tr.s) { const Hk = la.toK(r[0]); if (!Hk) continue;
+        const k = apply(Hk, (r[1] + r[3]) / 2, r[4]), m = apply(Hm, k[0], k[1]); pts.push([r[0], m[0], m[1]]); } }
+    pts.sort((a, b) => a[0] - b[0]);
+    return { p, pts, color: p === S.person ? '#ffe14d' : MAP_COLORS[i % MAP_COLORS.length] };
+  });
+  const line = s.line.map(q => apply(Hm, q[0], q[1]));
+  P.map = { cal, paths, line, rect: mapRect(cal) };
+  $('mapNote').textContent = '上から見た図です。点が選手（黄色がこの人）、赤い線がゴールのライン。ラインの場面に重なる向きの時だけ出ます。';
+}
+function mapAt(pts, t) {
+  if (!pts.length) return null;
+  let lo = 0, hi = pts.length - 1; while (hi - lo > 1) { const m = (lo + hi) >> 1; if (pts[m][0] <= t) lo = m; else hi = m; }
+  const a = pts[lo], b = pts[hi];
+  if (t < a[0] - 0.3 || t > b[0] + 0.3) return null;
+  if (b[0] - a[0] > 0.8 || t <= a[0]) return Math.abs(t - a[0]) < 0.3 ? a : (Math.abs(t - b[0]) < 0.3 ? b : null);
+  const f = (t - a[0]) / (b[0] - a[0]); return [t, a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f];
+}
+function drawMap(t) {
+  const cv = $('mapCv'), c = cv.getContext('2d'), M = P.map;
+  const Wc = 720; if (!M) { cv.width = Wc; cv.height = 200; c.fillStyle = '#0b2240'; c.fillRect(0, 0, Wc, 200); return; }
+  const [w, h] = M.rect[2], pad = Math.max(w, h) * 0.35;
+  const x0 = -pad, x1 = w + pad, y0 = -pad, y1 = h + pad, sc = Wc / (x1 - x0), Hc = Math.round((y1 - y0) * sc);
+  if (cv.width !== Wc || cv.height !== Hc) { cv.width = Wc; cv.height = Hc; }
+  const X = x => (x - x0) * sc, Y = y => (y - y0) * sc;
+  c.fillStyle = '#0b2240'; c.fillRect(0, 0, Wc, Hc);
+  c.fillStyle = '#dfeefa'; c.globalAlpha = 0.12; c.fillRect(X(0), Y(0), w * sc, h * sc); c.globalAlpha = 1;
+  c.strokeStyle = '#9fc0df'; c.lineWidth = 2; c.strokeRect(X(0), Y(0), w * sc, h * sc);
+  if (M.cal.w) { // 5m ごとの目盛り
+    c.strokeStyle = 'rgb(159 192 223 / .18)'; c.lineWidth = 1;
+    for (let x = Math.ceil(x0 / 5) * 5; x <= x1; x += 5) { c.beginPath(); c.moveTo(X(x), 0); c.lineTo(X(x), Hc); c.stroke(); }
+    for (let y = Math.ceil(y0 / 5) * 5; y <= y1; y += 5) { c.beginPath(); c.moveTo(0, Y(y)); c.lineTo(Wc, Y(y)); c.stroke(); }
+    c.fillStyle = '#9fc0df'; c.font = '20px sans-serif'; c.textAlign = 'left'; c.fillText('マス＝5m', 10, Hc - 10);
+  }
+  c.strokeStyle = '#ff3b4f'; c.lineWidth = 4; c.beginPath(); c.moveTo(X(M.line[0][0]), Y(M.line[0][1])); c.lineTo(X(M.line[1][0]), Y(M.line[1][1])); c.stroke();
+  c.textAlign = 'center'; c.font = '800 22px sans-serif';
+  for (const pa of M.paths) {
+    // 3秒分の通った跡
+    c.strokeStyle = pa.color; c.globalAlpha = 0.45; c.lineWidth = 3; c.beginPath(); let first = true;
+    for (const q of pa.pts) { if (q[0] < t - 3 || q[0] > t) continue; if (first) { c.moveTo(X(q[1]), Y(q[2])); first = false; } else c.lineTo(X(q[1]), Y(q[2])); }
+    c.stroke(); c.globalAlpha = 1;
+    const q = mapAt(pa.pts, t); if (!q) continue;
+    const me = pa.p === S.person, r = me ? 13 : 9;
+    c.fillStyle = pa.color; c.beginPath(); c.arc(X(q[1]), Y(q[2]), r, 0, 7); c.fill();
+    c.fillStyle = '#fff'; c.fillText(pa.p.name || '', X(q[1]), Y(q[2]) - r - 6);
+  }
+}
+// マップの設定画面
+const ms = { quad: null, img: null, drag: -1 };
+$('mapSetBtn').onclick = async () => {
+  const s = S.session; if (!s || !s.lineImg) return toast('この記録にはラインの場面がありません');
+  ms.img = new Image(); ms.img.src = s.lineImg; await ms.img.decode();
+  const cal = s.mapCal || lsGet('skate-mapcal', null);
+  ms.quad = cal ? cal.quad.map(q => q.slice()) : [[0.3, 0.55], [0.7, 0.55], [0.85, 0.85], [0.15, 0.85]];
+  $('mapW').value = cal && cal.w ? cal.w : ''; $('mapH').value = cal && cal.h ? cal.h : '';
+  const cv = $('mapSetCv'); cv.width = ms.img.naturalWidth; cv.height = ms.img.naturalHeight;
+  stopPlayer(); document.querySelectorAll('.scr').forEach(x => x.classList.toggle('on', x.id === 'sMapSet')); window.scrollTo(0, 0);
+  drawMapSet();
+};
+function drawMapSet() {
+  const cv = $('mapSetCv'), c = cv.getContext('2d'), W = cv.width, H = cv.height, q = ms.quad;
+  c.drawImage(ms.img, 0, 0, W, H);
+  c.fillStyle = 'rgb(63 180 255 / .2)'; c.strokeStyle = '#3fb4ff'; c.lineWidth = Math.max(2, W / 300);
+  c.beginPath(); q.forEach((p, i) => i ? c.lineTo(p[0] * W, p[1] * H) : c.moveTo(p[0] * W, p[1] * H)); c.closePath(); c.fill(); c.stroke();
+  const ln = S.session.line; c.strokeStyle = '#ff3b4f'; c.beginPath(); c.moveTo(ln[0][0] * W, ln[0][1] * H); c.lineTo(ln[1][0] * W, ln[1][1] * H); c.stroke();
+  const r = Math.max(10, W / 45); c.font = `800 ${Math.round(r * 1.1)}px sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle';
+  q.forEach((p, i) => { c.fillStyle = 'rgb(255 225 77 / .85)'; c.beginPath(); c.arc(p[0] * W, p[1] * H, r, 0, 7); c.fill(); c.fillStyle = '#0b2240'; c.fillText('①②③④'[i], p[0] * W, p[1] * H); });
+}
+{
+  const cv = $('mapSetCv'), pos = e => { const r = cv.getBoundingClientRect(); return [(e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height]; };
+  cv.addEventListener('pointerdown', e => {
+    const p = pos(e), r = cv.getBoundingClientRect(), asp = r.width / r.height;
+    const d = ms.quad.map(q => Math.hypot((q[0] - p[0]) * asp, q[1] - p[1])), i = d.indexOf(Math.min(...d));
+    if (d[i] > 0.12) return; ms.drag = i; cv.setPointerCapture(e.pointerId);
+  });
+  cv.addEventListener('pointermove', e => { if (ms.drag < 0) return; const p = pos(e); ms.quad[ms.drag] = [Math.min(1, Math.max(0, p[0])), Math.min(1, Math.max(0, p[1]))]; drawMapSet(); });
+  cv.addEventListener('pointerup', () => ms.drag = -1);
+}
+$('mapSave').onclick = async () => {
+  const w = parseFloat($('mapW').value) || null, h = parseFloat($('mapH').value) || null;
+  const cal = { quad: ms.quad, w, h: w ? h : null };
+  if (!homFrom4(cal.quad, mapRect(cal))) return toast('4つの丸の位置を確かめてください');
+  S.session.mapCal = cal; lsSet('skate-mapcal', cal); await saveSession(S.session);
+  toast('マップを作りました'); openPerson(S.person);
+  $('modeSeg').querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.v === 'map')); P.mode = 'map';
+  $('mapBox').classList.remove('hide'); $('shapeSeg').classList.add('hide'); prepMap();
+};
 
 // ---------- 追いかけ動画を保存 ----------
 $('saveVideo').onclick = async () => {
@@ -535,6 +736,34 @@ $('liveBtn').onclick = async () => {
   await openLine();
 };
 
+$('standBtn').onclick = async () => {
+  try {
+    const name = await stand.connect(() => { $('standState').textContent = '台が切れました'; });
+    $('standState').textContent = `${name} につながりました`; toast('台につながりました');
+  } catch (e) { if (e.name !== 'NotFoundError') toast(e.message || '台につなげませんでした'); }
+};
+// 撮影中、どの人に向けるかを決める：登録した部員（自分→部員の順）。いなければ、さっきまでの人を少し待つ
+function pickTarget(t) {
+  const members = loadMembers(); if (!members.length) return null;
+  let best = null;
+  for (const tr of L.tracker.active) {
+    const last = tr.s[tr.s.length - 1]; if (t - last[0] > 0.25) continue;
+    if (!tr.memberT || t - tr.memberT > 1) { // 1秒に1回だけ見分け直す
+      tr.memberT = t;
+      const m = tr.hn >= 3 ? matchMember(normHist(tr.hist, tr.hn), members) : null;
+      if (m) tr.member = m.member; else if (tr.hn > 15) tr.member = null;
+    }
+    if (!tr.member) continue;
+    const pr = priorityOf(tr.member), size = last[4] - last[2];
+    if (!best || pr < best.pr || (pr === best.pr && size > best.size)) best = { tr, pr, size };
+  }
+  if (best) { L.target = { id: best.tr.id, t }; }
+  else if (L.target && t - L.target.t < 1) { const tr = L.tracker.active.find(x => x.id === L.target.id); if (tr) best = { tr }; }
+  if (!best) return null;
+  const last = best.tr.s[best.tr.s.length - 1];
+  return { tr: best.tr, name: best.tr.member ? best.tr.member.name : '', x: (last[1] + last[3]) / 2, box: last, vx: best.tr.vx };
+}
+
 const L = { rec: null, chunks: [], t0: 0, tracker: null, persons: [], byTrack: new Map(), crossings: [], lastDet: 0, timer: 0, tiles: 1, newId: null };
 async function startLive() {
   lsSet('skate-line-live', S.line); lsSet('skate-line', S.line);
@@ -572,12 +801,15 @@ async function startLive() {
         L.motion.push([t, T, loc ? loc.H : null]); if (loc) L.toK.set(Math.round(t * 1000), loc.H);
         L.tracker.update(t, dets, v, T);
         for (const tr of L.tracker.active) { const c = liveCrossing(tr, toK, S.line, W, H); if (c) onLiveCross(c, tr); }
+        const tg = pickTarget(t);
+        stand.setSpeed(stand.aimSpeed(tg));
         if ($('dark').classList.contains('hide')) {
           cx.clearRect(0, 0, W, H); cx.lineWidth = Math.max(3, W / 300); cx.strokeStyle = '#ff3b4f';
           const ln = loc ? loc.line : null;
           if (ln) { cx.beginPath(); cx.moveTo(ln[0][0] * W, ln[0][1] * H); cx.lineTo(ln[1][0] * W, ln[1][1] * H); cx.stroke(); }
           cx.strokeStyle = '#3fb4ff'; cx.lineWidth = Math.max(2, W / 500);
           for (const d of dets) cx.strokeRect(d.x1 * W, d.y1 * H, (d.x2 - d.x1) * W, (d.y2 - d.y1) * H);
+          if (tg) drawAim(cx, W, H, tg);
         }
       }
     }
@@ -585,21 +817,37 @@ async function startLive() {
   };
   if ('requestVideoFrameCallback' in v) v.requestVideoFrameCallback(step); else requestAnimationFrame(t => step(t));
 }
+// 追いかける人に黄色い枠と名前。まん中から外れていたら、向ける方向に矢印
+function drawAim(cx, W, H, tg) {
+  const b = tg.box, lw = Math.max(4, W / 200);
+  cx.strokeStyle = '#ffe14d'; cx.lineWidth = lw; cx.strokeRect(b[1] * W, b[2] * H, (b[3] - b[1]) * W, (b[4] - b[2]) * H);
+  const fs = Math.round(W / 30); cx.font = `800 ${fs}px sans-serif`; cx.fillStyle = '#ffe14d'; cx.textAlign = 'center';
+  if (tg.name) cx.fillText(tg.name, (b[1] + b[3]) / 2 * W, b[2] * H - fs * 0.4);
+  const ex = tg.x - 0.5;
+  if (Math.abs(ex) > 0.15 && !stand.connected()) {
+    const dir = ex > 0 ? 1 : -1, cxp = W / 2 + dir * W * 0.3, cy = H * 0.12, a = W / 18;
+    cx.fillStyle = 'rgb(255 225 77 / .9)'; cx.beginPath();
+    cx.moveTo(cxp + dir * a, cy); cx.lineTo(cxp - dir * a * 0.2, cy - a * 0.7); cx.lineTo(cxp - dir * a * 0.2, cy + a * 0.7); cx.closePath(); cx.fill();
+    cx.fillText(dir > 0 ? '右に向けて' : '左に向けて', W / 2, cy + fs * 0.35);
+  }
+}
 // 前向き＝いちばん多い通過の向き
 const liveDir = () => { const p = L.crossings.filter(c => c.dir > 0).length; return p >= L.crossings.length - p ? 1 : -1; };
 function onLiveCross(c, tr) {
   L.crossings.push(c);
   let p = L.byTrack.get(tr.id);
   if (!p) { // 服の色がいちばん似ていて、少し前に通った人を探す
-    const h = normHist(tr.hist, tr.hn); let best = null, bv = 0.9;
+    const h = normHist(tr.hist, tr.hn); let best = null, bv = 0.95; // 別の人とまちがえないよう厳しめ（部員なら下で見分ける）
     const busy = new Set(L.tracker.active.filter(x => x !== tr).map(x => L.byTrack.get(x.id)).filter(Boolean));
     for (const q of L.persons) {
       if (busy.has(q)) continue;
       const last = q.cs.length ? q.cs[q.cs.length - 1].t : -1e9;
       if (c.t - last < L.minLap * 0.6) continue;
-      const v = histSim(h, normHist(q.hist, q.hn)); if (v > bv) { bv = v; best = q; }
+      const qh = normHist(q.hist, q.hn), v = histSim(h, qh); if (v > bv && headSim(h, qh) >= 0.92) { bv = v; best = q; }
     }
-    p = best || { id: 'p' + tr.id, name: String.fromCharCode(65 + L.persons.length % 26) + (L.persons.length >= 26 ? Math.floor(L.persons.length / 26) : ''), tracks: [], cs: [], hist: new Float32Array(tr.hist.length), hn: 0, thumb: null };
+    const mm = matchMember(normHist(tr.hist, tr.hn));
+    if (!best && mm) best = L.persons.find(q => q.member === mm.member.id && !busy.has(q)) || null;
+    p = best || { id: 'p' + tr.id, member: mm ? mm.member.id : null, name: mm ? mm.member.name : String.fromCharCode(65 + L.persons.length % 26) + (L.persons.length >= 26 ? Math.floor(L.persons.length / 26) : ''), tracks: [], cs: [], hist: new Float32Array(tr.hist.length), hn: 0, thumb: null };
     if (!best) L.persons.push(p);
     p.tracks.push(tr.id); L.byTrack.set(tr.id, p);
     for (let i = 0; i < tr.hist.length; i++) p.hist[i] += tr.hist[i]; p.hn += tr.hn;
@@ -636,6 +884,7 @@ $('stopLive').onclick = async () => {
   $('stopLive').disabled = true;
   clearInterval(L.timer);
   const v = $('vLive'), W = v.videoWidth, H = v.videoHeight, dur = (performance.now() - L.t0) / 1000;
+  stand.stop();
   await new Promise(r => { L.rec.onstop = r; L.rec.stop(); });
   try { L.wake?.release(); } catch {}
   const ext = (L.type || 'webm').includes('mp4') ? 'mp4' : 'webm';

@@ -56,7 +56,7 @@ export function detectFrame(src, W, H, tiles = 1) {
 const okBox = b => (b.y2 - b.y1) > 0.025 && (b.x2 - b.x1) > 0.004;
 
 // ---------- 服の色（胴の色の分布）----------
-const HB = 9, SB = 3, GB = 4, NH = HB * SB + GB, NB = NH * 2; // 胴と脚の2か所
+const HB = 9, SB = 3, GB = 4, NH = HB * SB + GB, NB = NH * 3; // 胴・脚・頭（ヘルメット）の3か所
 const smallCv = document.createElement('canvas');
 const smallCx = smallCv.getContext('2d', { willReadFrequently: true });
 let smallData = null, sW = 0, sH = 0;
@@ -87,11 +87,18 @@ function regionHist(h, off, b, f1, f2, side) {
 }
 export function colorHist(b) {
   const h = new Float32Array(NB);
-  const n1 = regionHist(h, 0, b, 0.12, 0.55, 0.25), n2 = regionHist(h, NH, b, 0.58, 0.9, 0.2);
-  return n1 && n2 ? h : null;
+  const n1 = regionHist(h, 0, b, 0.12, 0.55, 0.25), n2 = regionHist(h, NH, b, 0.58, 0.9, 0.2), n3 = regionHist(h, NH * 2, b, 0, 0.11, 0.3);
+  return n1 && n2 && n3 ? h : null;
 }
-export function histSim(a, b) { // 1 に近いほど似ている（胴と脚の平均）
-  let s = 0; for (let i = 0; i < NB; i++) s += Math.sqrt(a[i] * b[i]); return s / 2;
+// 1 に近いほど似ている（胴・脚・頭の平均）。古い記録（2か所）とは比べない
+export function histSim(a, b) {
+  if (!a || !b || a.length !== NB || b.length !== NB) return 0;
+  let s = 0; for (let i = 0; i < NB; i++) s += Math.sqrt(a[i] * b[i]); return s / 3;
+}
+// 頭（ヘルメット）だけの近さ
+export function headSim(a, b) {
+  if (!a || !b || a.length !== NB || b.length !== NB) return 0;
+  let s = 0; for (let i = NH * 2; i < NB; i++) s += Math.sqrt(a[i] * b[i]); return s;
 }
 
 // ---------- 追いかけ ----------
@@ -101,45 +108,74 @@ export class Tracker {
   update(t, dets, src, T) {
     const A = this.aspect, cand = [];
     const rds = dets.map(d => T ? mapBox(T, d) : d);
+    const dhs = dets.map(d => colorHist(d)); // 服とヘルメットの色（取り違え防止）
     for (const tr of this.active) {
+      const th = tr.hn >= 3 ? norm(tr.hist, tr.hn) : null;
       const L = tr.r[tr.r.length - 1], dt = t - L[0];
       const lh = L[4] - L[2], cx = (L[1] + L[3]) / 2 + tr.vx * dt, cy = (L[2] + L[4]) / 2 + tr.vy * dt;
+      // 画面の中の位置でも比べる（カメラがその人を追っている時は、画面の中ではあまり動かない。
+      // ぶれたコマで画面の動きの計算が外れても、見失わないように）
+      const I = tr.s[tr.s.length - 1], ih = I[4] - I[2];
+      const icx = (I[1] + I[3]) / 2 + (tr.ivx || 0) * dt, icy = (I[2] + I[4]) / 2 + (tr.ivy || 0) * dt;
       rds.forEach((d, j) => {
         const dh = d.y2 - d.y1, r = dh / lh;
-        if (r < 0.55 || r > 1.8) return;
-        const dx = ((d.x1 + d.x2) / 2 - cx) * A, dy = (d.y1 + d.y2) / 2 - cy;
-        const cost = Math.hypot(dx, dy) / Math.max(lh, dh);
+        let cost = Infinity;
+        if (r >= 0.55 && r <= 1.8) {
+          const dx = ((d.x1 + d.x2) / 2 - cx) * A, dy = (d.y1 + d.y2) / 2 - cy;
+          cost = Math.hypot(dx, dy) / Math.max(lh, dh);
+        }
+        const o = dets[j], oh = o.y2 - o.y1, ir = oh / ih;
+        if (ir >= 0.6 && ir <= 1.7) {
+          const dx = ((o.x1 + o.x2) / 2 - icx) * A, dy = (o.y1 + o.y2) / 2 - icy;
+          cost = Math.min(cost, Math.hypot(dx, dy) / Math.max(ih, oh) * 1.15);
+        }
+        if (th && dhs[j]) { // 色が違う人には乗り移らない
+          const sim = histSim(th, dhs[j]);
+          if (sim < 0.8) return;
+          cost += Math.max(0, 0.95 - sim) * 5;
+        }
         if (cost < 1.1) cand.push([cost, tr, j]);
       });
     }
     cand.sort((a, b) => a[0] - b[0]);
-    const usedT = new Set(), usedD = new Set();
+    // 重なっていて見分けにくい時は結ばない（別の人に乗り移るより、いったん見失う方がよい）
+    const amb = new Set();
+    for (const tr of this.active) {
+      const cs = cand.filter(c => c[1] === tr);
+      if (cs.length >= 2 && cs[1][0] - cs[0][0] < 0.25 && iou(dets[cs[0][2]], dets[cs[1][2]]) > 0.2) amb.add(tr);
+    }
+    const usedT = new Set(amb), usedD = new Set();
     for (const [, tr, j] of cand) {
       if (usedT.has(tr) || usedD.has(j)) continue;
-      usedT.add(tr); usedD.add(j); this._add(tr, t, dets[j], rds[j], src);
+      usedT.add(tr); usedD.add(j); this._add(tr, t, dets[j], rds[j], src, dhs[j]);
     }
     dets.forEach((d, j) => {
       if (usedD.has(j)) return;
       // 周りの人の枠と大きく重なる新しい枠は、重なりの見まちがいとして作らない
       if (this.active.some(tr => usedT.has(tr) && iou(lastBox(tr), rds[j]) > 0.5)) return;
       const tr = { id: this.next++, s: [], r: [], vx: 0, vy: 0, hist: new Float32Array(NB), hn: 0, thumbArea: 0, thumb: null };
-      this.active.push(tr); this._add(tr, t, d, rds[j], src);
+      this.active.push(tr); this._add(tr, t, d, rds[j], src, dhs[j]);
     });
     this.active = this.active.filter(tr => {
       if (t - tr.s[tr.s.length - 1][0] > 0.8) { this.done.push(tr); return false; }
       return true;
     });
   }
-  _add(tr, t, d, rd, src) {
+  _add(tr, t, d, rd, src, h) {
     const p = tr.r[tr.r.length - 1];
     if (p) {
       const dt = Math.max(1e-3, t - p[0]);
       const vx = ((rd.x1 + rd.x2) / 2 - (p[1] + p[3]) / 2) / dt, vy = ((rd.y1 + rd.y2) / 2 - (p[2] + p[4]) / 2) / dt;
       tr.vx = tr.r.length > 1 ? tr.vx * 0.5 + vx * 0.5 : vx; tr.vy = tr.r.length > 1 ? tr.vy * 0.5 + vy * 0.5 : vy;
     }
+    const q = tr.s[tr.s.length - 1];
+    if (q) { // 画面の中での動き
+      const dt = Math.max(1e-3, t - q[0]);
+      const vx = ((d.x1 + d.x2) / 2 - (q[1] + q[3]) / 2) / dt, vy = ((d.y1 + d.y2) / 2 - (q[2] + q[4]) / 2) / dt;
+      tr.ivx = tr.s.length > 1 ? tr.ivx * 0.5 + vx * 0.5 : vx; tr.ivy = tr.s.length > 1 ? tr.ivy * 0.5 + vy * 0.5 : vy;
+    }
     tr.s.push([t, d.x1, d.y1, d.x2, d.y2, d.score]);
     tr.r.push([t, rd.x1, rd.y1, rd.x2, rd.y2]);
-    const h = colorHist(d);
     if (h) { for (let i = 0; i < NB; i++) tr.hist[i] += h[i]; tr.hn++; }
     const area = (d.x2 - d.x1) * (d.y2 - d.y1) * d.score;
     if (area > tr.thumbArea * 1.15 && d.x1 > 0.003 && d.x2 < 0.997) { tr.thumbArea = area; tr.thumb = cropThumb(src, d, this.W, this.H); }
@@ -359,19 +395,35 @@ export function interpBox(s, t, maxGap = 0.6) {
 
 // ---------- 同じ人をまとめる ----------
 // 時間が重ならず、服の色がよく似ている切れはしを1人にまとめる。
-export function groupTracks(tracks, th = 0.93) {
-  const groups = tracks.map(tr => ({ ids: [tr.id], spans: [[tr.s[0][0], tr.s[tr.s.length - 1][0]]], hist: norm(tr.hist, tr.hn) }));
-  const overlap = (g, h) => g.spans.some(a => h.spans.some(b => Math.min(a[1], b[1]) - Math.max(a[0], b[0]) > 0.2));
+// 同じ人をまとめる。まちがえて別の人をまとめると、追いかけ動画が別の人に乗り移るので厳しめにする。
+// ・すぐ後（1.5秒以内）に近い場所に出てきて、色が似ている → まとめる
+// ・離れた時間 → 服もヘルメットも、とてもよく似ている時だけ（登録した部員は app.js で別にまとめる）
+export function groupTracks(tracks) {
+  const groups = tracks.map(tr => ({ ids: [tr.id], segs: [{ a: tr.s[0], b: tr.s[tr.s.length - 1] }], hist: norm(tr.hist, tr.hn), n: tr.hn }));
+  const overlap = (g, h) => g.segs.some(x => h.segs.some(y => Math.min(x.b[0], y.b[0]) - Math.max(x.a[0], y.a[0]) > 0.2));
+  const near = (g, h) => { // g の終わり → h の始まり（またはその逆）が、時間も場所も近いか
+    for (const x of g.segs) for (const y of h.segs) for (const [e, st] of [[x.b, y.a], [y.b, x.a]]) {
+      const gap = st[0] - e[0]; if (gap < 0 || gap > 1.5) continue;
+      const eh = e[4] - e[2], d = Math.hypot((e[1] + e[3]) / 2 - (st[1] + st[3]) / 2, ((e[2] + e[4]) - (st[2] + st[4])) / 2);
+      if (d < eh * (1.5 + gap * 2)) return true;
+    }
+    return false;
+  };
   for (;;) {
-    let best = null, bv = th;
+    let best = null, bv = 0;
     for (let i = 0; i < groups.length; i++) for (let j = i + 1; j < groups.length; j++) {
-      const v = histSim(groups[i].hist, groups[j].hist);
-      if (v > bv && !overlap(groups[i], groups[j])) { bv = v; best = [i, j]; }
+      const g = groups[i], h = groups[j];
+      if (overlap(g, h)) continue;
+      const v = histSim(g.hist, h.hist);
+      let ok = false, sc = v;
+      if (v >= 0.9 && headSim(g.hist, h.hist) >= 0.85 && near(g, h)) { ok = true; sc = v + 0.1; }
+      else if (v >= 0.95 && headSim(g.hist, h.hist) >= 0.92 && g.n >= 8 && h.n >= 8) ok = true;
+      if (ok && sc > bv) { bv = sc; best = [i, j]; }
     }
     if (!best) break;
-    const [i, j] = best, g = groups[i], h = groups[j], ni = g.ids.length, nj = h.ids.length;
+    const [i, j] = best, g = groups[i], h = groups[j], ni = g.n || 1, nj = h.n || 1;
     const hist = new Float32Array(NB); for (let k = 0; k < NB; k++) hist[k] = (g.hist[k] * ni + h.hist[k] * nj) / (ni + nj);
-    groups[i] = { ids: [...g.ids, ...h.ids], spans: [...g.spans, ...h.spans], hist };
+    groups[i] = { ids: [...g.ids, ...h.ids], segs: [...g.segs, ...h.segs], hist, n: ni + nj };
     groups.splice(j, 1);
   }
   return groups.map(g => g.ids);
