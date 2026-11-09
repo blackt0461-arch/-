@@ -1,0 +1,25 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>SafeTabs</title><link rel="icon" href="icons/32.png"><link rel="stylesheet" href="style.css"></head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <h1><img src="icons/128.png" alt="">SafeTabs</h1>
+    <span class="count" id="count"></span>
+    <input type="search" id="q" data-i18n-ph="search">
+  </header>
+  <nav class="tabs" id="nav">
+    <button data-v="list" class="on" data-i18n="savedTabs"></button>
+    <button data-v="trash" data-i18n="trash"></button>
+    <button data-v="backups" data-i18n="backups"></button>
+    <button data-v="recovery" data-i18n="recovery"></button>
+    <button data-v="io" data-i18n="exportImport"></button>
+    <button data-v="settings" data-i18n="settings"></button>
+  </nav>
+  <main id="main"></main>
+  <footer class="priv" data-i18n="privacy"></footer>
+</div>
+<script src="lib.js"></script>
+<script src="manager.js"></script>
+</body>
+</html>

@@ -1,0 +1,57 @@
+:root { --bg: #f5f6f8; --card: #fff; --ink: #1d2433; --muted: #6a7385; --line: #e3e6ec; --blue: #2f6fed; --blue2: #e8effe; --red: #d0413b; }
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #15181e; --card: #1e222a; --ink: #e8ebf1; --muted: #9aa3b5; --line: #2c313b; --blue: #6b9bff; --blue2: #22304d; --red: #ff6b63; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.6 system-ui, -apple-system, "Segoe UI", "Hiragino Sans", "Noto Sans JP", sans-serif; }
+button { font: inherit; cursor: pointer; }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid var(--line); background: var(--card); color: var(--ink); padding: 6px 12px; border-radius: 8px; }
+.btn:hover { border-color: var(--blue); }
+.btn.primary { background: var(--blue); border-color: var(--blue); color: #fff; font-weight: 600; }
+.btn.danger { color: var(--red); }
+.btn.small { padding: 2px 9px; font-size: 12px; }
+.muted { color: var(--muted); }
+a { color: inherit; text-decoration: none; }
+
+/* ポップアップ */
+.popup { width: 300px; padding: 14px; }
+.popup h1 { font-size: 15px; margin: 0 0 10px; display: flex; align-items: center; gap: 8px; }
+.popup h1 img { width: 20px; height: 20px; }
+.popup .btn { width: 100%; margin-top: 8px; padding: 10px; }
+.popup label { display: flex; gap: 6px; align-items: center; margin-top: 10px; font-size: 13px; color: var(--muted); }
+.popup .msg { margin-top: 10px; font-size: 13px; color: var(--blue); min-height: 1.4em; }
+
+/* 管理画面 */
+.wrap { max-width: 960px; margin: 0 auto; padding: 20px 16px 60px; }
+header.top { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+header.top h1 { font-size: 20px; margin: 0; display: flex; align-items: center; gap: 8px; }
+header.top h1 img { width: 26px; height: 26px; }
+header.top .count { color: var(--muted); font-size: 13px; }
+header.top input { margin-left: auto; min-width: 220px; padding: 8px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); color: var(--ink); font: inherit; }
+nav.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin-bottom: 16px; flex-wrap: wrap; }
+nav.tabs button { border: 0; background: none; color: var(--muted); padding: 8px 12px; border-bottom: 2px solid transparent; }
+nav.tabs button.on { color: var(--ink); border-bottom-color: var(--blue); font-weight: 600; }
+.group { background: var(--card); border: 1px solid var(--line); border-radius: 12px; margin-bottom: 12px; overflow: hidden; }
+.ghead { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+.ghead .title { font-weight: 600; outline: none; min-width: 60px; border-radius: 4px; padding: 0 2px; }
+.ghead .title:empty::before { content: attr(data-ph); color: var(--muted); font-weight: 400; }
+.ghead .title:focus { background: var(--blue2); }
+.ghead .meta { color: var(--muted); font-size: 12px; }
+.ghead .acts { margin-left: auto; display: flex; gap: 6px; flex-wrap: wrap; }
+ul.tl { list-style: none; margin: 0; padding: 4px 0; }
+ul.tl li { display: flex; align-items: center; gap: 8px; padding: 3px 14px; }
+ul.tl li:hover { background: var(--blue2); }
+ul.tl li img { width: 16px; height: 16px; flex: none; }
+ul.tl li a { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+ul.tl li a:hover { text-decoration: underline; }
+ul.tl li .x { opacity: 0; border: 0; background: none; color: var(--muted); font-size: 12px; }
+ul.tl li:hover .x { opacity: 1; }
+.empty { text-align: center; color: var(--muted); padding: 40px 10px; }
+.note { color: var(--muted); font-size: 13px; margin: 0 0 12px; }
+.panel { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin-bottom: 12px; }
+.panel textarea { width: 100%; min-height: 120px; margin-top: 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); font: 12px/1.5 ui-monospace, monospace; padding: 8px; }
+.panel label { display: flex; gap: 8px; align-items: center; margin: 6px 0; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 10px; display: flex; gap: 12px; align-items: center; box-shadow: 0 6px 20px rgba(0,0,0,.2); }
+.toast button { background: none; border: 0; color: var(--blue); font-weight: 700; }
+footer.priv { margin-top: 30px; color: var(--muted); font-size: 12px; text-align: center; }

@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CSVなおし｜文字化け・0落ちを一括で直す（無料・ファイルは外に送りません）</title>
+<meta name="description" content="CSVの文字化けを一括で直して、Excelでそのまま開ける形にします。郵便番号や電話番号の先頭の0が消える問題も防げます。複数ファイルの結合も。ファイルはブラウザの中だけで処理し、外に送りません。">
+<meta property="og:title" content="CSVなおし｜文字化け・0落ちを一括で直す">
+<meta property="og:description" content="CSVの文字化けを一括で直して、Excelでそのまま開ける形に。ファイルは外に送りません。">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%231f7a5a'/><path d='M8 10h16M8 16h16M8 22h10' stroke='white' stroke-width='3' stroke-linecap='round'/></svg>">
+<style>
+  :root { --bg: #f6f7f5; --card: #fff; --ink: #1f2a24; --muted: #66706a; --line: #e2e6e2; --green: #1f7a5a; --green2: #e6f2ec; --warn: #b4540a; --warn2: #fff3e6; --bad: #c0392b; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: "Hiragino Sans", "Noto Sans JP", "Yu Gothic", system-ui, sans-serif; line-height: 1.7; }
+  main { max-width: 920px; margin: 0 auto; padding: 28px 16px 60px; }
+  h1 { font-size: clamp(24px, 5vw, 32px); margin: 0 0 4px; }
+  h1 span { color: var(--green); }
+  .lead { color: var(--muted); margin: 0 0 20px; }
+  .safe { display: inline-flex; gap: 6px; align-items: center; background: var(--green2); color: var(--green); font-weight: 700; font-size: 13px; padding: 4px 12px; border-radius: 999px; margin-bottom: 18px; }
+  .drop { border: 2px dashed #b9c6bd; background: var(--card); border-radius: 16px; padding: 34px 16px; text-align: center; cursor: pointer; transition: .15s; }
+  .drop.over { border-color: var(--green); background: var(--green2); }
+  .drop b { display: block; font-size: 18px; margin-bottom: 4px; }
+  .drop small { color: var(--muted); }
+  .btn { display: inline-flex; align-items: center; gap: 8px; background: var(--green); color: #fff; border: 0; font: inherit; font-weight: 700; padding: 12px 22px; border-radius: 12px; cursor: pointer; }
+  .btn:disabled { background: #a9b5ae; cursor: default; }
+  .btn.ghost { background: #fff; color: var(--ink); border: 1px solid var(--line); }
+  .panel { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 18px; margin-top: 18px; }
+  .panel h2 { font-size: 16px; margin: 0 0 12px; }
+  .opts { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px 20px; }
+  .opts label { display: flex; gap: 8px; align-items: flex-start; font-size: 14px; cursor: pointer; }
+  .opts input[type=checkbox], .opts input[type=radio] { margin-top: 5px; accent-color: var(--green); }
+  .opts small { display: block; color: var(--muted); font-size: 12px; }
+  .group { border-top: 1px dashed var(--line); padding-top: 12px; margin-top: 12px; }
+  .group > b { display: block; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+  .file { border: 1px solid var(--line); border-radius: 12px; margin-top: 12px; overflow: hidden; }
+  .file-head { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; padding: 10px 14px; background: #fafbfa; border-bottom: 1px solid var(--line); font-size: 14px; }
+  .file-head b { word-break: break-all; }
+  .tag { font-size: 12px; padding: 1px 9px; border-radius: 999px; background: var(--green2); color: var(--green); font-weight: 700; }
+  .tag.warn { background: var(--warn2); color: var(--warn); }
+  .file-head select { font: inherit; font-size: 13px; padding: 3px 6px; border-radius: 8px; border: 1px solid var(--line); }
+  .file-head .rm { margin-left: auto; border: 0; background: none; color: var(--muted); cursor: pointer; font-size: 13px; }
+  .tbl { overflow-x: auto; }
+  table { border-collapse: collapse; font-size: 13px; width: max-content; min-width: 100%; }
+  td { border-bottom: 1px solid #f0f2f0; border-right: 1px solid #f0f2f0; padding: 4px 10px; white-space: nowrap; max-width: 260px; overflow: hidden; text-overflow: ellipsis; }
+  tr:first-child td { font-weight: 700; background: #fbfcfb; }
+  td.zero { background: var(--warn2); }
+  .actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 18px; }
+  .msg { font-size: 14px; color: var(--muted); }
+  .msg.bad { color: var(--bad); }
+  .how { margin-top: 36px; }
+  .how h2 { font-size: 18px; }
+  .how dt { font-weight: 700; margin-top: 14px; }
+  .how dd { margin: 4px 0 0; color: var(--muted); font-size: 14px; }
+  footer { margin-top: 40px; font-size: 12px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 16px; }
+  footer a { color: inherit; }
+</style>
+</head>
+<body>
+<main>
+  <h1>CSV<span>なおし</span></h1>
+  <p class="lead">CSVの<b>文字化け</b>を一括で直して、Excelでそのまま開ける形にします。郵便番号・電話番号の<b>先頭の0が消える</b>問題も防げます。</p>
+  <div class="safe">🔒 ファイルはこのブラウザの中だけで処理します。外には送りません</div>
+
+  <div class="drop" id="drop" tabindex="0" role="button" aria-label="CSVファイルを選ぶ">
+    <b>ここにCSVファイルをドラッグ</b>
+    <small>または押して選ぶ（何個でもまとめてOK・.csv .tsv .txt）</small>
+    <input type="file" id="pick" accept=".csv,.tsv,.txt,text/csv,text/plain" multiple hidden>
+  </div>
+
+  <div class="panel" id="optsPanel">
+    <h2>どう直すか</h2>
+    <div class="group" style="border:0;padding:0;margin:0">
+      <b>出力する文字コード</b>
+      <div class="opts">
+        <label><input type="radio" name="enc" value="utf8bom" checked><span>Excel用（おすすめ）<small>UTF-8（BOM付き）。Excelでダブルクリックしても化けません</small></span></label>
+        <label><input type="radio" name="enc" value="sjis"><span>Shift_JIS<small>古いシステムや会計ソフトに取りこむとき</small></span></label>
+        <label><input type="radio" name="enc" value="utf8"><span>UTF-8（BOMなし）<small>Googleスプレッドシートやプログラム用</small></span></label>
+      </div>
+    </div>
+    <div class="group">
+      <b>そのほか</b>
+      <div class="opts">
+        <label><input type="checkbox" id="optZero" checked><span>先頭の0・長い数字を守る<small>郵便番号・電話番号・商品コードがExcelで消えたり「1.2E+12」にならないようにします</small></span></label>
+        <label><input type="checkbox" id="optMerge"><span>全部を1つのファイルにまとめる<small>見出しの行は最初の1回だけ残します</small></span></label>
+        <label><input type="checkbox" id="optBlank" checked><span>空っぽの行を消す</span></label>
+        <label><input type="checkbox" id="optTrim"><span>前後の空白を消す</span></label>
+        <label><input type="checkbox" id="optTab"><span>区切りをタブにする<small>ふつうはカンマのままでOK</small></span></label>
+      </div>
+    </div>
+  </div>
+
+  <div id="files"></div>
+
+  <div class="actions">
+    <button class="btn" id="go" disabled>⬇ 直したファイルを保存</button>
+    <button class="btn ghost" id="clear" hidden>ぜんぶ消す</button>
+    <span class="msg" id="msg">ファイルを入れると、ここで中身を確かめられます。</span>
+  </div>
+
+  <section class="how">
+    <h2>よくある質問</h2>
+    <dl>
+      <dt>どうして文字化けするの？</dt>
+      <dd>CSVには「Shift_JIS」「UTF-8」など文字の書き方が何種類かあり、作ったソフトと開くソフトで書き方がちがうと化けます。このページは書き方を自動で見分けて、Excelが正しく読める形に書きなおします。</dd>
+      <dt>まだ化けている時は？</dt>
+      <dd>ファイル名の横の「読みこみ方」を切りかえてください。中身の見本がすぐ変わるので、正しく読めるものを選べます。</dd>
+      <dt>「先頭の0を守る」とどうなる？</dt>
+      <dd>「0120」「090…」のような数字を、Excelで開いても0が消えない書き方にします。Excelで開いたときの見た目は変わりません。ほかのシステムに取りこむときは、このチェックを外してください。</dd>
+      <dt>個人情報が入っていても大丈夫？</dt>
+      <dd>ファイルはインターネットに送られず、あなたのパソコンの中だけで処理されます。通信を切った状態でも動きます。</dd>
+    </dl>
+  </section>
+
+  <footer>
+    CSVなおし ／ 作者：KOTETSU WORKS ／ 使っている部品：<a href="https://github.com/polygonplanet/encoding.js">encoding.js</a>（MIT）・<a href="https://stuk.github.io/jszip/">JSZip</a>（MIT）
+  </footer>
+</main>
+
+<script src="lib/encoding.min.js"></script>
+<script src="lib/jszip.min.js"></script>
+<script>
+'use strict';
+// ===== 読みこみ =====
+const ENC_NAMES = { UTF8: 'UTF-8', SJIS: 'Shift_JIS', EUCJP: 'EUC-JP', UTF16LE: 'UTF-16', UTF16BE: 'UTF-16BE', JIS: 'JIS' };
+let files = []; // { name, bytes, enc, text, rows, delim }
+
+function detectEnc(bytes) {
+  if (bytes[0] === 0xEF && bytes[1] === 0xBB && bytes[2] === 0xBF) return 'UTF8';
+  if (bytes[0] === 0xFF && bytes[1] === 0xFE) return 'UTF16LE';
+  if (bytes[0] === 0xFE && bytes[1] === 0xFF) return 'UTF16BE';
+  // まず「UTF-8 として正しいか」を厳しく確かめる（いちばん確実）
+  try { new TextDecoder('utf-8', { fatal: true }).decode(bytes); return 'UTF8'; } catch (e) { /* UTF-8 ではない */ }
+  const d = Encoding.detect(bytes);
+  if (d === 'EUCJP' || d === 'JIS') return d;
+  return 'SJIS'; // 日本のCSVで UTF-8 でなければ、ほとんど Shift_JIS
+}
+function decode(bytes, enc) {
+  if (enc === 'UTF8' || enc === 'UTF16LE' || enc === 'UTF16BE') {
+    const label = { UTF8: 'utf-8', UTF16LE: 'utf-16le', UTF16BE: 'utf-16be' }[enc];
+    return new TextDecoder(label).decode(bytes).replace(/^﻿/, '');
+  }
+  return Encoding.codeToString(Encoding.convert(bytes, { to: 'UNICODE', from: enc }));
+}
+function detectDelim(text) {
+  const head = text.split(/\r?\n/).slice(0, 20).join('\n');
+  const outside = head.replace(/"[^"]*"/g, '');
+  const count = (c) => outside.split(c).length - 1;
+  const c = [[',', count(',')], ['\t', count('\t')], [';', count(';')]].sort((a, b) => b[1] - a[1]);
+  return c[0][1] > 0 ? c[0][0] : ',';
+}
+// CSV を行と列に分ける（"..." の中のカンマ・改行・"" に対応）
+function parse(text, delim) {
+  const rows = []; let row = [], cell = '', q = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (q) {
+      if (ch === '"') { if (text[i + 1] === '"') { cell += '"'; i++; } else q = false; }
+      else cell += ch;
+    } else if (ch === '"' && cell === '') q = true;
+    else if (ch === delim) { row.push(cell); cell = ''; }
+    else if (ch === '\n' || ch === '\r') {
+      if (ch === '\r' && text[i + 1] === '\n') i++;
+      row.push(cell); rows.push(row); row = []; cell = '';
+    } else cell += ch;
+  }
+  if (cell !== '' || row.length) { row.push(cell); rows.push(row); }
+  return rows;
+}
+function load(f) {
+  f.text = decode(f.bytes, f.enc);
+  f.delim = detectDelim(f.text);
+  f.rows = parse(f.text, f.delim);
+  // 化けていそうか（置きかえ文字「�」が多い）
+  f.suspect = (f.text.match(/�/g) || []).length > 0;
+}
+async function addFiles(list) {
+  for (const file of list) {
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const f = { name: file.name, bytes, enc: detectEnc(bytes) };
+    load(f); files.push(f);
+  }
+  render();
+}
+
+// ===== 書き出し =====
+const opt = (id) => document.getElementById(id).checked;
+function protect(v) {
+  // 先頭が0の数字（0120、090-…は対象外にして数字だけ）や、12けた以上の数字を Excel で崩れない形にする
+  if (/^0\d+$/.test(v) || /^\d{12,}$/.test(v)) return '="' + v + '"';
+  return v;
+}
+function needsQuote(v, d) { return v.includes(d) || v.includes('"') || v.includes('\n') || v.includes('\r'); }
+function toCSV(rows) {
+  const d = opt('optTab') ? '\t' : ',';
+  return rows.map(r => r.map(v => {
+    if (opt('optTrim')) v = v.trim();
+    if (opt('optZero')) { const p = protect(v); if (p !== v) return p; }
+    return needsQuote(v, d) ? '"' + v.replace(/"/g, '""') + '"' : v;
+  }).join(d)).join('\r\n') + '\r\n';
+}
+function cleanRows(rows) {
+  return opt('optBlank') ? rows.filter(r => r.some(v => v.trim() !== '')) : rows;
+}
+function encodeOut(text) {
+  const enc = document.querySelector('input[name=enc]:checked').value;
+  if (enc === 'sjis') return new Uint8Array(Encoding.convert(Encoding.stringToCode(text), { to: 'SJIS', from: 'UNICODE' }));
+  const body = new TextEncoder().encode(text);
+  if (enc === 'utf8') return body;
+  const out = new Uint8Array(body.length + 3); out.set([0xEF, 0xBB, 0xBF]); out.set(body, 3); return out;
+}
+function outName(name) { return name.replace(/\.(csv|tsv|txt)$/i, '') + (opt('optTab') ? '_なおし.tsv' : '_なおし.csv'); }
+function save(blob, name) {
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); setTimeout(() => { a.remove(); URL.revokeObjectURL(a.href); }, 4000);
+}
+async function run() {
+  const msg = document.getElementById('msg');
+  if (opt('optMerge') && files.length > 1) {
+    const head = files[0].rows[0] || [];
+    const diff = files.filter(f => (f.rows[0] || []).join('\u0001') !== head.join('\u0001')).map(f => f.name);
+    const all = [...cleanRows(files[0].rows)];
+    files.slice(1).forEach(f => { const r = cleanRows(f.rows); all.push(...(diff.includes(f.name) ? r : r.slice(1))); });
+    save(new Blob([encodeOut(toCSV(all))], { type: 'text/csv' }), 'まとめ_なおし.' + (opt('optTab') ? 'tsv' : 'csv'));
+    msg.className = diff.length ? 'msg bad' : 'msg';
+    msg.textContent = diff.length ? `保存しました。ただし見出しがちがうファイルがあったので、その見出しも残しています：${diff.join('、')}` : `${files.length}個を1つにまとめて保存しました（${all.length}行）。`;
+    return;
+  }
+  if (files.length === 1) {
+    const f = files[0];
+    save(new Blob([encodeOut(toCSV(cleanRows(f.rows)))], { type: 'text/csv' }), outName(f.name));
+  } else {
+    const zip = new JSZip();
+    files.forEach(f => zip.file(outName(f.name), encodeOut(toCSV(cleanRows(f.rows)))));
+    save(await zip.generateAsync({ type: 'blob' }), 'CSVなおし.zip');
+  }
+  msg.className = 'msg';
+  msg.textContent = `${files.length}個のファイルを保存しました。`;
+}
+
+// ===== 画面 =====
+function esc(s) { return s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+function render() {
+  const box = document.getElementById('files');
+  box.innerHTML = files.map((f, i) => {
+    const preview = f.rows.slice(0, 8).map(r => '<tr>' + r.slice(0, 12).map(v => `<td class="${opt('optZero') && protect(v) !== v ? 'zero' : ''}" title="${esc(v)}">${esc(v)}</td>`).join('') + '</tr>').join('');
+    const dn = { ',': 'カンマ', '\t': 'タブ', ';': 'セミコロン' }[f.delim];
+    return `<div class="file">
+      <div class="file-head"><b>${esc(f.name)}</b>
+        <span class="tag ${f.suspect ? 'warn' : ''}">${f.suspect ? '化けているかも' : ENC_NAMES[f.enc] + 'で読みました'}</span>
+        <span class="msg">${f.rows.length}行・${dn}区切り</span>
+        <label class="msg">読みこみ方 <select data-i="${i}">${['UTF8', 'SJIS', 'EUCJP', 'UTF16LE'].map(e => `<option value="${e}" ${e === f.enc ? 'selected' : ''}>${ENC_NAMES[e]}</option>`).join('')}</select></label>
+        <button class="rm" data-rm="${i}">✕ 外す</button>
+      </div>
+      <div class="tbl"><table>${preview}</table></div>
+    </div>`;
+  }).join('');
+  box.querySelectorAll('select').forEach(s => s.onchange = () => { const f = files[s.dataset.i]; f.enc = s.value; load(f); render(); });
+  box.querySelectorAll('[data-rm]').forEach(b => b.onclick = () => { files.splice(b.dataset.rm, 1); render(); });
+  document.getElementById('go').disabled = !files.length;
+  document.getElementById('clear').hidden = !files.length;
+  document.getElementById('msg').className = 'msg';
+  document.getElementById('msg').textContent = files.length
+    ? (opt('optZero') ? 'オレンジの所は、0が消えないように守ります。' : '中身が正しく読めているか確かめてください。')
+    : 'ファイルを入れると、ここで中身を確かめられます。';
+}
+const drop = document.getElementById('drop'), pick = document.getElementById('pick');
+drop.onclick = () => pick.click();
+drop.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick.click(); } };
+pick.onchange = () => { const list = [...pick.files]; pick.value = ''; addFiles(list); };
+['dragenter', 'dragover'].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.add('over'); }));
+['dragleave', 'drop'].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.remove('over'); }));
+drop.addEventListener('drop', e => addFiles([...e.dataTransfer.files]));
+document.getElementById('go').onclick = run;
+document.getElementById('clear').onclick = () => { files = []; render(); };
+document.getElementById('optsPanel').addEventListener('change', render);
+</script>
+</body>
+</html>

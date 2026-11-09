@@ -1,0 +1,165 @@
+{
+  "appName": {
+    "message": "SafeTabs – タブをまとめて保存・消えない"
+  },
+  "appDesc": {
+    "message": "開いているタブをワンクリックでまとめて保存して、パソコンを軽く。自動の控え・30日のゴミ箱・OneTabからの読みこみつきで、保存したタブが消えません。"
+  },
+  "cmdSave": {
+    "message": "このウィンドウのタブをすべて保存"
+  },
+  "saveWindow": {
+    "message": "このウィンドウのタブをすべて保存"
+  },
+  "saveThis": {
+    "message": "このタブだけ保存"
+  },
+  "openManager": {
+    "message": "保存したタブを見る"
+  },
+  "savedN": {
+    "message": "$N$個のタブを保存しました",
+    "placeholders": {
+      "n": {
+        "content": "$1"
+      }
+    }
+  },
+  "nothingToSave": {
+    "message": "保存できるタブがありません"
+  },
+  "closeAfter": {
+    "message": "保存したタブを閉じる"
+  },
+  "search": {
+    "message": "保存したタブをさがす"
+  },
+  "tabsN": {
+    "message": "$N$個のタブ",
+    "placeholders": {
+      "n": {
+        "content": "$1"
+      }
+    }
+  },
+  "restoreAll": {
+    "message": "すべて開く"
+  },
+  "restoreWin": {
+    "message": "新しいウィンドウで"
+  },
+  "delete": {
+    "message": "消す"
+  },
+  "rename": {
+    "message": "押して名前をつける"
+  },
+  "empty": {
+    "message": "まだ保存したタブはありません。SafeTabs のアイコンを押して「このウィンドウのタブをすべて保存」を選んでください。"
+  },
+  "trash": {
+    "message": "ゴミ箱"
+  },
+  "trashNote": {
+    "message": "消したグループは30日間ここに残ります。"
+  },
+  "putBack": {
+    "message": "元に戻す"
+  },
+  "deleteForever": {
+    "message": "完全に消す"
+  },
+  "backups": {
+    "message": "控え"
+  },
+  "backupsNote": {
+    "message": "変更のたびに、その前の状態を自動で控えています（最新10個）。"
+  },
+  "useThis": {
+    "message": "この控えに戻す"
+  },
+  "recovery": {
+    "message": "落ちたあとに戻す"
+  },
+  "recoveryNote": {
+    "message": "開いているタブを5分ごとに控えています。ブラウザが急に閉じたときは、ここから保存できます。"
+  },
+  "saveTheseTabs": {
+    "message": "このタブを保存"
+  },
+  "exportImport": {
+    "message": "書き出し・読みこみ"
+  },
+  "exportBtn": {
+    "message": "書き出す（JSONファイル）"
+  },
+  "importBtn": {
+    "message": "ファイルを読みこむ"
+  },
+  "importNote": {
+    "message": "SafeTabs の JSON と、OneTab の書き出し（「URL | タイトル」の行）が読めます。下に貼りつけるか、ファイルを選んでください。"
+  },
+  "importPaste": {
+    "message": "貼りつけた文を読みこむ"
+  },
+  "importedN": {
+    "message": "$N$個のグループを読みこみました",
+    "placeholders": {
+      "n": {
+        "content": "$1"
+      }
+    }
+  },
+  "importFail": {
+    "message": "読みこめませんでした。ファイルを確かめてください。"
+  },
+  "settings": {
+    "message": "設定"
+  },
+  "skipPinned": {
+    "message": "固定したタブは保存しない"
+  },
+  "dedupe": {
+    "message": "1回の保存で同じページは1つにする"
+  },
+  "deleted": {
+    "message": "消しました。ゴミ箱から戻せます。"
+  },
+  "undo": {
+    "message": "取り消す"
+  },
+  "restored": {
+    "message": "戻しました"
+  },
+  "confirmBackup": {
+    "message": "保存したタブを、この控えの状態に戻しますか？（いまの状態も先に控えます）"
+  },
+  "totalTabs": {
+    "message": "$G$グループ・$T$タブ",
+    "placeholders": {
+      "g": {
+        "content": "$1"
+      },
+      "t": {
+        "content": "$2"
+      }
+    }
+  },
+  "privacy": {
+    "message": "タブはこのブラウザの中だけに保存されます。どこにも送りません。"
+  },
+  "removeTab": {
+    "message": "外す"
+  },
+  "windowN": {
+    "message": "ウィンドウ$N$",
+    "placeholders": {
+      "n": {
+        "content": "$1"
+      }
+    }
+  },
+  "savedTabs": {
+    "message": "保存したタブ"
+  }
+}

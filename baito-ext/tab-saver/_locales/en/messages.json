@@ -1,0 +1,165 @@
+{
+  "appName": {
+    "message": "SafeTabs – Save Tabs, Never Lose Them"
+  },
+  "appDesc": {
+    "message": "Save all your tabs in one click and free up memory. Auto-backups, 30-day trash and OneTab import, so your saved tabs never disappear."
+  },
+  "cmdSave": {
+    "message": "Save all tabs in this window"
+  },
+  "saveWindow": {
+    "message": "Save all tabs in this window"
+  },
+  "saveThis": {
+    "message": "Save this tab only"
+  },
+  "openManager": {
+    "message": "Open saved tabs"
+  },
+  "savedN": {
+    "message": "Saved $N$ tabs",
+    "placeholders": {
+      "n": {
+        "content": "$1"
+      }
+    }
+  },
+  "nothingToSave": {
+    "message": "No tabs to save here"
+  },
+  "closeAfter": {
+    "message": "Close tabs after saving"
+  },
+  "search": {
+    "message": "Search saved tabs"
+  },
+  "tabsN": {
+    "message": "$N$ tab(s)",
+    "placeholders": {
+      "n": {
+        "content": "$1"
+      }
+    }
+  },
+  "restoreAll": {
+    "message": "Restore all"
+  },
+  "restoreWin": {
+    "message": "In new window"
+  },
+  "delete": {
+    "message": "Delete"
+  },
+  "rename": {
+    "message": "Click to name this group"
+  },
+  "empty": {
+    "message": "No saved tabs yet. Click the SafeTabs icon and choose “Save all tabs in this window”."
+  },
+  "trash": {
+    "message": "Trash"
+  },
+  "trashNote": {
+    "message": "Deleted groups stay here for 30 days."
+  },
+  "putBack": {
+    "message": "Put back"
+  },
+  "deleteForever": {
+    "message": "Delete forever"
+  },
+  "backups": {
+    "message": "Backups"
+  },
+  "backupsNote": {
+    "message": "A copy is kept automatically before every change (latest 10)."
+  },
+  "useThis": {
+    "message": "Restore this backup"
+  },
+  "recovery": {
+    "message": "Recover after a crash"
+  },
+  "recoveryNote": {
+    "message": "Your open tabs are copied every 5 minutes. If the browser closed unexpectedly, you can save them from here."
+  },
+  "saveTheseTabs": {
+    "message": "Save these tabs"
+  },
+  "exportImport": {
+    "message": "Export / Import"
+  },
+  "exportBtn": {
+    "message": "Export (JSON file)"
+  },
+  "importBtn": {
+    "message": "Import a file"
+  },
+  "importNote": {
+    "message": "Works with SafeTabs JSON and OneTab exports (lines of “URL | title”). Paste text below or choose a file."
+  },
+  "importPaste": {
+    "message": "Import pasted text"
+  },
+  "importedN": {
+    "message": "Imported $N$ groups",
+    "placeholders": {
+      "n": {
+        "content": "$1"
+      }
+    }
+  },
+  "importFail": {
+    "message": "Could not read this. Please check the file."
+  },
+  "settings": {
+    "message": "Settings"
+  },
+  "skipPinned": {
+    "message": "Don't save pinned tabs"
+  },
+  "dedupe": {
+    "message": "Skip duplicate pages in one save"
+  },
+  "deleted": {
+    "message": "Deleted. You can put it back from Trash."
+  },
+  "undo": {
+    "message": "Undo"
+  },
+  "restored": {
+    "message": "Restored"
+  },
+  "confirmBackup": {
+    "message": "Replace your saved tabs with this backup? (Your current list is backed up first.)"
+  },
+  "totalTabs": {
+    "message": "$G$ groups · $T$ tabs",
+    "placeholders": {
+      "g": {
+        "content": "$1"
+      },
+      "t": {
+        "content": "$2"
+      }
+    }
+  },
+  "privacy": {
+    "message": "Your tabs are stored only in this browser. Nothing is sent to any server."
+  },
+  "removeTab": {
+    "message": "Remove"
+  },
+  "windowN": {
+    "message": "Window $N$",
+    "placeholders": {
+      "n": {
+        "content": "$1"
+      }
+    }
+  },
+  "savedTabs": {
+    "message": "Saved tabs"
+  }
+}
