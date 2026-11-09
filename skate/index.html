@@ -114,7 +114,7 @@ dialog::backdrop{background:rgb(0 0 0 / .6)}
   <div style="height:10px"></div>
   <label class="btn blue" for="file">🎥 撮った動画を入れる</label>
   <input type="file" id="file" accept="video/*" class="hide">
-  <p class="note">版 2026-11-09b。動画はこのスマホの中だけで計算します。どこにも送りません。<br>「その場で撮る」は、撮りながらラップだけを測ります。追いかけ動画は撮り終わってから作ります。</p>
+  <p class="note">版 2026-11-09d。動画はこのスマホの中だけで計算します。どこにも送りません。<br>「その場で撮る」は、撮りながらラップだけを測ります。追いかけ動画は撮り終わってから作ります。</p>
   <h2 style="font-size:16px;margin:22px 0 6px">登録した部員</h2>
   <div id="memList"></div>
   <p class="note" id="memEmpty">選手の画面の「部員に登録」から登録できます。登録すると、次から自動で名前が付き、撮影中に自動で追いかけられます。</p>
@@ -223,8 +223,13 @@ dialog::backdrop{background:rgb(0 0 0 / .6)}
     <table class="laps" id="lapTable"></table>
     <p class="note" style="margin-bottom:0">行をタップすると、ラインを越える所をスローで確かめられます。</p>
   </div>
+  <div class="card hide" id="followCard">
+    <b>通しの確認</b>
+    <p class="note" style="margin:4px 0">2秒ごとに、この人として選んだ人です。違う人の写真をタップして、その場面での本人をタップすると、前後もつなぎ直します。</p>
+    <div class="scenes" id="followStrip"></div>
+  </div>
   <div class="card">
-    <div class="row"><b class="grow">この人が写っている場面</b><button class="btn small" id="mergeBtn">同じ人にまとめる</button></div>
+    <div class="row"><b class="grow">この人が写っている場面</b><button class="btn small" id="chainBtn">通しでつなぐ</button><button class="btn small" id="mergeBtn">同じ人にまとめる</button></div>
     <div class="scenes" id="scenes"></div>
   </div>
   <button class="btn blue" id="saveVideo" style="width:100%">追いかけ動画を保存</button>
@@ -246,6 +251,12 @@ dialog::backdrop{background:rgb(0 0 0 / .6)}
   <div class="row"><button class="btn grow" id="regCancel">やめる</button></div>
 </dialog>
 
+<dialog id="pickDlg">
+  <b id="pickTitle">この場面の本人をタップ</b>
+  <div class="stage" style="margin:8px 0"><canvas id="pickCv"></canvas></div>
+  <div class="row"><button class="btn grow" id="pickNone">ここにはいない</button><button class="btn grow" id="pickCancel">やめる</button></div>
+</dialog>
+
 <dialog id="mergeDlg">
   <b>同じ人を選んでください</b>
   <div class="grid" id="mergeFaces"></div>
@@ -254,6 +265,7 @@ dialog::backdrop{background:rgb(0 0 0 / .6)}
 
 <video id="vPlay" class="hidvid" playsinline></video>
 <video id="vWork" class="hidvid" playsinline muted></video>
+<video id="vThumb" class="hidvid" playsinline muted></video>
 <div class="toast" id="toast"></div>
 <script type="module" src="app.js"></script>
 </body>

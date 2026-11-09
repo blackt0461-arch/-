@@ -70,7 +70,7 @@ async function setVideo(file) {
     v.onloadedmetadata = () => res(); v.onerror = () => rej(new Error('この動画は開けませんでした'));
     setTimeout(() => rej(new Error('動画を読みこめませんでした（時間切れ）。もう一度選んでください')), 20000);
   });
-  for (const x of [$('vScan'), $('vPlay'), v]) { x.preload = 'auto'; x.src = S.videoURL; try { x.load(); } catch {} }
+  for (const x of [$('vScan'), $('vPlay'), $('vThumb'), v]) { x.preload = 'auto'; x.src = S.videoURL; try { x.load(); } catch {} }
   await ready;
   if (!v.videoWidth) await new Promise(r => { v.onloadeddata = r; setTimeout(r, 3000); });
 }
@@ -249,6 +249,7 @@ function buildSession(rawTracks, W, H, duration, tiles, preset, motion) {
   topPersons(s).forEach((p, i) => p.name = `選手${i + 1}`);
   s.persons.forEach(p => { if (!p.name) p.name = ''; });
   applyMembers(s);
+  autoChain(s);
   return s;
 }
 
@@ -279,6 +280,181 @@ function applyMembers(s) {
     p.member = m.member.id; p.name = m.member.name; byMember.set(m.member.id, p);
   }
   s.persons = s.persons.filter(p => p.tracks.length);
+}
+
+// ---------- 1人を通しでつなぐ ----------
+// 切れはし（追いかけが切れた所で分かれた部分）を「動きの続き方」と「服・ヘルメットの色」で、
+// 動画全体として一番筋が通るようにつなぐ（一本道の最適化）。人の山に隠れた間は 3 秒までつなぐ。
+const GAP_MAX = 3.0, LONG_GAP = 8.0;
+function fragInfo(s) {
+  const rows = (s.motion || []).filter(r => r.length >= 26), map = new Map();
+  for (const r of rows) map.set(Math.round(r[0] * 1000), r);
+  const toRef = (t, x, y) => { const r = map.get(Math.round(t * 1000)); return r ? apply(r.slice(1, 10), x, y) : [x, y]; };
+  return s.tracks.filter(t => t.s.length >= 3 && t.hn).map(t => {
+    const a = t.s[0], b = t.s[t.s.length - 1], c = t.s[Math.max(0, t.s.length - 4)], d = t.s[Math.min(3, t.s.length - 1)];
+    const ref = r => toRef(r[0], (r[1] + r[3]) / 2, r[4]);
+    const ra = ref(a), rb = ref(b), rc = ref(c), rd = ref(d);
+    const vEnd = b[0] > c[0] ? [(rb[0] - rc[0]) / (b[0] - c[0]), (rb[1] - rc[1]) / (b[0] - c[0])] : [0, 0];
+    const vStart = d[0] > a[0] ? [(rd[0] - ra[0]) / (d[0] - a[0]), (rd[1] - ra[1]) / (d[0] - a[0])] : [0, 0];
+    const hist = Float32Array.from(t.hist, v => v / t.hn);
+    return { id: t.id, t0: a[0], t1: b[0], ra, rb, vEnd, vStart, h: ((a[4] - a[2]) + (b[4] - b[2])) / 2, hist, n: t.hn };
+  }).sort((x, y) => x.t0 - y.t0);
+}
+function looks(hist, model) { return (histSim(hist, model) * 3 + headSim(hist, model) * 2) / 5; }
+function chainFrom(s, seedId, model, exclude = new Set()) {
+  const F = fragInfo(s).filter(f => f.id === seedId || !exclude.has(f.id)), si = F.findIndex(f => f.id === seedId); if (si < 0) return null;
+  const A = s.W / s.H;
+  const w = F.map(f => { const v = looks(f.hist, model); return (f.t1 - f.t0 + 0.1) * Math.max(-2, (v - 0.86) * 12); });
+  const lk = F.map(f => looks(f.hist, model));
+  const link = (i, j) => { // i のあとに j が続く時の、つながりの悪さ（つながらなければ null）
+    const a = F[i], b = F[j], gap = b.t0 - a.t1;
+    if (gap < -0.3 || gap > LONG_GAP) return null;
+    const g = Math.max(0, gap);
+    if (g > GAP_MAX) { // 長く見えなかった後：色がとてもよく合う時だけ。場所はゆるく（向きと速さが変わるので）
+      if (lk[j] < 0.92) return null;
+      const d = Math.hypot((a.rb[0] - b.ra[0]) * A, a.rb[1] - b.ra[1]) / Math.max(a.h, b.h, 0.02);
+      if (d > 4 + g * 3) return null;
+      return 1.5 + g * 0.3 + d * 0.1;
+    }
+    const p = [a.rb[0] + a.vEnd[0] * g, a.rb[1] + a.vEnd[1] * g];
+    const d = Math.hypot((p[0] - b.ra[0]) * A, p[1] - b.ra[1]) / Math.max(a.h, b.h, 0.02);
+    if (d > 1.5 + g * 1.5) return null;
+    return d * 0.6 + g * 0.4;
+  };
+  // 前へ
+  const fw = new Array(F.length).fill(-Infinity), fp = new Array(F.length).fill(-1); fw[si] = w[si];
+  for (let j = si + 1; j < F.length; j++) for (let i = si; i < j; i++) {
+    if (fw[i] === -Infinity) continue; const c = link(i, j); if (c == null) continue;
+    const v = fw[i] + w[j] - c; if (v > fw[j]) { fw[j] = v; fp[j] = i; }
+  }
+  // 後ろへ
+  const bw = new Array(F.length).fill(-Infinity), bp = new Array(F.length).fill(-1); bw[si] = w[si];
+  for (let j = si - 1; j >= 0; j--) for (let i = si; i > j; i--) {
+    if (bw[i] === -Infinity) continue; const c = link(j, i); if (c == null) continue;
+    const v = bw[i] + w[j] - c; if (v > bw[j]) { bw[j] = v; bp[j] = i; }
+  }
+  let fe = si; for (let j = si; j < F.length; j++) if (fw[j] > fw[fe]) fe = j;
+  let be = si; for (let j = 0; j <= si; j++) if (bw[j] > bw[be]) be = j;
+  const ids = [];
+  for (let j = fe; j !== -1 && j !== si; j = fp[j]) ids.push(F[j].id);
+  ids.push(F[si].id);
+  for (let j = be; j !== -1 && j !== si; j = bp[j]) ids.push(F[j].id);
+  return ids;
+}
+// person を、いちばん長い切れはしから通しにする。ほかの人に入っていた切れはしは移す
+function makeChain(s, person, model) {
+  const own = person.tracks.map(id => trackById(s, id)).filter(t => t && t.hn);
+  if (!own.length) return false;
+  const seed = own.sort((a, b) => (b.s[b.s.length - 1][0] - b.s[0][0]) - (a.s[a.s.length - 1][0] - a.s[0][0]))[0];
+  if (!model) { model = Float32Array.from(seed.hist, v => v / seed.hn); }
+  const exclude = new Set(s.persons.filter(q => q !== person && q.chain).flatMap(q => q.tracks)); // ほかの通しの人の分は取らない
+  const ids = chainFrom(s, seed.id, model, exclude); if (!ids) return false;
+  const set = new Set(ids);
+  for (const q of s.persons) if (q !== person) q.tracks = q.tracks.filter(id => !set.has(id));
+  person.tracks = [...new Set([...ids, ...person.tracks.filter(id => {
+    // もとの切れはしのうち、通しの道と時間が重なるものは外す（別の人の可能性）
+    const t = trackById(s, id); if (!t || set.has(id)) return false;
+    return !ids.some(j => { const u = trackById(s, j); return Math.min(u.s[u.s.length - 1][0], t.s[t.s.length - 1][0]) - Math.max(u.s[0][0], t.s[0][0]) > 0.3; });
+  })])];
+  person.chain = true;
+  s.persons = s.persons.filter(q => q.tracks.length);
+  return true;
+}
+// 解析のあと自動で：カメラがいちばん長く追っていた人と、登録した部員を通しにする
+function autoChain(s) {
+  const members = loadMembers();
+  for (const p of s.persons.filter(p => p.member)) {
+    const m = members.find(x => x.id === p.member);
+    let model = null;
+    if (m && m.samples.length) { model = new Float32Array(m.samples[0].length); for (const smp of m.samples) for (let i = 0; i < model.length; i++) model[i] += smp[i] / m.samples.length; }
+    follow(s, p, { model });
+  }
+  const top = topPersons(s)[0];
+  if (top && !top.follow) follow(s, top, {});
+  topPersons(s).forEach((p, i) => { if (!p.member) p.name = `選手${i + 1}`; });
+}
+
+// ---------- 1コマごとに「この人はどの枠か」を選んで通しにする ----------
+// まん中に近い（カメラが追っている）・前のコマから動きが続く・色が続く、の3つで、動画全体として一番筋が通る選び方（ビタビ）。
+// 本人がタップした「これが自分」（pins）と「これは違う」（bans）を必ず守る。結果は「通しの枠」1本として記録に入れる。
+function followPath(s, { model, pins = [], bans = [] }) {
+  const A = s.W / s.H, K = 30, MISS = 0.15;
+  const hist = new Map(s.tracks.filter(t => t.hn && !t.virtual).map(t => [t.id, Float32Array.from(t.hist, v => v / t.hn)]));
+  const banned = (id, t) => bans.some(b => b.tr === id && (b.all || Math.abs(b.t - t) < 0.6));
+  const byT = new Map();
+  for (const t of s.tracks) {
+    if (!hist.has(t.id)) continue;
+    for (const r of t.s) { if (banned(t.id, r[0])) continue; const k = Math.round(r[0] * 1000); if (!byT.has(k)) byT.set(k, []); byT.get(k).push({ tr: t.id, t: r[0], cx: (r[1] + r[3]) / 2, y2: r[4], h: r[4] - r[2], r }); }
+  }
+  const times = [...byT.keys()].sort((a, b) => a - b); if (!times.length) return null;
+  const fr = times.map(k => byT.get(k));
+  // 「これが自分」のコマは、その枠だけにする
+  for (const pn of pins) {
+    let i = 0, bd = Infinity; fr.forEach((cs, k) => { const d = Math.abs(cs[0].t - pn.t); if (d < bd) { bd = d; i = k; } });
+    const keep = fr[i].filter(c => c.tr === pn.tr); if (keep.length) fr[i] = keep;
+  }
+  const pinTr = new Set(pins.map(p => p.tr));
+  const PLc = new Map(), PL = (a, b) => { if (a === b) return 1; const k = a < b ? a + ',' + b : b + ',' + a; if (!PLc.has(k)) PLc.set(k, looks(hist.get(a), hist.get(b))); return PLc.get(k); };
+  let path = null;
+  for (let it = 0; it < 3; it++) {
+    const em = fr.map(cs => cs.map(c => (1 - Math.abs(c.cx - 0.5) * 2.2) + (model ? 6 * (looks(hist.get(c.tr), model) - 0.88) : 0) + (pinTr.has(c.tr) ? 1.5 : 0)));
+    const best = em.map(r => r.slice()), back = fr.map(cs => cs.map(() => null));
+    const forced = new Set(); for (const pn of pins) fr.forEach((cs, k) => { if (cs.length === 1 && cs[0].tr === pn.tr && Math.abs(cs[0].t - pn.t) < 0.06) forced.add(k); });
+    for (let i = 1; i < fr.length; i++) for (let j = 0; j < fr[i].length; j++) {
+      const q = fr[i][j];
+      for (let k = Math.max(0, i - K); k < i; k++) {
+        // 「これが自分」のコマは飛ばせない
+        let jumpsPin = false; for (const f of forced) if (f > k && f < i) { jumpsPin = true; break; }
+        if (jumpsPin) continue;
+        const skip = i - k - 1, dt = q.t - fr[k][0].t;
+        for (let m = 0; m < fr[k].length; m++) {
+          const p = fr[k][m]; let cost;
+          if (p.tr === q.tr) cost = skip * MISS;
+          else {
+            const d = Math.hypot((p.cx - q.cx) * A, p.y2 - q.y2) / Math.max(p.h, q.h, 0.03);
+            if (d > 1.2 + dt * 1.5) continue;
+            const pl = PL(p.tr, q.tr); if (pl < 0.8) continue;
+            cost = 0.3 + d * 0.5 + (0.95 - pl) * 8 + skip * MISS;
+          }
+          const v = best[k][m] - cost + em[i][j];
+          if (v > best[i][j]) { best[i][j] = v; back[i][j] = [k, m]; }
+        }
+      }
+      if (forced.has(i)) { /* 前のどこからもつながらなくても、ここから始められる */ }
+    }
+    // 終わり：「これが自分」のコマをすべて通る道の中で一番よいもの
+    let bi = -1, bj = 0, bv = -Infinity;
+    const lastPin = forced.size ? Math.max(...forced) : -1;
+    for (let i = Math.max(0, lastPin); i < fr.length; i++) for (let j = 0; j < fr[i].length; j++) if (best[i][j] > bv) { bv = best[i][j]; bi = i; bj = j; }
+    if (bi < 0) return null;
+    path = []; for (let cur = [bi, bj]; cur; cur = back[cur[0]][cur[1]]) path.unshift(fr[cur[0]][cur[1]]);
+    if (!model || it > 0) { // 通しの道の色の平均を「この人らしさ」にして、もう一度
+      const m = new Float32Array(93); for (const c of path) { const h = hist.get(c.tr); for (let k = 0; k < 93; k++) m[k] += h[k] / path.length; }
+      model = m;
+    }
+  }
+  return { path, model };
+}
+function follow(s, person, { model = null, pins = person.pins || [], bans = person.bans || [] }) {
+  if (!model && person.model) model = Float32Array.from(person.model);
+  if (!model) { // この人のいちばん長い切れはしの色から始める
+    const own = person.tracks.map(id => trackById(s, id)).filter(t => t && t.hn && !t.virtual).sort((a, b) => b.s.length - a.s.length)[0];
+    if (own) model = Float32Array.from(own.hist, v => v / own.hn);
+  }
+  const r = followPath(s, { model, pins, bans }); if (!r) return false;
+  // 前の「通しの枠」を消して、新しく作る
+  const vid = 'v' + person.id;
+  s.tracks = s.tracks.filter(t => t.id !== vid); s.crossings = s.crossings.filter(c => c.track !== vid);
+  const rows = r.path.map(c => c.r);
+  const src = new Map(); for (const c of r.path) src.set(c.tr, (src.get(c.tr) || 0) + 1);
+  const main = [...src.entries()].sort((a, b) => b[1] - a[1])[0][0], mt = trackById(s, main);
+  const vt = { id: vid, virtual: true, s: rows, from: r.path.map(c => [c.t, c.tr]), hist: Array.from(r.model), hn: 1, thumb: mt && mt.thumb, thumbArea: mt ? mt.thumbArea : 0, mv: mt ? mt.mv : 1 };
+  s.tracks.push(vt);
+  const measure = makeLineAt(s).measure;
+  s.crossings.push(...trackCrossings(vt, measure));
+  person.tracks = [vid]; person.follow = true; person.chain = true; person.pins = pins; person.bans = bans;
+  person.model = Array.from(r.model, x => Math.round(x * 1e4) / 1e4);
+  return true;
 }
 
 // ---------- ラップの計算 ----------
@@ -367,7 +543,7 @@ function openPerson(p) {
   S.person = p; go('sPerson'); P.lineAt = null; P.map = null; if (P.mode === 'map') setTimeout(prepMap);
   $('pName').textContent = p.name || '（名前なし）';
   P.path = buildPath(S.session, p);
-  renderLaps(); renderScenes();
+  renderLaps(); renderScenes(); renderFollow();
   const has = !!S.videoURL;
   for (const id of ['playBtn', 'seek', 'saveVideo']) $(id).disabled = !has;
   $('playStage').classList.toggle('hide', !has);
@@ -446,6 +622,75 @@ function renderScenes() {
     box.append(el);
   }
 }
+// ---------- 通しの確認（2秒ごとの写真）と、タップで直す ----------
+let followTok = 0;
+async function renderFollow() {
+  const s = S.session, p = S.person, card = $('followCard'), box = $('followStrip');
+  const vt = p && p.follow ? trackById(s, 'v' + p.id) : null;
+  card.classList.toggle('hide', !vt || !S.videoURL); box.innerHTML = '';
+  if (!vt || !S.videoURL) return;
+  const tok = ++followTok, v = $('vThumb'), W = s.W, H = s.H; // 見直し（vWork）とぶつからないよう別の動画で
+  for (let T = 0; T < s.duration; T += 2) {
+    if (tok !== followTok) return;
+    let r = null; for (const x of vt.s) if (Math.abs(x[0] - T) < 0.4 && (!r || Math.abs(x[0] - T) < Math.abs(r[0] - T))) r = x;
+    const el = document.createElement('div'); el.className = 'scene';
+    const cv = document.createElement('canvas'); cv.width = 84; cv.height = 112; cv.style.borderRadius = '10px'; cv.style.display = 'block';
+    const c = cv.getContext('2d'); c.fillStyle = '#132f50'; c.fillRect(0, 0, 84, 112);
+    el.append(cv); const lb = document.createElement('span'); lb.textContent = clock(T) + (r ? '' : ' 見失い'); el.append(lb);
+    el.onclick = () => openPick(r ? r[0] : T, r);
+    box.append(el);
+    const mt = await seekTo(v, r ? r[0] : T);
+    if (tok !== followTok) return;
+    if (r) {
+      const bh = (r[4] - r[2]) * H * 1.9, bw = bh * 84 / 112, cx = (r[1] + r[3]) / 2 * W, cy = (r[2] + r[4]) / 2 * H;
+      c.drawImage(v, cx - bw / 2, cy - bh / 2, bw, bh, 0, 0, 84, 112);
+    } else { c.globalAlpha = 0.5; c.drawImage(v, 0, 0, W, H, 0, 28, 84, 84 * H / W); c.globalAlpha = 1; }
+  }
+}
+const pick = { t: 0, cands: [], cur: null };
+async function openPick(t, cur) {
+  const s = S.session, v = $('vThumb'); followTok++; // 写真づくりを止める
+  // そのコマに写っている全員の枠
+  let ft = t, bd = Infinity;
+  for (const tr of s.tracks) if (!tr.virtual) for (const r of tr.s) { const d = Math.abs(r[0] - t); if (d < bd) { bd = d; ft = r[0]; } }
+  pick.t = ft; pick.cur = cur; pick.cands = [];
+  for (const tr of s.tracks) if (!tr.virtual) for (const r of tr.s) if (Math.abs(r[0] - ft) < 0.002) pick.cands.push({ tr: tr.id, r });
+  await seekTo(v, ft);
+  const cv = $('pickCv'), c = cv.getContext('2d'); cv.width = 960; cv.height = Math.round(960 * s.H / s.W);
+  c.drawImage(v, 0, 0, cv.width, cv.height);
+  for (const k of pick.cands) {
+    const r = k.r, isCur = cur && Math.abs(cur[1] - r[1]) < 1e-4 && Math.abs(cur[2] - r[2]) < 1e-4;
+    c.strokeStyle = isCur ? '#ffe14d' : '#3fb4ff'; c.lineWidth = isCur ? 6 : 4;
+    c.strokeRect(r[1] * cv.width, r[2] * cv.height, (r[3] - r[1]) * cv.width, (r[4] - r[2]) * cv.height);
+  }
+  $('pickTitle').textContent = `${clock(ft)} の場面：本人の枠をタップ（黄色がいまの選び方）`;
+  $('pickDlg').showModal();
+}
+$('pickCv').addEventListener('click', async e => {
+  const cv = $('pickCv'), rc = cv.getBoundingClientRect(), x = (e.clientX - rc.left) / rc.width, y = (e.clientY - rc.top) / rc.height;
+  const hit = pick.cands.filter(k => x >= k.r[1] && x <= k.r[3] && y >= k.r[2] && y <= k.r[4]).sort((a, b) => (a.r[3] - a.r[1]) * (a.r[4] - a.r[2]) - (b.r[3] - b.r[1]) * (b.r[4] - b.r[2]))[0];
+  if (!hit) return toast('枠の中をタップしてください');
+  const p = S.person; p.pins = (p.pins || []).filter(q => Math.abs(q.t - pick.t) > 0.3); p.pins.push({ t: pick.t, tr: hit.tr });
+  p.bans = (p.bans || []).filter(b => b.tr !== hit.tr);
+  await refollow('つなぎ直しました');
+});
+$('pickNone').onclick = async () => {
+  const p = S.person, cur = pick.cur && pick.cands.find(k => Math.abs(k.r[1] - pick.cur[1]) < 1e-4 && Math.abs(k.r[2] - pick.cur[2]) < 1e-4);
+  if (cur) { p.bans = p.bans || []; p.bans.push({ t: pick.t, tr: cur.tr }); p.pins = (p.pins || []).filter(q => q.tr !== cur.tr || Math.abs(q.t - pick.t) > 0.6); }
+  await refollow('この場面を外しました');
+};
+$('pickCancel').onclick = () => $('pickDlg').close();
+async function refollow(msg) {
+  $('pickDlg').close();
+  const s = S.session, p = S.person;
+  if (!follow(s, p, {})) return toast('つなげませんでした');
+  await saveSession(s); toast(msg); openPerson(p);
+}
+$('chainBtn').onclick = async () => {
+  const s = S.session, p = S.person;
+  if (!follow(s, p, {})) return toast('つなげませんでした');
+  await saveSession(s); toast('通しでつなぎました。下の写真で確かめてください'); openPerson(p);
+};
 $('regBtn').onclick = () => {
   const s = S.session, p = S.person, h = personHist(s, p);
   if (!h || h.length !== 93) return toast('この記録は古い形なので登録できません。動画を解析し直してください');
@@ -485,10 +730,10 @@ $('mergeCancel').onclick = () => $('mergeDlg').close();
 const STEP = 0.04;
 function buildPath(s, p) {
   const all = p.tracks.map(id => trackById(s, id)).filter(Boolean).flatMap(t => t.s).sort((a, b) => a[0] - b[0]);
-  const segs = [];
+  const segs = [], bridge = p.chain ? GAP_MAX + 0.2 : 0.4; // 通しの人は、隠れた間もつなぐ
   let cur = null;
   for (const r of all) {
-    if (!cur || r[0] - cur.last > 0.4) { cur = { s: [], last: r[0] }; segs.push(cur); }
+    if (!cur || r[0] - cur.last > bridge) { cur = { s: [], last: r[0] }; segs.push(cur); }
     cur.s.push(r); cur.last = r[0];
   }
   return {
@@ -496,7 +741,7 @@ function buildPath(s, p) {
       const a = Math.max(0, g.s[0][0] - 0.15), b = Math.min(s.duration, g.last + 0.15), n = Math.max(1, Math.ceil((b - a) / STEP));
       const cx = new Float32Array(n), cy = new Float32Array(n), h = new Float32Array(n);
       for (let i = 0; i < n; i++) {
-        const t = a + i * STEP, bx = interpBox(g.s, Math.min(Math.max(t, g.s[0][0]), g.last), 1.0) || boxOf(g.s[0]);
+        const t = a + i * STEP, bx = interpBox(g.s, Math.min(Math.max(t, g.s[0][0]), g.last), bridge + 0.1) || boxOf(g.s[0]);
         cx[i] = (bx.x1 + bx.x2) / 2; cy[i] = (bx.y1 + bx.y2) / 2; h[i] = bx.y2 - bx.y1;
       }
       return { a, b, cx: smooth(cx, 0.25 / STEP), cy: smooth(cy, 0.3 / STEP), h: smooth(h, 0.7 / STEP) };
