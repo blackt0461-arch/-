@@ -117,9 +117,9 @@ export function snapRedLine(line, boxes = []) {
     const y0 = Math.max(0, Math.floor(Math.min(...ys) - band - L * 0.1)), y1 = Math.min(sH - 1, Math.ceil(Math.max(...ys) + band + L * 0.1));
     for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
       const qx = x - a[0], qy = y - a[1], u = (qx * ux + qy * uy) / L, d = qx * nx + qy * ny;
-      if (u < -0.1 || u > 1.1 || Math.abs(d) > band) continue;
+      if (u < 0.02 || u > 1.02 || Math.abs(d) > band) continue; // 線のはしより外（壁の側）の赤は見ない
       const i = (y * sW + x) * 4, r = smallData[i], g = smallData[i + 1], b = smallData[i + 2];
-      if (r > 70 && r - (g + b) / 2 > 22 && r > g + 12 && r > b + 12 && !inBox(x, y)) pts.push([x, y, u]);
+      if (r > 70 && r - (g + b) / 2 > 22 && r > g * 1.25 && r > b + 12 && !inBox(x, y)) pts.push([x, y, u]);
     }
     return pts;
   };
@@ -331,7 +331,8 @@ export function seekTo(video, t) {
 }
 
 // ---------- 赤いラインを自動で探す ----------
-// 赤い画素を集め、いちばん多くの赤い画素が乗る直線を探す（RANSAC）。見つからなければ null。
+// 赤い画素を集め、多くの赤い画素が乗る直線を探す（RANSAC）。
+// 壁（フェンス）の赤い帯は使わない：短くてほぼ縦の線・画面の上半分だけにある線は外す（氷の上のラインは手前まで長く伸びる）。
 export function findRedLine(src, W, H) {
   const w = 320, h = Math.round(320 * H / W);
   const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
@@ -339,26 +340,32 @@ export function findRedLine(src, W, H) {
   const d = c.getImageData(0, 0, w, h).data, pts = [];
   for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
     const i = (y * w + x) * 4, r = d[i], g = d[i + 1], b = d[i + 2];
-    if (r > 110 && r > g * 1.7 && r > b * 1.5) pts.push([x, y]);
+    if (r > 90 && r > g * 1.45 && r > b * 1.3 && r - Math.max(g, b) > 28) pts.push([x, y]); // 黄色・オレンジは入れない
   }
   if (pts.length < 30) return null;
-  let best = null, bestN = 0;
-  for (let k = 0; k < 600; k++) {
+  const inl = (a, b) => { const dx = b[0] - a[0], dy = b[1] - a[1], L = Math.hypot(dx, dy); let n = 0;
+    for (let i = 0; i < pts.length; i += 2) { const p = pts[i]; if (Math.abs((p[0] - a[0]) * dy - (p[1] - a[1]) * dx) / L < 1.6) n++; } return n; };
+  const cands = [];
+  for (let k = 0; k < 800; k++) {
     const a = pts[(Math.random() * pts.length) | 0], b = pts[(Math.random() * pts.length) | 0];
-    const dx = b[0] - a[0], dy = b[1] - a[1], L = Math.hypot(dx, dy);
-    if (L < 20) continue;
-    let n = 0;
-    for (let i = 0; i < pts.length; i += 2) { const p = pts[i]; if (Math.abs((p[0] - a[0]) * dy - (p[1] - a[1]) * dx) / L < 1.6) n++; }
-    if (n > bestN) { bestN = n; best = [a, b]; }
+    if (Math.hypot(b[0] - a[0], b[1] - a[1]) < 20) continue;
+    cands.push({ a, b, n: inl(a, b) });
   }
-  if (!best || bestN < 20) return null;
-  const [a, b] = best, dx = b[0] - a[0], dy = b[1] - a[1], L = Math.hypot(dx, dy);
-  const us = [];
-  for (const p of pts) if (Math.abs((p[0] - a[0]) * dy - (p[1] - a[1]) * dx) / L < 1.6) us.push(((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / L);
-  us.sort((x, y) => x - y);
-  const u1 = us[Math.floor(us.length * 0.02)], u2 = us[Math.floor(us.length * 0.98)];
-  const P = u => [(a[0] + dx / L * u) / w, (a[1] + dy / L * u) / h];
-  return [P(u1), P(u2)];
+  cands.sort((x, y) => y.n - x.n);
+  for (const { a, b, n } of cands.slice(0, 40)) {
+    if (n < 20) break;
+    const dx = b[0] - a[0], dy = b[1] - a[1], L = Math.hypot(dx, dy), us = [];
+    for (const p of pts) if (Math.abs((p[0] - a[0]) * dy - (p[1] - a[1]) * dx) / L < 1.6) us.push(((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / L);
+    us.sort((x, y) => x - y);
+    const u1 = us[Math.floor(us.length * 0.02)], u2 = us[Math.floor(us.length * 0.98)];
+    const P = u => [(a[0] + dx / L * u) / w, (a[1] + dy / L * u) / h];
+    const e1 = P(u1), e2 = P(u2), vert = Math.abs(dx) / L < 0.26, span = Math.abs(e2[1] - e1[1]), low = Math.max(e1[1], e2[1]);
+    if (vert && span < 0.35) continue;   // 短い縦の帯＝壁の赤い帯
+    if (low < 0.5) continue;              // 画面の上半分だけ＝壁や観客席
+    if (Math.hypot((e2[0] - e1[0]) * w, (e2[1] - e1[1]) * h) < 40) continue; // 短すぎる
+    return e1[1] < e2[1] ? [e1, e2] : [e2, e1];
+  }
+  return null;
 }
 
 // ---------- ライン通過 ----------

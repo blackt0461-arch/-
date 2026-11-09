@@ -1,0 +1,11 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>redline test</title>
+<script type="module">
+// 赤いラインの自動検出の試験：?img=画像
+import { findRedLine } from '../vision.js';
+const im = new Image(); im.src = new URLSearchParams(location.search).get('img'); await im.decode();
+const out = [];
+for (let k = 0; k < 5; k++) out.push(findRedLine(im, im.naturalWidth, im.naturalHeight));
+window.result = out.map(l => l ? l.map(p => p.map(v => +v.toFixed(3))) : null);
+</script>
