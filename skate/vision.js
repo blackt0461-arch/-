@@ -344,3 +344,19 @@ export function groupTracks(tracks, th = 0.93) {
   return groups.map(g => g.ids);
 }
 function norm(h, n) { const o = new Float32Array(NB); for (let i = 0; i < NB; i++) o[i] = n ? h[i] / n : 0; return o; }
+
+// ---------- その場で測る（撮影しながら）----------
+// 追いかけ中の人の、いちばん新しい2つの位置の間でラインを越えたかを調べる。越えていれば通過を返す。
+export function liveCrossing(tr, line, W, H) {
+  const n = tr.s.length; if (n < 2) return null;
+  const A = tr.s[n - 2], B = tr.s[n - 1];
+  if (B[0] - A[0] > 0.6) return null;
+  const a = lineMetric(line, W, H, A[1], A[4], A[3]), b = lineMetric(line, W, H, B[1], B[4], B[3]);
+  if (!(a.s < 0 && b.s >= 0) && !(a.s > 0 && b.s <= 0)) return null;
+  const um = (a.u + b.u) / 2; if (um < -0.15 || um > 1.15) return null;
+  const t = A[0] + (B[0] - A[0]) * (a.s / (a.s - b.s));
+  if (tr.lastCross != null && t - tr.lastCross < 3) return null;
+  tr.lastCross = t;
+  return { t, dir: b.s > a.s ? 1 : -1, track: tr.id, refined: false };
+}
+export function normHist(h, n) { const o = new Float32Array(h.length); for (let i = 0; i < h.length; i++) o[i] = n ? h[i] / n : 0; return o; }

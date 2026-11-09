@@ -1,11 +1,11 @@
 // スケートラップ：画面と記録
-import { loadDetector, usedDelegate, scanVideo, seekTo, findRedLine, trackCrossings, refineCrossing, interpBox, groupTracks } from './vision.js';
+import { loadDetector, usedDelegate, scanVideo, seekTo, findRedLine, trackCrossings, refineCrossing, interpBox, groupTracks, Tracker, detectFrame, grabSmall, liveCrossing, histSim, normHist } from './vision.js';
 
 const $ = id => document.getElementById(id);
-const S = { session: null, videoURL: null, videoFile: null, person: null, line: null };
+const S = { session: null, videoURL: null, videoFile: null, person: null, line: null, live: false, stream: null, recBlob: null };
 
 // ---------- 小さな道具 ----------
-function go(id) { document.querySelectorAll('.scr').forEach(s => s.classList.toggle('on', s.id === id)); window.scrollTo(0, 0); if (id !== 'sPerson') stopPlayer(); }
+function go(id) { document.querySelectorAll('.scr').forEach(s => s.classList.toggle('on', s.id === id)); window.scrollTo(0, 0); if (id !== 'sPerson') stopPlayer(); if (id !== 'sLine' && id !== 'sLive') stopCamera(); }
 document.querySelectorAll('[data-go]').forEach(b => b.onclick = () => { if (b.dataset.go === 'sResult') showResult(); else { go(b.dataset.go); if (b.dataset.go === 'sHome') showHome(); } });
 let toastTm; function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(toastTm); toastTm = setTimeout(() => t.classList.remove('on'), 2200); }
 const fmt = s => { if (s == null || !isFinite(s)) return '—'; const m = Math.floor(s / 60), r = s - m * 60; return m ? `${m}:${r.toFixed(2).padStart(5, '0')}` : r.toFixed(2); };
@@ -52,7 +52,7 @@ async function setVideo(file) {
 $('file').onchange = async e => {
   const f = e.target.files[0]; e.target.value = ''; if (!f) return;
   try { await setVideo(f); } catch (err) { return toast(err.message); }
-  S.session = null;
+  S.session = null; S.live = false; S.recBlob = null;
   openLine();
   loadDetector().catch(() => {}); // 線を合わせている間に準備しておく
 };
@@ -66,18 +66,23 @@ $('file2').onchange = async e => {
 
 // ---------- 赤いラインを合わせる ----------
 const lineCv = $('lineCv'), lineCx = lineCv.getContext('2d');
+const lineSrc = () => S.live ? $('vLive') : $('vWork');
 async function openLine() {
   go('sLine');
-  const v = $('vWork');
+  const v = lineSrc();
   lineCv.width = v.videoWidth; lineCv.height = v.videoHeight;
-  S.line = lsGet('skate-line', null);
+  S.line = lsGet(S.live ? 'skate-line-live' : 'skate-line', null) || lsGet('skate-line', null);
   $('optTiles').checked = lsGet('skate-tiles', 1) === 2;
-  await seekTo(v, 0.5);
+  $('lineTime').classList.toggle('hide', S.live);
+  $('lineNote').textContent = S.live ? 'スマホを置いて動かさないでください。動くとラインがずれます。線は置き場所ごとに覚えます。' : '人が線に重なっていない場面を選ぶと合わせやすいです。線は置き場所ごとに覚えます。';
+  $('startScan').textContent = S.live ? '⏺ この線で撮影スタート' : 'この線で解析する';
+  if (!S.live) await seekTo(v, 0.5);
   if (!S.line) S.line = findRedLine(v, v.videoWidth, v.videoHeight) || [[0.3, 0.75], [0.7, 0.6]];
   drawLine();
+  if (S.live) { const loop = () => { if (!$('sLine').classList.contains('on')) return; drawLine(); requestAnimationFrame(loop); }; requestAnimationFrame(loop); }
 }
 function drawLine() {
-  const v = $('vWork'), W = lineCv.width, H = lineCv.height;
+  const v = lineSrc(), W = lineCv.width, H = lineCv.height;
   lineCx.drawImage(v, 0, 0, W, H);
   const [a, b] = S.line, r = Math.max(10, W / 50);
   lineCx.lineWidth = Math.max(3, W / 300); lineCx.strokeStyle = '#ffffff'; lineCx.setLineDash([W / 60, W / 90]);
@@ -85,7 +90,7 @@ function drawLine() {
   for (const p of [a, b]) { lineCx.beginPath(); lineCx.arc(p[0] * W, p[1] * H, r, 0, 7); lineCx.fillStyle = 'rgb(255 59 79 / .55)'; lineCx.fill(); lineCx.lineWidth = Math.max(2, W / 400); lineCx.strokeStyle = '#fff'; lineCx.stroke(); }
 }
 $('lineTime').oninput = async e => { const v = $('vWork'); await seekTo(v, v.duration * e.target.value / 1000); drawLine(); };
-$('lineAuto').onclick = () => { const v = $('vWork'); const l = findRedLine(v, v.videoWidth, v.videoHeight); if (l) { S.line = l; drawLine(); toast('赤い線を見つけました'); } else toast('赤い線が見つかりません。丸を動かしてください'); };
+$('lineAuto').onclick = () => { const v = lineSrc(); const l = findRedLine(v, v.videoWidth, v.videoHeight); if (l) { S.line = l; drawLine(); toast('赤い線を見つけました'); } else toast('赤い線が見つかりません。丸を動かしてください'); };
 {
   let drag = -1;
   const pos = e => { const r = lineCv.getBoundingClientRect(); return [(e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height]; };
@@ -103,6 +108,7 @@ $('lineAuto').onclick = () => { const v = $('vWork'); const l = findRedLine(v, v
 let stopFlag = false;
 $('stopScan').onclick = () => { stopFlag = true; };
 $('startScan').onclick = async () => {
+  if (S.live) return startLive();
   lsSet('skate-line', S.line);
   const tiles = $('optTiles').checked ? 2 : 1; lsSet('skate-tiles', tiles);
   go('sScan'); stopFlag = false;
@@ -139,7 +145,7 @@ $('startScan').onclick = async () => {
   } finally { try { wake?.release(); } catch {} }
 };
 
-function buildSession(rawTracks, W, H, duration, tiles) {
+function buildSession(rawTracks, W, H, duration, tiles, preset) {
   const line = S.line;
   // 短すぎる切れはし（見まちがい）は外す。ただしラインを越えたものは残す
   const tracks = [], crossings = [];
@@ -152,7 +158,13 @@ function buildSession(rawTracks, W, H, duration, tiles) {
   }
   // 前向き＝いちばん多い通過の向き
   const plus = crossings.filter(c => c.dir > 0).length, dir = plus >= crossings.length - plus ? 1 : -1;
-  const groups = groupTracks(tracks.map(t => ({ ...t, hist: Float32Array.from(t.hist) })));
+  let groups;
+  if (preset) { // その場で分けた人はそのまま。残りは服の色でまとめる
+    const kept = new Set(tracks.map(t => t.id));
+    groups = preset.map(g => g.filter(id => kept.has(id))).filter(g => g.length);
+    const used = new Set(groups.flat());
+    groups.push(...groupTracks(tracks.filter(t => !used.has(t.id)).map(t => ({ ...t, hist: Float32Array.from(t.hist) }))));
+  } else groups = groupTracks(tracks.map(t => ({ ...t, hist: Float32Array.from(t.hist) })));
   const s = {
     id: 's' + Date.now(), date: Date.now(), videoName: S.videoFile.name, videoSize: S.videoFile.size, duration, W, H, line, tiles, dir,
     minLap: lsGet('skate-minlap', 15), tracks, crossings, persons: groups.map(ids => ({ id: 'p' + ids[0], name: '', tracks: ids })),
@@ -195,6 +207,7 @@ function showResult() {
   const d = new Date(s.date);
   $('resTitle').innerHTML = `選手一覧<small></small>`; $('resTitle').querySelector('small').textContent = `${d.getMonth() + 1}/${d.getDate()}・${s.videoName}`;
   $('needVideo').classList.toggle('hide', !!S.videoURL);
+  $('recSave').classList.toggle('hide', !(S.recBlob && S.session.live && S.session.videoName === S.videoFile?.name));
   $('minLap').value = s.minLap;
   const main = topPersons(s), mainSet = new Set(main);
   const others = s.persons.filter(p => !mainSet.has(p)).sort((a, b) => personTime(s, b) - personTime(s, a)).slice(0, 60);
@@ -461,6 +474,147 @@ $('saveVideo').onclick = async () => {
   document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 60000);
   P.mode = P0.mode; $('onlyMe').checked = P0.only; P.rate = P0.rate;
   btn.disabled = false; btn.textContent = '追いかけ動画を保存'; toast('保存しました');
+};
+
+// ---------- その場で撮る ----------
+function stopCamera() {
+  if (L.rec && L.rec.state !== 'inactive') return; // 撮影中は止めない
+  if (S.stream) { S.stream.getTracks().forEach(t => t.stop()); S.stream = null; }
+}
+$('liveBtn').onclick = async () => {
+  if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) return toast('この端末ではアプリで撮影できません。カメラで撮って「撮った動画を入れる」を使ってください');
+  try {
+    S.stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30 } } });
+  } catch (e) { return toast('カメラを使えませんでした（カメラの許可を確かめてください）'); }
+  const v = $('vLive'); v.srcObject = S.stream; v.muted = true;
+  await v.play().catch(() => {});
+  if (!v.videoWidth) await new Promise(r => v.onloadedmetadata = r);
+  S.live = true; S.session = null;
+  loadDetector().catch(() => {});
+  await openLine();
+};
+
+const L = { rec: null, chunks: [], t0: 0, tracker: null, persons: [], byTrack: new Map(), crossings: [], lastDet: 0, timer: 0, tiles: 1, newId: null };
+async function startLive() {
+  lsSet('skate-line-live', S.line); lsSet('skate-line', S.line);
+  const v = $('vLive'), W = v.videoWidth, H = v.videoHeight;
+  const cv = $('liveCv'), cx = cv.getContext('2d'); cv.width = W; cv.height = H;
+  go('sLive');
+  $('liveCards').innerHTML = ''; $('liveInfo').textContent = '準備しています…';
+  try { await loadDetector(); } catch (e) { toast('準備できませんでした（はじめの1回は電波が必要です）'); go('sHome'); return; }
+  try { L.wake = await navigator.wakeLock?.request('screen'); } catch {}
+  const types = ['video/mp4;codecs=avc1', 'video/mp4', 'video/webm;codecs=vp9', 'video/webm'];
+  L.type = types.find(t => MediaRecorder.isTypeSupported(t)) || '';
+  L.rec = new MediaRecorder(S.stream, L.type ? { mimeType: L.type, videoBitsPerSecond: 6e6 } : {});
+  L.chunks = []; L.rec.ondataavailable = e => e.data.size && L.chunks.push(e.data);
+  L.tracker = new Tracker(W, H); L.persons = []; L.byTrack = new Map(); L.crossings = []; L.lastDet = 0;
+  L.minLap = lsGet('skate-minlap', 15); L.tiles = lsGet('skate-tiles', 1);
+  await new Promise(r => { L.rec.onstart = r; L.rec.start(1000); });
+  L.t0 = performance.now();
+  $('liveInfo').textContent = 'ラインを越えた人がここに出ます';
+  L.timer = setInterval(() => { const t = clock((performance.now() - L.t0) / 1000); $('liveTime').textContent = t; $('darkTime').textContent = t; }, 500);
+  const step = (now, meta) => {
+    if (!L.rec || L.rec.state === 'inactive') return;
+    const at = (meta && meta.captureTime) || now;
+    // 1秒に10回くらいだけ調べる（電池と熱のため）
+    if (at - L.lastDet >= 95) {
+      L.lastDet = at;
+      const t = (at - L.t0) / 1000;
+      if (t >= 0) {
+        grabSmall(v, W, H);
+        const dets = detectFrame(v, W, H, L.tiles);
+        L.tracker.update(t, dets, v);
+        for (const tr of L.tracker.active) { const c = liveCrossing(tr, S.line, W, H); if (c) onLiveCross(c, tr); }
+        if ($('dark').classList.contains('hide')) {
+          cx.clearRect(0, 0, W, H); cx.lineWidth = Math.max(3, W / 300); cx.strokeStyle = '#ff3b4f';
+          cx.beginPath(); cx.moveTo(S.line[0][0] * W, S.line[0][1] * H); cx.lineTo(S.line[1][0] * W, S.line[1][1] * H); cx.stroke();
+          cx.strokeStyle = '#3fb4ff'; cx.lineWidth = Math.max(2, W / 500);
+          for (const d of dets) cx.strokeRect(d.x1 * W, d.y1 * H, (d.x2 - d.x1) * W, (d.y2 - d.y1) * H);
+        }
+      }
+    }
+    if ('requestVideoFrameCallback' in v) v.requestVideoFrameCallback(step); else requestAnimationFrame(t => step(t));
+  };
+  if ('requestVideoFrameCallback' in v) v.requestVideoFrameCallback(step); else requestAnimationFrame(t => step(t));
+}
+// 前向き＝いちばん多い通過の向き
+const liveDir = () => { const p = L.crossings.filter(c => c.dir > 0).length; return p >= L.crossings.length - p ? 1 : -1; };
+function onLiveCross(c, tr) {
+  L.crossings.push(c);
+  let p = L.byTrack.get(tr.id);
+  if (!p) { // 服の色がいちばん似ていて、少し前に通った人を探す
+    const h = normHist(tr.hist, tr.hn); let best = null, bv = 0.9;
+    const busy = new Set(L.tracker.active.filter(x => x !== tr).map(x => L.byTrack.get(x.id)).filter(Boolean));
+    for (const q of L.persons) {
+      if (busy.has(q)) continue;
+      const last = q.cs.length ? q.cs[q.cs.length - 1].t : -1e9;
+      if (c.t - last < L.minLap * 0.6) continue;
+      const v = histSim(h, normHist(q.hist, q.hn)); if (v > bv) { bv = v; best = q; }
+    }
+    p = best || { id: 'p' + tr.id, name: String.fromCharCode(65 + L.persons.length % 26) + (L.persons.length >= 26 ? Math.floor(L.persons.length / 26) : ''), tracks: [], cs: [], hist: new Float32Array(tr.hist.length), hn: 0, thumb: null };
+    if (!best) L.persons.push(p);
+    p.tracks.push(tr.id); L.byTrack.set(tr.id, p);
+    for (let i = 0; i < tr.hist.length; i++) p.hist[i] += tr.hist[i]; p.hn += tr.hn;
+  }
+  if (tr.thumb) p.thumb = tr.thumb.toDataURL('image/jpeg', 0.7);
+  p.cs.push(c); L.newId = p.id;
+  renderLiveCards();
+}
+function liveLaps(p) {
+  const d = liveDir(), cs = p.cs.filter(c => c.dir === d).sort((a, b) => a.t - b.t), out = [];
+  for (const c of cs) if (!out.length || c.t - out[out.length - 1].t >= L.minLap) out.push(c);
+  const laps = []; for (let i = 1; i < out.length; i++) laps.push(out[i].t - out[i - 1].t);
+  return laps;
+}
+function renderLiveCards() {
+  const box = $('liveCards'); box.innerHTML = '';
+  const list = L.persons.map(p => ({ p, laps: liveLaps(p), last: p.cs[p.cs.length - 1].t })).sort((a, b) => b.laps.length - a.laps.length || b.last - a.last);
+  let total = 0;
+  for (const { p, laps } of list) {
+    total += laps.length;
+    const el = document.createElement('div'); el.className = 'lcard' + (p.id === L.newId ? ' new' : '');
+    el.innerHTML = `<img alt=""><div><div class="n"></div><div class="last">${laps.length ? fmt(laps[laps.length - 1]) : '—'}</div><div class="hist">${laps.slice(0, -1).reverse().slice(0, 12).map(fmt).join(' ')}</div></div>`;
+    el.querySelector('img').src = p.thumb || 'icon.svg';
+    el.querySelector('.n').textContent = `${p.name}・${laps.length}周`;
+    box.append(el);
+  }
+  $('darkInfo').textContent = `${list.length}人・${total}周`;
+}
+$('darkBtn').onclick = () => $('dark').classList.remove('hide');
+$('dark').onclick = () => $('dark').classList.add('hide');
+$('stopLive').onclick = async () => {
+  if (!L.rec || L.rec.state === 'inactive') return;
+  if (!confirm('撮影を止めますか？')) return;
+  $('stopLive').disabled = true;
+  clearInterval(L.timer);
+  const v = $('vLive'), W = v.videoWidth, H = v.videoHeight, dur = (performance.now() - L.t0) / 1000;
+  await new Promise(r => { L.rec.onstop = r; L.rec.stop(); });
+  try { L.wake?.release(); } catch {}
+  const ext = (L.type || 'webm').includes('mp4') ? 'mp4' : 'webm';
+  const d = new Date(), name = `スケート_${d.getMonth() + 1}月${d.getDate()}日_${d.getHours()}時${String(d.getMinutes()).padStart(2, '0')}分.${ext}`;
+  S.recBlob = new Blob(L.chunks, { type: L.type || 'video/webm' }); L.chunks = [];
+  const file = new File([S.recBlob], name, { type: S.recBlob.type });
+  L.rec = null; stopCamera(); $('stopLive').disabled = false;
+  try { await setVideo(file); } catch (e) { toast('撮った動画を開けませんでした'); }
+  const vd = $('vWork').duration;
+  const s = buildSession(L.tracker.finish(), W, H, isFinite(vd) && vd > 0 ? vd : dur, L.tiles, L.persons.map(p => p.tracks));
+  // その場で付けた名前（A・B…）を引きつぐ
+  for (const lp of L.persons) { const sp = s.persons.find(x => x.tracks.includes(lp.tracks[0])); if (sp) sp.name = lp.name; }
+  s.live = true; s.title = name.replace(/\.\w+$/, '');
+  await saveSession(s); S.session = s; S.live = false;
+  showResult();
+};
+$('saveRec').onclick = () => {
+  if (!S.recBlob) return;
+  const a = document.createElement('a'); a.href = URL.createObjectURL(S.recBlob); a.download = S.videoFile.name;
+  document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+  toast('保存しました（ダウンロードを確かめてください）');
+};
+$('deepScan').onclick = async () => {
+  if (!S.session) return;
+  if (!confirm('撮った動画を最初から解析し直します（数分かかります）。新しい記録として追加されます。')) return;
+  S.line = S.session.line; S.live = false;
+  $('startScan').onclick();
 };
 
 // ---------- はじめ ----------
