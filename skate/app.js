@@ -539,7 +539,7 @@ function fillFaces(box, s, list, onTap) {
 $('minLap').onchange = async e => { const s = S.session; s.minLap = Math.max(3, +e.target.value || 15); lsSet('skate-minlap', s.minLap); await saveSession(s); showResult(); };
 
 // ---------- 選手の画面 ----------
-const P = { mode: 'chase', shape: 'v', zoom: 'wide', rate: 1, path: null, raf: 0, refining: false, check: null };
+const P = { mode: 'chase', shape: 'h', zoom: 'tv', rate: 1, path: null, raf: 0, refining: false, check: null };
 const playCv = $('playCv'), playCx = playCv.getContext('2d');
 function openPerson(p) {
   S.person = p; go('sPerson'); P.lineAt = null; P.map = null;
@@ -749,7 +749,9 @@ function buildPath(s, p) {
         const t = a + i * STEP, bx = interpBox(g.s, Math.min(Math.max(t, g.s[0][0]), g.last), bridge + 0.1) || boxOf(g.s[0]);
         cx[i] = (bx.x1 + bx.x2) / 2; cy[i] = (bx.y1 + bx.y2) / 2; h[i] = bx.y2 - bx.y1;
       }
-      return { a, b, cx: smooth(cx, 0.25 / STEP), cy: smooth(cy, 0.3 / STEP), h: smooth(h, 0.7 / STEP) };
+      // 中継：カメラの動きはゆっくり（中心 0.7秒・高さ 0.9秒）、寄り具合はもっとゆっくり（2.5秒）
+      return { a, b, cx: smooth(cx, 0.25 / STEP), cy: smooth(cy, 0.3 / STEP), h: smooth(h, 0.7 / STEP),
+        tcx: smooth(cx, 0.7 / STEP), tcy: smooth(cy, 0.9 / STEP), th: smooth(h, 2.5 / STEP) };
     }),
   };
 }
@@ -764,10 +766,11 @@ function segAt(t) { return P.path.segs.find(g => t >= g.a && t <= g.b); }
 function cropAt(t, W, H, outAsp) {
   const g = segAt(t); if (!g) return null;
   const i = Math.min(g.cx.length - 1, Math.max(0, Math.round((t - g.a) / STEP)));
-  const k = P.zoom === 'mid' ? 4.5 : 2.4; // 寄る：背の2.4倍、少し寄る：4.5倍
-  let ch = Math.min(1, Math.max(0.2, g.h[i] * k)), cw = ch * H * outAsp / W;
+  // 中継：背の6倍の広さ（その人と周りのコース）を、なめらかに保つ。寄る：背の2.4倍
+  const tv = P.zoom === 'tv', hh = tv ? g.th[i] : g.h[i], gx = tv ? g.tcx[i] : g.cx[i], gy = tv ? g.tcy[i] : g.cy[i];
+  let ch = Math.min(1, Math.max(0.2, hh * (tv ? 6 : 2.4))), cw = ch * H * outAsp / W;
   if (cw > 1) { ch /= cw; cw = 1; }
-  const x = Math.min(1 - cw, Math.max(0, g.cx[i] - cw / 2)), y = Math.min(1 - ch, Math.max(0, g.cy[i] - ch / 2));
+  const x = Math.min(1 - cw, Math.max(0, gx - cw / 2)), y = Math.min(1 - ch, Math.max(0, gy - ch / 2));
   return { x, y, w: cw, h: ch };
 }
 
@@ -800,6 +803,13 @@ function drawFrame() {
     label(c, 'この人は画面の外', ow / 2, oh / 2, 'center');
   } else if (crop) {
     c.drawImage(v, crop.x * W, crop.y * H, crop.w * W, crop.h * H, 0, 0, ow, oh);
+    if (P.zoom === 'tv') { // 中継は周りの人も映るので、この人に枠を付ける
+      const b = interpBox(P.path.all, t, S.person && S.person.chain ? 3.3 : 1.0);
+      if (b) {
+        const X = x => (x - crop.x) / crop.w * ow, Y = y => (y - crop.y) / crop.h * oh;
+        c.strokeStyle = '#ffe14d'; c.lineWidth = Math.max(3, ow / 260); c.strokeRect(X(b.x1), Y(b.y1), X(b.x2) - X(b.x1), Y(b.y2) - Y(b.y1));
+      }
+    }
   } else {
     c.drawImage(v, 0, 0, ow, oh);
     const sx = ow, sy = oh;
@@ -848,14 +858,8 @@ function segBtns(id, key, after) {
 segBtns('modeSeg', 'mode', () => { $('shapeSeg').classList.toggle('hide', P.mode !== 'chase' || P.zoom === 'wide'); $('zoomRow').classList.toggle('hide', P.mode !== 'chase'); $('mapBox').classList.toggle('hide', P.mode !== 'map'); if (P.mode === 'map') prepMap(); });
 segBtns('shapeSeg', 'shape');
 segBtns('zoomSeg', 'zoom', () => { $('shapeSeg').classList.toggle('hide', P.mode !== 'chase' || P.zoom === 'wide'); if (S.person) { S.person.zoom = P.zoom; saveSession(S.session); } });
-// 画角の最初の設定：カメラで追って撮った動画・人が大きく写る動画は「そのまま」、動かない引きの動画は「寄る」
-function autoZoom(s, p) {
-  const rows = (s.motion || []).filter(r => r.length >= 26);
-  let pan = 0; for (const r of rows) pan = Math.max(pan, Math.abs(r[3]), Math.abs(r[6]));
-  const hs = []; for (const id of p.tracks) { const t = trackById(s, id); if (t) for (const r of t.s) hs.push(r[4] - r[2]); }
-  hs.sort((a, b) => a - b); const mh = hs.length ? hs[hs.length >> 1] : 0;
-  return pan > 0.08 || mh > 0.15 ? 'wide' : 'close';
-}
+// 画角の最初の設定：いつも「中継」（本人の希望：練習の動画全体で、ちょうどいい画角を保つ）
+function autoZoom() { return 'tv'; }
 segBtns('rateSeg', 'rate', () => { $('vPlay').playbackRate = P.rate; });
 async function checkCrossing(t) {
   if (!S.videoURL) return toast('動画を選ぶと確かめられます');
