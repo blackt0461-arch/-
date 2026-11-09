@@ -101,6 +101,41 @@ export function headSim(a, b) {
   let s = 0; for (let i = NH * 2; i < NB; i++) s += Math.sqrt(a[i] * b[i]); return s;
 }
 
+// ---------- 赤いラインの色と、壁と氷の境目 ----------
+// 氷の上の赤いラインは、氷を通して見るので「とても薄い赤（灰色に近いピンク）」。緑と青がほぼ同じ量なのが特徴。
+// 壁の下の黄色〜オレンジの帯は緑が青よりずっと多いので入れない（2026-11-09 本人の指摘：境目を赤い線とまちがえる）。
+export function isLineRed(r, g, b) {
+  const red = r - Math.max(g, b);
+  return r > 60 && red >= 10 && Math.abs(g - b) <= Math.max(10, red * 0.6);
+}
+// 壁と氷の境目：各列で、壁らしい色（黄色い帯・青いマット）のいちばん下を集め、直線を当てはめる。
+// 返り値：x（0〜w）→ 境目の y（ピクセル）。見つからなければ null（その時は境目で切らない）
+export function wallEdge(data, w, h) {
+  const pts = [];
+  for (let x = 0; x < w; x += 2) {
+    let low = -1, run = 0;
+    for (let y = 0; y < Math.floor(h * 0.85); y++) {
+      const i = (y * w + x) * 4, r = data[i], g = data[i + 1], b = data[i + 2];
+      const yellow = r > 140 && g > 110 && b < g * 0.6, blue = b > r + 40 && b > g + 5 && b > 90;
+      if (yellow || blue) { run++; if (run >= 3) low = y; } else run = 0;
+    }
+    if (low >= 0) pts.push([x, low]);
+  }
+  if (pts.length < w / 2 * 0.25) return null;
+  // RANSAC で直線（マットの切れ目や人の服の色に引っぱられないように）
+  let best = null, bn = 0;
+  for (let k = 0; k < 200; k++) {
+    const a = pts[(Math.random() * pts.length) | 0], c = pts[(Math.random() * pts.length) | 0];
+    if (Math.abs(c[0] - a[0]) < w * 0.15) continue;
+    const m = (c[1] - a[1]) / (c[0] - a[0]); let n = 0;
+    for (const p of pts) if (Math.abs(a[1] + m * (p[0] - a[0]) - p[1]) < 3) n++;
+    if (n > bn) { bn = n; best = [a, m]; }
+  }
+  if (!best || bn < pts.length * 0.4) return null;
+  const [a, m] = best;
+  return x => a[1] + m * (x - a[0]);
+}
+
 // ---------- 赤いラインを、いまのコマの中で探して合わせ直す ----------
 // 予想した線（計算で出した位置）の近くだけで赤っぽい画素を集め、直線を当てはめ直す。
 // 人の枠の中は使わない（赤い服を線とまちがえないように）。見つからなければ null。
@@ -110,6 +145,9 @@ export function snapRedLine(line, boxes = []) {
   let dx = P1[0] - P0[0], dy = P1[1] - P0[1]; const L = Math.hypot(dx, dy); if (L < 12) return null;
   dx /= L; dy /= L;
   const inBox = (x, y) => boxes.some(b => x >= b.x1 * sW && x <= b.x2 * sW && y >= b.y1 * sH && y <= b.y2 * sH);
+  const edge = wallEdge(smallData, sW, sH); // 壁の側（境目より上）は探さない
+  const margin = Math.max(4, sH * 0.05); // 境目のすぐ下は、氷に映った壁の帯（写り込み）なので見ない
+  const onWall = (x, y) => edge && y <= edge(x) + margin;
   const collect = (a, ux, uy, band) => {
     const pts = [], nx = -uy, ny = ux;
     const xs = [a[0], a[0] + ux * L], ys = [a[1], a[1] + uy * L];
@@ -119,7 +157,7 @@ export function snapRedLine(line, boxes = []) {
       const qx = x - a[0], qy = y - a[1], u = (qx * ux + qy * uy) / L, d = qx * nx + qy * ny;
       if (u < 0.02 || u > 1.02 || Math.abs(d) > band) continue; // 線のはしより外（壁の側）の赤は見ない
       const i = (y * sW + x) * 4, r = smallData[i], g = smallData[i + 1], b = smallData[i + 2];
-      if (r > 70 && r - (g + b) / 2 > 22 && r > g * 1.25 && r > b + 12 && !inBox(x, y)) pts.push([x, y, u]);
+      if (isLineRed(r, g, b) && !inBox(x, y) && !onWall(x, y)) pts.push([x, y, u]);
     }
     return pts;
   };
@@ -337,10 +375,10 @@ export function findRedLine(src, W, H) {
   const w = 320, h = Math.round(320 * H / W);
   const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
   const c = cv.getContext('2d', { willReadFrequently: true }); c.drawImage(src, 0, 0, w, h);
-  const d = c.getImageData(0, 0, w, h).data, pts = [];
+  const d = c.getImageData(0, 0, w, h).data, pts = [], edge = wallEdge(d, w, h), margin = Math.max(4, h * 0.05);
   for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
     const i = (y * w + x) * 4, r = d[i], g = d[i + 1], b = d[i + 2];
-    if (r > 90 && r > g * 1.45 && r > b * 1.3 && r - Math.max(g, b) > 28) pts.push([x, y]); // 黄色・オレンジは入れない
+    if (isLineRed(r, g, b) && !(edge && y <= edge(x) + margin)) pts.push([x, y]); // 薄い赤だけ・壁の側と写り込みは入れない
   }
   if (pts.length < 30) return null;
   const inl = (a, b) => { const dx = b[0] - a[0], dy = b[1] - a[1], L = Math.hypot(dx, dy); let n = 0;
@@ -363,6 +401,10 @@ export function findRedLine(src, W, H) {
     if (vert && span < 0.35) continue;   // 短い縦の帯＝壁の赤い帯
     if (low < 0.5) continue;              // 画面の上半分だけ＝壁や観客席
     if (Math.hypot((e2[0] - e1[0]) * w, (e2[1] - e1[1]) * h) < 40) continue; // 短すぎる
+    if (edge) { // 境目と平行で、境目に近い線は、壁の帯の写り込み
+      const d1 = e1[1] * h - edge(e1[0] * w), d2 = e2[1] * h - edge(e2[0] * w);
+      if (Math.abs(d1 - d2) < h * 0.04 && Math.max(d1, d2) < h * 0.12) continue;
+    }
     return e1[1] < e2[1] ? [e1, e2] : [e2, e1];
   }
   return null;
