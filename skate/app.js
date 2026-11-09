@@ -2,7 +2,7 @@
 import * as stand from './stand.js';
 import { loadMembers, saveMembers, matchMember, addMember, addSample, priorityOf } from './members.js';
 import { grabGray, LineAnchor, MotionChain, apply, inv3, homFrom4 } from './motion.js';
-import { loadDetector, usedDelegate, scanVideo, seekTo, findRedLine, trackCrossings, refineCrossing, interpBox, groupTracks, Tracker, detectFrame, grabSmall, liveCrossing, histSim, headSim, normHist } from './vision.js';
+import { loadDetector, usedDelegate, scanVideo, seekTo, findRedLine, trackCrossings, refineCrossing, interpBox, groupTracks, Tracker, detectFrame, grabSmall, liveCrossing, lineMetric, footMetric, LineTracker, histSim, headSim, normHist } from './vision.js';
 
 const $ = id => document.getElementById(id);
 const S = { session: null, videoURL: null, videoFile: null, person: null, line: null, live: false, stream: null, recBlob: null };
@@ -174,9 +174,12 @@ function frameImage(v) {
 }
 // 各コマの「いま→線のコマ」の変換から、その時刻のコマでの線の位置を出す
 function makeLineAt(s) {
-  const map = new Map(), rows = s.motion || [];
+  const map = new Map(), rows = (s.motion || []).filter(r => r.length >= 26); // 古い形の記録は使わない
   for (const r of rows) map.set(Math.round(r[0] * 1000), r);
-  const lineOf = r => { if (!r || !r[10]) return null; const Hi = inv3(r.slice(11, 20)); return s.line.map(p => apply(Hi, p[0], p[1])); };
+  const W = s.W, H = s.H;
+  const hkOf = r => r && r[10] ? r.slice(11, 20) : null;
+  // そのコマでの線：赤い線で合わせ直した線（なければ K に重ねて計算した線）
+  const lineOf = r => r && r[20] ? [[r[21], r[22]], [r[23], r[24]]] : null;
   const near = (t, tol) => { // 近い時刻のコマ（二分探索）
     if (!rows.length) return null;
     let lo = 0, hi = rows.length - 1;
@@ -184,13 +187,19 @@ function makeLineAt(s) {
     const r = Math.abs(rows[lo][0] - t) <= Math.abs(rows[hi][0] - t) ? rows[lo] : rows[hi];
     return Math.abs(r[0] - t) <= tol ? r : null;
   };
-  const hkOf = r => r && r[10] ? r.slice(11, 20) : null;
-  if (!rows.length) return { exact: () => s.line, near: () => s.line, Hk: () => null, toK: () => [1, 0, 0, 0, 1, 0, 0, 0, 1] };
+  const exactRow = t => map.get(Math.round(t * 1000)) || near(t, 0.002);
+  if (!rows.length) return { exact: () => s.line, near: () => s.line, Hk: () => null, toK: () => [1, 0, 0, 0, 1, 0, 0, 0, 1], measure: (t, x1, y2, x2) => lineMetric(s.line, W, H, x1, y2, x2) };
   return {
-    toK: t => hkOf(map.get(Math.round(t * 1000)) || near(t, 0.002)),
-    exact: t => lineOf(map.get(Math.round(t * 1000)) || near(t, 0.002)),
+    exact: t => lineOf(exactRow(t)),
+    toK: t => hkOf(exactRow(t)),
     near: (t, tol = 0.2) => lineOf(near(t, tol)),
-    Hk: t => { const r = near(t, 0.6); return r && r[10] ? r.slice(11, 20) : null; },
+    Hk: t => hkOf(near(t, 0.6)),
+    // 足もととラインの符号つき距離。赤い線で合わせ直せたコマはその線で、だめなら K に置き直して比べる
+    measure: (t, x1, y2, x2) => {
+      const r = exactRow(t); if (!r) return null;
+      if (r[25]) return lineMetric(lineOf(r), W, H, x1, y2, x2);
+      const Hk = hkOf(r); return Hk ? footMetric(s.line, W, H, Hk, x1, y2, x2) : null;
+    },
   };
 }
 async function lineKOf(s) {
@@ -203,12 +212,14 @@ async function lineKOf(s) {
 function buildSession(rawTracks, W, H, duration, tiles, preset, motion) {
   const line = S.line;
   const r5 = x => Math.round(x * 1e5) / 1e5;
-  const mrows = (motion || []).map(([t, T, Hk]) => [r5(t), ...T.map(r5), Hk ? 1 : 0, ...(Hk ? Hk.map(r5) : [])]);
-  const toK = makeLineAt({ line, motion: mrows }).toK;
+  // 1行：[時刻, いま→基準(9), K に重なったか, いま→K(9), 線が分かったか, 線(4), 赤い線で合わせ直したか]
+  const Z9 = [0, 0, 0, 0, 0, 0, 0, 0, 0];
+  const mrows = (motion || []).map(([t, T, Hk, ln, sn]) => [r5(t), ...T.map(r5), Hk ? 1 : 0, ...(Hk ? Hk.map(r5) : Z9), ln ? 1 : 0, ...(ln ? ln.flat().map(r5) : [0, 0, 0, 0]), sn ? 1 : 0]);
+  const measure = makeLineAt({ line, motion: mrows, W, H }).measure;
   // 短すぎる切れはし（見まちがい）は外す。ただしラインを越えたものは残す
   const tracks = [], crossings = [];
   for (const tr of rawTracks) {
-    const cr = trackCrossings(tr, toK, line, W, H);
+    const cr = trackCrossings(tr, measure);
     const dur = tr.s[tr.s.length - 1][0] - tr.s[0][0];
     if (!cr.length && (tr.s.length < 4 || dur < 0.5)) continue;
     crossings.push(...cr);
@@ -373,7 +384,7 @@ async function refinePerson(p) {
   try {
     await loadDetector();
     const v = $('vWork'), la = makeLineAt(s);
-    const ctx = { line: s.line, K: await lineKOf(s), HkNear: la.Hk, toK: la.toK, tiles: s.tiles };
+    const ctx = { line: s.line, K: await lineKOf(s), HkNear: la.Hk, lineNear: t => la.near(t, 0.5), measure: la.measure, tiles: s.tiles };
     for (let i = 0; i < todo.length; i++) {
       if (S.person !== p) break;
       info.textContent = `ラップを細かく見直しています… ${i + 1}/${todo.length}`;
@@ -780,8 +791,8 @@ async function startLive() {
   L.tracker = new Tracker(W, H); L.persons = []; L.byTrack = new Map(); L.crossings = []; L.lastDet = 0;
   // いま写っているコマを「線のコマ」にする。首を振っても、毎回このコマに重ねて線の位置を求める
   S.lineImg = frameImage(v);
-  L.anchor = new LineAnchor(grabGray(v, W, H), S.line.map(p => p.slice())); L.chain = new MotionChain(); L.motion = []; L.toK = new Map();
-  const toK = t => L.toK.get(Math.round(t * 1000)) || null;
+  L.lt = new LineTracker(new LineAnchor(grabGray(v, W, H), S.line.map(p => p.slice()))); L.chain = new MotionChain(); L.motion = []; L.meas = new Map();
+  const measure = (t, x1, y2, x2) => { const m = L.meas.get(Math.round(t * 1000)); if (!m) return null; return m.sn ? lineMetric(m.line, W, H, x1, y2, x2) : footMetric(S.line, W, H, m.Hk, x1, y2, x2); };
   L.minLap = lsGet('skate-minlap', 15); L.tiles = lsGet('skate-tiles', 1);
   await new Promise(r => { L.rec.onstart = r; L.rec.start(1000); });
   L.t0 = performance.now();
@@ -797,10 +808,11 @@ async function startLive() {
       if (t >= 0) {
         grabSmall(v, W, H);
         const dets = detectFrame(v, W, H, L.tiles);
-        const P = grabGray(v, W, H), T = L.chain.step(P, dets), loc = L.anchor.locate(P, T, dets);
-        L.motion.push([t, T, loc ? loc.H : null]); if (loc) L.toK.set(Math.round(t * 1000), loc.H);
+        const P = grabGray(v, W, H), T = L.chain.step(P, dets), loc = L.lt.step(t, P, T, dets);
+        L.motion.push([t, T, loc.Hk, loc.line, loc.snapped]);
+        if (loc.snapped || loc.Hk) L.meas.set(Math.round(t * 1000), { sn: loc.snapped, line: loc.line, Hk: loc.Hk });
         L.tracker.update(t, dets, v, T);
-        for (const tr of L.tracker.active) { const c = liveCrossing(tr, toK, S.line, W, H); if (c) onLiveCross(c, tr); }
+        for (const tr of L.tracker.active) { const c = liveCrossing(tr, measure); if (c) onLiveCross(c, tr); }
         const tg = pickTarget(t);
         stand.setSpeed(stand.aimSpeed(tg));
         if ($('dark').classList.contains('hide')) {
