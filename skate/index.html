@@ -114,7 +114,7 @@ dialog::backdrop{background:rgb(0 0 0 / .6)}
   <div style="height:10px"></div>
   <label class="btn blue" for="file">🎥 撮った動画を入れる</label>
   <input type="file" id="file" accept="video/*" class="hide">
-  <p class="note">版 2026-11-09e。動画はこのスマホの中だけで計算します。どこにも送りません。<br>「その場で撮る」は、撮りながらラップだけを測ります。追いかけ動画は撮り終わってから作ります。</p>
+  <p class="note">版 2026-11-09f。動画はこのスマホの中だけで計算します。どこにも送りません。<br>「その場で撮る」は、撮りながらラップだけを測ります。追いかけ動画は撮り終わってから作ります。</p>
   <h2 style="font-size:16px;margin:22px 0 6px">登録した部員</h2>
   <div id="memList"></div>
   <p class="note" id="memEmpty">選手の画面の「部員に登録」から登録できます。登録すると、次から自動で名前が付き、撮影中に自動で追いかけられます。</p>
@@ -210,6 +210,10 @@ dialog::backdrop{background:rgb(0 0 0 / .6)}
   <div class="row" style="margin-top:8px">
     <div class="seg grow" id="modeSeg"><button data-v="chase" class="on">追いかけ</button><button data-v="full">全体</button><button data-v="map">マップ</button></div>
     <div class="seg" id="shapeSeg"><button data-v="v" class="on">縦</button><button data-v="h">横</button></div>
+  </div>
+  <div class="row" style="margin-top:8px" id="zoomRow">
+    <span class="note" style="margin:0">画角</span>
+    <div class="seg grow" id="zoomSeg"><button data-v="wide" class="on">そのまま</button><button data-v="mid">少し寄る</button><button data-v="close">寄る</button></div>
     <div class="seg" id="rateSeg"><button data-v="1" class="on">1×</button><button data-v="0.5">½</button><button data-v="0.25">¼</button></div>
   </div>
   <div id="mapBox" class="hide">

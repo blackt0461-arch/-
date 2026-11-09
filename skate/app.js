@@ -539,10 +539,13 @@ function fillFaces(box, s, list, onTap) {
 $('minLap').onchange = async e => { const s = S.session; s.minLap = Math.max(3, +e.target.value || 15); lsSet('skate-minlap', s.minLap); await saveSession(s); showResult(); };
 
 // ---------- 選手の画面 ----------
-const P = { mode: 'chase', shape: 'v', rate: 1, path: null, raf: 0, refining: false, check: null };
+const P = { mode: 'chase', shape: 'v', zoom: 'wide', rate: 1, path: null, raf: 0, refining: false, check: null };
 const playCv = $('playCv'), playCx = playCv.getContext('2d');
 function openPerson(p) {
-  S.person = p; go('sPerson'); P.lineAt = null; P.map = null; if (P.mode === 'map') setTimeout(prepMap);
+  S.person = p; go('sPerson'); P.lineAt = null; P.map = null;
+  P.zoom = p.zoom || autoZoom(S.session, p);
+  $('zoomSeg').querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.v === P.zoom));
+  $('shapeSeg').classList.toggle('hide', P.mode !== 'chase' || P.zoom === 'wide'); if (P.mode === 'map') setTimeout(prepMap);
   $('pName').textContent = p.name || '（名前なし）';
   P.path = buildPath(S.session, p);
   renderLaps(); renderScenes(); renderFollow();
@@ -761,7 +764,8 @@ function segAt(t) { return P.path.segs.find(g => t >= g.a && t <= g.b); }
 function cropAt(t, W, H, outAsp) {
   const g = segAt(t); if (!g) return null;
   const i = Math.min(g.cx.length - 1, Math.max(0, Math.round((t - g.a) / STEP)));
-  let ch = Math.min(1, Math.max(0.2, g.h[i] * 2.4)), cw = ch * H * outAsp / W;
+  const k = P.zoom === 'mid' ? 4.5 : 2.4; // 寄る：背の2.4倍、少し寄る：4.5倍
+  let ch = Math.min(1, Math.max(0.2, g.h[i] * k)), cw = ch * H * outAsp / W;
   if (cw > 1) { ch /= cw; cw = 1; }
   const x = Math.min(1 - cw, Math.max(0, g.cx[i] - cw / 2)), y = Math.min(1 - ch, Math.max(0, g.cy[i] - ch / 2));
   return { x, y, w: cw, h: ch };
@@ -781,7 +785,9 @@ function drawFrame() {
     }
   }
   if (P.check && t >= P.check.end) { v.pause(); P.check = null; }
-  const chase = P.mode === 'chase' && !P.check;
+  // 画角「そのまま」：切り抜かず、動画全体にこの人の枠と名前を出す（コース上の位置が見えるように）
+  const wideChase = P.mode === 'chase' && P.zoom === 'wide' && !P.check;
+  const chase = P.mode === 'chase' && P.zoom !== 'wide' && !P.check;
   const asp = chase ? (P.shape === 'v' ? 9 / 16 : 16 / 9) : W / H;
   const ow = chase ? (P.shape === 'v' ? 540 : 960) : Math.min(1280, W), oh = Math.round(ow / asp);
   if (playCv.width !== ow || playCv.height !== oh) { playCv.width = ow; playCv.height = oh; }
@@ -800,9 +806,10 @@ function drawFrame() {
     c.lineWidth = Math.max(2, ow / 400); c.strokeStyle = '#ff3b4f';
     const ln = (P.lineAt || (P.lineAt = makeLineAt(s))).near(t);
     if (ln) { c.beginPath(); c.moveTo(ln[0][0] * sx, ln[0][1] * sy); c.lineTo(ln[1][0] * sx, ln[1][1] * sy); c.stroke(); }
-    const b = interpBox(P.path.all, t, 1.0);
+    const b = interpBox(P.path.all, t, S.person && S.person.chain ? 3.3 : 1.0);
     if (b) {
-      c.strokeStyle = '#3fb4ff'; c.lineWidth = Math.max(3, ow / 300); c.strokeRect(b.x1 * sx, b.y1 * sy, (b.x2 - b.x1) * sx, (b.y2 - b.y1) * sy);
+      c.strokeStyle = wideChase ? '#ffe14d' : '#3fb4ff'; c.lineWidth = Math.max(3, ow / (wideChase ? 220 : 300)); c.strokeRect(b.x1 * sx, b.y1 * sy, (b.x2 - b.x1) * sx, (b.y2 - b.y1) * sy);
+      if (wideChase && S.person.name) label(c, S.person.name, (b.x1 + b.x2) / 2 * sx, Math.max(ow / 40, b.y1 * sy - ow / 40), 'center', Math.round(ow / 40));
       c.fillStyle = '#ffe14d'; c.beginPath(); c.arc((b.x1 + b.x2) / 2 * sx, b.y2 * sy, Math.max(4, ow / 160), 0, 7); c.fill();
     }
   }
@@ -838,8 +845,17 @@ function segBtns(id, key, after) {
     P[key] = key === 'rate' ? +b.dataset.v : b.dataset.v; after && after();
   });
 }
-segBtns('modeSeg', 'mode', () => { $('shapeSeg').classList.toggle('hide', P.mode !== 'chase'); $('mapBox').classList.toggle('hide', P.mode !== 'map'); if (P.mode === 'map') prepMap(); });
+segBtns('modeSeg', 'mode', () => { $('shapeSeg').classList.toggle('hide', P.mode !== 'chase' || P.zoom === 'wide'); $('zoomRow').classList.toggle('hide', P.mode !== 'chase'); $('mapBox').classList.toggle('hide', P.mode !== 'map'); if (P.mode === 'map') prepMap(); });
 segBtns('shapeSeg', 'shape');
+segBtns('zoomSeg', 'zoom', () => { $('shapeSeg').classList.toggle('hide', P.mode !== 'chase' || P.zoom === 'wide'); if (S.person) { S.person.zoom = P.zoom; saveSession(S.session); } });
+// 画角の最初の設定：カメラで追って撮った動画・人が大きく写る動画は「そのまま」、動かない引きの動画は「寄る」
+function autoZoom(s, p) {
+  const rows = (s.motion || []).filter(r => r.length >= 26);
+  let pan = 0; for (const r of rows) pan = Math.max(pan, Math.abs(r[3]), Math.abs(r[6]));
+  const hs = []; for (const id of p.tracks) { const t = trackById(s, id); if (t) for (const r of t.s) hs.push(r[4] - r[2]); }
+  hs.sort((a, b) => a - b); const mh = hs.length ? hs[hs.length >> 1] : 0;
+  return pan > 0.08 || mh > 0.15 ? 'wide' : 'close';
+}
 segBtns('rateSeg', 'rate', () => { $('vPlay').playbackRate = P.rate; });
 async function checkCrossing(t) {
   if (!S.videoURL) return toast('動画を選ぶと確かめられます');
