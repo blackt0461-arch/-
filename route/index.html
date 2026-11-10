@@ -7,7 +7,7 @@
 <title>いどうナビ</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
-<link rel="apple-touch-icon" href="icon.svg">
+<link rel="apple-touch-icon" href="icon-192.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="いどうナビ">
@@ -196,8 +196,12 @@ textarea{min-height:140px}
   <div class="set">
     <button id="homeBtn">家・定期・授業の時間<span>家：<b id="homeName"></b>・余裕 <b id="bufName"></b>分</span></button>
     <button id="pasteBtn">文字から予定を入れる<span>まとめて貼る</span></button>
-    <button id="ttBtn">授業の時間割<span id="ttInfo"></span></button>
+    <button id="ttBtn">授業の時間割<span id="ttInfo" style="max-width:60%;text-align:right"></span></button>
   </div>
+  <div class="set">
+    <button id="pushBtn">通知<span id="pushInfo"></span></button>
+  </div>
+  <p class="sub" style="margin:-4px 4px 8px">出発の10分前・2分前と、乗りかえ・降りる駅の2分前に知らせます。iPhone はホーム画面に追加して、そこから開いてください。</p>
   <p id="cloud" class="cloud"></p>
   <div class="set"><button onclick="location.href='/'">KOTETSU WORKS にもどる<span>›</span></button></div>
   <p class="credit">駅名の候補：「国土数値情報（鉄道データ）」（国土交通省）をもとに作成（CC BY 4.0）。乗りかえ案内：Yahoo!乗換案内。線の色は各路線の色に近い色です。</p>
@@ -268,7 +272,7 @@ textarea{min-height:140px}
   <div class="dact"><button value="cancel">とじる</button></div>
 </form></dialog>
 
-<script src="app.js?v=15"></script>
-<script src="cloud.js?v=15"></script>
+<script src="app.js?v=17"></script>
+<script src="cloud.js?v=17"></script>
 </body>
 </html>

@@ -350,6 +350,7 @@ function render() {
     const h = items[items.length - 1];
     rows.push({ tm: h.arrive != null ? toHM(h.arrive) : '', cls: 'stop', dot: 'home', html: `<b>${esc(S.home)}</b> <span class="sub">家に着く</span>` });
   }
+  planSoon();
   L.innerHTML = rows.map((r, i) => {
     const cls = ['r', ...(r.cls || '').split(' ').filter(Boolean)];
     if (i === 0) cls.push('first'); if (i === rows.length - 1) cls.push('last');
@@ -729,6 +730,105 @@ document.querySelectorAll('.tabs button').forEach((b) => b.addEventListener('cli
 // 開いたまま時間がたったら「次の行動」を新しくする
 setInterval(() => { if ($('tab-today').classList.contains('on') && !document.querySelector('dialog[open]')) render(); }, 60000);
 
+// ---- 通知（出発の10分前・2分前、乗りかえ・降りる駅の2分前）----
+// 宛先はこの端末（idounavi-push）。予定は今日とあしたの分を計算して、KOTETSU WORKS のアカウントで Supabase に送る（設定 032）。
+const VAPID_PUB = 'BOQsPofgTvCRwYUN1VdKhu3hH1BESkPJIBHMI7FNoy-FR5ewhbdRsXTCCCzrHUIHuEdhx3VD6tn5xy0J0_FKFA8'; // 通知を送る鍵の「公開してよい方」（秘密の方は Supabase の秘密の設定にだけある）
+const SB = 'https://zmteazudhtnzvfvmndqn.supabase.co';
+const kwToken = () => { try { return (JSON.parse(localStorage.getItem('kw.session') || 'null') || {}).token || ''; } catch (e) { return ''; } };
+const pushState = () => { try { return JSON.parse(localStorage.getItem('idounavi-push') || 'null'); } catch (e) { return null; } };
+async function kwRpc(fn, body) {
+  const r = await fetch(`${SB}/rest/v1/rpc/${fn}`, { method: 'POST', headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const t = await r.text(); const j = t ? JSON.parse(t) : null;
+  if (!r.ok) throw Object.assign(new Error(j?.message || 'server'), { code: j?.message });
+  return j;
+}
+const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent);
+const standalone = () => window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+let swReg = null;
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').then((r) => { swReg = r; drawPush(); }).catch(() => {});
+
+function drawPush() {
+  const el = $('pushInfo'); if (!el) return;
+  const st = pushState();
+  if (!('Notification' in window) || !('PushManager' in window)) el.textContent = isIOS && !standalone() ? 'ホーム画面から開くと使えます' : 'この画面では使えません';
+  else if (!kwToken()) el.textContent = 'KOTETSU WORKS にログインが要ります';
+  else if (st && st.on && Notification.permission === 'granted') el.textContent = 'オン';
+  else el.textContent = 'オフ';
+}
+async function pushOn() {
+  if (isIOS && !standalone()) { alert('iPhone では、いどうナビを「ホーム画面に追加」して、ホーム画面のアイコンから開くと通知を使えます。\n\nSafari の共有ボタン →「ホーム画面に追加」'); return; }
+  if (!('Notification' in window) || !('PushManager' in window) || !swReg) { alert('この画面では通知を使えません。'); return; }
+  if (!kwToken()) { alert('通知には KOTETSU WORKS のログインが要ります。入口（kotetsuworks.com）でログインしてから、もう一度押してください。'); return; }
+  if (!VAPID_PUB) { alert('通知の準備がまだできていません（鍵の設定待ち）。'); return; }
+  const perm = await Notification.requestPermission();
+  if (perm !== 'granted') { alert('通知が許可されませんでした。iPhone の「設定」→「通知」→「いどうナビ」で許可できます。'); drawPush(); return; }
+  try {
+    const key = Uint8Array.from(atob(VAPID_PUB.replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0));
+    const sub = (await swReg.pushManager.getSubscription()) || (await swReg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key }));
+    await kwRpc('idounavi_push_sub', { p_token: kwToken(), p_sub: sub.toJSON() });
+    localStorage.setItem('idounavi-push', JSON.stringify({ on: true, endpoint: sub.endpoint }));
+    drawPush(); planSoon(0);
+    alert('通知をオンにしました。出発の10分前・2分前と、乗りかえ・降りる駅の2分前に知らせます。');
+  } catch (e) { alert('通知をオンにできませんでした：' + (e.code || e.message)); }
+}
+async function pushOff() {
+  const st = pushState();
+  try { if (st && st.endpoint) await kwRpc('idounavi_push_off', { p_token: kwToken(), p_endpoint: st.endpoint }); } catch (e) { /* なし */ }
+  try { const sub = swReg && (await swReg.pushManager.getSubscription()); if (sub) await sub.unsubscribe(); } catch (e) { /* なし */ }
+  localStorage.setItem('idounavi-push', JSON.stringify({ on: false }));
+  drawPush();
+}
+$('pushBtn').onclick = () => { const st = pushState(); if (st && st.on) { if (confirm('通知をオフにしますか？')) pushOff(); } else pushOn(); };
+
+// その日の通知の予定（分→ISO 日本時間）
+function alertsOf(date, items) {
+  const iso = (m) => { const d = new Date(date + 'T00:00:00+09:00'); d.setMinutes(d.getMinutes() + m); return d.toISOString(); };
+  const out = [];
+  for (const b of items) {
+    if (b.kind !== 'move' || b.leave == null) continue;
+    const first = b.state === 'auto' ? b.a.steps[0] : null;
+    const go = `${hm(toHM(b.leave))} ${b.P}を出る` + (first ? `・${hm(first.dep)} ${first.station}発 ${lineShort(first.line)}` : '') + (b.out ? `（${HOW[b.out.how] || '歩き'}で${b.out.st}へ）` : '');
+    out.push({ at: iso(b.leave - 10), title: 'あと10分で出発', body: go, tag: `${date}-${b.id}-go` });
+    out.push({ at: iso(b.leave - 2), title: 'まもなく出発', body: go, tag: `${date}-${b.id}-go` });
+    if (b.state !== 'auto') continue;
+    const st = b.a.steps;
+    let base = 0, prev = toMin(st[0].dep);
+    st.forEach((x, i) => {
+      if (i === 0 || /徒歩/.test(st[i - 1].line)) return; // 歩いて着いた駅は知らせない
+      const t0 = x.arr || (i === st.length - 1 ? (x.dep || x.arr) : x.dep);
+      if (!t0) return;
+      let m = toMin(t0) + base; if (m < prev) { base += 1440; m += 1440; } prev = m; // 夜12時をまたぐ
+      let body;
+      if (i === st.length - 1) body = `${x.station}で降ります` + (b.inn ? `・${HOW[b.inn.how] || '歩き'}で${b.Q}へ` : '');
+      else if (/徒歩/.test(x.line)) body = `${x.station}で降りて、歩いて${st[i + 1].station}へ`;
+      else body = `${x.station}で${lineShort(x.line)}に乗りかえ（${hm(x.dep)}発）`;
+      out.push({ at: iso(m - 2), title: `まもなく${x.station}`, body, tag: `${date}-${b.id}-${i}` });
+    });
+  }
+  return out;
+}
+let planTimer = null, lastPlan = '';
+function planSoon(ms = 3000) { clearTimeout(planTimer); planTimer = setTimeout(planPush, ms); }
+async function planPush() {
+  const st = pushState(); if (!st || !st.on || !kwToken()) return;
+  const keep = day, keepWant = want;
+  const now = Date.now(), alerts = [], more = [];
+  const t = new Date();
+  for (let i = 0; i < 2; i++) {
+    const d = ymd(new Date(t.getFullYear(), t.getMonth(), t.getDate() + i));
+    day = d;
+    const evs = eventsOf(d);
+    if (evs.length) { const items = buildDay(evs); more.push(...want); alerts.push(...alertsOf(d, items)); }
+  }
+  day = keep; want = keepWant;
+  const list = alerts.filter((a) => new Date(a.at).getTime() > now).sort((a, b) => (a.at < b.at ? -1 : 1)).slice(0, 300);
+  const sig = JSON.stringify(list);
+  if (sig !== lastPlan) {
+    try { await kwRpc('idounavi_push_plan', { p_token: kwToken(), p_alerts: list }); lastPlan = sig; } catch (e) { /* 次のときにまた送る */ }
+  }
+  if (more.length) autoFill(more); // あしたの乗りかえもしらべておく（しらべ終わると描きなおし → また計算）
+}
+
 function drawTT() {
   const T = S.tt;
   $('ttInfo').textContent = T && T.term ? `${+T.term.start.slice(5, 7)}/${+T.term.start.slice(8)}〜${+T.term.end.slice(5, 7)}/${+T.term.end.slice(8)}・${(T.classes || []).length}コマ` : 'まだありません';
@@ -746,6 +846,9 @@ function drawTT() {
 }
 $('ttBtn').onclick = () => { drawTT(); $('ttDlg').showModal(); };
 drawTT();
+drawPush();
 drawMeetBtn();
 render();
+planSoon(1500);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') planSoon(1500); });
 if (!S.home) setTimeout(() => $('homeBtn').click(), 300);
