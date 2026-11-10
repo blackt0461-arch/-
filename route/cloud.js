@@ -26,12 +26,6 @@ const Cloud = (() => {
     return j;
   }
   const pack = () => { const o = {}; for (const [k, v] of Object.entries(S)) if (!LOCAL_ONLY.includes(k)) o[k] = v; return o; };
-  function adopt(data) {
-    const keep = {}; for (const k of LOCAL_ONLY) if (k in S) keep[k] = S[k];
-    S = Object.assign({ home: '', buffer: 5, days: {}, routes: {}, places: {}, ovr: {}, pass: null, periods: S.periods, auto: {}, meets: [] }, data, keep);
-    save0();
-    render(); if (typeof drawMeetBtn === 'function') drawMeetBtn();
-  }
   function show(s) {
     const el = document.getElementById('cloud'); if (!el) return;
     el.innerHTML = {
@@ -44,24 +38,70 @@ const Cloud = (() => {
     }[s] || '';
   }
 
+  // ---- 3つをくらべてまぜる（前にそろえた時・この端末・アカウント）----
+  // 片方だけが変えたところはその変更を使い、両方が同じところを変えたときはこの端末を優先する。
+  // 予定は日ごと、行き方は場所ごと、大会は大会ごと（「出る／出ない」はこの端末で押したものを残す）にまぜる。
+  const DEF = { home: '', buffer: 5, days: {}, routes: {}, places: {}, ovr: {}, pass: null, meets: [] };
+  // キーの並びをそろえて文字にする（アカウントから戻ると並びが変わるため）
+  const sortKeys = (v) => Array.isArray(v) ? v.map(sortKeys) : (v && typeof v === 'object') ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, sortKeys(v[k])])) : v;
+  const J = (v) => JSON.stringify(sortKeys(v === undefined ? null : v));
+  const isObj = (v) => v && typeof v === 'object' && !Array.isArray(v);
+  const fill = (o) => { const r = Object.assign({}, DEF); for (const [k, v] of Object.entries(o || {})) if (!LOCAL_ONLY.includes(k) && v !== undefined) r[k] = v; return r; };
+  function mergeObj(b, l, r) {
+    const out = {};
+    for (const k of new Set([...Object.keys(b || {}), ...Object.keys(l || {}), ...Object.keys(r || {})])) {
+      const v = J(l?.[k]) === J(b?.[k]) ? r?.[k] : J(r?.[k]) === J(b?.[k]) ? l?.[k] : l?.[k];
+      if (v !== undefined) out[k] = v;
+    }
+    return out;
+  }
+  function mergeMeets(b, l, r) {
+    const by = (a) => Object.fromEntries((a || []).map((m) => [m.id, m]));
+    const B = by(b), L = by(l), R = by(r), out = [];
+    for (const id of new Set([...Object.keys(R), ...Object.keys(L)])) {
+      const bm = B[id], lm = L[id], rm = R[id];
+      if (!rm) { out.push(lm); continue; }
+      if (!lm) { out.push(rm); continue; }
+      const st = J(lm.status) !== J(bm?.status) ? lm.status : rm.status; // この端末で押した「出る／出ない」を残す
+      out.push(Object.assign({}, rm, { status: st }));
+    }
+    return out;
+  }
+  function merge3(base, local, remote) {
+    const out = {};
+    for (const k of new Set([...Object.keys(base), ...Object.keys(local), ...Object.keys(remote)])) {
+      const b = base[k], l = local[k], r = remote[k];
+      if (J(l) === J(b)) out[k] = r;
+      else if (J(r) === J(b)) out[k] = l;
+      else if (k === 'meets') out[k] = mergeMeets(b, l, r);
+      else if (isObj(l) && isObj(r)) out[k] = mergeObj(b, l, r);
+      else out[k] = l;
+      if (out[k] === undefined) delete out[k];
+    }
+    return out;
+  }
+  function apply(data) {
+    const keep = {}; for (const k of LOCAL_ONLY) if (k in S) keep[k] = S[k];
+    S = Object.assign({ periods: S.periods }, fill(data), keep);
+    save0();
+    render(); if (typeof drawMeetBtn === 'function') drawMeetBtn();
+  }
+
   async function pull() {
     const tok = token(); if (!tok) { show('off'); return; }
     show('saving');
     let remote;
     try { remote = await rpc('kw_data_get', { p_token: tok, p_app: APP }); }
     catch (e) { show(e.code === 'bad_token' ? 'expired' : 'offline'); return; }
-    const local = JSON.stringify(pack());
-    const localChanged = local !== meta.sent;
-    if (!remote) { push(true); return; }                                  // アカウントにまだ無い → この端末の分を送る
-    if (meta.at && remote.at <= meta.at) { if (localChanged) push(true); else show('ok'); return; }
-    const empty = !Object.keys(S.days || {}).length;
-    if (!localChanged || empty || JSON.stringify(remote.data) === local) {  // アカウントの方が新しい
-      adopt(remote.data); meta = { at: remote.at, sent: JSON.stringify(remote.data) }; put(META, meta); show('ok'); return;
-    }
-    // 両方で変わっている
-    const useRemote = confirm(`ほかの端末で変えた予定がアカウントに入っています（${new Date(remote.at).toLocaleString('ja-JP')}）。\n\nOK：アカウントの方を使う\nキャンセル：この端末の方を使う\n\n使わなかった方は消えます。`);
-    if (useRemote) { adopt(remote.data); meta = { at: remote.at, sent: JSON.stringify(remote.data) }; put(META, meta); show('ok'); }
-    else { meta.at = remote.at; put(META, meta); push(true); }
+    if (!remote) { push(true); return; }                                   // アカウントにまだ無い → この端末の分を送る
+    const local = fill(pack());
+    if (meta.at && remote.at <= meta.at) { if (J(local) !== meta.sent) push(true); else show('ok'); return; }
+    let base = {};
+    try { base = meta.sent ? JSON.parse(meta.sent) : {}; } catch (e) { base = {}; }
+    const merged = merge3(fill(base), local, fill(remote.data));
+    apply(merged);
+    meta = { at: remote.at, sent: J(fill(remote.data)) }; put(META, meta);
+    if (J(fill(merged)) !== J(fill(remote.data))) push(true); else { meta.sent = J(fill(merged)); put(META, meta); show('ok'); }
   }
 
   async function push(now) {
@@ -69,7 +109,7 @@ const Cloud = (() => {
     clearTimeout(timer);
     if (!now) { timer = setTimeout(() => push(true), 2000); return; }
     if (busy) { timer = setTimeout(() => push(true), 1500); return; }
-    const body = pack(), s = JSON.stringify(body);
+    const body = fill(pack()), s = J(body);
     if (s === meta.sent && meta.at) { show('ok'); return; }
     busy = true; show('saving');
     try {
