@@ -104,6 +104,29 @@ async function autoFill(list) {
   }
 }
 
+
+// ---- 時間割（授業リマインダーから写したもの）----
+// S.tt = { place, term:{start,end}, off:[休みの日], classes:[{wd:曜日0-6, p:時限, name, room}], src, at }
+// 学期の中で、その曜日の授業を毎週自動で出す。S.ttHide['日付|時限'] はその日だけ消した（直した）授業。
+if (!S.ttHide) S.ttHide = {};
+function ttEvents(date) {
+  const T = S.tt;
+  if (!T || !T.term || date < T.term.start || date > T.term.end || (T.off || []).includes(date)) return [];
+  const wd = new Date(date + 'T00:00').getDay();
+  // 第何回か：学期の初めからその曜日を数える（休みの日は数えない）
+  let n = 0;
+  for (let d = new Date(T.term.start + 'T00:00'); ymd(d) <= date; d.setDate(d.getDate() + 1)) if (d.getDay() === wd && !(T.off || []).includes(ymd(d))) n++;
+  return (T.classes || []).filter((c) => c.wd === wd && !S.ttHide[date + '|' + c.p] && n <= (c.total || 99)).map((c) => {
+    const [st, en] = (S.periods[c.p - 1] || '').split('-');
+    const exam = (c.exams || {})[n];
+    return { id: 'tt-' + date + '-' + c.p, tt: c.p, exam, name: `${c.p}限 ${c.name}${c.room ? `（${c.room}）` : ''}${exam ? `・${exam}テスト` : ''}`, start: st, end: en, place: c.place || T.place };
+  }).filter((e) => e.start);
+}
+function eventsOf(date) {
+  const own = S.days[date] || [];
+  return own.concat(ttEvents(date).filter((g) => !own.some((o) => o.start === g.start)));
+}
+
 // ---- 1日の流れを組み立てる ----
 // P から Q への移動。type '4'＝time までに着く、'1'＝time 以降に出る（time は駅での時刻）
 function moveInfo(id, P, Q, base, hurry, minLeave, target) {
@@ -293,7 +316,7 @@ function render() {
   $('daySub').textContent = isToday ? 'きょう' : (S.home ? `家：${S.home}` : '');
   $('homeName').textContent = S.home || '未設定';
   $('bufName').textContent = S.buffer;
-  const evs = S.days[day] || [];
+  const evs = eventsOf(day);
   const L = $('list');
   if (!evs.length) { $('hero').innerHTML = ''; L.innerHTML = '<div class="empty">この日の予定はまだありません。<br>右下の ＋ から入れてください。</div>'; return; }
   const items = buildDay(evs);
@@ -350,12 +373,15 @@ $('evDlg').addEventListener('close', () => {
   if (!v.name || !v.start || !v.end) return;
   if (toMin(v.end) < toMin(v.start)) v.end = v.start;
   const arr = S.days[day] || (S.days[day] = []);
-  if (editing) Object.assign(editing, v); else arr.push({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), ...v });
+  const nid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  if (editing && editing.tt) { S.ttHide[day + '|' + editing.tt] = true; arr.push({ id: nid(), ...v }); } // 時間割の授業を直した → その日だけ自分の予定にする
+  else if (editing) Object.assign(editing, v); else arr.push({ id: nid(), ...v });
   save(); render();
 });
 $('evDel').addEventListener('click', () => {
   if (!editing) return;
-  S.days[day] = (S.days[day] || []).filter((x) => x !== editing);
+  if (editing.tt) S.ttHide[day + '|' + editing.tt] = true; // 時間割の授業はその日だけ消す
+  else S.days[day] = (S.days[day] || []).filter((x) => x !== editing);
   save(); $('evDlg').close('cancel'); render();
 });
 
@@ -434,7 +460,7 @@ const onDayClick = (ev) => {
   const pl = ev.target.closest('[data-place]');
   if (pl) { openPlace(pl.dataset.place); return; }
   const e = ev.target.closest('[data-ev]');
-  if (e) openEv((S.days[day] || []).find((x) => x.id === e.dataset.ev));
+  if (e) openEv(eventsOf(day).find((x) => x.id === e.dataset.ev));
 };
 $('list').addEventListener('click', onDayClick);
 $('hero').addEventListener('click', onDayClick);
@@ -637,19 +663,21 @@ $('meetList').addEventListener('click', (ev) => {
 // ---- カレンダー（月の表＋これからの予定）----
 // 同じ場所で続く予定（あいだ60分まで）は1つにまとめる。大学の授業なら「大学 9:00〜18:15」。
 function blocksOf(date) {
-  const list = (S.days[date] || []).slice().sort((a, b) => toMin(a.start) - toMin(b.start));
+  const list = eventsOf(date).slice().sort((a, b) => toMin(a.start) - toMin(b.start));
   const out = [];
   for (const e of list) {
     const last = out[out.length - 1];
     if (last && !e.meet && !last.meet && e.place && e.place === last.place && toMin(e.start) - toMin(last.end) <= 60) {
       last.end = toMin(e.end) > toMin(last.end) ? e.end : last.end; last.n++;
-    } else out.push({ start: e.start, end: e.end, place: e.place, name: e.name, meet: !!e.meet, n: 1 });
+    } else out.push({ start: e.start, end: e.end, place: e.place, name: e.name, meet: !!e.meet, n: 1, exam: !!e.exam });
+    if (e.exam && last && out[out.length - 1] === last) last.exam = true;
   }
   return out.map((b) => {
     let label = b.name.replace(/（.*?）/g, '');
     if (/大学|キャンパス|BKC/.test(b.place || '') && (b.n > 1 || /限/.test(b.name))) label = '大学';
     else if (/部活|練習/.test(b.name)) label = '部活';
     const kind = b.meet ? 'meet' : label === '部活' ? 'club' : '';
+    if (b.exam && label === '大学') label = '大学（テスト）';
     return { ...b, label, kind };
   });
 }
@@ -669,10 +697,11 @@ function drawCal() {
   }
   $('calGrid').innerHTML = h;
   // これからの予定（今日から先、予定のある日を30日ぶん）
-  const days = Object.keys(S.days).filter((k) => k >= t && S.days[k].length).sort().slice(0, 30);
+  const days = [];
+  for (let i = 0, d0 = new Date(t + 'T00:00'); i < 120 && days.length < 30; i++) { const k = ymd(new Date(d0.getFullYear(), d0.getMonth(), d0.getDate() + i)); if (eventsOf(k).length) days.push(k); }
   const wd = (s2) => '日月火水木金土'[new Date(s2 + 'T00:00').getDay()];
   $('agenda').innerHTML = days.length ? days.map((k) => `<div class="agday" data-go="${k}"><b>${+k.slice(5, 7)}/${+k.slice(8)}(${wd(k)})</b><div>` +
-    blocksOf(k).map((b) => `<div class="it"><span class="t">${hm(b.start)}〜${hm(b.end)}</span>${b.kind === 'meet' ? '<span class="tag">大会</span> ' : ''}${esc(b.label)}${b.place && b.label !== '大学' ? '<div class="sub">' + esc(b.place) + '</div>' : ''}</div>`).join('') + '</div></div>').join('')
+    blocksOf(k).map((b) => `<div class="it"><span class="t">${hm(b.start)}〜${hm(b.end)}</span>${b.kind === 'meet' ? '<span class="tag">大会</span> ' : ''}${esc(b.label)}${b.place && !b.label.startsWith('大学') ? '<div class="sub">' + esc(b.place) + '</div>' : ''}</div>`).join('') + '</div></div>').join('')
     : '<p class="sub">これからの予定はありません。</p>';
 }
 $('calPrev').onclick = () => { calMonth = calMonth[1] === 1 ? [calMonth[0] - 1, 12] : [calMonth[0], calMonth[1] - 1]; drawCal(); };
@@ -692,6 +721,16 @@ document.querySelectorAll('.tabs button').forEach((b) => b.addEventListener('cli
 // 開いたまま時間がたったら「次の行動」を新しくする
 setInterval(() => { if ($('tab-today').classList.contains('on') && !document.querySelector('dialog[open]')) render(); }, 60000);
 
+function drawTT() {
+  const T = S.tt;
+  $('ttInfo').textContent = T && T.term ? `${+T.term.start.slice(5, 7)}/${+T.term.start.slice(8)}〜${+T.term.end.slice(5, 7)}/${+T.term.end.slice(8)}・${(T.classes || []).length}コマ` : 'まだありません';
+  if (!T || !T.classes) { $('ttList').innerHTML = '<p class="sub">まだ時間割がありません。</p>'; return; }
+  const wds = '日月火水木金土';
+  $('ttList').innerHTML = (T.term ? `<p class="sub">学期：${esc(T.term.start)}〜${esc(T.term.end)}${(T.off || []).length ? `・休み ${T.off.length}日` : ''}</p>` : '') +
+    T.classes.slice().sort((a, b) => a.wd - b.wd || a.p - b.p).map((c) => `<div class="ttrow"><b>${wds[c.wd]}${c.p}</b><span>${esc(c.name)}${c.room ? ` <span class="sub">${esc(c.room)}</span>` : ''}</span></div>`).join('');
+}
+$('ttBtn').onclick = () => { drawTT(); $('ttDlg').showModal(); };
+drawTT();
 drawMeetBtn();
 render();
 if (!S.home) setTimeout(() => $('homeBtn').click(), 300);

@@ -140,6 +140,8 @@ main{max-width:640px;margin:0 auto;padding:0 16px}
 .set button span{color:var(--sub);font-weight:500;font-size:13px}
 .cloud{font-size:13px;margin:8px 0}
 .cloud a{color:var(--accent)}
+.ttrow{display:grid;grid-template-columns:52px 1fr;border-top:1px solid var(--line);padding:6px 0;font-size:14px}
+.ttrow b{font-family:var(--num)}
 .credit{font-size:12px;color:var(--sub);margin-top:12px}
 
 /* 入力画面 */
@@ -194,6 +196,7 @@ textarea{min-height:140px}
   <div class="set">
     <button id="homeBtn">家・定期・授業の時間<span>家：<b id="homeName"></b>・余裕 <b id="bufName"></b>分</span></button>
     <button id="pasteBtn">文字から予定を入れる<span>まとめて貼る</span></button>
+    <button id="ttBtn">授業の時間割<span id="ttInfo"></span></button>
   </div>
   <p id="cloud" class="cloud"></p>
   <div class="set"><button onclick="location.href='/'">KOTETSU WORKS にもどる<span>›</span></button></div>
@@ -258,7 +261,14 @@ textarea{min-height:140px}
   <div class="dact"><button value="cancel">やめる</button><button class="main" value="ok">保存</button></div>
 </form></dialog>
 
-<script src="app.js?v=12"></script>
-<script src="cloud.js?v=12"></script>
+<dialog id="ttDlg"><form method="dialog">
+  <h2>授業の時間割</h2>
+  <p class="sub" style="margin:0">授業リマインダーから写したものです。学期の中は、毎週この授業が自動で入ります。その日だけ消したり直したりするときは、今日の画面で授業をタップしてください。</p>
+  <div id="ttList"></div>
+  <div class="dact"><button value="cancel">とじる</button></div>
+</form></dialog>
+
+<script src="app.js?v=14"></script>
+<script src="cloud.js?v=14"></script>
 </body>
 </html>

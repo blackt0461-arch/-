@@ -84,7 +84,7 @@ const Cloud = (() => {
     const keep = {}; for (const k of LOCAL_ONLY) if (k in S) keep[k] = S[k];
     S = Object.assign({ periods: S.periods }, fill(data), keep);
     save0();
-    render(); if (typeof drawMeetBtn === 'function') drawMeetBtn();
+    render(); if (typeof drawMeetBtn === 'function') drawMeetBtn(); if (typeof drawTT === 'function') drawTT();
   }
 
   async function pull() {
