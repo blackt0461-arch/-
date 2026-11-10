@@ -451,15 +451,25 @@ $('plDlg').addEventListener('close', () => {
 attachSuggest($('inSt'));
 attachSuggest($('outSt'));
 
-// ---- リンクで予定を入れる（#import=…）----
-function importFromHash() {
-  const m = location.hash.match(/^#import=([A-Za-z0-9_-]+)/);
-  if (!m) return;
+// ---- リンクで予定を入れる（#i=コード：Supabase に置いた予定／#import=…：リンクの中に入れた予定）----
+const SB_KEY = 'sb_publishable_0kgkan6JFFV-TMSLLTgiOQ_uwgeEfQf'; // 公開してよい鍵（ほかのアプリと同じ）
+async function importFromHash() {
+  const short = location.hash.match(/^#i=([0-9a-f]{6,16})$/);
+  const long = location.hash.match(/^#import=([A-Za-z0-9_-]+)/);
+  if (!short && !long) return;
   history.replaceState(null, '', location.pathname);
   let d;
   try {
-    const b = atob(m[1].replace(/-/g, '+').replace(/_/g, '/'));
-    d = JSON.parse(new TextDecoder().decode(Uint8Array.from(b, (c) => c.charCodeAt(0))));
+    if (short) {
+      const r = await fetch('https://zmteazudhtnzvfvmndqn.supabase.co/rest/v1/rpc/idounavi_take', {
+        method: 'POST', headers: { apikey: SB_KEY, 'Content-Type': 'application/json' }, body: JSON.stringify({ p_code: short[1] }),
+      });
+      d = r.ok ? await r.json() : null;
+      if (!d) { alert('このリンクの予定は見つかりませんでした（7日たつと消えます）。'); return; }
+    } else {
+      const b = atob(long[1].replace(/-/g, '+').replace(/_/g, '/'));
+      d = JSON.parse(new TextDecoder().decode(Uint8Array.from(b, (c) => c.charCodeAt(0))));
+    }
   } catch (e) { alert('リンクを読み取れませんでした。'); return; }
   const days = Object.keys(d.days || {});
   const msg = ['この内容をアプリに入れますか？'];
@@ -475,9 +485,10 @@ function importFromHash() {
   if (d.periods) S.periods = d.periods;
   save();
   if (days[0]) day = days[0];
+  render();
 }
 importFromHash();
-window.addEventListener('hashchange', () => { importFromHash(); render(); });
+window.addEventListener('hashchange', () => { importFromHash(); });
 loadStations(); // 定期の判定に使う
 
 render();
