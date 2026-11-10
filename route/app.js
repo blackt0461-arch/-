@@ -112,7 +112,7 @@ function moveInfo(id, P, Q, base, hurry, minLeave, target) {
   const outMin = out ? Number(out.min) || 0 : 0, inMin = inn ? Number(inn.min) || 0 : 0;
   const o = S.ovr[day + '|' + id];
   let type = base.type, time = base.type === '4' ? toHM(toMin(base.time) - inMin) : toHM(toMin(base.time) + outMin);
-  if (o) { type = '1'; time = o.time; }
+  if (o) { type = o.type || '1'; time = o.time; }
   time = pad(time);
   const m = { id, P, Q, fromSt, toSt, out, inn, outMin, inMin, type, time, ovr: !!o, hurry, target: target ?? null };
   const clampLeave = (v) => (type === '1' && minLeave != null ? Math.max(minLeave, v) : v);
@@ -226,7 +226,7 @@ function render() {
     const note = b.state === 'auto' ? `<div class="sub">${b.train} の電車${b.hurry ? '（急ぎなので速さ優先）' : S.pass ? '（定期を考えて安い方）' : ''}${b.ovr ? '・ずらし中' : ''}</div>` : '';
     const lines = [legText('out', b.out, b.P), ...(b.steps || []), legText('in', b.inn, b.Q)].filter(Boolean);
     const steps = lines.length ? `<ol class="steps">${lines.map((s) => `<li>${esc(s)}</li>`).join('')}</ol>` : '';
-    const shift = b.state === 'auto' ? `<button type="button" data-next="${esc(b.id)}" data-t="${esc(b.train)}">1本あと</button>` : '';
+    const shift = b.state === 'auto' ? `<button type="button" data-prev="${esc(b.id)}" data-t="${esc(b.a.arr)}">1本前</button><button type="button" data-next="${esc(b.id)}" data-t="${esc(b.train)}">1本あと</button>` : '';
     const now = isToday && b.fromSt !== b.toSt ? `<button type="button" data-now="${esc(b.id)}" data-out="${b.outMin}">いまから出る</button>` : '';
     const retry = b.state === 'failed' ? `<button type="button" data-retry="${esc(b.k)}">もう一度しらべる</button>` : '';
     const back = b.ovr ? `<button type="button" data-back="${esc(b.id)}">もとにもどす</button>` : '';
@@ -330,9 +330,12 @@ $('list').addEventListener('click', (ev) => {
     return;
   }
   const nx = ev.target.closest('[data-next]');
-  if (nx) { S.ovr[day + '|' + nx.dataset.next] = { time: pad(toHM(toMin(nx.dataset.t) + 1)) }; save(); render(); return; }
+  if (nx) { S.ovr[day + '|' + nx.dataset.next] = { type: '1', time: pad(toHM(toMin(nx.dataset.t) + 1)) }; save(); render(); return; }
+  // 1本前：いま選んでいる電車より1分前までに着く電車（＝1本前）で調べ直す
+  const pv = ev.target.closest('[data-prev]');
+  if (pv) { S.ovr[day + '|' + pv.dataset.prev] = { type: '4', time: pad(toHM(toMin(pv.dataset.t) - 1)) }; save(); render(); return; }
   const nw = ev.target.closest('[data-now]');
-  if (nw) { const d = new Date(); S.ovr[day + '|' + nw.dataset.now] = { time: pad(toHM(d.getHours() * 60 + d.getMinutes() + Number(nw.dataset.out || 0))) }; save(); render(); return; }
+  if (nw) { const d = new Date(); S.ovr[day + '|' + nw.dataset.now] = { type: '1', time: pad(toHM(d.getHours() * 60 + d.getMinutes() + Number(nw.dataset.out || 0))) }; save(); render(); return; }
   const rt = ev.target.closest('[data-retry]');
   if (rt) { failed.delete(rt.dataset.retry); render(); return; }
   const bk = ev.target.closest('[data-back]');
