@@ -147,7 +147,7 @@ function showAccount() {
       <button class="kw-btn" type="submit">ROOMIN とつなぐ</button></form>`}
     ${me.admin ? `<h3>アプリを渡す（管理者）</h3><form class="kw-form grant-f">
       <label>KOTETSU WORKS のユーザー名<input name="u" required autocomplete="off"></label>
-      <label>アプリ<select name="a"><option value="test-study">テスト勉強</option><option value="class-reminder">授業リマインダー</option><option value="alarm">目覚まし管理</option></select></label>
+      <label>アプリ<select name="a"><option value="test-study">テスト勉強</option><option value="class-reminder">授業リマインダー</option><option value="alarm">目覚まし管理</option><option value="route">いどうナビ</option></select></label>
       <p class="kw-err" role="alert"></p>
       <div class="kw-row"><button class="kw-btn" type="submit" data-on="1">渡す</button><button class="kw-btn ghost" type="submit" data-on="0">取り上げる</button></div></form>` : ''}
     <button class="kw-btn ghost out">ログアウト</button>`);
