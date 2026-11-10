@@ -9,6 +9,7 @@ import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
 const JWKS = createRemoteJWKSet(new URL('https://gitlab.com/oauth/discovery/keys'));
 const PROJECT = 'kotetsu-works-group/kotetsuworks-site';
 const AUD = 'smagro-upload';
+const REFS = ['claude/smagro', 'claude/gril-me-gq7x4p'];   // 予定を 動かしてよい ブランチ（窓口と きめた 2026-11-10）
 const json = (o: unknown, status = 200) => new Response(JSON.stringify(o), { status, headers: { 'Content-Type': 'application/json' } });
 
 Deno.serve(async (req) => {
@@ -18,7 +19,9 @@ Deno.serve(async (req) => {
   try {
     ({ payload: claims } = await jwtVerify(tok, JWKS, { issuer: 'https://gitlab.com', audience: AUD }));
   } catch (_e) { return json({ error: 'bad_token' }, 401); }
-  if (claims.project_path !== PROJECT || !['schedule', 'web'].includes(String(claims.pipeline_source))) return json({ error: 'not_allowed' }, 403);
+  // プロジェクト・起動のしかた（予定 か 手動）・ブランチ を ぜんぶ 確かめる
+  if (claims.project_path !== PROJECT || !['schedule', 'web'].includes(String(claims.pipeline_source))
+    || claims.ref_type !== 'branch' || !REFS.includes(String(claims.ref))) return json({ error: 'not_allowed' }, 403);
 
   let body: { data?: string; feats?: string; cache?: string };
   try { body = await req.json(); } catch (_e) { return json({ error: 'bad_body' }, 400); }
