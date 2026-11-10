@@ -3,7 +3,7 @@
 import * as store from './store.js';
 import * as cloud from './cloud.js';
 
-const APP_VERSION = '1.12.0';
+const APP_VERSION = '1.13.0';
 const $app = document.getElementById('app');
 let COURSES = [];
 const testCache = {};
@@ -265,7 +265,7 @@ function plan(c, t, d) {
   const qs = d.questions;
   const ex = examTime(c, t);
   const byRecall = (a, b) => store.recall(a.key) - store.recall(b.key);
-  const unseen = qs.filter((q) => !store.seen(q.key));
+  const unseen = qs.filter((q) => !store.seen(q.key)).sort((a, b) => !!b.focus - !!a.focus); // 出そうな問題を先に
   const due = qs.filter((q) => store.seen(q.key) && store.isDue(q.key)).sort(byRecall);
   let phase, pool;
   if (dl === 0) {
@@ -351,6 +351,8 @@ async function home() {
       ${p.target ? `<div class="meter ${fin ? 'ok' : ''}"><i style="width:${Math.min(100, (p.done / p.target) * 100)}%"></i></div>` : ''}
       <button class="btn ${fin ? 'sub' : ''}" data-today="${k}">${icon(fin ? 'redo' : 'play')}${fin ? 'もっとやる（10問）' : p.dl === 0 ? '見直しをはじめる' : p.done ? '続きをやる' : '今日の分をはじめる'}</button>
     </div>`;
+    const fq = todays[k].d.questions.filter((q) => q.focus);
+    if (fq.length && p.dl <= 3) html += `<button class="row notice" data-focus="${k}"><span class="av c1">${icon('spark')}</span><div class="t"><div class="name">テストに出そうな説明問題</div><div class="meta">${fq.length}問・先生が「出す」と言っていた所</div></div><span class="arrow">${icon('next')}</span></button>`;
   });
   const ng = newGrades();
   if (ng.length) {
@@ -373,6 +375,10 @@ async function home() {
     const p = plan(x.c, x.t, x.d);
     if (p.rest > 0) startToday(x.c, x.t, x.d);
     else startQuiz(x.c, x.t, x.d, x.d.questions, { id: 'more', name: 'もっとやる', back: home }, { limit: 10 });
+  }));
+  w.querySelectorAll('[data-focus]').forEach((b) => (b.onclick = () => {
+    const x = todays[+b.dataset.focus];
+    startQuiz(x.c, x.t, x.d, x.d.questions.filter((q) => q.focus).sort((a, b) => (a.id >= 'd141' ? 0 : 1) - (b.id >= 'd141' ? 0 : 1)), { id: 'focus', name: 'テストに出そうな説明問題', back: home, keepOrder: true }, { limit: 0 });
   }));
   w.querySelectorAll('[data-c]').forEach((b) => (b.onclick = () => course(COURSES.find((c) => c.id === b.dataset.c))));
   const gb = w.querySelector('[data-grades]');
@@ -406,6 +412,7 @@ async function course(c) {
 
 // ---------- テスト：勉強のしかたを選ぶ ----------
 const MODES = [
+  { id: 'focus', name: 'テストに出そうな説明問題', desc: '先生が「出す」と言っていた所', ic: 'spark', col: 'c1', wide: true, pick: (q) => !!q.focus },
   { id: 'all', name: 'ぜんぶ混ぜる', desc: '忘れかけている問題から', ic: 'mix', wide: true, pick: () => true },
   { id: 'card', name: '単語カード', desc: '用語と意味', ic: 'cards', col: 'c2', pick: (q) => q.type === 'card' || q.type === 'fill' },
   { id: 'auto', name: '小テスト', desc: '選択・穴うめ・計算', ic: 'quiz', col: 'c3', pick: (q) => ['choice', 'fill', 'calc'].includes(q.type) },
