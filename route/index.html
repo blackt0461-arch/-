@@ -25,7 +25,7 @@
 body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif;
   padding:env(safe-area-inset-top) 0 calc(env(safe-area-inset-bottom) + 90px)}
 header{position:sticky;top:0;z-index:5;background:var(--bg);padding:12px 16px 8px;display:flex;align-items:center;gap:8px}
-header h1{font-size:20px;margin:0;flex:1}
+header h1{font-size:18px;margin:0;flex:1;white-space:nowrap}
 .datebar{display:flex;align-items:center;gap:6px}
 .datebar button{width:36px;height:36px}
 .datebar input{font:inherit;padding:4px 6px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink)}
@@ -69,6 +69,13 @@ select{font:inherit;padding:8px;border:1px solid var(--line);border-radius:8px;b
 .back{font-size:26px;line-height:1;color:var(--sub);text-decoration:none;padding:0 4px}
 .cloud{text-align:center;font-size:13px;margin:16px 0}
 .cloud a{color:var(--main)}
+.meetbtn{margin:0 0 6px;font-size:14px}
+.meet{border:1px solid var(--line);border-radius:12px;padding:10px;margin:8px 0}
+.meet.join{border-color:var(--gap-b);background:var(--gap)}
+.meet.skip{opacity:.55}
+.meet .acts{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap}
+.meet .acts button{font-size:14px;padding:4px 10px}
+.meet .acts button.on{background:var(--main);color:var(--main-ink);border-color:var(--main)}
 .credit{font-size:12px;color:var(--sub);margin-top:12px}
 </style>
 </head>
@@ -85,6 +92,7 @@ select{font:inherit;padding:8px;border:1px solid var(--line);border-radius:8px;b
 <main>
   <div class="home sub">家：<b id="homeName">未設定</b> <button id="homeBtn" style="font-size:13px;padding:2px 8px">変える</button>
     ・出発の余裕 <b id="bufName"></b>分</div>
+  <button id="meetBtn" class="meetbtn">🏁 大会の候補</button>
   <div id="list"></div>
   <p id="cloud" class="sub cloud"></p>
 </main>
@@ -144,7 +152,14 @@ select{font:inherit;padding:8px;border:1px solid var(--line);border-radius:8px;b
   <div class="dact"><button value="cancel">やめる</button><button class="main" value="ok">保存</button></div>
 </form></dialog>
 
-<script src="app.js?v=8"></script>
-<script src="cloud.js?v=8"></script>
+<dialog id="meetDlg"><form method="dialog">
+  <h2>大会の候補</h2>
+  <p class="sub" style="margin:0">「出る」を押すと、その日の予定に受付の時刻で入ります。週に1回、Claude が日本スケート連盟と SEIKO SPORTSLINK を見て増やします。</p>
+  <div id="meetList"></div>
+  <div class="dact"><button value="cancel">とじる</button></div>
+</form></dialog>
+
+<script src="app.js?v=9"></script>
+<script src="cloud.js?v=9"></script>
 </body>
 </html>

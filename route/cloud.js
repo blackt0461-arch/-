@@ -28,9 +28,9 @@ const Cloud = (() => {
   const pack = () => { const o = {}; for (const [k, v] of Object.entries(S)) if (!LOCAL_ONLY.includes(k)) o[k] = v; return o; };
   function adopt(data) {
     const keep = {}; for (const k of LOCAL_ONLY) if (k in S) keep[k] = S[k];
-    S = Object.assign({ home: '', buffer: 5, days: {}, routes: {}, places: {}, ovr: {}, pass: null, periods: S.periods, auto: {} }, data, keep);
+    S = Object.assign({ home: '', buffer: 5, days: {}, routes: {}, places: {}, ovr: {}, pass: null, periods: S.periods, auto: {}, meets: [] }, data, keep);
     save0();
-    render();
+    render(); if (typeof drawMeetBtn === 'function') drawMeetBtn();
   }
   function show(s) {
     const el = document.getElementById('cloud'); if (!el) return;

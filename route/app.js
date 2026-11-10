@@ -38,6 +38,7 @@ const pending = new Set(), failed = new Map();
 if (!S.auto) S.auto = {};      // 検索の答え：{ 'A→B|日付|種類|時刻': { routes:[...], at } }
 if (!S.places) S.places = {};  // いつもの行き方：{ 場所: { in:{st,min,how}, out:{st,min,how} } }
 if (!S.ovr) S.ovr = {};        // 「1本あと」「いまから」：{ '日付|移動id': {time} }
+if (!S.meets) S.meets = [];   // 大会の候補（Claude が週1回入れる）
 if (S.pass === undefined) S.pass = null; // 定期：{ a:'須磨', b:'南草津' }（JR）
 if (!S.periods) S.periods = ['09:00-10:35', '10:45-12:20', '13:10-14:45', '14:55-16:30', '16:40-18:15', '18:25-20:00', '20:10-21:45'];
 const akey = (from, to, date, type, time) => `${rkey(from, to)}|${date}|${type}|${time}`;
@@ -500,5 +501,48 @@ importFromHash();
 window.addEventListener('hashchange', () => { importFromHash(); });
 loadStations(); // 定期の判定に使う
 
+// ---- 大会の候補 ----
+// S.meets = [{ id, name, place, url, src, note, status:'new'|'join'|'skip', days:[{ date, uketsuke, end }] }]
+function meetEvents(m) {
+  return (m.days || []).map((d) => ({
+    id: 'meet-' + m.id + '-' + d.date, meet: m.id,
+    name: `${m.name}（受付 ${d.uketsuke || '要項で確認'}）`,
+    start: d.uketsuke || '08:00', end: d.end || '17:00', place: m.place,
+  }));
+}
+function setMeet(id, status) {
+  const m = S.meets.find((x) => x.id === id); if (!m) return;
+  m.status = status;
+  // いったん、この大会の予定を消してから入れなおす
+  Object.keys(S.days).forEach((k) => { S.days[k] = S.days[k].filter((e) => e.meet !== id); if (!S.days[k].length) delete S.days[k]; });
+  if (status === 'join') meetEvents(m).forEach((e) => { const date = e.id.slice(-10); (S.days[date] = S.days[date] || []).push(e); });
+  save(); drawMeets(); render(); drawMeetBtn();
+}
+const today = () => ymd(new Date());
+function drawMeetBtn() {
+  const up = S.meets.filter((m) => (m.days || []).some((d) => d.date >= today()));
+  const n = up.filter((m) => !m.status || m.status === 'new').length;
+  $('meetBtn').textContent = `🏁 大会の候補 ${up.length}件` + (n ? `（まだ決めていない ${n}件）` : '');
+}
+function drawMeets() {
+  const up = S.meets.filter((m) => (m.days || []).some((d) => d.date >= today()))
+    .sort((a, b) => (a.days[0].date < b.days[0].date ? -1 : 1));
+  const wd = (s) => '日月火水木金土'[new Date(s + 'T00:00').getDay()];
+  $('meetList').innerHTML = up.length ? up.map((m) => {
+    const days = m.days.map((d) => `${+d.date.slice(5, 7)}/${+d.date.slice(8)}(${wd(d.date)}) 受付 ${d.uketsuke ? esc(d.uketsuke) : '<span class="warn">要項で確認</span>'}`).join('<br>');
+    return `<div class="meet ${esc(m.status || 'new')}"><b>${esc(m.name)}</b><div class="sub">📍 ${esc(m.place)}</div><div class="sub">${days}</div>` +
+      (m.note ? `<div class="sub">${esc(m.note)}</div>` : '') +
+      `<div class="acts"><button type="button" data-join="${esc(m.id)}" class="${m.status === 'join' ? 'on' : ''}">出る</button>` +
+      `<button type="button" data-skip="${esc(m.id)}" class="${m.status === 'skip' ? 'on' : ''}">出ない</button>` +
+      (m.url ? `<a href="${esc(m.url)}" target="_blank" rel="noopener"><button type="button">要項</button></a>` : '') + `</div></div>`;
+  }).join('') : '<p class="sub">いまは候補がありません。</p>';
+}
+$('meetBtn').onclick = () => { drawMeets(); $('meetDlg').showModal(); };
+$('meetList').addEventListener('click', (ev) => {
+  const j = ev.target.closest('[data-join]'); if (j) { setMeet(j.dataset.join, 'join'); return; }
+  const k = ev.target.closest('[data-skip]'); if (k) setMeet(k.dataset.skip, 'skip');
+});
+
+drawMeetBtn();
 render();
 if (!S.home) setTimeout(() => $('homeBtn').click(), 300);
