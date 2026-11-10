@@ -61,6 +61,11 @@ textarea{min-height:140px}
 .sugg li:last-child{border-bottom:none}
 .sugg li:active,.sugg li.on{background:var(--ev)}
 .sugg small{color:var(--sub);margin-left:6px}
+.tag{font-size:12px;background:var(--warn);color:#fff;border-radius:6px;padding:1px 6px;margin-left:4px}
+.chk{display:flex;align-items:center;gap:8px;margin-top:10px;font-size:15px;color:var(--ink)}
+.chk input{width:auto}
+select{font:inherit;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink)}
+.leg{display:flex;gap:6px}.leg>*{flex:1}
 .credit{font-size:12px;color:var(--sub);margin-top:12px}
 </style>
 </head>
@@ -89,13 +94,14 @@ textarea{min-height:140px}
   <div class="two"><div><label>はじまり</label><input type="time" id="evStart" required></div>
     <div><label>おわり</label><input type="time" id="evEnd" required></div></div>
   <label>場所（駅名や施設名）</label><div class="sw"><input id="evPlace" autocomplete="off" placeholder="例：梅田、大阪大学 豊中キャンパス"></div>
+  <label class="chk"><input type="checkbox" id="evHurry"> 急ぎ（お金より速さを優先）</label>
   <div class="dact"><button type="button" id="evDel" class="warn">消す</button><button value="cancel">やめる</button><button class="main" value="ok">保存</button></div>
 </form></dialog>
 
 <dialog id="pasteDlg"><form method="dialog">
   <h2>文字から入れる</h2>
   <p class="sub" style="margin:0">1行に1つの予定。時刻・名前・場所（@のあと）を書きます。</p>
-  <p class="sub" style="margin:4px 0">例）<br>9:00-10:30 1限 @大阪大学 豊中キャンパス<br>13時〜17時 バイト @なんば駅<br>19:00 夕ご飯 @家</p>
+  <p class="sub" style="margin:4px 0">例）<br>1-5限 授業 @立命館大学 BKC<br>13時〜17時 バイト @なんば<br>19:00 夕ご飯 @須磨 急ぎ</p>
   <textarea id="pasteText"></textarea>
   <div class="dact"><button value="cancel">やめる</button><button class="main" value="ok">読み取る</button></div>
 </form></dialog>
@@ -113,7 +119,22 @@ textarea{min-height:140px}
   <h2>設定</h2>
   <label>家（1日のはじまりと終わりの場所）</label><div class="sw"><input id="homeIn" autocomplete="off" placeholder="例：千里中央"></div>
   <label>出発の余裕（分）</label><input type="number" id="bufIn" min="0" max="60">
+  <label>定期（JR）の区間</label><div class="leg"><input id="passA" placeholder="例：須磨"><input id="passB" placeholder="例：南草津"></div>
+  <label>授業の時間（「1-5限」と書けるように）</label><textarea id="periodsIn" style="min-height:120px"></textarea>
   <p class="credit">駅名の候補：「国土数値情報（鉄道データ）」（国土交通省）をもとに作成（CC BY 4.0）。<br>乗りかえ案内：Yahoo!乗換案内</p>
+  <div class="dact"><button value="cancel">やめる</button><button class="main" value="ok">保存</button></div>
+</form></dialog>
+
+<dialog id="plDlg"><form method="dialog">
+  <h2>いつもの行き方</h2>
+  <p class="sub" style="margin:0">📍 <b id="plName"></b></p>
+  <label>行き：どの駅でおりて、そこから</label>
+  <div class="sw"><input id="inSt" autocomplete="off" placeholder="例：南草津"></div>
+  <div class="leg"><select id="inHow"><option value="walk">🚶 歩き</option><option value="shuttle">🚌 シャトルバス</option><option value="bus">🚌 バス</option><option value="bike">🚲 自転車</option></select><input type="number" id="inMin" min="0" max="180" placeholder="分"></div>
+  <label>帰り：どの駅まで、どうやって</label>
+  <div class="sw"><input id="outSt" autocomplete="off" placeholder="例：西京極"></div>
+  <div class="leg"><select id="outHow"><option value="walk">🚶 歩き</option><option value="shuttle">🚌 シャトルバス</option><option value="bus">🚌 バス</option><option value="bike">🚲 自転車</option></select><input type="number" id="outMin" min="0" max="180" placeholder="分"></div>
+  <p class="sub">駅を空にすると、その場所の名前でそのまま調べます。</p>
   <div class="dact"><button value="cancel">やめる</button><button class="main" value="ok">保存</button></div>
 </form></dialog>
 

@@ -19,9 +19,19 @@ export function parseYahoo(html) {
       const arr = times.find((t) => t.type === 2);
       return { station: e.stationName || '', line: e.railName || '', arr: arr ? arr.time : '', dep: dep ? dep.time : '' };
     });
+    // 運賃は区間のまとまりごと：edgeGroup「a_b」＝ a番目〜b番目の乗車区間（駅 a 〜 駅 b+1）
+    const yen = (v) => Number(String(v || '0').replace(/[^\d]/g, '')) || 0;
+    const fares = [], seen = new Set();
+    (f.edgeInfoList || []).forEach((e) => {
+      const p = e.priceInfo;
+      if (!p || !p.edgeGroup || seen.has(p.edgeGroup)) return;
+      seen.add(p.edgeGroup);
+      const [a, b] = p.edgeGroup.split('_').map(Number);
+      fares.push({ a, b, price: yen(p.price), exp: yen(p.expPrice) });
+    });
     return {
       dep: s.departureTime || '', arr: s.arrivalTime || '', min: toMin(s.totalTime),
-      price: s.totalPrice || '', transfers: Number(s.transferCount || 0), steps,
+      price: s.totalPrice || '', transfers: Number(s.transferCount || 0), steps, fares,
     };
   });
 }

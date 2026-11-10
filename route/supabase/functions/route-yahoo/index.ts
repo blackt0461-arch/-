@@ -3,7 +3,7 @@
 import { parseYahoo } from './parse.js';
 
 const ALLOW = ['https://kotetsuworks.com', 'https://www.kotetsuworks.com'];
-const DAILY_MAX = 60;           // 1日に Yahoo! を見に行く回数の上限
+const DAILY_MAX = 120;          // 1日に Yahoo! を見に行く回数の上限（1回の検索で「早い順」「安い順」の2回）
 const CACHE_MS = 30 * 60 * 1000; // 同じ検索を覚えておく時間
 const cache = new Map<string, { at: number; body: string }>();
 let count = { day: '', n: 0 };
@@ -37,24 +37,34 @@ Deno.serve(async (req) => {
 
   const today = new Date().toISOString().slice(0, 10);
   if (count.day !== today) count = { day: today, n: 0 };
-  if (count.n >= DAILY_MAX) return json({ error: 'daily_limit' }, 429, origin);
-  count.n++;
+  if (count.n + 2 > DAILY_MAX) return json({ error: 'daily_limit' }, 429, origin);
+  count.n += 2;
 
   const [y, m, d] = date.split('-');
   const [hh, mm] = time.split(':');
-  const p = new URLSearchParams({ from, to, y, m, d, hh, m1: mm[0], m2: mm[1], type, ticket: 'ic', expkind: '1', ws: '3', s: '0' });
-  const url = 'https://transit.yahoo.co.jp/search/result?' + p.toString();
-  let html = '';
+  // s=0：到着が早い順、s=1：料金が安い順。両方の案をまとめて返し、どれを使うかはアプリが決める（定期を考えるため）
+  const get = async (sort: string) => {
+    const p = new URLSearchParams({ from, to, y, m, d, hh, m1: mm[0], m2: mm[1], type, ticket: 'ic', expkind: '1', ws: '3', s: sort });
+    const r = await fetch('https://transit.yahoo.co.jp/search/result?' + p.toString(), {
+      headers: { 'User-Agent': 'idounavi/1.0 (personal use; kotetsuworks.com/route/)', 'Accept-Language': 'ja' },
+    });
+    if (!r.ok) throw new Error('upstream ' + r.status);
+    return parseYahoo(await r.text()) || [];
+  };
+  let routes: any[] = [];
   try {
-    const r = await fetch(url, { headers: { 'User-Agent': 'idounavi/1.0 (personal use; kotetsuworks.com/route/)', 'Accept-Language': 'ja' } });
-    if (!r.ok) return json({ error: 'upstream', status: r.status }, 502, origin);
-    html = await r.text();
+    const fast = await get('0');
+    const cheap = await get('1');
+    const seen = new Set<string>();
+    for (const rt of [...fast, ...cheap]) {
+      const k = rt.dep + rt.arr + rt.steps.map((x: any) => x.line).join('/');
+      if (!seen.has(k)) { seen.add(k); routes.push(rt); }
+    }
   } catch (_e) {
     return json({ error: 'upstream' }, 502, origin);
   }
-  const routes = parseYahoo(html);
-  if (!routes || !routes.length) return json({ error: 'no_route' }, 404, origin);
-  const body = JSON.stringify({ routes: routes.slice(0, 3), source: 'Yahoo!乗換案内' });
+  if (!routes.length) return json({ error: 'no_route' }, 404, origin);
+  const body = JSON.stringify({ routes: routes.slice(0, 6), source: 'Yahoo!乗換案内' });
   cache.set(key, { at: Date.now(), body });
   if (cache.size > 300) cache.delete(cache.keys().next().value!);
   return new Response(body, { headers: { ...cors(origin), 'Content-Type': 'application/json; charset=utf-8' } });
