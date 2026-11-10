@@ -252,5 +252,65 @@ $('day').onchange = () => { if ($('day').value) { day = $('day').value; render()
 $('addBtn').onclick = () => openEv(null);
 $('pasteBtn').onclick = () => $('pasteDlg').showModal();
 
+// ---- 場所の候補（前に入れた場所＋関西の駅名）----
+let STATIONS = null;
+function loadStations() {
+  if (STATIONS) return;
+  STATIONS = [];
+  fetch('stations.json').then((r) => r.json()).then((j) => { STATIONS = j; }).catch(() => {});
+}
+function usedPlaces() {
+  const c = {};
+  const add = (p, w) => { p = norm(p); if (p) c[p] = (c[p] || 0) + w; };
+  add(S.home, 5);
+  Object.values(S.days).forEach((list) => list.forEach((e) => add(e.place, 1)));
+  return Object.keys(c).sort((a, b) => c[b] - c[a]);
+}
+function suggest(q) {
+  q = norm(q).replace(/駅$/, '');
+  if (!q) return usedPlaces().slice(0, 6).map((p) => ({ v: p, tag: 'よく使う' }));
+  const out = [], seen = new Set();
+  const push = (v, tag) => { if (!seen.has(v) && out.length < 8) { seen.add(v); out.push({ v, tag }); } };
+  const used = usedPlaces();
+  used.filter((p) => p.startsWith(q)).forEach((p) => push(p, '前に使った'));
+  used.filter((p) => p.includes(q)).forEach((p) => push(p, '前に使った'));
+  const st = STATIONS || [];
+  st.filter((x) => x.n === q).forEach((x) => push(x.n, '駅・' + x.l));
+  st.filter((x) => x.n.startsWith(q)).forEach((x) => push(x.n, '駅・' + x.l));
+  st.filter((x) => x.n.includes(q)).forEach((x) => push(x.n, '駅・' + x.l));
+  return out;
+}
+function attachSuggest(input) {
+  const ul = document.createElement('ul');
+  ul.className = 'sugg'; ul.hidden = true;
+  input.parentNode.appendChild(ul);
+  let items = [], on = -1;
+  const pick = (v) => { input.value = v; ul.hidden = true; };
+  const show = () => {
+    items = suggest(input.value); on = -1;
+    if (!items.length || (items.length === 1 && items[0].v === norm(input.value))) { ul.hidden = true; return; }
+    ul.innerHTML = items.map((it, i) => `<li data-i="${i}">${esc(it.v)}<small>${esc(it.tag)}</small></li>`).join('');
+    ul.hidden = false;
+  };
+  input.addEventListener('focus', () => { loadStations(); show(); });
+  input.addEventListener('input', show);
+  input.addEventListener('blur', () => setTimeout(() => { ul.hidden = true; }, 150));
+  // 押した瞬間に入力欄が閉じないように、pointerdown で選ぶ
+  ul.addEventListener('pointerdown', (ev) => { const li = ev.target.closest('li'); if (li) { ev.preventDefault(); pick(items[+li.dataset.i].v); } });
+  input.addEventListener('keydown', (ev) => {
+    if (ul.hidden) return;
+    if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
+      ev.preventDefault(); on = (on + (ev.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length;
+      [...ul.children].forEach((li, i) => li.classList.toggle('on', i === on));
+    } else if (ev.key === 'Enter' && on >= 0) { ev.preventDefault(); pick(items[on].v); }
+    else if (ev.key === 'Escape') ul.hidden = true;
+  });
+  // 入力中に読みこみが終わったら出し直す
+  let tries = 0;
+  const wait = setInterval(() => { if (++tries > 60) clearInterval(wait); if (STATIONS && STATIONS.length) { clearInterval(wait); if (document.activeElement === input) show(); } }, 300);
+}
+attachSuggest($('evPlace'));
+attachSuggest($('homeIn'));
+
 render();
 if (!S.home) setTimeout(() => $('homeBtn').click(), 300);
