@@ -1,0 +1,16 @@
+{
+  "name": "いどうナビ",
+  "short_name": "いどうナビ",
+  "description": "1日の予定から、移動と休憩できる時間を出すアプリ",
+  "lang": "ja",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f3f6f9",
+  "theme_color": "#0f6fb5",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

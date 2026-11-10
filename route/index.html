@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0f3b5f">
+<title>いどうナビ</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="いどうナビ">
+<style>
+:root{
+  --bg:#f3f6f9; --card:#fff; --ink:#1b2733; --sub:#5d6b78; --line:#dde3ea;
+  --main:#0f6fb5; --main-ink:#fff; --ev:#e8f1fb; --ev-b:#0f6fb5;
+  --mv:#fff6e5; --mv-b:#e09a1a; --gap:#e9f8ef; --gap-b:#2a9d5c; --warn:#c8402e;
+}
+@media (prefers-color-scheme: dark){
+  :root{ --bg:#10161d; --card:#18212b; --ink:#e7edf3; --sub:#9aa8b5; --line:#2a3642;
+    --main:#4aa3e8; --main-ink:#06121c; --ev:#16293b; --ev-b:#4aa3e8;
+    --mv:#2e2615; --mv-b:#e6a93a; --gap:#15291e; --gap-b:#4cc283; --warn:#ff7a66; }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif;
+  padding:env(safe-area-inset-top) 0 calc(env(safe-area-inset-bottom) + 90px)}
+header{position:sticky;top:0;z-index:5;background:var(--bg);padding:12px 16px 8px;display:flex;align-items:center;gap:8px}
+header h1{font-size:20px;margin:0;flex:1}
+.datebar{display:flex;align-items:center;gap:6px}
+.datebar button{width:36px;height:36px}
+.datebar input{font:inherit;padding:4px 6px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink)}
+main{padding:0 16px;max-width:640px;margin:0 auto}
+button{font:inherit;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:10px;padding:6px 12px;cursor:pointer}
+button.main{background:var(--main);color:var(--main-ink);border-color:var(--main);font-weight:700}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.blk{border-radius:12px;padding:10px 12px;margin:8px 0;border-left:5px solid}
+.ev{background:var(--ev);border-color:var(--ev-b)}
+.mv{background:var(--mv);border-color:var(--mv-b)}
+.gp{background:var(--gap);border-color:var(--gap-b)}
+.t{font-variant-numeric:tabular-nums;font-weight:700}
+.sub{color:var(--sub);font-size:14px}
+.warn{color:var(--warn);font-weight:700}
+.blk .acts{margin-top:6px;display:flex;gap:6px;flex-wrap:wrap}
+.blk .acts button{font-size:14px;padding:4px 10px}
+.empty{color:var(--sub);text-align:center;padding:40px 0}
+.fab{position:fixed;left:0;right:0;bottom:0;padding:12px 16px calc(12px + env(safe-area-inset-bottom));background:linear-gradient(transparent,var(--bg) 30%);display:flex;gap:8px;justify-content:center}
+.fab button{flex:1;max-width:300px;padding:12px}
+dialog{border:none;border-radius:16px;padding:16px;width:min(92vw,480px);background:var(--card);color:var(--ink)}
+dialog::backdrop{background:#0007}
+dialog h2{margin:0 0 10px;font-size:18px}
+label{display:block;margin:8px 0 2px;font-size:14px;color:var(--sub)}
+input,textarea{font:inherit;width:100%;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink)}
+textarea{min-height:140px}
+.two{display:flex;gap:8px}.two>div{flex:1}
+.dact{display:flex;gap:8px;justify-content:flex-end;margin-top:14px}
+.home{font-size:14px;margin:4px 0 8px}
+.steps{margin:4px 0 0;padding-left:18px;font-size:14px}
+</style>
+</head>
+<body>
+<header>
+  <h1>いどうナビ</h1>
+  <div class="datebar">
+    <button id="prev" aria-label="前の日">‹</button>
+    <input type="date" id="day">
+    <button id="next" aria-label="次の日">›</button>
+  </div>
+</header>
+<main>
+  <div class="home sub">家：<b id="homeName">未設定</b> <button id="homeBtn" style="font-size:13px;padding:2px 8px">変える</button>
+    ・出発の余裕 <b id="bufName"></b>分</div>
+  <div id="list"></div>
+</main>
+<div class="fab">
+  <button class="main" id="addBtn">＋ 予定を入れる</button>
+  <button id="pasteBtn">文字から入れる</button>
+</div>
+
+<dialog id="evDlg"><form method="dialog">
+  <h2 id="evTitle">予定</h2>
+  <label>予定の名前</label><input id="evName" required>
+  <div class="two"><div><label>はじまり</label><input type="time" id="evStart" required></div>
+    <div><label>おわり</label><input type="time" id="evEnd" required></div></div>
+  <label>場所（駅名や施設名）</label><input id="evPlace" placeholder="例：梅田駅、大阪大学 豊中キャンパス">
+  <div class="dact"><button type="button" id="evDel" class="warn">消す</button><button value="cancel">やめる</button><button class="main" value="ok">保存</button></div>
+</form></dialog>
+
+<dialog id="pasteDlg"><form method="dialog">
+  <h2>文字から入れる</h2>
+  <p class="sub" style="margin:0">1行に1つの予定。時刻・名前・場所（@のあと）を書きます。</p>
+  <p class="sub" style="margin:4px 0">例）<br>9:00-10:30 1限 @大阪大学 豊中キャンパス<br>13時〜17時 バイト @なんば駅<br>19:00 夕ご飯 @家</p>
+  <textarea id="pasteText"></textarea>
+  <div class="dact"><button value="cancel">やめる</button><button class="main" value="ok">読み取る</button></div>
+</form></dialog>
+
+<dialog id="mvDlg"><form method="dialog">
+  <h2>移動を直す</h2>
+  <p class="sub" id="mvWhere" style="margin:0"></p>
+  <label>かかる時間（分）</label><input type="number" id="mvMin" min="0" max="600" required>
+  <label>乗りかえ（1行に1つ。例：御堂筋線 梅田→なんば）</label><textarea id="mvSteps" style="min-height:90px"></textarea>
+  <p class="sub">直した内容は覚えて、次から同じ場所どうしに使います。</p>
+  <div class="dact"><button value="cancel">やめる</button><button class="main" value="ok">保存</button></div>
+</form></dialog>
+
+<dialog id="homeDlg"><form method="dialog">
+  <h2>設定</h2>
+  <label>家（1日のはじまりと終わりの場所）</label><input id="homeIn" placeholder="例：千里中央駅">
+  <label>出発の余裕（分）</label><input type="number" id="bufIn" min="0" max="60">
+  <div class="dact"><button value="cancel">やめる</button><button class="main" value="ok">保存</button></div>
+</form></dialog>
+
+<script src="app.js"></script>
+</body>
+</html>
