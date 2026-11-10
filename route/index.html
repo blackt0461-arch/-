@@ -3,120 +3,210 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#0f3b5f">
+<meta name="theme-color" content="#ffffff">
 <title>いどうナビ</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon.svg">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="いどうナビ">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&family=Roboto+Condensed:wght@500;700&display=swap">
 <style>
+/* いどうナビ：白地の「路線図」。1日を1本の路線に見立て、予定が駅、移動が線（線は乗る路線の色）。
+   文字は駅の案内のような太めのゴシック、時刻は桁のそろう数字。下にタブ（今日・カレンダー・大会・設定）。 */
 :root{
-  --bg:#f3f6f9; --card:#fff; --ink:#1b2733; --sub:#5d6b78; --line:#dde3ea;
-  --main:#0f6fb5; --main-ink:#fff; --ev:#e8f1fb; --ev-b:#0f6fb5;
-  --mv:#fff6e5; --mv-b:#e09a1a; --gap:#e9f8ef; --gap-b:#2a9d5c; --warn:#c8402e;
-}
-@media (prefers-color-scheme: dark){
-  :root{ --bg:#10161d; --card:#18212b; --ink:#e7edf3; --sub:#9aa8b5; --line:#2a3642;
-    --main:#4aa3e8; --main-ink:#06121c; --ev:#16293b; --ev-b:#4aa3e8;
-    --mv:#2e2615; --mv-b:#e6a93a; --gap:#15291e; --gap-b:#4cc283; --warn:#ff7a66; }
+  --bg:#ffffff; --bg2:#f4f6f8; --ink:#14181d; --sub:#66707a; --line:#e3e7eb; --rail:#c9d0d7;
+  --accent:#0072bc; --accent-ink:#fff; --warn:#d7332a; --ok:#14874c; --gold:#f2b600;
+  --font:"Noto Sans JP","Hiragino Sans","Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif;
+  --num:"Roboto Condensed","Noto Sans JP",sans-serif;
+  --tabh:62px;
+  color-scheme:light;
 }
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif;
-  padding:env(safe-area-inset-top) 0 calc(env(safe-area-inset-bottom) + 90px)}
-header{position:sticky;top:0;z-index:5;background:var(--bg);padding:12px 16px 8px;display:flex;align-items:center;gap:8px}
-header h1{font-size:18px;margin:0;flex:1;white-space:nowrap}
-.datebar{display:flex;align-items:center;gap:6px}
-.datebar button{width:36px;height:36px}
-.datebar input{font:inherit;padding:4px 6px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink)}
-main{padding:0 16px;max-width:640px;margin:0 auto}
-button{font:inherit;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:10px;padding:6px 12px;cursor:pointer}
-button.main{background:var(--main);color:var(--main-ink);border-color:var(--main);font-weight:700}
-.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-.blk{border-radius:12px;padding:10px 12px;margin:8px 0;border-left:5px solid}
-.ev{background:var(--ev);border-color:var(--ev-b)}
-.mv{background:var(--mv);border-color:var(--mv-b)}
-.gp{background:var(--gap);border-color:var(--gap-b)}
-.t{font-variant-numeric:tabular-nums;font-weight:700}
-.sub{color:var(--sub);font-size:14px}
+html{background:var(--bg)}
+body{margin:0;background:var(--bg);color:var(--ink);font:500 16px/1.5 var(--font);-webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent;
+  padding:env(safe-area-inset-top) 0 calc(env(safe-area-inset-bottom) + var(--tabh) + 16px)}
+button{font:inherit;color:inherit;border:1.5px solid var(--line);background:#fff;border-radius:999px;padding:6px 14px;cursor:pointer;font-weight:700}
+button.main{background:var(--ink);color:#fff;border-color:var(--ink)}
+a{color:inherit}
+.t,.num{font-family:var(--num);font-variant-numeric:tabular-nums;letter-spacing:.01em}
+.sub{color:var(--sub);font-size:13px}
 .warn{color:var(--warn);font-weight:700}
-.blk .acts{margin-top:6px;display:flex;gap:6px;flex-wrap:wrap}
-.blk .acts button{font-size:14px;padding:4px 10px}
-.empty{color:var(--sub);text-align:center;padding:40px 0}
-.fab{position:fixed;left:0;right:0;bottom:0;padding:12px 16px calc(12px + env(safe-area-inset-bottom));background:linear-gradient(transparent,var(--bg) 30%);display:flex;gap:8px;justify-content:center}
-.fab button{flex:1;max-width:300px;padding:12px}
-dialog{border:none;border-radius:16px;padding:16px;width:min(92vw,480px);background:var(--card);color:var(--ink)}
-dialog::backdrop{background:#0007}
-dialog h2{margin:0 0 10px;font-size:18px}
-label{display:block;margin:8px 0 2px;font-size:14px;color:var(--sub)}
-input,textarea{font:inherit;width:100%;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink)}
-textarea{min-height:140px}
-.two{display:flex;gap:8px}.two>div{flex:1}
-.dact{display:flex;gap:8px;justify-content:flex-end;margin-top:14px}
-.home{font-size:14px;margin:4px 0 8px}
-.steps{margin:4px 0 0;padding-left:18px;font-size:14px}
-.sw{position:relative}
-.sugg{position:static;margin:2px 0 0;padding:0;list-style:none;background:var(--card);border:1px solid var(--line);border-radius:8px;box-shadow:0 6px 20px #0003;max-height:240px;overflow:auto}
-.sugg li{padding:9px 10px;border-bottom:1px solid var(--line);cursor:pointer}
-.sugg li:last-child{border-bottom:none}
-.sugg li:active,.sugg li.on{background:var(--ev)}
-.sugg small{color:var(--sub);margin-left:6px}
-.tag{font-size:12px;background:var(--warn);color:#fff;border-radius:6px;padding:1px 6px;margin-left:4px}
-.chk{display:flex;align-items:center;gap:8px;margin-top:10px;font-size:15px;color:var(--ink)}
-.chk input{width:auto}
-select{font:inherit;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink)}
-.leg{display:flex;gap:6px}.leg>*{flex:1}
-.back{font-size:26px;line-height:1;color:var(--sub);text-decoration:none;padding:0 4px}
-.cloud{text-align:center;font-size:13px;margin:16px 0}
-.cloud a{color:var(--main)}
-.meetbtn{margin:0 0 6px;font-size:14px}
-.meet{border:1px solid var(--line);border-radius:12px;padding:10px;margin:8px 0}
-.meet.join{border-color:var(--gap-b);background:var(--gap)}
-.meet.skip{opacity:.55}
-.meet .acts{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap}
-.meet .acts button{font-size:14px;padding:4px 10px}
-.meet .acts button.on{background:var(--main);color:var(--main-ink);border-color:var(--main)}
-dialog.cal{width:min(96vw,560px);max-height:92vh}
-.calhead{display:flex;align-items:center;justify-content:space-between}
-.calhead h2{margin:0}
+main{max-width:640px;margin:0 auto;padding:0 16px}
+.tab{display:none}.tab.on{display:block}
+
+/* 上：日付 */
+.top{position:sticky;top:0;z-index:5;background:rgba(255,255,255,.94);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border-bottom:1px solid var(--line);
+  display:flex;align-items:center;gap:6px;padding:10px 16px}
+.top .d{flex:1;min-width:0}
+.top .d b{display:block;font-size:22px;font-weight:900;letter-spacing:.02em;line-height:1.1}
+.top .d small{color:var(--sub);font-size:12px}
+.top .ic{width:40px;height:40px;padding:0;border-radius:50%;font-size:20px;line-height:1;display:grid;place-items:center}
+.top .picker{position:relative;width:40px;height:40px}
+.top .picker input{position:absolute;inset:0;opacity:0;width:100%;height:100%}
+
+/* 次の行動 */
+.hero{margin:14px 0 6px;border-radius:18px;background:var(--ink);color:#fff;padding:14px 16px 12px;position:relative;overflow:hidden}
+.hero .lbl{font-size:12px;letter-spacing:.12em;color:var(--gold);font-weight:700}
+.hero .main{display:flex;align-items:baseline;gap:12px;margin-top:2px}
+.hero .main .t{font-size:44px;font-weight:700;line-height:1}
+.hero .main .what{font-size:18px;font-weight:900;line-height:1.3}
+.hero .left{font-size:13px;color:#cfd6dd;margin-top:2px}
+.hero ol{list-style:none;margin:10px 0 0;padding:8px 0 0;border-top:1px solid #ffffff22}
+.hero li{display:flex;gap:10px;font-size:14px;color:#dfe5ea;padding:2px 0}
+.hero li .t{width:44px;flex:none;color:#fff;font-weight:700}
+.hero .bar{position:absolute;left:0;top:0;bottom:0;width:6px}
+.hero .acts{display:flex;gap:6px;margin-top:10px}
+.hero .acts button{background:transparent;color:#fff;border-color:#ffffff44;font-size:13px;padding:4px 12px}
+
+/* 路線図 */
+.rm{margin:8px 0 0}
+.r{display:grid;grid-template-columns:50px 26px 1fr;min-height:30px}
+.r .tm{text-align:right;padding:4px 6px 0 0;font-family:var(--num);font-weight:700;font-size:15px;line-height:1.2}
+.r .tm small{display:block;color:var(--sub);font-weight:500;font-size:12px}
+.r .rl{position:relative}
+.r .rl::before{content:"";position:absolute;left:11px;top:0;bottom:0;width:4px;background:var(--c,var(--rail));border-radius:2px}
+.r.dash .rl::before{background:repeating-linear-gradient(var(--c,var(--rail)) 0 4px,transparent 4px 8px)}
+.r.thin .rl::before{width:2px;left:12px;background:var(--rail)}
+.r.first .rl::before{top:12px}.r.last .rl::before{bottom:calc(100% - 12px)}
+.r .dot{position:absolute;left:5px;top:6px;width:16px;height:16px;border-radius:50%;background:#fff;border:4px solid var(--c,var(--ink));z-index:1}
+.r .dot.big{left:1px;top:2px;width:24px;height:24px;border-width:5px;border-color:var(--ink)}
+.r .dot.home{background:var(--ink)}
+.r .tx{padding:3px 0 8px 6px;min-width:0}
+.r .tx b{font-size:17px;font-weight:900}
+.r.ev .tx{cursor:pointer}
+.r.seg .tx{font-size:13px;color:var(--sub);padding-top:2px}
+.lnm{display:inline-block;font-size:12px;font-weight:700;color:#fff;background:var(--c,var(--sub));border-radius:4px;padding:0 6px;margin-right:4px}
+.gapx{font-size:13px;color:var(--ok);font-weight:700}
+.tools{display:flex;gap:6px;flex-wrap:wrap;margin:2px 0 6px}
+.tools button,.tools a button{font-size:12px;padding:3px 10px;border-width:1px}
+.tools .moreset{display:contents}
+.tools .moreset[hidden]{display:none}
+.tag{font-size:11px;background:var(--warn);color:#fff;border-radius:4px;padding:1px 5px;margin-left:4px;vertical-align:2px}
+.tag.asap{background:var(--accent)}
+.empty{color:var(--sub);text-align:center;padding:48px 0}
+.add{position:fixed;right:16px;bottom:calc(env(safe-area-inset-bottom) + var(--tabh) + 14px);width:58px;height:58px;border-radius:50%;padding:0;font-size:30px;line-height:1;
+  background:var(--ink);color:#fff;border:none;box-shadow:0 6px 18px #0003;z-index:6}
+
+/* 下のタブ */
+.tabs{position:fixed;left:0;right:0;bottom:0;z-index:8;background:rgba(255,255,255,.96);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border-top:1px solid var(--line);
+  display:flex;padding:0 0 env(safe-area-inset-bottom)}
+.tabs button{flex:1;border:none;border-radius:0;background:none;height:var(--tabh);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:11px;color:var(--sub);position:relative}
+.tabs button svg{width:24px;height:24px}
+.tabs button.on{color:var(--ink)}
+.tabs button.on::after{content:"";position:absolute;top:0;left:30%;right:30%;height:3px;background:var(--accent);border-radius:0 0 3px 3px}
+.badge{position:absolute;top:8px;left:55%;background:var(--warn);color:#fff;border-radius:999px;font-size:10px;padding:0 5px;line-height:16px}
+
+/* ページの見出し */
+.ph{font-size:22px;font-weight:900;margin:16px 0 8px}
+
+/* カレンダー */
+.calhead{display:flex;align-items:center;justify-content:space-between;margin-top:14px}
+.calhead h2{margin:0;font-size:20px;font-weight:900}
+.calhead button{width:40px;height:40px;padding:0;border-radius:50%}
 .calgrid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin-top:8px}
 .calgrid .wd{font-size:12px;text-align:center;color:var(--sub)}
 .calgrid .wd.su,.cd.su .n{color:var(--warn)}
-.cd{min-height:58px;border:1px solid var(--line);border-radius:8px;padding:2px 3px;font-size:11px;overflow:hidden;cursor:pointer;background:var(--card)}
+.cd{min-height:60px;border-radius:8px;padding:3px;font-size:11px;overflow:hidden;cursor:pointer;background:var(--bg2)}
 .cd.out{opacity:.35}
-.cd.today{border-color:var(--main);border-width:2px}
-.cd .n{font-weight:700;font-size:12px}
-.chip{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-radius:4px;padding:0 3px;margin-top:2px;background:var(--ev);color:var(--ink)}
-.chip.meet{background:var(--warn);color:#fff}
-.chip.club{background:var(--mv)}
-.agh{font-size:15px;margin:14px 0 4px}
-.agday{border-top:1px solid var(--line);padding:6px 0;cursor:pointer}
-.agday b{font-size:14px}
-.agday .it{font-size:14px;margin-left:8px}
+.cd.today{outline:2.5px solid var(--accent)}
+.cd .n{font-family:var(--num);font-weight:700;font-size:13px}
+.chip{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-radius:3px;padding:0 3px;margin-top:2px;background:#fff;border-left:3px solid var(--ink);font-weight:700}
+.chip.k-meet{background:var(--warn);color:#fff;border-left-color:var(--warn)}
+.chip.k-club{border-color:var(--accent)}
+.agh{font-size:16px;font-weight:900;margin:18px 0 4px}
+.agday{border-top:1px solid var(--line);padding:8px 0;cursor:pointer;display:grid;grid-template-columns:70px 1fr}
+.agday b{font-family:var(--num);font-size:15px}
+.agday .it{font-size:14px;padding:1px 0}
+.agday .it .tag{margin:0 4px 0 0}
+.agday .it .t{font-weight:700;margin-right:6px}
+
+/* 大会 */
+.meet{border-radius:14px;padding:12px;margin:10px 0;background:var(--bg2);border-left:5px solid var(--rail)}
+.meet.join{border-left-color:var(--ok);background:#eef8f2}
+.meet.skip{opacity:.5}
+.meet b{font-size:16px;font-weight:900}
+.meet .acts{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+.meet .acts button{font-size:13px;padding:4px 14px}
+.meet .acts button.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+
+/* 設定 */
+.set{border-radius:14px;background:var(--bg2);margin:10px 0}
+.set button{display:flex;width:100%;justify-content:space-between;align-items:center;border:none;border-bottom:1px solid var(--line);border-radius:0;background:none;padding:14px 16px;font-weight:700;text-align:left}
+.set button:last-child{border-bottom:none}
+.set button span{color:var(--sub);font-weight:500;font-size:13px}
+.cloud{font-size:13px;margin:8px 0}
+.cloud a{color:var(--accent)}
 .credit{font-size:12px;color:var(--sub);margin-top:12px}
+
+/* 入力画面 */
+dialog{border:none;border-radius:18px;padding:18px;width:min(92vw,480px);background:#fff;color:var(--ink)}
+dialog::backdrop{background:#0008}
+dialog h2{margin:0 0 10px;font-size:19px;font-weight:900}
+label{display:block;margin:10px 0 3px;font-size:13px;color:var(--sub);font-weight:700}
+input,textarea,select{font:inherit;width:100%;padding:10px;border:1.5px solid var(--line);border-radius:10px;background:var(--bg2);color:var(--ink)}
+textarea{min-height:140px}
+.two{display:flex;gap:8px}.two>div{flex:1}
+.dact{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
+.sw{position:relative}
+.sugg{margin:4px 0 0;padding:0;list-style:none;background:#fff;border:1.5px solid var(--line);border-radius:10px;max-height:240px;overflow:auto}
+.sugg li{padding:10px;border-bottom:1px solid var(--line);cursor:pointer}
+.sugg li:last-child{border-bottom:none}
+.sugg li:active,.sugg li.on{background:var(--bg2)}
+.sugg small{color:var(--sub);margin-left:6px}
+.chk{display:flex;align-items:center;gap:8px;margin-top:12px;font-size:15px;color:var(--ink);font-weight:500}
+.chk input{width:auto}
+.leg{display:flex;gap:6px}.leg>*{flex:1}
 </style>
 </head>
 <body>
-<header>
-  <a class="back" href="/" aria-label="KOTETSU WORKS にもどる">‹</a>
-  <h1>いどうナビ</h1>
-  <div class="datebar">
-    <button id="prev" aria-label="前の日">‹</button>
-    <input type="date" id="day">
-    <button id="next" aria-label="次の日">›</button>
-  </div>
-</header>
 <main>
-  <div class="home sub">家：<b id="homeName">未設定</b> <button id="homeBtn" style="font-size:13px;padding:2px 8px">変える</button>
-    ・出発の余裕 <b id="bufName"></b>分</div>
-  <div class="row"><button id="calBtn" class="meetbtn">📅 カレンダー</button><button id="meetBtn" class="meetbtn">🏁 大会の候補</button></div>
-  <div id="list"></div>
-  <p id="cloud" class="sub cloud"></p>
+<section class="tab on" id="tab-today">
+  <div class="top">
+    <button class="ic" id="prev" aria-label="前の日">‹</button>
+    <div class="d"><b id="dayTitle"></b><small id="daySub"></small></div>
+    <span class="picker"><button class="ic" tabindex="-1" aria-hidden="true">📅</button><input type="date" id="day" aria-label="日付をえらぶ"></span>
+    <button class="ic" id="next" aria-label="次の日">›</button>
+  </div>
+  <div id="hero"></div>
+  <div id="list" class="rm"></div>
+  <button class="add" id="addBtn" aria-label="予定を入れる">＋</button>
+</section>
+
+<section class="tab" id="tab-cal">
+  <div class="calhead"><button type="button" id="calPrev" aria-label="前の月">‹</button><h2 id="calTitle"></h2><button type="button" id="calNext" aria-label="次の月">›</button></div>
+  <div class="calgrid" id="calGrid"></div>
+  <h3 class="agh">これからの予定</h3>
+  <div id="agenda"></div>
+</section>
+
+<section class="tab" id="tab-meet">
+  <h2 class="ph">大会</h2>
+  <p class="sub" style="margin:0">「出る」を押すと、その日の予定に受付の時刻で入ります。週に1回、Claude が日本スケート連盟と SEIKO SPORTSLINK を見て増やします。</p>
+  <div id="meetList"></div>
+</section>
+
+<section class="tab" id="tab-set">
+  <h2 class="ph">設定</h2>
+  <div class="set">
+    <button id="homeBtn">家・定期・授業の時間<span>家：<b id="homeName"></b>・余裕 <b id="bufName"></b>分</span></button>
+    <button id="pasteBtn">文字から予定を入れる<span>まとめて貼る</span></button>
+  </div>
+  <p id="cloud" class="cloud"></p>
+  <div class="set"><button onclick="location.href='/'">KOTETSU WORKS にもどる<span>›</span></button></div>
+  <p class="credit">駅名の候補：「国土数値情報（鉄道データ）」（国土交通省）をもとに作成（CC BY 4.0）。乗りかえ案内：Yahoo!乗換案内。線の色は各路線の色に近い色です。</p>
+</section>
 </main>
-<div class="fab">
-  <button class="main" id="addBtn">＋ 予定を入れる</button>
-  <button id="pasteBtn">文字から入れる</button>
-</div>
+
+<nav class="tabs" aria-label="画面のきりかえ">
+  <button data-tab="today" class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="5" r="2.5"/><circle cx="12" cy="19" r="2.5"/><path d="M12 7.5v9"/></svg>今日</button>
+  <button data-tab="cal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>カレンダー</button>
+  <button data-tab="meet"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21V4M5 4h11l-2 4 2 4H5"/></svg>大会<span class="badge" id="meetBadge" hidden></span></button>
+  <button data-tab="set"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>設定</button>
+</nav>
 
 <dialog id="evDlg"><form method="dialog">
   <h2 id="evTitle">予定</h2>
@@ -152,8 +242,7 @@ dialog.cal{width:min(96vw,560px);max-height:92vh}
   <label>出発の余裕（分）</label><input type="number" id="bufIn" min="0" max="60">
   <label>定期（JR）の区間</label><div class="leg"><input id="passA" placeholder="例：須磨"><input id="passB" placeholder="例：南草津"></div>
   <label>授業の時間（「1-5限」と書けるように）</label><textarea id="periodsIn" style="min-height:120px"></textarea>
-  <p class="credit">駅名の候補：「国土数値情報（鉄道データ）」（国土交通省）をもとに作成（CC BY 4.0）。<br>乗りかえ案内：Yahoo!乗換案内</p>
-  <div class="dact"><button value="cancel">やめる</button><button class="main" value="ok">保存</button></div>
+    <div class="dact"><button value="cancel">やめる</button><button class="main" value="ok">保存</button></div>
 </form></dialog>
 
 <dialog id="plDlg"><form method="dialog">
@@ -169,22 +258,7 @@ dialog.cal{width:min(96vw,560px);max-height:92vh}
   <div class="dact"><button value="cancel">やめる</button><button class="main" value="ok">保存</button></div>
 </form></dialog>
 
-<dialog id="meetDlg"><form method="dialog">
-  <h2>大会の候補</h2>
-  <p class="sub" style="margin:0">「出る」を押すと、その日の予定に受付の時刻で入ります。週に1回、Claude が日本スケート連盟と SEIKO SPORTSLINK を見て増やします。</p>
-  <div id="meetList"></div>
-  <div class="dact"><button value="cancel">とじる</button></div>
-</form></dialog>
-
-<dialog id="calDlg" class="cal"><form method="dialog">
-  <div class="calhead"><button type="button" id="calPrev" aria-label="前の月">‹</button><h2 id="calTitle"></h2><button type="button" id="calNext" aria-label="次の月">›</button></div>
-  <div class="calgrid" id="calGrid"></div>
-  <h3 class="agh">これからの予定</h3>
-  <div id="agenda"></div>
-  <div class="dact"><button value="cancel">とじる</button></div>
-</form></dialog>
-
-<script src="app.js?v=11"></script>
-<script src="cloud.js?v=11"></script>
+<script src="app.js?v=12"></script>
+<script src="cloud.js?v=12"></script>
 </body>
 </html>

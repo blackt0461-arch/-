@@ -185,60 +185,148 @@ function buildDay(evs) {
 }
 
 // ---- 画面 ----
-const HOW = { walk: '🚶 歩き', shuttle: '🚌 シャトルバス', bus: '🚌 バス', bike: '🚲 自転車' };
-function legText(dir, leg, place) {
-  if (!leg) return '';
-  const how = HOW[leg.how] || HOW.walk;
-  return dir === 'out' ? `${how}　${place} → ${leg.st}（${leg.min}分）` : `${how}　${leg.st} → ${place}（${leg.min}分）`;
+const HOW = { walk: '歩き', shuttle: 'シャトルバス', bus: 'バス', bike: '自転車' };
+// 線の色：乗る路線の色に近い色（公式の色そのものではない）
+const LINE_COLORS = [
+  [/御堂筋/, '#e5171f'], [/谷町/, '#8b4ea0'], [/四つ橋/, '#0078ba'], [/中央線/, '#019a66'], [/千日前/, '#e44d93'], [/堺筋/, '#814721'],
+  [/長堀鶴見緑地/, '#9acd32'], [/今里筋/, '#ee7b1a'], [/ニュートラム|南港ポートタウン/, '#00a3d9'],
+  [/烏丸線/, '#00a65a'], [/京都市営.*東西線/, '#e95e26'], [/西神|山手線/, '#00984a'], [/海岸線/, '#0094d8'], [/ポートライナー|六甲ライナー/, '#00a0e9'],
+  [/大阪環状/, '#f15a22'], [/桜島|ゆめ咲/, '#2e3192'], [/学研都市|片町|ＪＲ東西線|JR東西線/, '#e4007f'], [/奈良線/, '#8c6239'], [/草津線/, '#5bb531'],
+  [/嵯峨野|山陰/, '#7b5ea7'], [/阪和/, '#f39800'], [/^(ＪＲ|JR)/, '#0072bc'],
+  [/阪急/, '#7a1e2c'], [/阪神/, '#0b5aa8'], [/山陽電/, '#c8102e'], [/京阪/, '#008b44'], [/近鉄/, '#d7000f'], [/南海/, '#f08300'],
+  [/神戸電鉄/, '#d6007f'], [/叡山|嵐電|京福/, '#7d6b4f'], [/モノレール/, '#004ea2'],
+];
+const lineColor = (n) => { for (const [re, c] of LINE_COLORS) if (re.test(n || '')) return c; return '#5c6670'; };
+const lineShort = (n) => (n || '').replace(/・.*$/, '').replace(/^大阪メトロ/, '');
+const hm = (t) => (t || '').replace(/^0(\d):/, '$1:');
+const wdOf = (s2) => '日月火水木金土'[new Date(s2 + 'T00:00').getDay()];
+
+// 1つの移動を、路線図の行（駅・線）にする
+function moveRows(b) {
+  const rows = [];
+  const tools = () => {
+    const btn = [];
+    if (b.state === 'auto') btn.push(`<button type="button" data-prev="${esc(b.id)}" data-t="${esc(b.a.arr)}">1本前</button>`, `<button type="button" data-next="${esc(b.id)}" data-t="${esc(b.train)}">1本あと</button>`);
+    if (day === ymd(new Date()) && b.fromSt !== b.toSt) btn.push(`<button type="button" data-now="${esc(b.id)}" data-out="${b.outMin}">いまから出る</button>`);
+    if (b.ovr) btn.push(`<button type="button" data-back="${esc(b.id)}">もとにもどす</button>`);
+    if (b.state === 'failed') btn.push(`<button type="button" data-retry="${esc(b.k)}">もう一度しらべる</button>`);
+    if (b.fromSt !== b.toSt) btn.push(`<a href="${esc(yahooUrl(b.fromSt, b.toSt, day, b.time, b.type))}" target="_blank" rel="noopener"><button type="button">Yahoo!</button></a>`);
+    const more = [];
+    if (b.fromSt !== b.toSt) more.push(btn.pop());
+    more.push(`<button type="button" data-place="${esc(b.home ? b.P : b.Q)}">行き方</button>`);
+    if (b.fromSt !== b.toSt) more.push(`<button type="button" data-mv="1" data-from="${esc(b.fromSt)}" data-to="${esc(b.toSt)}">${b.learned || b.state === 'auto' ? '直す' : '時間を入れる'}</button>`);
+    return `<div class="tools">${btn.join('')}<button type="button" class="more" aria-label="ほかの操作">…</button><span class="moreset" hidden>${more.join('')}</span></div>`;
+  };
+  const money = b.state === 'auto' ? (S.pass ? `定期外 ${b.pay.toLocaleString()}円` : (b.price ? `${esc(b.price)}円` : '')) : '';
+  const late = b.target != null && b.arrive != null && b.arrive > b.target ? ` <span class="warn">${b.arrive - b.target}分おくれ</span>` : '';
+  const head = b.leave != null
+    ? `<b>${esc(b.P)} を出る</b><div class="sub">${dur(b.min)}${money ? '・' + money : ''}${b.hurry ? '・急ぎ' : ''}${b.ovr ? '・ずらし中' : ''}${late}</div>`
+    : b.state === 'loading' ? '<b>乗りかえをしらべています…</b>'
+    : b.state === 'failed' ? `<b class="warn">自動でしらべられませんでした</b><div class="sub">${esc({ daily_limit: '今日の検索の回数をこえました', no_route: '行き方が見つかりませんでした（駅名にすると見つかりやすい）', upstream: 'Yahoo!から答えがありませんでした', network: 'ネットにつながりませんでした' }[failed.get(b.k)] || String(failed.get(b.k) || ''))}</div>`
+    : '<b class="warn">移動時間がまだわかりません</b>';
+  rows.push({ tm: b.leave != null ? toHM(b.leave) : '', cls: 'stop', dot: b.P === norm(S.home) ? 'home' : '', c: '', html: head + tools() });
+  // 駅まで（いつもの行き方）
+  if (b.out) rows.push({ cls: 'seg dash', c: '#8a949e', html: `${HOW[b.out.how] || '歩き'}　${esc(b.out.st)}まで ${b.out.min}分` });
+  if (b.state === 'auto') {
+    const st = b.a.steps || [];
+    st.forEach((x, i) => {
+      if (i === st.length - 1) { rows.push({ tm: x.dep || x.arr, cls: 'stop', dot: !b.inn && b.home && bare(x.station) === bare(S.home) ? 'home' : '', c: lineColor(st[i - 1] && st[i - 1].line), html: !b.inn && b.home && bare(x.station) === bare(S.home) ? `<b>${esc(x.station)}</b> <span class="sub">家に着く</span>` : `<b>${esc(x.station)}</b> <span class="sub">で降りる</span>` }); return; }
+      const walk = /徒歩/.test(x.line);
+      const prevC = i > 0 ? lineColor(st[i - 1].line) : lineColor(x.line);
+      const label = i === 0 ? `<b>${esc(x.station)}</b>` : `<b>${esc(x.station)}</b> <span class="sub">${x.arr ? 'で乗りかえ' : ''}</span>`;
+      if (i === 0 && !b.out && bare(x.station) === bare(b.P)) { rows[rows.length - 1].tmsub = hm(x.dep) + '発'; } else rows.push({ tm: x.dep, tmsub: i > 0 && x.arr && x.arr !== x.dep ? hm(x.arr) + '着' : '', cls: 'stop', c: i > 0 ? prevC : lineColor(x.line), html: label });
+      rows.push({ cls: walk ? 'seg dash' : 'seg', c: walk ? '#8a949e' : lineColor(x.line), html: walk ? '歩いて乗りかえ' : `<span class="lnm" style="--c:${lineColor(x.line)}">${esc(lineShort(x.line))}</span>${esc((x.line.match(/・(.+)$/) || [])[1] || '')}` });
+    });
+  } else if (b.steps && b.steps.length) {
+    rows.push({ cls: 'seg', c: '#5c6670', html: b.steps.map(esc).join('<br>') });
+  } else if (b.fromSt !== b.toSt) {
+    rows.push({ cls: 'seg dash', c: '#c9d0d7', html: `${esc(b.fromSt)} → ${esc(b.toSt)}` });
+  }
+  if (b.inn) rows.push({ cls: 'seg dash', c: '#8a949e', html: `${HOW[b.inn.how] || '歩き'}　${esc(b.Q)}まで ${b.inn.min}分` });
+  return rows;
 }
+
+// その日の「行動」の並び（次の行動に使う）
+function actionsOf(items) {
+  const acts = [];
+  for (const b of items) {
+    if (b.kind === 'ev') { acts.push({ t: toMin(b.e.start), what: b.e.name, where: b.e.place }); continue; }
+    if (b.kind !== 'move' || b.leave == null) continue;
+    acts.push({ t: b.leave, what: `${b.P} を出る`, where: b.out ? `${HOW[b.out.how] || '歩き'}で${b.out.st}へ` : '', mv: b });
+    if (b.state === 'auto') {
+      const st = b.a.steps || [];
+      st.forEach((x, i) => {
+        if (i === st.length - 1) { acts.push({ t: toMin(x.dep || x.arr), what: `${x.station}で降りる`, where: b.inn ? `${HOW[b.inn.how] || '歩き'}で${b.Q}へ` : '', mv: b }); return; }
+        if (/徒歩/.test(x.line)) return;
+        acts.push({ t: toMin(x.dep), what: `${x.station}で${lineShort(x.line)}に乗る`, where: (x.line.match(/・(.+)$/) || [])[1] || '', mv: b, c: lineColor(x.line) });
+      });
+    }
+  }
+  return acts.sort((p, q) => p.t - q.t);
+}
+function drawHero(items) {
+  const acts = actionsOf(items);
+  const isToday = day === ymd(new Date());
+  const now = new Date(); const nowMin = now.getHours() * 60 + now.getMinutes();
+  let i = isToday ? acts.findIndex((a) => a.t >= nowMin) : 0;
+  if (!acts.length || i < 0) {
+    $('hero').innerHTML = isToday && acts.length ? '<div class="hero"><div class="lbl">きょうの予定</div><div class="main"><span class="what">ぜんぶ終わりました。おつかれさま！</span></div></div>' : '';
+    return;
+  }
+  const a = acts[i], nx = acts.slice(i + 1, i + 4);
+  const left = isToday ? a.t - nowMin : null;
+  const mv = a.mv;
+  $('hero').innerHTML = `<div class="hero"><span class="bar" style="background:${a.c || 'var(--gold)'}"></span>` +
+    `<div class="lbl">${isToday ? 'つぎの行動' : `${+day.slice(5, 7)}/${+day.slice(8)} さいしょの行動`}</div>` +
+    `<div class="main"><span class="t">${toHM(a.t)}</span><span class="what">${esc(a.what)}</span></div>` +
+    `<div class="left">${left != null ? (left === 0 ? 'いまです' : `あと ${left >= 60 ? Math.floor(left / 60) + '時間' : ''}${left % 60}分`) : ''}${a.where ? (left != null ? '・' : '') + esc(a.where) : ''}</div>` +
+    (nx.length ? `<ol>${nx.map((x) => `<li><span class="t">${toHM(x.t)}</span><span>${esc(x.what)}</span></li>`).join('')}</ol>` : '') +
+    (mv && mv.state === 'auto' ? `<div class="acts"><button type="button" data-prev="${esc(mv.id)}" data-t="${esc(mv.a.arr)}">1本前</button><button type="button" data-next="${esc(mv.id)}" data-t="${esc(mv.train)}">1本あと</button></div>` : '') +
+    `</div>`;
+}
+
 function render() {
   $('day').value = day;
+  const d = new Date(day + 'T00:00');
+  const isToday = day === ymd(new Date());
+  $('dayTitle').textContent = `${d.getMonth() + 1}月${d.getDate()}日（${wdOf(day)}）`;
+  $('daySub').textContent = isToday ? 'きょう' : (S.home ? `家：${S.home}` : '');
   $('homeName').textContent = S.home || '未設定';
   $('bufName').textContent = S.buffer;
   const evs = S.days[day] || [];
   const L = $('list');
-  if (!evs.length) { L.innerHTML = '<div class="empty">この日の予定はまだありません。<br>下のボタンから入れてください。</div>'; return; }
-  const isToday = day === ymd(new Date());
-  const parts = buildDay(evs).map((b) => {
+  if (!evs.length) { $('hero').innerHTML = ''; L.innerHTML = '<div class="empty">この日の予定はまだありません。<br>右下の ＋ から入れてください。</div>'; return; }
+  const items = buildDay(evs);
+  drawHero(items);
+  const rows = [];
+  // 家から
+  const firstMove = items.find((x) => x.kind === 'move');
+  for (const b of items) {
     if (b.kind === 'ev') {
       const e = b.e;
-      return `<div class="blk ev" data-ev="${e.id}"><div><span class="t">${e.start}〜${e.end}</span> ${esc(e.name)}${e.hurry ? ' <span class="tag">急ぎ</span>' : ''}${e.asap ? ' <span class="tag">早めに着く</span>' : ''}</div>` +
-        `<div class="sub">${e.place ? '📍 ' + esc(e.place) : '場所なし'}</div></div>`;
+      rows.push({ tm: e.start, tmsub: e.end, cls: 'stop ev', dot: 'big', data: e.id,
+        html: `<b>${esc(e.name)}</b>${e.hurry ? '<span class="tag">急ぎ</span>' : ''}${e.asap ? '<span class="tag asap">早めに着く</span>' : ''}<div class="sub">${e.place ? esc(e.place) : '場所なし'}</div>` });
+    } else if (b.kind === 'gap') {
+      rows.push({ cls: 'seg thin', html: `<span class="gapx">すき間 ${dur(b.min)}</span> <span class="sub">${toHM(b.from)}〜${toHM(b.to)}・${b.min >= 60 ? '休憩やご飯に' : 'ひと休み'}</span>` });
+    } else if (b.kind === 'late') {
+      rows.push({ cls: 'seg thin', html: `<span class="warn">⚠ ${esc(b.before)} に ${b.min}分 まにあいません</span>` });
+    } else if (b.kind === 'move') {
+      rows.push(...moveRows(b));
     }
-    if (b.kind === 'gap') {
-      return `<div class="blk gp"><span class="t">${toHM(b.from)}〜${toHM(b.to)}</span> すき間 <b>${dur(b.min)}</b>` +
-        `<div class="sub">${b.min >= 60 ? '休憩やご飯に使えます' : 'ひと休みできます'}</div></div>`;
-    }
-    if (b.kind === 'late') {
-      return `<div class="blk mv"><span class="warn">⚠ ${esc(b.before)} に ${b.min}分 まにあいません</span></div>`;
-    }
-    // 移動
-    let head;
-    const money = b.state === 'auto' ? (S.pass ? `・定期外 ${b.pay.toLocaleString()}円` : (b.price ? `・${esc(b.price)}円` : '')) : '';
-    if (b.leave != null) head = `<span class="t">${toHM(b.leave)} 出発</span> → ${toHM(b.arrive)} 着（${dur(b.min)}${money}）`;
-    else if (b.state === 'loading') head = '<span class="sub">乗りかえをしらべています…</span>';
-    else if (b.state === 'failed') {
-      const why = { daily_limit: '今日の検索の回数をこえました', no_route: '行き方が見つかりませんでした（場所の名前を駅名にすると見つかりやすいです）', upstream: 'Yahoo!から答えがありませんでした', network: 'ネットにつながりませんでした', http403: 'このページからは調べられません' }[failed.get(b.k)] || ('うまくいきませんでした：' + failed.get(b.k));
-      head = `<span class="warn">自動でしらべられませんでした</span><div class="sub">${esc(why)}</div>`;
-    }
-    else head = '<span class="warn">移動時間がまだわかりません</span>';
-    if (b.leave != null && b.state === 'loading') head += ' <span class="sub">しらべ中…</span>';
-    const late = b.target != null && b.arrive != null && b.arrive > b.target ? `<div class="warn">⚠ ${b.arrive - b.target}分 おくれます</div>` : '';
-    const note = b.state === 'auto' ? `<div class="sub">${b.train} の電車${b.hurry ? '（急ぎなので速さ優先）' : S.pass ? '（定期を考えて安い方）' : ''}${b.ovr ? '・ずらし中' : ''}</div>` : '';
-    const lines = [legText('out', b.out, b.P), ...(b.steps || []), legText('in', b.inn, b.Q)].filter(Boolean);
-    const steps = lines.length ? `<ol class="steps">${lines.map((s) => `<li>${esc(s)}</li>`).join('')}</ol>` : '';
-    const shift = b.state === 'auto' ? `<button type="button" data-prev="${esc(b.id)}" data-t="${esc(b.a.arr)}">1本前</button><button type="button" data-next="${esc(b.id)}" data-t="${esc(b.train)}">1本あと</button>` : '';
-    const now = isToday && b.fromSt !== b.toSt ? `<button type="button" data-now="${esc(b.id)}" data-out="${b.outMin}">いまから出る</button>` : '';
-    const retry = b.state === 'failed' ? `<button type="button" data-retry="${esc(b.k)}">もう一度しらべる</button>` : '';
-    const back = b.ovr ? `<button type="button" data-back="${esc(b.id)}">もとにもどす</button>` : '';
-    return `<div class="blk mv"><div>🚃 ${head}</div><div class="sub">${esc(b.P)} → ${esc(b.Q)}</div>${late}${note}${steps}` +
-      `<div class="acts">${retry}${shift}${now}${back}` +
-      (b.fromSt !== b.toSt ? `<a href="${esc(yahooUrl(b.fromSt, b.toSt, day, b.time, b.type))}" target="_blank" rel="noopener"><button type="button">Yahoo!で見る</button></a>` : '') +
-      `<button type="button" data-place="${esc(b.home ? b.P : b.Q)}">行き方</button>` +
-      (b.fromSt !== b.toSt ? `<button type="button" data-mv="1" data-from="${esc(b.fromSt)}" data-to="${esc(b.toSt)}">${b.learned || b.state === 'auto' ? '直す' : '時間を入れる'}</button>` : '') +
-      `</div></div>`;
-  });
-  L.innerHTML = parts.join('');
+  }
+  const lastMv = items[items.length - 1];
+  if (lastMv && lastMv.kind === 'move' && lastMv.home && !(lastMv.state === 'auto' && !lastMv.inn && bare(lastMv.a.steps[lastMv.a.steps.length - 1].station) === bare(S.home))) {
+    const h = items[items.length - 1];
+    rows.push({ tm: h.arrive != null ? toHM(h.arrive) : '', cls: 'stop', dot: 'home', html: `<b>${esc(S.home)}</b> <span class="sub">家に着く</span>` });
+  }
+  L.innerHTML = rows.map((r, i) => {
+    const cls = ['r', ...(r.cls || '').split(' ').filter(Boolean)];
+    if (i === 0) cls.push('first'); if (i === rows.length - 1) cls.push('last');
+    const isStop = cls.includes('stop');
+    const dot = isStop ? `<span class="dot ${r.dot || ''}"></span>` : '';
+    const segC = r.c ? ` style="--c:${r.c}"` : '';
+    return `<div class="${cls.join(' ')}"${segC}${r.data ? ` data-ev="${esc(r.data)}"` : ''}><div class="tm">${hm(r.tm)}${r.tmsub ? `<small>${esc(hm(r.tmsub))}</small>` : ''}</div><div class="rl">${dot}</div><div class="tx">${r.html}</div></div>`;
+  }).join('');
   autoFill(want);
 }
 
@@ -319,7 +407,9 @@ $('pasteDlg').addEventListener('close', () => {
 
 // ---- 移動を直す ----
 let mvKey = null;
-$('list').addEventListener('click', (ev) => {
+const onDayClick = (ev) => {
+  const mo = ev.target.closest('.more');
+  if (mo) { const set = mo.nextElementSibling; set.hidden = !set.hidden; mo.hidden = true; return; }
   const b = ev.target.closest('[data-mv]');
   if (b) {
     mvKey = rkey(b.dataset.from, b.dataset.to);
@@ -345,7 +435,9 @@ $('list').addEventListener('click', (ev) => {
   if (pl) { openPlace(pl.dataset.place); return; }
   const e = ev.target.closest('[data-ev]');
   if (e) openEv((S.days[day] || []).find((x) => x.id === e.dataset.ev));
-});
+};
+$('list').addEventListener('click', onDayClick);
+$('hero').addEventListener('click', onDayClick);
 $('mvDlg').addEventListener('close', () => {
   if ($('mvDlg').returnValue !== 'ok' || !mvKey) return;
   const min = Math.max(0, Math.round(Number($('mvMin').value) || 0));
@@ -522,7 +614,7 @@ const today = () => ymd(new Date());
 function drawMeetBtn() {
   const up = S.meets.filter((m) => (m.days || []).some((d) => d.date >= today()));
   const n = up.filter((m) => !m.status || m.status === 'new').length;
-  $('meetBtn').textContent = `🏁 大会の候補 ${up.length}件` + (n ? `（まだ決めていない ${n}件）` : '');
+  const bd = $('meetBadge'); bd.hidden = !n; bd.textContent = n;
 }
 function drawMeets() {
   const up = S.meets.filter((m) => (m.days || []).some((d) => d.date >= today()))
@@ -537,7 +629,6 @@ function drawMeets() {
       (m.url ? `<a href="${esc(m.url)}" target="_blank" rel="noopener"><button type="button">要項</button></a>` : '') + `</div></div>`;
   }).join('') : '<p class="sub">いまは候補がありません。</p>';
 }
-$('meetBtn').onclick = () => { drawMeets(); $('meetDlg').showModal(); };
 $('meetList').addEventListener('click', (ev) => {
   const j = ev.target.closest('[data-join]'); if (j) { setMeet(j.dataset.join, 'join'); return; }
   const k = ev.target.closest('[data-skip]'); if (k) setMeet(k.dataset.skip, 'skip');
@@ -573,21 +664,33 @@ function drawCal() {
     const d = new Date(start); d.setDate(start.getDate() + i);
     const k = ymd(d);
     if (i >= 35 && d.getMonth() !== m - 1) break;
-    const chips = blocksOf(k).slice(0, 3).map((b) => `<span class="chip ${b.kind}">${esc(b.kind === 'meet' ? '大会' : b.label)}</span>`).join('');
+    const chips = blocksOf(k).slice(0, 3).map((b) => `<span class="chip k-${b.kind}">${esc(b.kind === 'meet' ? '大会' : b.label)}</span>`).join('');
     h += `<div class="cd${d.getMonth() !== m - 1 ? ' out' : ''}${k === t ? ' today' : ''}${d.getDay() === 0 ? ' su' : ''}" data-go="${k}"><span class="n">${d.getDate()}</span>${chips}</div>`;
   }
   $('calGrid').innerHTML = h;
   // これからの予定（今日から先、予定のある日を30日ぶん）
   const days = Object.keys(S.days).filter((k) => k >= t && S.days[k].length).sort().slice(0, 30);
   const wd = (s2) => '日月火水木金土'[new Date(s2 + 'T00:00').getDay()];
-  $('agenda').innerHTML = days.length ? days.map((k) => `<div class="agday" data-go="${k}"><b>${+k.slice(5, 7)}/${+k.slice(8)}(${wd(k)})</b>` +
-    blocksOf(k).map((b) => `<div class="it">${b.start}〜${b.end}　${esc(b.label)}${b.kind === 'meet' ? '' : b.place && b.label !== '大学' ? ' <span class="sub">@' + esc(b.place) + '</span>' : ''}</div>`).join('') + '</div>').join('')
+  $('agenda').innerHTML = days.length ? days.map((k) => `<div class="agday" data-go="${k}"><b>${+k.slice(5, 7)}/${+k.slice(8)}(${wd(k)})</b><div>` +
+    blocksOf(k).map((b) => `<div class="it"><span class="t">${hm(b.start)}〜${hm(b.end)}</span>${b.kind === 'meet' ? '<span class="tag">大会</span> ' : ''}${esc(b.label)}${b.place && b.label !== '大学' ? '<div class="sub">' + esc(b.place) + '</div>' : ''}</div>`).join('') + '</div></div>').join('')
     : '<p class="sub">これからの予定はありません。</p>';
 }
-$('calBtn').onclick = () => { const d = new Date(day + 'T00:00'); calMonth = [d.getFullYear(), d.getMonth() + 1]; drawCal(); $('calDlg').showModal(); };
 $('calPrev').onclick = () => { calMonth = calMonth[1] === 1 ? [calMonth[0] - 1, 12] : [calMonth[0], calMonth[1] - 1]; drawCal(); };
 $('calNext').onclick = () => { calMonth = calMonth[1] === 12 ? [calMonth[0] + 1, 1] : [calMonth[0], calMonth[1] + 1]; drawCal(); };
-$('calDlg').addEventListener('click', (ev) => { const g = ev.target.closest('[data-go]'); if (g) { day = g.dataset.go; $('calDlg').close(); render(); } });
+$('tab-cal').addEventListener('click', (ev) => { const g = ev.target.closest('[data-go]'); if (g) { day = g.dataset.go; showTab('today'); } });
+
+// ---- 下のタブ ----
+function showTab(name) {
+  document.querySelectorAll('.tab').forEach((t) => t.classList.toggle('on', t.id === 'tab-' + name));
+  document.querySelectorAll('.tabs button').forEach((b) => b.classList.toggle('on', b.dataset.tab === name));
+  if (name === 'cal') { const d = new Date(day + 'T00:00'); calMonth = [d.getFullYear(), d.getMonth() + 1]; drawCal(); }
+  if (name === 'meet') drawMeets();
+  if (name === 'today') render();
+  window.scrollTo(0, 0);
+}
+document.querySelectorAll('.tabs button').forEach((b) => b.addEventListener('click', () => showTab(b.dataset.tab)));
+// 開いたまま時間がたったら「次の行動」を新しくする
+setInterval(() => { if ($('tab-today').classList.contains('on') && !document.querySelector('dialog[open]')) render(); }, 60000);
 
 drawMeetBtn();
 render();
