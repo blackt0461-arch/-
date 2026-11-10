@@ -397,7 +397,11 @@ const Scan = (() => {
       const got = new Set(results.map(r => r.it.id));
       const useRank = document.getElementById('scanrank')?.checked;
       for (const m of MEMS) { if (got.has(m.id)) S.memNo[m.id] = false; else if (all) S.memNo[m.id] = true; }
-      if (useRank) for (const r of results) if (r.rank) S.memRank[r.it.id] = r.rank;
+      // こ数を 自分で 入れていない メモリは ランクを 入れかえる。入れてある メモリは、そのランクが 0こ なら 1こに する
+      if (useRank) for (const r of results) if (r.rank) {
+        const c = S.memCnt[r.it.id];
+        if (!c) S.memRank[r.it.id] = r.rank; else if (!(c[r.rank] > 0)) { if (!RANKS.some(k => c[k] > 0)) S.memCnt[r.it.id] = {}; S.memCnt[r.it.id][r.rank] = 1; }
+      }
     } else {
       // 写っていた 種類（武器・盾など）の中だけ 入れかえる
       const cat = it => it.kind === 'w' ? 'w' : it.kind === 'c' ? 'c' : it.t;

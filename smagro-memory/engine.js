@@ -8,6 +8,7 @@ const PARTS = ['盾', '頭防具', '上防具', '下防具'];
 const ACC_SLOTS = 2;   // アクセサリーは 2つ つけられる
 const RANKF = { S: 1, A: 0.8, B: 0.65, C: 0.5, D: 0.4 };
 const COLOR_BONUS = 1.2;
+const TOKUI_BONUS = 40;      // 得意武器を持つと こうげき力（呪文の武器なら こうげき魔力）＋40 のめやす（本人に聞いた 2026-11-10）
 const BASE_CRIT = 5;          // 会心の基本率(%)のめやす
 const CRIT_EXTRA = 0.5;       // 会心で +50% のめやす
 const WEAKMUL = { 超弱: 1.7, 弱点: 1.5, 耐性: 0.5, 無効: 0, 吸収: 0 };
@@ -20,7 +21,8 @@ function parseEff(raw) {
   let t = q(raw).trim(); const cond = {}; let m;
   while ((m = t.match(/^【([^】]+)】/))) {
     const x = m[1];
-    if (x === '得' || x === '特') cond.tokui = 1; else if (TOKUI[x]) cond.job = x; else cond.wt = WT[x] || x;
+    const w = x.replace(/装備時$/, '');
+    if (x === '得' || x === '特') cond.tokui = 1; else if (TOKUI[x]) cond.job = x; else cond.wt = WT[w] || w;
     t = t.slice(m[0].length);
   }
   const r = { cond, text: q(raw) };
@@ -153,6 +155,7 @@ function searchChar(o) {
       cands[s] = [null, ...o.eqAvail(k).map(x => ({ ...x, V: eqVec(x.it, ctx, x.lv, x.t), sk: skillsOf(x.it, x.lv, x.t) }))];
     }
     const WV = wi ? eqVec(wi, ctx, W.lv, W.t) : new Float64Array(NV);
+    if (ctx.tokui) WV[ctx.type === 'phys' ? 1 : 2] += TOKUI_BONUS;
     const Wsk = wi ? skillsOf(wi, W.lv, W.t) : [];
     const slots = o.slots;
     const memC = o.memAvail.map(x => ({ m: x.m, rank: x.rank, ct: x.m.ct, Vm: memVec(x.m, ctx, true, x.rank), Vp: memVec(x.m, ctx, false, x.rank), sk: skillsOf(x.m) }));
@@ -229,7 +232,7 @@ function searchChar(o) {
             if (base + x.ct > o.cap || usedElse.has(x.m.id)) continue;
             st.mem[a] = x;
             for (const y of memC) {
-              if (y === x || usedElse.has(y.m.id) || base + x.ct + y.ct > o.cap) continue;
+              if (y.m.id === x.m.id || usedElse.has(y.m.id) || base + x.ct + y.ct > o.cap) continue;
               st.mem[b] = y; const sc = score();
               if (sc > best + 1e-9) { best = sc; bp = [x, y]; }
             }

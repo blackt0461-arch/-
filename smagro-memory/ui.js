@@ -23,7 +23,7 @@ function defaults() {
     ],
     main: 0, fixW: '', need: [],
     enemy: { mode: 'boss', boss: (BOSSES.find(b => b.boss === 'スライムナイト') || BOSSES[0] || {}).n || '', fam: 'スライム系', weak: {} },
-    memNo: {}, memRank: {}, memPin: {}, eq: ex
+    memNo: {}, memRank: {}, memCnt: {}, memPin: {}, eq: ex
   };
 }
 let S = defaults();
@@ -38,6 +38,12 @@ let lastResult = null;
 function save() {
   try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { }
 }
+/* メモリの ランクごとの こ数。memCnt に 入れていない メモリは、前と同じ「memRank の ランクを 1こ」あつかい */
+const RANKS = ['S', 'A', 'B', 'C', 'D'];
+function memCnt(id) { return S.memCnt[id] || { [S.memRank[id] || 'S']: 1 }; }
+function memTotal(id) { return S.memNo[id] ? 0 : RANKS.reduce((a, r) => a + (memCnt(id)[r] || 0), 0); }
+function memBest(id) { const c = memCnt(id); return RANKS.find(r => c[r] > 0) || 'S'; }
+function memLabel(id) { const c = memCnt(id), n = memTotal(id); return n > 1 ? RANKS.filter(r => c[r] > 0).map(r => r + (c[r] > 1 ? c[r] : '')).join('') : memBest(id); }
 function touch() { if (S.example) { S.example = false; } save(); }
 
 /* ---------- 敵 ---------- */
@@ -57,7 +63,9 @@ function runAll() {
   const en = enemyCtx();
   const avail = {}; for (const x of ownedEq()) avail[x.it.id] = x.n;
   const pool = kind => ownedEq().filter(x => avail[x.it.id] > 0 && (kind === 'w' ? x.it.kind === 'w' : kind === 'c' ? x.it.kind === 'c' : x.it.t === kind)).map(x => ({ ...x, n: avail[x.it.id] }));
-  const mems = cap => MEMS.filter(m => !S.memNo[m.id] && m.ct <= cap).map(m => ({ m, rank: S.memRank[m.id] || 'S' }));
+  // メモリは 3人で 取りあう。のこっている こ数を ランクごとに かぞえる（いいランクから 先に ならべる）
+  const memLeft = {}; for (const m of MEMS) if (memTotal(m.id) > 0) memLeft[m.id] = { ...memCnt(m.id) };
+  const mems = cap => MEMS.filter(m => memLeft[m.id] && m.ct <= cap).flatMap(m => RANKS.filter(r => memLeft[m.id][r] > 0).map(rank => ({ m, rank })));
   const out = { main: null, alts: [], subs: [] };
   const order = [S.main, ...[0, 1, 2].filter(i => i !== S.main)];
   for (const idx of order) {
@@ -83,6 +91,7 @@ function runAll() {
     const best = res[0];
     if (best.W) avail[best.W.it.id]--;
     for (const x of Object.values(best.eq)) if (x) avail[x.it.id]--;
+    for (const x of best.mem) if (x && memLeft[x.m.id]) memLeft[x.m.id][x.rank]--;
     if (isMain) { out.main = { idx, p, r: best }; out.alts = res.slice(1, 5).map(r => ({ idx, p, r })); }
     else out.subs.push({ idx, p, r: best });
   }
@@ -123,7 +132,7 @@ function vParty() {
       ${main ? `<div class="grid2">
         <label class="f">もとの こうげき力<input id="ba${i}" type="number" inputmode="numeric" min="0" value="${esc(p.base.atk)}" data-act="base" data-k="atk" data-i="${i}"></label>
         <label class="f">もとの こうげき魔力<input id="bm${i}" type="number" inputmode="numeric" min="0" value="${esc(p.base.matk)}" data-act="base" data-k="matk" data-i="${i}"></label></div>
-        <div class="note">そうびと メモリを ぜんぶ外したときの ステータスの数字です。わからなければ そのままで だいじょうぶ（くらべる じゅんばんは ほぼ変わりません）。</div>
+        <div class="note">そうびと メモリを ぜんぶ外したときの ステータスの数字です。物理と呪文の どちらの武器が よいかに かかわるので、なるべく 入れてください（得意武器の ＋40 は 入れなくて よい）。</div>
         <label class="f">武器を こていする<select id="fixw" data-act="fixw"><option value="">じどうで えらぶ</option>${ownedEq().filter(x => x.it.kind === 'w').map(x => `<option value="${x.it.id}" ${S.fixW === x.it.id ? 'selected' : ''}>${esc(x.it.n)}</option>`).join('')}</select></label>
         <div><div class="note" style="margin-bottom:4px">かならず ほしい 冒険スキル（えらぶと それを持つ そうびか メモリを 入れます）</div>
         <div class="row">${S.need.map(s => `<button class="chip on" data-act="needdel" data-s="${esc(s)}">${esc(s)} ✕</button>`).join('')}
@@ -169,8 +178,12 @@ function vMem() {
     <div class="row" style="margin-top:8px"><button class="chip ${!S.memColor ? 'on' : ''}" data-act="mcol" data-c="">ぜんぶ</button>${['赤', '青', '黄', '緑', '紫'].map(c => `<button class="chip ${S.memColor === c ? 'on' : ''}" data-act="mcol" data-c="${c}"><span class="cdot c-${c}"></span> ${c}</button>`).join('')}</div></div>
   <div class="tiles">${list.map(m => `<div class="tile ${S.memNo[m.id] ? 'off' : ''} ${S.memPin[m.id] ? 'pin' : ''}" role="button" tabindex="0" data-act="memtog" data-id="${m.id}" aria-pressed="${!S.memNo[m.id]}">
       <span class="icow">${ico(m, 44)}<span class="cdot c-${m.c} icodot"></span></span><span class="nm">${esc(m.n)}</span>
-      <button class="rk" data-act="memsheet" data-id="${m.id}" aria-label="${esc(m.n)}の くわしく">${S.memRank[m.id] || 'S'}</button>
+      <button class="rk" data-act="memsheet" data-id="${m.id}" aria-label="${esc(m.n)}の くわしく">${memLabel(m.id)}</button>
       <span class="ct">コスト${m.ct}${S.memPin[m.id] ? '　★かならず' : ''}${m.src === 'now' ? '　<span style="color:var(--ok)">いま入手</span>' : ''}</span></div>`).join('')}</div>`;
+}
+function memToggle(id) {
+  S.memNo[id] = !S.memNo[id];
+  if (!S.memNo[id] && memTotal(id) === 0) S.memCnt[id] = { S: 1 };   // こ数が 0 の まま「もっている」に したら S を 1こ
 }
 function memSheet(id) {
   const m = ITEMS[id];
@@ -178,10 +191,10 @@ function memSheet(id) {
   sh.innerHTML = `<div class="win"><span class="tag">メモリ</span>
     <div class="row" style="justify-content:space-between;margin-top:6px"><h2 style="margin:0;display:flex;gap:10px;align-items:center">${ico(m, 64)}<span><span class="cdot c-${m.c}"></span> ${esc(m.n)}</span></h2><button class="btn" data-act="close">とじる</button></div>
     <div class="sub">${esc(m.f || '')}　コスト${m.ct}　${esc(m.r)}　入手：${esc(SRCNAME[m.src] || '')}${m.stage ? ' ' + esc(m.stage) : ''}</div>
-    <div class="calc" style="margin:8px 0">${STAT_KEYS.map((k, i) => `<span>${k}</span><span>${Math.round(m.st[i] * (RANKF[S.memRank[id] || 'S']))}</span>`).join('')}</div>
+    <div class="calc" style="margin:8px 0">${STAT_KEYS.map((k, i) => `<span>${k}</span><span>${Math.round(m.st[i] * (RANKF[memBest(id)]))}</span>`).join('')}</div>
     <div class="eff">${m.effs.map(e => esc(e.text)).join('<br>')}</div>
-    <div class="note" style="margin-top:8px">ランク（S以外の数字は Sの数字からの めやす）</div>
-    <div class="row">${['S', 'A', 'B', 'C', 'D'].map(r => `<button class="btn ${(S.memRank[id] || 'S') === r ? 'on' : ''}" data-act="rank" data-id="${id}" data-r="${r}">${r}</button>`).join('')}</div>
+    <div class="note" style="margin-top:8px">もっている こ数（ランクごと）。3人で 同じ メモリを つかうときは、この こ数までに します。上の数字は いちばん いいランクの もの（S以外は Sからの めやす）</div>
+    <div class="lines">${RANKS.map(r => { const n = S.memNo[id] ? 0 : (memCnt(id)[r] || 0); return `<div class="line" style="align-items:center"><span class="k">ランク ${r}</span><div class="stepper"><button data-act="mcnt" data-id="${id}" data-r="${r}" data-d="-1" aria-label="${r}を へらす">－</button><output>${n}</output><button data-act="mcnt" data-id="${id}" data-r="${r}" data-d="1" aria-label="${r}を ふやす">＋</button></div></div>`; }).join('')}</div>
     <div class="row" style="margin-top:10px"><button class="btn ${S.memNo[id] ? '' : 'on'}" data-act="memtog2" data-id="${id}">${S.memNo[id] ? 'もっていない' : 'もっている'}</button>
     <button class="btn ${S.memPin[id] ? 'on' : ''}" data-act="mpin" data-id="${id}">★ メインに かならず使う</button></div></div>`;
   sh.hidden = false;
@@ -247,7 +260,7 @@ function vResultBody() {
     ${!r.skillOK ? '<div class="banner" style="margin-top:8px">かならず ほしい 冒険スキルを 入れられませんでした。もっている そうびか メモリを 見なおしてください。</div>' : ''}
     <div style="margin-top:10px">${loadout(r, M.p)}</div>
     <h2 style="margin-top:12px">火力の うちわけ</h2>
-    <div class="calc"><span>こうげき${r.ctx.type === 'phys' ? '力' : '魔力'}（もと＋そうび＋メモリ）</span><span>${fmt(pt.base)}</span>
+    <div class="calc"><span>こうげき${r.ctx.type === 'phys' ? '力' : '魔力'}（もと＋そうび＋メモリ${r.ctx.tokui ? '＋得意武器' + TOKUI_BONUS : ''}）</span><span>${fmt(pt.base)}</span>
       <span>${typ}ダメージ</span><span>×${pt.mAll.toFixed(2)}</span>
       <span>${esc(r.ctx.el || '無')}ぞくせいダメージ</span><span>×${pt.mEl.toFixed(2)}</span>
       <span>${R.enemy.fam ? esc(R.enemy.fam) + '・あいてへの とっこう' : 'とっこう（けいとうが わからないので なし）'}</span><span>×${pt.mFam.toFixed(2)}</span>
@@ -293,12 +306,18 @@ document.addEventListener('click', ev => {
     case 'msrc': S.memSrc = b.dataset.s; break;
     case 'msrcall': {
       const qq = S.memQ.trim(), src = S.memSrc || '';
-      for (const m of MEMS) if ((!src || m.src === src) && (!S.memColor || m.c === S.memColor) && (!qq || m.n.includes(qq) || m.effs.some(e => e.text.includes(qq)))) S.memNo[m.id] = b.dataset.v !== '1';
+      for (const m of MEMS) if ((!src || m.src === src) && (!S.memColor || m.c === S.memColor) && (!qq || m.n.includes(qq) || m.effs.some(e => e.text.includes(qq)))) { S.memNo[m.id] = b.dataset.v !== '1'; if (!S.memNo[m.id] && memTotal(m.id) === 0) S.memCnt[m.id] = { S: 1 }; }
       break;
     }
     case 'memsheet': ev.stopPropagation(); memSheet(b.dataset.id); return;
-    case 'memtog': S.memNo[b.dataset.id] = !S.memNo[b.dataset.id]; break;
-    case 'memtog2': S.memNo[b.dataset.id] = !S.memNo[b.dataset.id]; invalidate(); save(); render(); memSheet(b.dataset.id); return;
+    case 'memtog': memToggle(b.dataset.id); break;
+    case 'memtog2': memToggle(b.dataset.id); invalidate(); save(); render(); memSheet(b.dataset.id); return;
+    case 'mcnt': {
+      const id = b.dataset.id, c = S.memNo[id] ? {} : { ...memCnt(id) };
+      c[b.dataset.r] = Math.max(0, Math.min(99, (c[b.dataset.r] || 0) + +b.dataset.d));
+      S.memCnt[id] = c; S.memNo[id] = !RANKS.some(r => c[r] > 0);
+      touch(); invalidate(); render(); memSheet(id); return;
+    }
     case 'rank': S.memRank[b.dataset.id] = b.dataset.r; invalidate(); save(); render(); memSheet(b.dataset.id); return;
     case 'mpin': S.memPin[b.dataset.id] = !S.memPin[b.dataset.id]; invalidate(); save(); render(); memSheet(b.dataset.id); return;
     case 'close': $('#sheet').hidden = true; return;
