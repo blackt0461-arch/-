@@ -33,7 +33,7 @@ function yahooUrl(from, to, date, arrive, type = '4') {
 }
 // ---- 自動で調べる（Supabase の route-yahoo が Yahoo!乗換案内を読んで返す）----
 const API = 'https://zmteazudhtnzvfvmndqn.supabase.co/functions/v1/route-yahoo';
-const AUTO_OK = /(^|\.)kotetsuworks\.com$/.test(location.hostname); // ほかの場所からは受け付けてもらえない
+const AUTO_OK = location.protocol === 'https:'; // 公開したページならいつも調べる（サーバー側で kotetsuworks.com などだけ受け付ける）
 const pending = new Set(), failed = new Map();
 if (!S.auto) S.auto = {};      // 検索の答え：{ 'A→B|日付|種類|時刻': { routes:[...], at } }
 if (!S.places) S.places = {};  // いつもの行き方：{ 場所: { in:{st,min,how}, out:{st,min,how} } }
@@ -97,7 +97,7 @@ async function autoFill(list) {
         const old = Date.now() - 14 * 864e5;
         Object.keys(S.auto).forEach((x) => { if (S.auto[x].at < old) delete S.auto[x]; });
         save();
-      } else failed.set(k, j.error || r.status);
+      } else failed.set(k, j.error || ('http' + r.status));
     } catch (e) { failed.set(k, 'network'); }
     pending.delete(k); render();
   }
@@ -216,7 +216,10 @@ function render() {
     const money = b.state === 'auto' ? (S.pass ? `・定期外 ${b.pay.toLocaleString()}円` : (b.price ? `・${esc(b.price)}円` : '')) : '';
     if (b.leave != null) head = `<span class="t">${toHM(b.leave)} 出発</span> → ${toHM(b.arrive)} 着（${dur(b.min)}${money}）`;
     else if (b.state === 'loading') head = '<span class="sub">乗りかえをしらべています…</span>';
-    else if (b.state === 'failed') head = '<span class="warn">自動でしらべられませんでした</span>';
+    else if (b.state === 'failed') {
+      const why = { daily_limit: '今日の検索の回数をこえました', no_route: '行き方が見つかりませんでした（場所の名前を駅名にすると見つかりやすいです）', upstream: 'Yahoo!から答えがありませんでした', network: 'ネットにつながりませんでした', http403: 'このページからは調べられません' }[failed.get(b.k)] || ('うまくいきませんでした：' + failed.get(b.k));
+      head = `<span class="warn">自動でしらべられませんでした</span><div class="sub">${esc(why)}</div>`;
+    }
     else head = '<span class="warn">移動時間がまだわかりません</span>';
     if (b.leave != null && b.state === 'loading') head += ' <span class="sub">しらべ中…</span>';
     const late = b.target != null && b.arrive != null && b.arrive > b.target ? `<div class="warn">⚠ ${b.arrive - b.target}分 おくれます</div>` : '';
@@ -225,9 +228,10 @@ function render() {
     const steps = lines.length ? `<ol class="steps">${lines.map((s) => `<li>${esc(s)}</li>`).join('')}</ol>` : '';
     const shift = b.state === 'auto' ? `<button type="button" data-next="${esc(b.id)}" data-t="${esc(b.train)}">1本あと</button>` : '';
     const now = isToday && b.fromSt !== b.toSt ? `<button type="button" data-now="${esc(b.id)}" data-out="${b.outMin}">いまから出る</button>` : '';
+    const retry = b.state === 'failed' ? `<button type="button" data-retry="${esc(b.k)}">もう一度しらべる</button>` : '';
     const back = b.ovr ? `<button type="button" data-back="${esc(b.id)}">もとにもどす</button>` : '';
     return `<div class="blk mv"><div>🚃 ${head}</div><div class="sub">${esc(b.P)} → ${esc(b.Q)}</div>${late}${note}${steps}` +
-      `<div class="acts">${shift}${now}${back}` +
+      `<div class="acts">${retry}${shift}${now}${back}` +
       (b.fromSt !== b.toSt ? `<a href="${esc(yahooUrl(b.fromSt, b.toSt, day, b.time, b.type))}" target="_blank" rel="noopener"><button type="button">Yahoo!で見る</button></a>` : '') +
       `<button type="button" data-place="${esc(b.home ? b.P : b.Q)}">行き方</button>` +
       (b.fromSt !== b.toSt ? `<button type="button" data-mv="1" data-from="${esc(b.fromSt)}" data-to="${esc(b.toSt)}">${b.learned || b.state === 'auto' ? '直す' : '時間を入れる'}</button>` : '') +
@@ -329,6 +333,8 @@ $('list').addEventListener('click', (ev) => {
   if (nx) { S.ovr[day + '|' + nx.dataset.next] = { time: pad(toHM(toMin(nx.dataset.t) + 1)) }; save(); render(); return; }
   const nw = ev.target.closest('[data-now]');
   if (nw) { const d = new Date(); S.ovr[day + '|' + nw.dataset.now] = { time: pad(toHM(d.getHours() * 60 + d.getMinutes() + Number(nw.dataset.out || 0))) }; save(); render(); return; }
+  const rt = ev.target.closest('[data-retry]');
+  if (rt) { failed.delete(rt.dataset.retry); render(); return; }
   const bk = ev.target.closest('[data-back]');
   if (bk) { delete S.ovr[day + '|' + bk.dataset.back]; save(); render(); return; }
   const pl = ev.target.closest('[data-place]');

@@ -2,7 +2,8 @@
 // 守り方：kotetsuworks.com からだけ受け付ける／1日の回数に上限／同じ検索はしばらく覚えて使い回す
 import { parseYahoo } from './parse.js';
 
-const ALLOW = ['https://kotetsuworks.com', 'https://www.kotetsuworks.com'];
+// kotetsuworks.com と、同じサイトの Cloudflare Pages のアドレス（kotetsuworks.pages.dev とその下）
+const ALLOW_RE = /^https:\/\/(www\.)?kotetsuworks\.com$|^https:\/\/([a-z0-9-]+\.)?kotetsuworks\.pages\.dev$/;
 const DAILY_MAX = 120;          // 1日に Yahoo! を見に行く回数の上限（1回の検索で「早い順」「安い順」の2回）
 const CACHE_MS = 30 * 60 * 1000; // 同じ検索を覚えておく時間
 const cache = new Map<string, { at: number; body: string }>();
@@ -21,7 +22,7 @@ const json = (o: unknown, status: number, origin: string) =>
 
 Deno.serve(async (req) => {
   const origin = req.headers.get('Origin') || '';
-  if (!ALLOW.includes(origin)) return new Response('forbidden', { status: 403 });
+  if (!ALLOW_RE.test(origin)) return new Response('forbidden', { status: 403 });
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors(origin) });
   if (req.method !== 'GET') return json({ error: 'method' }, 405, origin);
 
