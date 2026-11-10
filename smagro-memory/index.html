@@ -145,6 +145,7 @@ body { margin: 0; }
   <div class="win">
     <h1>スマグロ さいてきか</h1>
     <div class="sub">メモリと そうびの いちばん強い くみあわせを さがします</div>
+    <div class="sub" id="cloud" style="margin-top:4px;font-size:12px"></div>
   </div>
   <nav class="win" aria-label="コマンド">
     <span class="tag">コマンド</span>
@@ -154,13 +155,20 @@ body { margin: 0; }
 </div>
 <div class="sheet" id="sheet" hidden></div>
 
-<script src="engine.js?v=20261110a"></script>
+<script src="engine.js?v=20261110c"></script>
 <script>
-const V = '20261110a'; window.APP_V = V;  // 版。ファイルを変えたら あげる（iPhone が 古いファイルを 使いつづけないように）
-fetch('data.json', { cache: 'no-cache' }).then(r => r.json()).then(D => {
+const V = '20261110c'; window.APP_V = V;  // 版。ファイルを変えたら あげる（iPhone が 古いファイルを 使いつづけないように）
+// データは 毎日 GitLab の作業が Supabase の公開バケットに置く。読めなければ サイトに入っている data.json を使う
+const BUCKET = 'https://zmteazudhtnzvfvmndqn.supabase.co/storage/v1/object/public/smagro/';
+const getJ = u => fetch(u, { cache: 'no-cache' }).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); });
+Promise.all([getJ(BUCKET + 'data.json').catch(() => null), getJ('data.json').catch(() => null)]).then(([B, L]) => {
+  const useB = B && (!L || B.updated >= L.updated);
+  const D = useB ? B : L; if (!D) throw new Error('no data');
+  window.DATA_BASE = useB ? BUCKET : '';   // feats.json も 同じ ところから 読む
+
   window.DATA_UPDATED = D.updated;
   initData(D);
-  for (const f of ['ui.js', 'scan.js', 'pip.js']) { const s = document.createElement('script'); s.src = f + '?v=' + V; s.async = false; document.body.appendChild(s); }
+  for (const f of ['ui.js', 'scan.js', 'pip.js', 'cloud.js']) { const s = document.createElement('script'); s.src = f + '?v=' + V; s.async = false; document.body.appendChild(s); }
 }).catch(() => { document.getElementById('view').innerHTML = '<div class="win">データを よみこめませんでした。つうしんを たしかめて ひらきなおしてください。</div>'; });
 </script>
 </body>

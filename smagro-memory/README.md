@@ -7,14 +7,28 @@
 - `ui.js` … 画面の操作。サブ（2・3人目）は はじめ「こうげき力＋こうげき魔力」を たいせつにする設定。入力した持ち物は、その端末のブラウザに保存されます
 - `scan.js` … ゲームの「もちもの」一覧のスクショから持ち物を登録する。AIは使わず、名前の帯を目じるしにアイコンを切り出し、`feats.json` の特徴と見くらべる。名前の帯の文字も Tesseract.js（スマホの中で動く文字読み取り。初回だけ部品をダウンロード）で読み、絵と文字の両方で決める。メモリはランクの文字の色、装備は Lv（黄色い文字）と凸（△の右の数字。1〜5の形の見本と見くらべ）も読む。スクショはスマホの外に出さない
 - `feats.json` … アイコンを見分けるための特徴（絵そのものではなく小さな数字の並び）。`tools/iconfeat.py` で作る。計算は `scan.js` と同じにすること
+- `cloud.js` … KOTETSU WORKS アカウント（入口でログイン）に持ち物を保存。どの端末でも同じ持ち物になる。サーバーは Supabase の kw_data_get / kw_data_put（study-room-beta/supabase/028）。ほかの端末と食いちがった時はどちらを使うか聞く
 - `pip.js` … 「うかぶメモ」。結果を動画にして、ピクチャ・イン・ピクチャでゲームの上に浮かべる
 - `data.json` … メモリ・そうび・ボスのデータ（絵は GameWith の画像の場所を入れていて、見えている分だけ読む）（自動で作られます。手で直さない）
 - `icon.svg` / `*.png` / `manifest.webmanifest` … アイコン（ドット絵の剣・▶・メモリの宝石）とホーム画面用の設定
 - `tools/update.py` … GameWith からデータを集めて `data.json` を作り直します（GameWith から公開・自動収集の許可あり）
+- `tools/ci_update.py` … GitLab の毎日の作業から動かす（下の「データの毎日の更新」）
+- `server/smagro-upload.ts` … データをバケットに置く Supabase の Edge Function（公開はされない。Supabase に入れて使う）
 - `tools/iconfeat.py` … アイコンの特徴の作り方
 - `tools/cache.json` … くわしいページの読み取り結果。毎日、新しいページと古いもの30件だけ読み直して、相手の負担を小さくしています
 
-`.github/workflows/smagro-update.yml` が毎日 日本時間4時ごろに `update.py` を動かし、変わっていたら自動でコミットします。手で動かすときは GitHub の Actions 画面で「スマグロ データ更新」→「Run workflow」。
+## データの毎日の更新（2026-11-10〜）
+
+GitHub が止まったので、GitLab で動かす。サイトの公開とは別に動く。
+
+1. GitLab の「予定（Pipeline schedules）」が毎日 日本時間4時ごろ、変数 `SMAGRO_UPDATE=1` を付けて作業を動かす（`.gitlab-ci.yml` の `smagro-update`）
+2. `tools/ci_update.py` が、Supabase の公開バケット `smagro` からきのうの data.json・feats.json・cache.json を取り、`update.py` で集め直す（新しいページと古い30件だけ）
+3. 3つのファイルを Edge Function `smagro-upload`（`server/smagro-upload.ts`）に送る。鍵は使わず、GitLab が作業ごとに出す ID トークンを確かめる（このリポジトリの予定・手動実行だけ通す）
+4. ページ（index.html）はバケットの data.json を先に読む。読めない・サイトの方が新しい時は、サイトに入っている data.json を使う
+
+手で動かすとき：GitLab の Build → Pipeline schedules →「スマグロ データ更新」の ▶。
+`server/` の Edge Function を変えたら、Supabase の Management API（functions/deploy?slug=smagro-upload・verify_jwt false）で入れ直す。
+サイトに入っている data.json は、ときどき手で `python3 tools/update.py` して新しくしておく（バケットが読めない時の予備）。
 
 ## 計算のめやす
 

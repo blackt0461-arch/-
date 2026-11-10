@@ -14,7 +14,7 @@ const Scan = (() => {
 
   async function loadFeats() {
     if (FE) return FE;
-    const js = await (await fetch('feats.json', { cache: 'no-cache' })).json();
+    const js = await (await fetch((window.DATA_BASE || '') + 'feats.json', { cache: 'no-cache' })).json();
     FE = { n: js.n, blur: js.blur, baseW: js.base_w, m: [], e: [] };
     for (const [id, b64] of Object.entries(js.items)) {
       if (!ITEMS[id]) continue;
