@@ -111,6 +111,14 @@ async function autoFill(list) {
 if (!S.ttHide) S.ttHide = {};
 function ttEvents(date) {
   const T = S.tt;
+  // 授業リマインダーから読んだ「実際に授業がある日」（休み・休講・補講を入れたもの）があれば、それを使う
+  if (T && Array.isArray(T.sessions)) {
+    return T.sessions.filter((x) => x.date === date && !S.ttHide[date + '|' + x.start]).map((x) => ({
+      id: 'tt-' + date + '-' + x.start, tt: x.start, exam: x.test || '',
+      name: `${x.subject}${x.room ? `（${x.room}）` : ''}${x.test ? `・${x.test}` : ''}${x.extra ? '・補講' : ''}`,
+      start: x.start, end: x.end, place: T.place,
+    }));
+  }
   if (!T || !T.term || date < T.term.start || date > T.term.end || (T.off || []).includes(date)) return [];
   const wd = new Date(date + 'T00:00').getDay();
   // 第何回か：学期の初めからその曜日を数える（休みの日は数えない）
@@ -724,6 +732,13 @@ setInterval(() => { if ($('tab-today').classList.contains('on') && !document.que
 function drawTT() {
   const T = S.tt;
   $('ttInfo').textContent = T && T.term ? `${+T.term.start.slice(5, 7)}/${+T.term.start.slice(8)}〜${+T.term.end.slice(5, 7)}/${+T.term.end.slice(8)}・${(T.classes || []).length}コマ` : 'まだありません';
+  if (T && Array.isArray(T.sessions)) {
+    const up = T.sessions.filter((x) => x.date >= today()).slice(0, 40);
+    $('ttInfo').textContent = `${T.name || ''} 授業リマインダーから（${(T.at || '').slice(5, 10).replace('-', '/')}）`;
+    $('ttList').innerHTML = `<p class="sub">学期：${esc(T.term.start)}〜${esc(T.term.end)}。毎日、授業リマインダーから写しています。</p>` +
+      up.map((x) => `<div class="ttrow"><b>${+x.date.slice(5, 7)}/${+x.date.slice(8)}</b><span><span class="t">${hm(x.start)}</span> ${esc(x.subject)}${x.test ? ` <span class="tag">${esc(x.test)}</span>` : ''}${x.extra ? ' <span class="sub">補講</span>' : ''}</span></div>`).join('');
+    return;
+  }
   if (!T || !T.classes) { $('ttList').innerHTML = '<p class="sub">まだ時間割がありません。</p>'; return; }
   const wds = '日月火水木金土';
   $('ttList').innerHTML = (T.term ? `<p class="sub">学期：${esc(T.term.start)}〜${esc(T.term.end)}${(T.off || []).length ? `・休み ${T.off.length}日` : ''}</p>` : '') +
