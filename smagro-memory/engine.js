@@ -8,7 +8,6 @@ const PARTS = ['盾', '頭防具', '上防具', '下防具'];
 const ACC_SLOTS = 2;   // アクセサリーは 2つ つけられる
 const RANKF = { S: 1, A: 0.8, B: 0.65, C: 0.5, D: 0.4 };
 const COLOR_BONUS = 1.2;
-const TOKUI_BONUS = 40;      // 得意武器を持つと こうげき力（呪文の武器なら こうげき魔力）＋40 のめやす（本人に聞いた 2026-11-10）
 const BASE_CRIT = 5;          // 会心の基本率(%)のめやす
 const CRIT_EXTRA = 0.5;       // 会心で +50% のめやす
 const WEAKMUL = { 超弱: 1.7, 弱点: 1.5, 耐性: 0.5, 無効: 0, 吸収: 0 };
@@ -52,7 +51,8 @@ function initData(D) {
   for (const e of D.equip) {
     const kind = e.cat;
     const it = { kind, id: e.id, n: e.n, t: kind === 'w' ? e.t : (kind === 'c' ? 'アクセ' : e.t), el: e.el || '', rar: e.rar, img: e.img || '', get: e.get || '' };
-    it.maxLv = kind === 'w' ? 50 : (kind === 'a' ? 25 : 1);
+    // 凸なしの 最大レベル（GameWith の「最大値」は このレベルの数字）。レア度で ちがう。凸で 上限が 上がった分は 同じ伸びで のばす めやす
+    it.maxLv = kind === 'w' ? ({ 3: 50, 2: 40, 1: 30 }[e.rar] || 50) : (kind === 'a' ? ({ 3: 25, 2: 20, 1: 15 }[e.rar] || 25) : 1);
     const sm = e.stat || {};
     const pick = k => sm[k] || [0, 0];
     it.base = kind === 'w' ? { atk: pick('攻撃'), matk: pick('攻撃魔力'), heal: pick('回復魔力') } : kind === 'a' ? { def: pick('守備'), mdef: pick('呪文守備'), heal: pick('回復魔力') } : {};
@@ -155,7 +155,6 @@ function searchChar(o) {
       cands[s] = [null, ...o.eqAvail(k).map(x => ({ ...x, V: eqVec(x.it, ctx, x.lv, x.t), sk: skillsOf(x.it, x.lv, x.t) }))];
     }
     const WV = wi ? eqVec(wi, ctx, W.lv, W.t) : new Float64Array(NV);
-    if (ctx.tokui) WV[ctx.type === 'phys' ? 1 : 2] += TOKUI_BONUS;
     const Wsk = wi ? skillsOf(wi, W.lv, W.t) : [];
     const slots = o.slots;
     const memC = o.memAvail.map(x => ({ m: x.m, rank: x.rank, ct: x.m.ct, Vm: memVec(x.m, ctx, true, x.rank), Vp: memVec(x.m, ctx, false, x.rank), sk: skillsOf(x.m) }));

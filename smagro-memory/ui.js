@@ -132,7 +132,7 @@ function vParty() {
       ${main ? `<div class="grid2">
         <label class="f">もとの こうげき力<input id="ba${i}" type="number" inputmode="numeric" min="0" value="${esc(p.base.atk)}" data-act="base" data-k="atk" data-i="${i}"></label>
         <label class="f">もとの こうげき魔力<input id="bm${i}" type="number" inputmode="numeric" min="0" value="${esc(p.base.matk)}" data-act="base" data-k="matk" data-i="${i}"></label></div>
-        <div class="note">そうびと メモリを ぜんぶ外したときの ステータスの数字です。物理と呪文の どちらの武器が よいかに かかわるので、なるべく 入れてください（得意武器の ＋40 は 入れなくて よい）。</div>
+        <div class="note">そうびと メモリを ぜんぶ外したときの ステータスの数字です。物理と呪文の どちらの武器が よいかに かかわるので、なるべく 入れてください（得意武器の ぶんは 入れなくて よい）。</div>
         <label class="f">武器を こていする<select id="fixw" data-act="fixw"><option value="">じどうで えらぶ</option>${ownedEq().filter(x => x.it.kind === 'w').map(x => `<option value="${x.it.id}" ${S.fixW === x.it.id ? 'selected' : ''}>${esc(x.it.n)}</option>`).join('')}</select></label>
         <div><div class="note" style="margin-bottom:4px">かならず ほしい 冒険スキル（えらぶと それを持つ そうびか メモリを 入れます）</div>
         <div class="row">${S.need.map(s => `<button class="chip on" data-act="needdel" data-s="${esc(s)}">${esc(s)} ✕</button>`).join('')}
@@ -260,7 +260,7 @@ function vResultBody() {
     ${!r.skillOK ? '<div class="banner" style="margin-top:8px">かならず ほしい 冒険スキルを 入れられませんでした。もっている そうびか メモリを 見なおしてください。</div>' : ''}
     <div style="margin-top:10px">${loadout(r, M.p)}</div>
     <h2 style="margin-top:12px">火力の うちわけ</h2>
-    <div class="calc"><span>こうげき${r.ctx.type === 'phys' ? '力' : '魔力'}（もと＋そうび＋メモリ${r.ctx.tokui ? '＋得意武器' + TOKUI_BONUS : ''}）</span><span>${fmt(pt.base)}</span>
+    <div class="calc"><span>こうげき${r.ctx.type === 'phys' ? '力' : '魔力'}（もと＋そうび＋メモリ）</span><span>${fmt(pt.base)}</span>
       <span>${typ}ダメージ</span><span>×${pt.mAll.toFixed(2)}</span>
       <span>${esc(r.ctx.el || '無')}ぞくせいダメージ</span><span>×${pt.mEl.toFixed(2)}</span>
       <span>${R.enemy.fam ? esc(R.enemy.fam) + '・あいてへの とっこう' : 'とっこう（けいとうが わからないので なし）'}</span><span>×${pt.mFam.toFixed(2)}</span>

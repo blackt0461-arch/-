@@ -155,9 +155,9 @@ body { margin: 0; }
 </div>
 <div class="sheet" id="sheet" hidden></div>
 
-<script src="engine.js?v=20261110c"></script>
+<script src="engine.js?v=20261110d"></script>
 <script>
-const V = '20261110c'; window.APP_V = V;  // 版。ファイルを変えたら あげる（iPhone が 古いファイルを 使いつづけないように）
+const V = '20261110d'; window.APP_V = V;  // 版。ファイルを変えたら あげる（iPhone が 古いファイルを 使いつづけないように）
 // データは 毎日 GitLab の作業が Supabase の公開バケットに置く。読めなければ サイトに入っている data.json を使う
 const BUCKET = 'https://zmteazudhtnzvfvmndqn.supabase.co/storage/v1/object/public/smagro/';
 const getJ = u => fetch(u, { cache: 'no-cache' }).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); });
