@@ -4,12 +4,13 @@
 # ・Cloudflare 側でビルドしない「直接アップロード」なので、Cloudflare の月500回のビルド回数は使わない。
 # ・鍵は GitLab の CI 変数 CLOUDFLARE_API_TOKEN（Pages Edit だけ）。ここには書かない。
 #   変数を Protected にした時は、タグ「deploy-*」も Protected tags に登録しておく（でないと鍵が渡らない）。
-# ・スマグロ さいてきか のデータ更新：GitLab の「予定（Pipeline schedules）」で 変数 SMAGRO_UPDATE=1 を付けて毎日動かす。
+# ・スマグロ さいてきか のデータ更新：GitLab の「予定（Pipeline schedules）」から動いた時だけ動く（予定の ▶ で手動でも）。
+#   新しい画面には変数の欄がないので、変数は使わない（2026-11-10）。
 #   集めたデータは Supabase の公開バケット smagro に置く（サイトの公開はしない）。くわしくは smagro-memory/README.md。
 workflow:
   rules:
     - if: '$CI_COMMIT_TAG =~ /^deploy-/'
-    - if: '$SMAGRO_UPDATE == "1" && ($CI_PIPELINE_SOURCE == "schedule" || $CI_PIPELINE_SOURCE == "web")'
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
     - when: never
 
 publish:
@@ -27,7 +28,7 @@ publish:
 
 smagro-update:
   rules:
-    - if: '$SMAGRO_UPDATE == "1"'
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
   image: python:3.12-slim
   id_tokens:
     SMAGRO_ID_TOKEN:

@@ -21,7 +21,7 @@
 
 GitHub が止まったので、GitLab で動かす。サイトの公開とは別に動く。
 
-1. GitLab の「予定（Pipeline schedules）」が毎日 日本時間4時ごろ、変数 `SMAGRO_UPDATE=1` を付けて作業を動かす（`.gitlab-ci.yml` の `smagro-update`）
+1. GitLab の「予定（Pipeline schedules）」が毎日 日本時間4:17 に作業を動かす（予定から動いた時だけ smagro-update が動く。変数はいらない）（`.gitlab-ci.yml` の `smagro-update`）
 2. `tools/ci_update.py` が、Supabase の公開バケット `smagro` からきのうの data.json・feats.json・cache.json を取り、`update.py` で集め直す（新しいページと古い30件だけ）
 3. 3つのファイルを Edge Function `smagro-upload`（`server/smagro-upload.ts`）に送る。鍵は使わず、GitLab が作業ごとに出す ID トークンを確かめる（このリポジトリの予定・手動実行だけ通す）
 4. ページ（index.html）はバケットの data.json を先に読む。読めない・サイトの方が新しい時は、サイトに入っている data.json を使う
