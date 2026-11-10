@@ -105,7 +105,7 @@ async function autoFill(list) {
 
 // ---- 1日の流れを組み立てる ----
 // P から Q への移動。type '4'＝time までに着く、'1'＝time 以降に出る（time は駅での時刻）
-function moveInfo(id, P, Q, base, hurry, minLeave) {
+function moveInfo(id, P, Q, base, hurry, minLeave, target) {
   const buf = Number(S.buffer || 0);
   const out = (S.places[P] || {}).out, inn = (S.places[Q] || {}).in;
   const fromSt = norm((out && out.st) || P), toSt = norm((inn && inn.st) || Q);
@@ -114,7 +114,7 @@ function moveInfo(id, P, Q, base, hurry, minLeave) {
   let type = base.type, time = base.type === '4' ? toHM(toMin(base.time) - inMin) : toHM(toMin(base.time) + outMin);
   if (o) { type = '1'; time = o.time; }
   time = pad(time);
-  const m = { id, P, Q, fromSt, toSt, out, inn, outMin, inMin, type, time, ovr: !!o, hurry, target: base.type === '4' ? toMin(base.time) : null };
+  const m = { id, P, Q, fromSt, toSt, out, inn, outMin, inMin, type, time, ovr: !!o, hurry, target: target ?? null };
   const clampLeave = (v) => (type === '1' && minLeave != null ? Math.max(minLeave, v) : v);
   if (fromSt === toSt) { // 駅を使わない（歩くだけ など）
     m.state = 'walk'; m.min = outMin + inMin;
@@ -157,7 +157,9 @@ function buildDay(evs) {
     const from = norm(prevPlace), to = norm(e.place);
     let mv = null;
     if (from && to && from !== to) {
-      mv = moveInfo('ev:' + e.id, from, to, { type: '4', time: e.start }, !!e.hurry, prevEnd);
+      // 「できるだけ早く」：前の予定が終わったら、いちばん早く着く行き方
+      const base = e.asap && prevEnd != null ? { type: '1', time: toHM(prevEnd) } : { type: '4', time: e.start };
+      mv = moveInfo('ev:' + e.id, from, to, base, !!e.hurry, prevEnd, toMin(e.start));
       addMove(mv);
     }
     // すき間：前の予定の終わりから、移動の出発（または次の予定）まで
@@ -165,7 +167,7 @@ function buildDay(evs) {
       const until = mv && mv.leave != null ? mv.leave : toMin(e.start);
       const gap = until - prevEnd;
       if (gap >= 10) out.push({ kind: 'gap', from: prevEnd, to: until, min: gap });
-      else if (gap < 0 && !(mv && mv.ovr)) out.push({ kind: 'late', min: -gap, before: e.name });
+      else if (gap < 0 && !(mv && (mv.ovr || mv.type === '1'))) out.push({ kind: 'late', min: -gap, before: e.name });
     }
     if (mv) out.push({ kind: 'move', ...mv });
     out.push({ kind: 'ev', e });
@@ -199,7 +201,7 @@ function render() {
   const parts = buildDay(evs).map((b) => {
     if (b.kind === 'ev') {
       const e = b.e;
-      return `<div class="blk ev" data-ev="${e.id}"><div><span class="t">${e.start}〜${e.end}</span> ${esc(e.name)}${e.hurry ? ' <span class="tag">急ぎ</span>' : ''}</div>` +
+      return `<div class="blk ev" data-ev="${e.id}"><div><span class="t">${e.start}〜${e.end}</span> ${esc(e.name)}${e.hurry ? ' <span class="tag">急ぎ</span>' : ''}${e.asap ? ' <span class="tag">早めに着く</span>' : ''}</div>` +
         `<div class="sub">${e.place ? '📍 ' + esc(e.place) : '場所なし'}</div></div>`;
     }
     if (b.kind === 'gap') {
@@ -245,12 +247,13 @@ function openEv(e) {
   $('evEnd').value = e ? e.end : '';
   $('evPlace').value = e ? e.place : '';
   $('evHurry').checked = !!(e && e.hurry);
+  $('evAsap').checked = !!(e && e.asap);
   $('evDel').style.display = e ? '' : 'none';
   $('evDlg').showModal();
 }
 $('evDlg').addEventListener('close', () => {
   if ($('evDlg').returnValue !== 'ok') return;
-  const v = { name: $('evName').value.trim(), start: $('evStart').value, end: $('evEnd').value, place: norm($('evPlace').value), hurry: $('evHurry').checked };
+  const v = { name: $('evName').value.trim(), start: $('evStart').value, end: $('evEnd').value, place: norm($('evPlace').value), hurry: $('evHurry').checked, asap: $('evAsap').checked };
   if (!v.name || !v.start || !v.end) return;
   if (toMin(v.end) < toMin(v.start)) v.end = v.start;
   const arr = S.days[day] || (S.days[day] = []);
@@ -272,8 +275,11 @@ function parseLines(text) {
   for (let line of text.split(/\r?\n/)) {
     line = line.replace(/[０-９：＠！]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)).trim();
     if (!line) continue;
-    let hurry = false;
-    if (/(急ぎ|いそぎ|!)\s*$/.test(line)) { hurry = true; line = line.replace(/(急ぎ|いそぎ|!)\s*$/, '').trim(); }
+    let hurry = false, asap = false;
+    for (let k = 0; k < 2; k++) {
+      if (/(急ぎ|いそぎ|!)\s*$/.test(line)) { hurry = true; line = line.replace(/(急ぎ|いそぎ|!)\s*$/, '').trim(); }
+      if (/(早めに?|はやめに?)\s*$/.test(line)) { asap = true; line = line.replace(/(早めに?|はやめに?)\s*$/, '').trim(); }
+    }
     let start, end, rest;
     const pm = line.match(/^(\d)\s*(?:[-〜~ー–]\s*(\d))?\s*限\s*(.*)$/); // 「1限」「1-5限」
     if (pm && periodTime(+pm[1])) {
@@ -292,7 +298,7 @@ function parseLines(text) {
     const at = rest.match(/[@＠](.+)$/) || rest.match(/[（(]([^）)]+)[）)]\s*$/);
     if (at) { place = at[1].trim(); rest = rest.slice(0, at.index).trim(); }
     if (!end) end = toHM(toMin(start) + 60).padStart(5, '0');
-    out.push({ name: rest.trim() || '予定', start, end, place: norm(place), hurry });
+    out.push({ name: rest.trim() || '予定', start, end, place: norm(place), hurry, asap });
   }
   return out;
 }

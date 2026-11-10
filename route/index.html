@@ -95,13 +95,14 @@ select{font:inherit;padding:8px;border:1px solid var(--line);border-radius:8px;b
     <div><label>おわり</label><input type="time" id="evEnd" required></div></div>
   <label>場所（駅名や施設名）</label><div class="sw"><input id="evPlace" autocomplete="off" placeholder="例：梅田、大阪大学 豊中キャンパス"></div>
   <label class="chk"><input type="checkbox" id="evHurry"> 急ぎ（お金より速さを優先）</label>
+  <label class="chk"><input type="checkbox" id="evAsap"> できるだけ早く着く（前の予定のあとすぐ向かう）</label>
   <div class="dact"><button type="button" id="evDel" class="warn">消す</button><button value="cancel">やめる</button><button class="main" value="ok">保存</button></div>
 </form></dialog>
 
 <dialog id="pasteDlg"><form method="dialog">
   <h2>文字から入れる</h2>
   <p class="sub" style="margin:0">1行に1つの予定。時刻・名前・場所（@のあと）を書きます。</p>
-  <p class="sub" style="margin:4px 0">例）<br>1-5限 授業 @立命館大学 BKC<br>13時〜17時 バイト @なんば<br>19:00 夕ご飯 @須磨 急ぎ</p>
+  <p class="sub" style="margin:4px 0">例）<br>1-5限 授業 @立命館大学 BKC<br>13時〜17時 バイト @なんば<br>19:00 夕ご飯 @須磨 急ぎ<br>20:30-22:30 部活 @京都アクアアリーナ 早め</p>
   <textarea id="pasteText"></textarea>
   <div class="dact"><button value="cancel">やめる</button><button class="main" value="ok">読み取る</button></div>
 </form></dialog>
