@@ -543,6 +543,52 @@ $('meetList').addEventListener('click', (ev) => {
   const k = ev.target.closest('[data-skip]'); if (k) setMeet(k.dataset.skip, 'skip');
 });
 
+// ---- カレンダー（月の表＋これからの予定）----
+// 同じ場所で続く予定（あいだ60分まで）は1つにまとめる。大学の授業なら「大学 9:00〜18:15」。
+function blocksOf(date) {
+  const list = (S.days[date] || []).slice().sort((a, b) => toMin(a.start) - toMin(b.start));
+  const out = [];
+  for (const e of list) {
+    const last = out[out.length - 1];
+    if (last && !e.meet && !last.meet && e.place && e.place === last.place && toMin(e.start) - toMin(last.end) <= 60) {
+      last.end = toMin(e.end) > toMin(last.end) ? e.end : last.end; last.n++;
+    } else out.push({ start: e.start, end: e.end, place: e.place, name: e.name, meet: !!e.meet, n: 1 });
+  }
+  return out.map((b) => {
+    let label = b.name.replace(/（.*?）/g, '');
+    if (/大学|キャンパス|BKC/.test(b.place || '') && (b.n > 1 || /限/.test(b.name))) label = '大学';
+    else if (/部活|練習/.test(b.name)) label = '部活';
+    const kind = b.meet ? 'meet' : label === '部活' ? 'club' : '';
+    return { ...b, label, kind };
+  });
+}
+let calMonth = null;
+function drawCal() {
+  const [y, m] = calMonth;
+  $('calTitle').textContent = `${y}年${m}月`;
+  const first = new Date(y, m - 1, 1), start = new Date(first); start.setDate(1 - first.getDay());
+  const t = today();
+  let h = '日月火水木金土'.split('').map((w, i) => `<div class="wd${i === 0 ? ' su' : ''}">${w}</div>`).join('');
+  for (let i = 0; i < 42; i++) {
+    const d = new Date(start); d.setDate(start.getDate() + i);
+    const k = ymd(d);
+    if (i >= 35 && d.getMonth() !== m - 1) break;
+    const chips = blocksOf(k).slice(0, 3).map((b) => `<span class="chip ${b.kind}">${esc(b.kind === 'meet' ? '大会' : b.label)}</span>`).join('');
+    h += `<div class="cd${d.getMonth() !== m - 1 ? ' out' : ''}${k === t ? ' today' : ''}${d.getDay() === 0 ? ' su' : ''}" data-go="${k}"><span class="n">${d.getDate()}</span>${chips}</div>`;
+  }
+  $('calGrid').innerHTML = h;
+  // これからの予定（今日から先、予定のある日を30日ぶん）
+  const days = Object.keys(S.days).filter((k) => k >= t && S.days[k].length).sort().slice(0, 30);
+  const wd = (s2) => '日月火水木金土'[new Date(s2 + 'T00:00').getDay()];
+  $('agenda').innerHTML = days.length ? days.map((k) => `<div class="agday" data-go="${k}"><b>${+k.slice(5, 7)}/${+k.slice(8)}(${wd(k)})</b>` +
+    blocksOf(k).map((b) => `<div class="it">${b.start}〜${b.end}　${esc(b.label)}${b.kind === 'meet' ? '' : b.place && b.label !== '大学' ? ' <span class="sub">@' + esc(b.place) + '</span>' : ''}</div>`).join('') + '</div>').join('')
+    : '<p class="sub">これからの予定はありません。</p>';
+}
+$('calBtn').onclick = () => { const d = new Date(day + 'T00:00'); calMonth = [d.getFullYear(), d.getMonth() + 1]; drawCal(); $('calDlg').showModal(); };
+$('calPrev').onclick = () => { calMonth = calMonth[1] === 1 ? [calMonth[0] - 1, 12] : [calMonth[0], calMonth[1] - 1]; drawCal(); };
+$('calNext').onclick = () => { calMonth = calMonth[1] === 12 ? [calMonth[0] + 1, 1] : [calMonth[0], calMonth[1] + 1]; drawCal(); };
+$('calDlg').addEventListener('click', (ev) => { const g = ev.target.closest('[data-go]'); if (g) { day = g.dataset.go; $('calDlg').close(); render(); } });
+
 drawMeetBtn();
 render();
 if (!S.home) setTimeout(() => $('homeBtn').click(), 300);

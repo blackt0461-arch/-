@@ -76,6 +76,23 @@ select{font:inherit;padding:8px;border:1px solid var(--line);border-radius:8px;b
 .meet .acts{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap}
 .meet .acts button{font-size:14px;padding:4px 10px}
 .meet .acts button.on{background:var(--main);color:var(--main-ink);border-color:var(--main)}
+dialog.cal{width:min(96vw,560px);max-height:92vh}
+.calhead{display:flex;align-items:center;justify-content:space-between}
+.calhead h2{margin:0}
+.calgrid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin-top:8px}
+.calgrid .wd{font-size:12px;text-align:center;color:var(--sub)}
+.calgrid .wd.su,.cd.su .n{color:var(--warn)}
+.cd{min-height:58px;border:1px solid var(--line);border-radius:8px;padding:2px 3px;font-size:11px;overflow:hidden;cursor:pointer;background:var(--card)}
+.cd.out{opacity:.35}
+.cd.today{border-color:var(--main);border-width:2px}
+.cd .n{font-weight:700;font-size:12px}
+.chip{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-radius:4px;padding:0 3px;margin-top:2px;background:var(--ev);color:var(--ink)}
+.chip.meet{background:var(--warn);color:#fff}
+.chip.club{background:var(--mv)}
+.agh{font-size:15px;margin:14px 0 4px}
+.agday{border-top:1px solid var(--line);padding:6px 0;cursor:pointer}
+.agday b{font-size:14px}
+.agday .it{font-size:14px;margin-left:8px}
 .credit{font-size:12px;color:var(--sub);margin-top:12px}
 </style>
 </head>
@@ -92,7 +109,7 @@ select{font:inherit;padding:8px;border:1px solid var(--line);border-radius:8px;b
 <main>
   <div class="home sub">家：<b id="homeName">未設定</b> <button id="homeBtn" style="font-size:13px;padding:2px 8px">変える</button>
     ・出発の余裕 <b id="bufName"></b>分</div>
-  <button id="meetBtn" class="meetbtn">🏁 大会の候補</button>
+  <div class="row"><button id="calBtn" class="meetbtn">📅 カレンダー</button><button id="meetBtn" class="meetbtn">🏁 大会の候補</button></div>
   <div id="list"></div>
   <p id="cloud" class="sub cloud"></p>
 </main>
@@ -159,7 +176,15 @@ select{font:inherit;padding:8px;border:1px solid var(--line);border-radius:8px;b
   <div class="dact"><button value="cancel">とじる</button></div>
 </form></dialog>
 
-<script src="app.js?v=10"></script>
-<script src="cloud.js?v=10"></script>
+<dialog id="calDlg" class="cal"><form method="dialog">
+  <div class="calhead"><button type="button" id="calPrev" aria-label="前の月">‹</button><h2 id="calTitle"></h2><button type="button" id="calNext" aria-label="次の月">›</button></div>
+  <div class="calgrid" id="calGrid"></div>
+  <h3 class="agh">これからの予定</h3>
+  <div id="agenda"></div>
+  <div class="dact"><button value="cancel">とじる</button></div>
+</form></dialog>
+
+<script src="app.js?v=11"></script>
+<script src="cloud.js?v=11"></script>
 </body>
 </html>
