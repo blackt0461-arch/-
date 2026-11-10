@@ -12,23 +12,23 @@
 - `data.json` … メモリ・そうび・ボスのデータ（絵は GameWith の画像の場所を入れていて、見えている分だけ読む）（自動で作られます。手で直さない）
 - `icon.svg` / `*.png` / `manifest.webmanifest` … アイコン（ドット絵の剣・▶・メモリの宝石）とホーム画面用の設定
 - `tools/update.py` … GameWith からデータを集めて `data.json` を作り直します（GameWith から公開・自動収集の許可あり）
-- `tools/ci_update.py` … GitLab の毎日の作業から動かす（下の「データの毎日の更新」）
+- `tools/daily.py` … 毎朝のデータ更新（下の「データの毎日の更新」）
 - `server/smagro-upload.ts` … データをバケットに置く Supabase の Edge Function（公開はされない。Supabase に入れて使う）
 - `tools/iconfeat.py` … アイコンの特徴の作り方
 - `tools/cache.json` … くわしいページの読み取り結果。毎日、新しいページと古いもの30件だけ読み直して、相手の負担を小さくしています
 
 ## データの毎日の更新（2026-11-10〜）
 
-GitHub が止まったので、GitLab で動かす。サイトの公開とは別に動く。
+GitHub が止まったので、Claude の予定（claude.ai の scheduled task「スマグロ データ更新」。毎朝 4:17 ごろ・この環境で新しい作業が起きる）で動かす。サイトの公開とは別に動く。
+GitLab の CI も試したが、GameWith が GitLab のサーバーからの読み取りを 403 で断るのでやめた。
 
-1. GitLab の「予定（Pipeline schedules）」が毎日 日本時間4:17 に作業を動かす（予定から動いた時だけ smagro-update が動く。変数はいらない）（`.gitlab-ci.yml` の `smagro-update`）
-2. `tools/ci_update.py` が、Supabase の公開バケット `smagro` からきのうの data.json・feats.json・cache.json を取り、`update.py` で集め直す（新しいページと古い30件だけ）
-3. 3つのファイルを Edge Function `smagro-upload`（`server/smagro-upload.ts`）に送る。鍵は使わず、GitLab が作業ごとに出す ID トークンを確かめる（このリポジトリの予定・手動実行だけ通す）
-4. ページ（index.html）はバケットの data.json を先に読む。読めない・サイトの方が新しい時は、サイトに入っている data.json を使う
+1. `tools/daily.py` が、Supabase の公開バケット `smagro` からきのうの data.json・feats.json・cache.json を取り、`update.py` で集め直す（新しいページと古い30件だけ）
+2. 合言葉（表 smagro_upload_key。study-room-beta/supabase/029。外からは読めない）を Management API で読み、Edge Function `smagro-upload`（`server/smagro-upload.ts`）に 1ファイルずつ gzip で送る（大きいと受け取り口の手前で止まる）
+3. ページ（index.html）はバケットの data.json を先に読む。読めない・サイトの方が新しい時は、サイトに入っている data.json を使う
 
-手で動かすとき：GitLab の Build → Pipeline schedules →「スマグロ データ更新」の ▶。
-`server/` の Edge Function を変えたら、Supabase の Management API（functions/deploy?slug=smagro-upload・verify_jwt false）で入れ直す。
-サイトに入っている data.json は、ときどき手で `python3 tools/update.py` して新しくしておく（バケットが読めない時の予備）。
+手で動かすとき：`python3 smagro-memory/tools/daily.py`（送るだけなら `--send`）。
+`server/` を変えたら、Supabase の Management API（functions/deploy?slug=smagro-upload・verify_jwt false）で入れ直す。
+サイトに入っている data.json は予備。ときどき新しくしておく。
 
 ## 計算のめやす
 
