@@ -138,7 +138,7 @@ h2 { font-size: 13px; color: var(--sub); margin: 26px 4px 10px; font-weight: 700
 .c7 { background: linear-gradient(135deg, #14b8a6, #22c55e); }
 
 /* 小さな道具の行 */
-.tools { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.tools { display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); gap: 10px; }
 .tool { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 12px 6px; display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; box-shadow: var(--shadow); }
 .tool svg { width: 24px; height: 24px; color: var(--acc); }
 

@@ -192,6 +192,7 @@ export function todayTarget(testKey, compute) {
 }
 // ---- テストの日を変えたとき（その日の目標も計算しなおす） ----
 export const getDate = (testKey) => ALL['dt/' + testKey]?.date || null;
+export const getDateAt = (testKey) => ALL['dt/' + testKey]?.t || 0; // テストの日を手で変えた時刻
 export function setDate(testKey, date) {
   const now = Date.now();
   ALL['tg/' + testKey + '@' + today()] = { n: null, t: now }; DIRTY.add('tg/' + testKey + '@' + today());

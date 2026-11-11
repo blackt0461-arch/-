@@ -3,7 +3,7 @@
 import * as store from './store.js';
 import * as cloud from './cloud.js';
 
-const APP_VERSION = '1.14.0';
+const APP_VERSION = '1.15.0';
 const $app = document.getElementById('app');
 let COURSES = [];
 const testCache = {};
@@ -247,7 +247,12 @@ const courseColor = (c) => COLORS[Math.max(0, COURSES.indexOf(c)) % COLORS.lengt
 // ・解いた問題は、思い出せる確率が 90% を下回ったら「復習」として出す（忘れかけたころに復習＝間隔反復）。
 // ・前日は、テストの日に 90% を下回りそうな問題を総復習。当日は忘れかけている問題だけ見直し。
 const tkey = (c, t) => c.id + '/' + t.id;
-const testDate = (c, t) => store.getDate(tkey(c, t)) || t.date;
+// テストの日：アプリで手で変えた日があればそちら。ただし courses.json の dateSince より前に変えたもの（前のテストの日）は使わない
+const testDate = (c, t) => {
+  const k = tkey(c, t), mine = store.getDate(k);
+  if (mine && t.dateSince && store.getDateAt(k) < Date.parse(t.dateSince)) return t.date;
+  return mine || t.date;
+};
 const examTime = (c, t) => { const s = testDate(c, t); return s ? new Date(s + 'T09:00:00').getTime() : null; };
 function memStats(qs, at) {
   const now = Date.now();
@@ -265,7 +270,7 @@ function plan(c, t, d) {
   const qs = d.questions;
   const ex = examTime(c, t);
   const byRecall = (a, b) => store.recall(a.key) - store.recall(b.key);
-  const unseen = qs.filter((q) => !store.seen(q.key)).sort((a, b) => !!b.focus - !!a.focus); // 出そうな問題を先に
+  const unseen = qs.filter((q) => !store.seen(q.key));
   const due = qs.filter((q) => store.seen(q.key) && store.isDue(q.key)).sort(byRecall);
   let phase, pool;
   if (dl === 0) {
@@ -351,8 +356,6 @@ async function home() {
       ${p.target ? `<div class="meter ${fin ? 'ok' : ''}"><i style="width:${Math.min(100, (p.done / p.target) * 100)}%"></i></div>` : ''}
       <button class="btn ${fin ? 'sub' : ''}" data-today="${k}">${icon(fin ? 'redo' : 'play')}${fin ? 'もっとやる（10問）' : p.dl === 0 ? '見直しをはじめる' : p.done ? '続きをやる' : '今日の分をはじめる'}</button>
     </div>`;
-    const fq = todays[k].d.questions.filter((q) => q.focus);
-    if (fq.length && p.dl <= 3) html += `<button class="row notice" data-focus="${k}"><span class="av c1">${icon('spark')}</span><div class="t"><div class="name">テストに出そうな説明問題</div><div class="meta">${fq.length}問・先生が「出す」と言っていた所</div></div><span class="arrow">${icon('next')}</span></button>`;
   });
   const ng = newGrades();
   if (ng.length) {
@@ -375,10 +378,6 @@ async function home() {
     const p = plan(x.c, x.t, x.d);
     if (p.rest > 0) startToday(x.c, x.t, x.d);
     else startQuiz(x.c, x.t, x.d, x.d.questions, { id: 'more', name: 'もっとやる', back: home }, { limit: 10 });
-  }));
-  w.querySelectorAll('[data-focus]').forEach((b) => (b.onclick = () => {
-    const x = todays[+b.dataset.focus];
-    startQuiz(x.c, x.t, x.d, x.d.questions.filter((q) => q.focus).sort((a, b) => (a.id >= 'd141' ? 0 : 1) - (b.id >= 'd141' ? 0 : 1)), { id: 'focus', name: 'テストに出そうな説明問題', back: home, keepOrder: true }, { limit: 0 });
   }));
   w.querySelectorAll('[data-c]').forEach((b) => (b.onclick = () => course(COURSES.find((c) => c.id === b.dataset.c))));
   const gb = w.querySelector('[data-grades]');
@@ -412,7 +411,6 @@ async function course(c) {
 
 // ---------- テスト：勉強のしかたを選ぶ ----------
 const MODES = [
-  { id: 'focus', name: 'テストに出そうな説明問題', desc: '先生が「出す」と言っていた所', ic: 'spark', col: 'c1', wide: true, pick: (q) => !!q.focus },
   { id: 'all', name: 'ぜんぶ混ぜる', desc: '忘れかけている問題から', ic: 'mix', wide: true, pick: () => true },
   { id: 'card', name: '単語カード', desc: '用語と意味', ic: 'cards', col: 'c2', pick: (q) => q.type === 'card' || q.type === 'fill' },
   { id: 'auto', name: '小テスト', desc: '選択・穴うめ・計算', ic: 'quiz', col: 'c3', pick: (q) => ['choice', 'fill', 'calc'].includes(q.type) },
@@ -461,7 +459,7 @@ async function testMenu(c, t) {
       <h2>道具</h2>
       <div class="tools">
         <button class="tool" data-list>${icon('list')}問題一覧</button>
-        <button class="tool" data-sheet ${d.sheet ? '' : 'disabled'}>${icon('sheet')}まとめシート</button>
+        ${d.sheet ? `<button class="tool" data-sheet>${icon('sheet')}まとめシート</button>` : ''}
         <button class="tool" data-answers>${icon('pen')}書いた答え</button>
       </div>
       ${memoryHTML(c, t, qs, lectures)}`;
@@ -480,7 +478,7 @@ async function testMenu(c, t) {
     }));
     w.querySelector('[data-date]').onchange = (e) => { store.setDate(tkey(c, t), e.target.value); testMenu(c, t); };
     const dr = w.querySelector('[data-date-reset]'); if (dr) dr.onclick = () => { store.setDate(tkey(c, t), null); testMenu(c, t); };
-    w.querySelector('[data-sheet]').onclick = () => sheet(c, t, d);
+    const sb = w.querySelector('[data-sheet]'); if (sb) sb.onclick = () => sheet(c, t, d);
     w.querySelector('[data-answers]').onclick = () => answers(c, t, d);
     w.querySelector('[data-list]').onclick = () => qlist(c, t, d);
     const lb = w.querySelector('[data-lessons]'); if (lb) lb.onclick = () => lessonList(c, t, d);
