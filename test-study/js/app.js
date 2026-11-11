@@ -3,7 +3,7 @@
 import * as store from './store.js';
 import * as cloud from './cloud.js';
 
-const APP_VERSION = '1.16.0';
+const APP_VERSION = '1.17.0';
 const $app = document.getElementById('app');
 let COURSES = [];
 const testCache = {};
