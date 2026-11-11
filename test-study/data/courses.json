@@ -1,5 +1,26 @@
 {
   "courses": [
-    { "id": "denshi1", "name": "電子回路I", "tests": [ { "id": "midterm", "name": "中間テスト", "date": "2026-11-11" } ] }
+    {
+      "id": "denshi1",
+      "name": "電子回路I",
+      "tests": [
+        {
+          "id": "midterm",
+          "name": "中間テスト",
+          "date": "2026-11-11"
+        }
+      ]
+    },
+    {
+      "id": "tsushin",
+      "name": "通信理論",
+      "tests": [
+        {
+          "id": "midterm",
+          "name": "中テスト",
+          "date": "2026-11-12"
+        }
+      ]
+    }
   ]
 }
