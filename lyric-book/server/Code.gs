@@ -9,11 +9,12 @@
 //
 // 最初に登録した人が「管理する人」。2人目からは、管理する人が決めた「招待の合言葉」がないと登録できない。
 // 新しい版のコードに貼りかえたときは、「デプロイ」→「デプロイを管理」→ えんぴつ →「新バージョン」→「デプロイ」。
+// 版6 から「LYRIC BOOK」フォルダを ID でも覚えるので、ドライブの中で別のフォルダへ動かしても大丈夫（名前は変えないでください）。
 
 const ROOT_NAME = 'LYRIC BOOK';
 const DB_NAME = 'データ（さわらないでください）.json';
 const KEEP_DAYS = 30;
-const SERVER_VERSION = 5;
+const SERVER_VERSION = 6;
 
 // ---------- はじめの準備 ----------
 function setup() {
@@ -54,7 +55,27 @@ function folder_(parent, name) {
   const it = parent.getFoldersByName(name);
   return it.hasNext() ? it.next() : parent.createFolder(name);
 }
-function root_() { return folder_(DriveApp.getRootFolder(), ROOT_NAME); }
+// 「LYRIC BOOK」フォルダは ID でも覚えておく（ドライブの中で別のフォルダへ動かしても見失わない）。
+// ID で見つからないときだけ名前で探す：マイドライブ直下 → ドライブ全体（データの入っているもの）→ なければ直下に作る。
+let rootCache_ = null;
+function root_() {
+  if (rootCache_) return rootCache_;
+  const p = PropertiesService.getScriptProperties();
+  const id = p.getProperty('LB_ROOT_ID');
+  if (id) {
+    try { const f = DriveApp.getFolderById(id); if (!f.isTrashed()) return (rootCache_ = f); } catch (e) { /* 消えた・権限がない → 名前で探す */ }
+  }
+  let f = null;
+  const top = DriveApp.getRootFolder().getFoldersByName(ROOT_NAME);
+  while (top.hasNext() && !f) { const x = top.next(); if (x.getFilesByName(DB_NAME).hasNext()) f = x; }
+  if (!f) {
+    const all = DriveApp.getFoldersByName(ROOT_NAME);
+    while (all.hasNext() && !f) { const x = all.next(); if (!x.isTrashed() && x.getFilesByName(DB_NAME).hasNext()) f = x; }
+  }
+  if (!f) { const t = DriveApp.getRootFolder().getFoldersByName(ROOT_NAME); f = t.hasNext() ? t.next() : DriveApp.getRootFolder().createFolder(ROOT_NAME); }
+  p.setProperty('LB_ROOT_ID', f.getId());
+  return (rootCache_ = f);
+}
 function dbFile_() {
   const r = root_();
   const it = r.getFilesByName(DB_NAME);

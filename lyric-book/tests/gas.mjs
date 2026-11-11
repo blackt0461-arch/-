@@ -34,6 +34,7 @@ export function makeGas(codePath, opts = {}) {
   function Folder(id) {
     return {
       getId: () => id, getUrl: () => 'https://drive.google.com/drive/folders/' + id,
+      isTrashed: () => items.get(id).trashed, setTrashed: v => { items.get(id).trashed = v; }, moveTo: f => { items.get(id).parent = f.getId(); },
       getFoldersByName: n => iter(children(id, 'folder', n).map(x => Folder(x.id))),
       createFolder: n => Folder(mk('folder', n, id)),
       getFilesByName: n => iter(children(id, 'file', n).map(x => File(x.id))),
@@ -47,7 +48,12 @@ export function makeGas(codePath, opts = {}) {
   }
   const props = new Map(), cache = new Map();
   const ctx = {
-    DriveApp: { getRootFolder: () => Folder(rootId), getFileById: id => { if (!items.has(id)) throw new Error('no file'); return File(id); } },
+    DriveApp: {
+      getRootFolder: () => Folder(rootId),
+      getFileById: id => { if (!items.has(id)) throw new Error('no file'); return File(id); },
+      getFolderById: id => { if (!items.has(id) || items.get(id).type !== 'folder') throw new Error('no folder'); return Folder(id); },
+      getFoldersByName: n => iter([...items.values()].filter(x => x.type === 'folder' && x.name === n && !x.trashed).map(x => Folder(x.id))),
+    },
     Utilities: {
       DigestAlgorithm: { SHA_256: 'sha256' }, Charset: { UTF_8: 'utf8' },
       computeDigest: (alg, s) => [...crypto.createHash('sha256').update(toBuf(s)).digest()].map(b => (b << 24) >> 24),
@@ -77,6 +83,15 @@ export function makeGas(codePath, opts = {}) {
     post: body => JSON.parse(ctx.__api.doPost({ postData: { contents: body } }).text),
     setup: () => ctx.__api.setup(),
     backup: () => ctx.__api.backup(),
+    // テスト用：1回ずつの実行（Google では毎回まっさら）のまね。覚えた ID を消すこともできる
+    resetCache: (forgetId = false) => { try { vm.runInContext('rootCache_ = null', ctx); } catch (e) {} if (forgetId) props.delete('LB_ROOT_ID'); },
+    folders: () => [...items.values()].filter(x => x.type === 'folder').map(x => ({ id: x.id, name: x.name, parent: items.get(x.parent)?.name ?? null, trashed: x.trashed })),
+    // テスト用：「LYRIC BOOK」フォルダを別のフォルダの中へ動かす（窓口がドライブを整理したときのまね）
+    moveRoot: (name, intoName) => {
+      const root = [...items.values()].find(x => x.type === 'folder' && x.name === name && !x.trashed);
+      const into = mk('folder', intoName, rootId);
+      root.parent = into;
+    },
     files: () => [...items.values()].filter(x => x.type === 'file').map(x => ({ name: x.name, parent: items.get(x.parent)?.name, trashed: x.trashed, size: x.content.length })),
     read: name => [...items.values()].find(x => x.name === name && !x.trashed)?.content.toString('utf8'),
   };
