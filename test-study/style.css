@@ -434,3 +434,9 @@ textarea.input { min-height: 160px; resize: vertical; }
 .glegend .ga { border-top: 3px solid var(--acc); }
 .replan { display: flex; gap: 8px; align-items: flex-start; background: color-mix(in srgb, var(--acc) 12%, transparent); border-radius: 12px; padding: 10px 12px; margin: 4px 0 10px; font-size: 13px; line-height: 1.5; }
 .replan svg { width: 18px; height: 18px; flex: none; margin-top: 1px; stroke: var(--acc); fill: none; stroke-width: 2; }
+/* 1.16.0 授業の一覧：回ごとの見出し（その下にパートが並ぶ） */
+.lgroup { margin: 22px 2px 8px; }
+.lg-h { display: flex; align-items: baseline; gap: 8px; font-size: 16px; min-width: 0; }
+.lg-h b { min-width: 0; overflow-wrap: anywhere; }
+.lg-lec { flex: none; font-size: 12px; font-weight: 700; padding: 2px 10px; border-radius: 99px; background: var(--soft); color: var(--acc); }
+.lg-m { color: var(--sub); font-size: 12.5px; margin-top: 4px; }

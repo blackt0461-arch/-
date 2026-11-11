@@ -2,7 +2,7 @@
 // ・アプリの部品（画面・見た目・プログラム・図・フォント・数式の道具）はとっておいたものをすぐ出し、裏で新しいものに入れかえる
 // ・問題データ（data/*.json）はネットを先に見て、つながらないときだけとっておいたものを使う
 // ・新しい版を出すときは VERSION を上げる（index.html の ?v= と同じにする）。上がると古いものを消して入れかわる
-const VERSION = '1.15.0';
+const VERSION = '1.16.0';
 const CACHE = 'test-study-' + VERSION;
 const CORE = [
   './', 'index.html', `style.css?v=${VERSION}`, `js/app.js?v=${VERSION}`, 'js/store.js', 'js/memory.js', 'js/cloud.js',

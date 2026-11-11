@@ -3,7 +3,7 @@
 import * as store from './store.js';
 import * as cloud from './cloud.js';
 
-const APP_VERSION = '1.15.0';
+const APP_VERSION = '1.16.0';
 const $app = document.getElementById('app');
 let COURSES = [];
 const testCache = {};
@@ -58,7 +58,7 @@ async function loadGlossary(c) {
   const words = Object.keys(map).sort((x, y) => y.length - x.length).map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
   GLOSS = { cid: c.id, re: words.length ? new RegExp(words.join('|'), 'g') : null, map };
 }
-const NO_TERM = '.katex, .term, .bar, .hero, .tabbar, .dock, .qtop, .sheet, .lname, .badge, .pill, .kicker, .gpop, input, textarea, svg';
+const NO_TERM = '.katex, .term, .bar, .hero, .tabbar, .dock, .qtop, .sheet, .lname, .badge, .pill, .kicker, .gpop, .btn, input, textarea, svg';
 function termify(root) {
   if (!GLOSS || !GLOSS.re || !root || !root.querySelectorAll) return;
   const used = new Set();
@@ -195,7 +195,28 @@ async function getJSON(path) {
 }
 function prepTest(key, d) {
   d.questions = (d.questions || []).map((q) => ({ ...q, key: key + '/' + q.id }));
+  d.lessons = splitLessons(d.lessons || []);
   return d;
+}
+// 授業を小分け（パート）にする（1.16.0）。テストの JSON の lessons[].parts = [{title, from, to}]（tools/parts.py が作る）
+// パートは id「l1-2」の授業として扱う。スライドは from〜to−1 だけ。covers の番号もパートの中の番号に直す
+function splitLessons(ls) {
+  const out = [];
+  for (const L of ls) {
+    const ps = L.parts && L.parts.length > 1 ? L.parts : null;
+    if (!ps) { out.push(L); continue; }
+    const total = ps[ps.length - 1].to;
+    ps.forEach((P, k) => {
+      const covers = {};
+      for (const [qid, arr] of Object.entries(L.covers || {})) {
+        const sl = arr.filter((n) => n >= P.from && n < P.to).map((n) => n - P.from);
+        if (sl.length) covers[qid] = sl;
+      }
+      out.push({ ...L, id: `${L.id}-${k + 1}`, parentId: L.id, part: k + 1, parts: ps.length, from: P.from, to: P.to,
+        title: P.title || L.title, lessonTitle: L.title, minutes: Math.max(2, Math.round(((L.minutes || 10) * (P.to - P.from)) / total)), covers });
+    });
+  }
+  return out;
 }
 async function loadTest(course, test) {
   const key = course.id + '/' + test.id;
@@ -907,7 +928,7 @@ async function stats() {
   w.querySelectorAll('[data-sl]').forEach((b) => (b.onclick = () => {
     const [ti, li] = b.dataset.sl.split(':').map(Number);
     const { c, t, d } = tests[ti];
-    const L = d.lessons[li]; const st = store.lesson(lkey(c, t, L));
+    const L = d.lessons[li]; const st = lrec(c, t, L);
     playLesson(c, t, d, L, st && !st.done ? st.last || 0 : 0);
   }));
   const wb = w.querySelector('[data-weak]');
@@ -931,7 +952,7 @@ function ensurePlanBase(c, t, d, days, dl) {
   const todayStart = dayStart(today);
   // 今日から先の目標（授業は計画表の割りふり、問題はテストの日に全問へ向かう直線）
   const future = () => {
-    const doneBefore = ls.filter((L) => { const at = store.lessonDoneAt(lkey(c, t, L)); return at && at < todayStart; }).length;
+    const doneBefore = ls.filter((L) => { const at = ldoneAt(c, t, L); return at && at < todayStart; }).length;
     const startQ = store.rememberedAt(keys, Date.now());
     return {
       lessonsT: days.map((r) => doneBefore + days.slice(0, r.k + 1).reduce((n, x) => n + x.lessons.length, 0)),
@@ -939,18 +960,18 @@ function ensurePlanBase(c, t, d, days, dl) {
     };
   };
   let base = store.planBase(tk);
-  const ti = base && base.exam === exam && base.v === 1 ? base.days.indexOf(today) : -1;
+  const ti = base && base.exam === exam && base.v === 2 ? base.days.indexOf(today) : -1;
   if (ti < 0) {
     // はじめて、またはテストの日が変わった：今日から作る
     const f = future();
-    base = { v: 1, exam, start: today, days: days.map((r) => r.key), lessonsT: f.lessonsT, qT: f.qT, totalL: ls.length, totalQ: keys.length };
+    base = { v: 2, exam, start: today, days: days.map((r) => r.key), lessonsT: f.lessonsT, qT: f.qT, totalL: ls.length, totalQ: keys.length };
     store.setPlanBase(tk, base);
     return base;
   }
   // 前の日の終わりに目標まで届いていなかったら、今日から先の目標を立て直す（それまでの日の目標は残す）
   if (ti > 0 && base.rev !== today) {
     const y = ti - 1;
-    const lY = ls.filter((L) => { const at = store.lessonDoneAt(lkey(c, t, L)); return at && at < todayStart; }).length;
+    const lY = ls.filter((L) => { const at = ldoneAt(c, t, L); return at && at < todayStart; }).length;
     const qY = store.rememberedAt(keys, todayStart - 1);
     if (lY < base.lessonsT[y] || qY < base.qT[y]) {
       const f = future();
@@ -984,7 +1005,7 @@ function growthHTML(c, t, d, days, dl) {
   base.days.forEach((k) => {
     if (k > today) { actualL.push(null); actualQ.push(null); return; }
     const end = k === today ? now : dayStart(k) + DAY_MS - 1;
-    actualL.push(ls.filter((L) => { const at = store.lessonDoneAt(lkey(c, t, L)); return at && at <= end; }).length);
+    actualL.push(ls.filter((L) => { const at = ldoneAt(c, t, L); return at && at <= end; }).length);
     actualQ.push(store.rememberedAt(keys, end));
   });
   const i = todayIdx >= 0 ? todayIdx : base.days.length - 1;
@@ -1007,8 +1028,8 @@ function scheduleHTML(c, t, d, ti) {
   const ls = d.lessons || [];
   if (dl === null || dl < 0 || !ls.length) return '';
   const today = dateKey(new Date());
-  const st = (L) => store.lesson(lkey(c, t, L)) || {};
-  const doneDay = (L) => { const at = store.lessonDoneAt(lkey(c, t, L)); return at ? dateKey(new Date(at)) : null; };
+  const st = (L) => lrec(c, t, L) || {};
+  const doneDay = (L) => { const at = ldoneAt(c, t, L); return at ? dateKey(new Date(at)) : null; };
   // 今日より前に見終わった授業は割りふらない
   const all = ls.map((L, i) => ({ L, i }));
   const rest = [...all.filter(({ L }) => doneDay(L) === today), ...all.filter(({ L }) => !doneDay(L))]; // 今日見終わった分を今日の先頭に
@@ -1027,7 +1048,7 @@ function scheduleHTML(c, t, d, ti) {
     const isToday = r.k === 0;
     const lessons = r.lessons.map(({ L, i }) => {
       const ok = !!st(L).done;
-      return `<button class="sl-chip ${ok ? 'ok' : ''}" data-sl="${ti}:${i}">${ok ? icon('check') : ''}${esc(L.lecture || '')}<span>${esc(L.title)}</span></button>`;
+      return `<button class="sl-chip ${ok ? 'ok' : ''}" data-sl="${ti}:${i}">${ok ? icon('check') : ''}${esc(L.lecture || '')}${L.part ? `-${L.part}` : ''}<span>${esc(L.title)}</span></button>`;
     }).join('');
     const q = isToday ? (p && p.target ? `<span class="sq ${p.done >= p.target ? 'ok' : ''}">問題 ${Math.min(p.done, p.target)}/${p.target}</span>` : '') : r.k > 0 && r.k < dl ? '<span class="sq">今日の勉強の問題</span>' : '';
     return `<div class="srow ${isToday ? 'today' : ''} ${r.k === dl ? 'exam-day' : ''}">
@@ -1142,6 +1163,19 @@ async function loadLesson(c, L) {
   return lessonCache[path];
 }
 const lkey = (c, t, L) => `${c.id}/${t.id}/${L.id}`;
+// パートの記録。まだなければ、分ける前の授業の記録から考える（見終わっていたら全部のパートを見終わった扱い、とちゅうなら見た所まで）
+function lrec(c, t, L) {
+  const own = store.lesson(lkey(c, t, L));
+  if (own || !L.parentId) return own;
+  const pk = `${c.id}/${t.id}/${L.parentId}`, par = store.lesson(pk);
+  if (!par) return null;
+  const at = store.lessonDoneAt(pk) || par.t;
+  if (par.done || (par.last ?? 0) >= L.to - 1) return { last: 0, done: true, doneAt: at, t: par.t };
+  if ((par.last ?? 0) >= L.from) return { last: par.last - L.from, done: false, t: par.t };
+  return null;
+}
+const ldoneAt = (c, t, L) => { const r = lrec(c, t, L); return r && r.done ? r.doneAt || r.t || null : null; };
+const partLabel = (L) => (L.part ? `パート${L.part}/${L.parts}` : '');
 // この問題を説明している授業とスライド（授業の covers から）
 function lessonFor(d, q) {
   for (const L of d.lessons || []) { const s = L.covers && L.covers[q.id]; if (s && s.length) return { L, slide: s[0] }; }
@@ -1161,26 +1195,36 @@ function bindLessonLink(root, c, t, d) {
 function lessonsCard(c, t, d) {
   const ls = d.lessons || [];
   if (!ls.length) return '';
-  const done = ls.filter((L) => store.lesson(lkey(c, t, L))?.done).length;
+  const done = ls.filter((L) => lrec(c, t, L)?.done).length;
   return `<button class="row lessons-card" data-lessons style="position:relative;z-index:2"><span class="av c3">${icon('cards')}</span>
-    <div class="t"><div class="name">授業で学ぶ</div><div class="meta">${ls.length}本・見終わった ${done}本　知識ゼロからでもわかる</div>
+    <div class="t"><div class="name">授業で学ぶ</div><div class="meta">${ls.length}本（1本 3〜5分）・見終わった ${done}本　知識ゼロからでもわかる</div>
     <div class="meter ok"><i style="width:${(done / ls.length) * 100}%"></i></div></div><span class="arrow">${icon('next')}</span></button>`;
 }
 function lessonList(c, t, d) {
   const w = screen('授業', { back: () => testMenu(c, t) });
-  w.innerHTML = `<div class="card flat muted small" style="margin-top:14px">上から順に見ると、テストの問題がぜんぶ解けるようになります。1本 10〜15分。とちゅうでやめても、続きから見られます。<br>点線のついた言葉は、<b>長押し</b>（文の中ならタップでも）で説明が出ます。</div>` +
-    (d.lessons || []).map((L, i) => {
-      const st = store.lesson(lkey(c, t, L));
+  let html = `<div class="card flat muted small" style="margin-top:14px">上から順に見ると、テストの問題がぜんぶ解けるようになります。1本 3〜5分の小分けです。とちゅうでやめても、続きから見られます。<br>点線のついた言葉は、<b>長押し</b>（文の中ならタップでも）で説明が出ます。</div>`;
+  let group = null;
+  (d.lessons || []).forEach((L, i) => {
+    const gid = L.parentId || L.id;
+    if (gid !== group) {
+      group = gid;
       const qs = d.questions.filter((q) => L.lecture && q.lecture === L.lecture);
       const m = qs.length ? memStats(qs).now : null;
-      return `<button class="row" data-l="${i}"><span class="av ${COLORS[i % COLORS.length]}">${st?.done ? icon('check') : esc(String(i))}</span>
-        <div class="t"><div class="meta">${esc(L.lecture || '')}・${L.minutes || 10}分${st?.done ? '・見終わった' : st ? '・とちゅう' : ''}</div><div class="name">${esc(L.title)}</div>
-        ${L.sub ? `<div class="meta">${esc(L.sub)}</div>` : ''}${m !== null ? `<div class="meta">この回の問題 ${qs.length}問・いま覚えている度 ${pct(m)}%</div>` : ''}</div><span class="arrow">${icon('next')}</span></button>`;
-    }).join('');
+      const mine = d.lessons.filter((x) => (x.parentId || x.id) === gid);
+      const dn = mine.filter((x) => lrec(c, t, x)?.done).length;
+      html += `<div class="lgroup"><div class="lg-h"><span class="lg-lec">${esc(L.lecture || '')}</span><b>${esc(L.lessonTitle || L.title)}</b></div>
+        <div class="lg-m">${mine.length}本・見終わった ${dn}本${m !== null ? `・この回の問題 ${qs.length}問（いま覚えている度 ${pct(m)}%）` : ''}</div></div>`;
+    }
+    const st = lrec(c, t, L);
+    html += `<button class="row" data-l="${i}"><span class="av ${COLORS[(L.part || i) % COLORS.length]}">${st?.done ? icon('check') : esc(String(L.part || i))}</span>
+      <div class="t"><div class="meta">${L.part ? esc(partLabel(L)) + '・' : esc(L.lecture || '') + '・'}${L.minutes || 10}分${st?.done ? '・見終わった' : st ? '・とちゅう' : ''}</div><div class="name">${esc(L.title)}</div>
+      ${!L.part && L.sub ? `<div class="meta">${esc(L.sub)}</div>` : ''}</div><span class="arrow">${icon('next')}</span></button>`;
+  });
+  w.innerHTML = html;
   math(w);
   w.querySelectorAll('[data-l]').forEach((b) => (b.onclick = () => {
     const L = d.lessons[+b.dataset.l];
-    const st = store.lesson(lkey(c, t, L));
+    const st = lrec(c, t, L);
     playLesson(c, t, d, L, st && !st.done ? st.last || 0 : 0);
   }));
 }
@@ -1219,7 +1263,7 @@ function slideInner(s, fig) {
 async function playLesson(c, t, d, L, start = 0, opt = {}) {
   let data;
   try { data = await loadLesson(c, L); } catch (e) { alert('授業を読みこめませんでした'); return; }
-  const slides = data.slides || [];
+  const slides = (data.slides || []).slice(L.from || 0, L.to ?? undefined);
   const key = lkey(c, t, L);
   let i = Math.max(0, Math.min(start, slides.length - 1));
   const answered = {};
@@ -1227,7 +1271,7 @@ async function playLesson(c, t, d, L, start = 0, opt = {}) {
     store.setLesson(key, i, i === slides.length - 1);
     const s = slides[i];
     const w = screen(L.title, { back: () => lessonList(c, t, d) });
-    w.innerHTML = `<div class="qtop"><span class="p">${i + 1}<small> / ${slides.length}</small></span><span class="lec">${esc(L.lecture || '')}</span></div>
+    w.innerHTML = `<div class="qtop"><span class="p">${i + 1}<small> / ${slides.length}</small></span><span class="lec">${esc(L.lecture || '')}${L.part ? ' ' + esc(partLabel(L)) : ''}</span></div>
       <div class="meter"><i style="width:${((i + 1) / slides.length) * 100}%"></i></div>
       <div class="card slide" data-slide>${slideHTML(c, s)}</div>
       ${i === slides.length - 1 ? lessonEnd(c, t, d, L) : ''}`;
@@ -1261,12 +1305,16 @@ async function playLesson(c, t, d, L, start = 0, opt = {}) {
   show();
 }
 function lessonEnd(c, t, d, L) {
-  const qs = d.questions.filter((q) => L.lecture && q.lecture === L.lecture);
+  const last = !L.part || L.part === L.parts; // この回の最後のパート
+  const qs = last ? d.questions.filter((q) => L.lecture && q.lecture === L.lecture) : [];
   const idx = (d.lessons || []).indexOf(L);
   const nextL = (d.lessons || [])[idx + 1];
-  return `<div class="card result" style="text-align:center"><div class="msg">🎉 授業おわり！</div><div class="muted small">見たことを、問題で確かめよう</div>
+  const nextName = nextL ? (nextL.part && nextL.parentId === L.parentId ? `次へ：${partLabel(nextL)}「${nextL.title}」` : `次の授業：${nextL.lecture || ''} ${nextL.lessonTitle || nextL.title}`) : '';
+  return `<div class="card result" style="text-align:center"><div class="msg">🎉 ${last ? (L.part ? `${esc(L.lecture || '')}おわり！` : '授業おわり！') : `${esc(partLabel(L))} おわり！`}</div>
+    <div class="muted small">${last ? '見たことを、問題で確かめよう' : 'ここで休んでも、次はこの続きから始められます'}</div>
+    ${!last && nextL ? `<button class="btn" data-ln>${esc(nextName)}</button>` : ''}
     ${qs.length ? `<button class="btn" data-lq>${icon('play')}この回の問題を解く（${qs.length}問）</button>` : ''}
-    ${nextL ? `<button class="btn sub" data-ln>次の授業：${esc(nextL.lecture || '')} ${esc(nextL.title)}</button>` : ''}</div>`;
+    ${last && nextL ? `<button class="btn sub" data-ln>${esc(nextName)}</button>` : ''}</div>`;
 }
 function bindLessonEnd(w, c, t, d, L) {
   const qb = w.querySelector('[data-lq]');
