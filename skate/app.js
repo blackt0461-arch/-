@@ -1182,7 +1182,7 @@ async function startLive() {
   L.minLap = lsGet('skate-minlap2', 6); L.tiles = lsGet('skate-tiles', 1);
   // ほかのスマホに出す（名前・練習メニュー・ラップの数字だけ）
   L.menu = $('menuText').value.trim(); lsSet('skate-menu', L.menu);
-  lsSet('skate-menulist', $('menuList').value); L.list = menuLines($('menuList').value); L.sets = [];
+  lsSet('skate-menulist', $('menuList').value); L.list = menuLines($('menuList').value); L.sets = []; L.lastX = null; L.typ = 0; L.day = Date.now();
   $('liveSets').innerHTML = ''; setBtn($('liveSetBtn'), L.list, -1); lsSet('skate-share', $('optShare').checked ? 1 : 0);
   $('shareLive').classList.toggle('hide', !$('optShare').checked); L.share = null;
   L.team = null; L.recId = crypto.randomUUID(); L.dirty = false; L.day = Date.now();
@@ -1278,9 +1278,14 @@ function setWin(k) { // k 番目の「本」の時間のはんい。メニュー
 function armSet(i) {
   if (!L.rec || !L.list || !(i >= 0 && i < L.list.length)) return;
   const t = (performance.now() - L.t0) / 1000, last = L.sets[L.sets.length - 1];
-  // まちがえてタップした時：まだだれも通っていなければ、前のタップを取り消して入れかえる
-  if (last && !L.crossings.some(c => c.t >= last.t)) L.sets.pop();
-  L.sets.push({ i, name: L.list[i], t, ...menuInfo(L.list, i) });
+  if (last && !last.name && last.n > 0 && L.lastX != null && t - L.lastX < 15) {
+    // もう滑り始めている（タップがおくれた）：いまの1本に名前を付ける
+    Object.assign(last, { i, name: L.list[i], ...menuInfo(L.list, i) });
+  } else {
+    // まちがえてタップした時：まだだれも通っていなければ、前のタップを取り消して入れかえる
+    if (last && !last.n) L.sets.pop();
+    L.sets.push({ i, name: L.list[i], t, n: 0, ...menuInfo(L.list, i) });
+  }
   for (const p of L.persons) p.sentK = -1;
   L.newId = null; renderLiveCards(); if (L.share) L.share.full(); saveLive();
   toast('「' + L.list[i] + '」のラップを記録します');
@@ -1294,9 +1299,10 @@ async function saveLive() {
   L.dirty = false;
   try { await share.saveRecord(L.team, L.recId, title, { at: L.day, menu: L.menu || '', sets }); } catch (e) { L.dirty = true; }
 }
+const setClock = t => { const d = new Date(L.day + t * 1000); return `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')} からの1本`; };
 function setSummary(k) {
   const st = L.sets[k];
-  return { name: st ? st.name : '', exp: st ? st.exp : 0, tgt: st ? st.tgt : 0,
+  return { name: st ? st.name || setClock(st.t) : '', exp: st ? st.exp : 0, tgt: st ? st.tgt : 0,
     persons: L.persons.map(p => ({ name: p.name, laps: liveLaps(p, k).map(x => Math.round(x * 100) / 100), last: Math.round(p.cs[p.cs.length - 1].t * 10) / 10 })).filter(p => p.laps.length) };
 }
 const esc = x => String(x).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -1348,6 +1354,17 @@ function cleanMenu(t) {
 function onLiveCross(c, tr) {
   const H = $('vLive').videoHeight || 1; c.v = c.ds && c.bh ? c.ds / (c.bh * H) : 0; // 1秒に体いくつ分進むか
   L.crossings.push(c);
+  // タップがなくても全部とる：しばらくだれも通らなかった後の通過は、新しい1本の始まりとして自動で区切る
+  if (liveOk(c, liveDir(), liveSlow())) {
+    const typ = liveTypical(); if (typ) L.typ = typ;
+    const last = L.sets[L.sets.length - 1], idle = L.lastX == null || c.t - L.lastX > Math.max(25, 2.5 * (L.typ || 0));
+    if (!last || (idle && last.n > 0)) {
+      L.sets.push({ i: -1, name: '', t: c.t - 0.5, n: 0, exp: 0, tgt: 0, auto: true });
+      for (const q of L.persons) q.sentK = -1;
+      if (L.share) L.share.full(); if (last) saveLive();
+    }
+    L.sets[L.sets.length - 1].n++; L.lastX = c.t;
+  }
   let p = L.byTrack.get(tr.id);
   if (!p) {
     // だれの通過かを決める：①服の色がどれだけ似ているか ②その人が「そろそろ来る時刻」にどれだけ近いか
@@ -1485,7 +1502,7 @@ $('watchLast').onclick = () => {
 function renderLiveCards() {
   const box = $('liveCards'); box.innerHTML = '';
   const n = L.sets.length, cs = n ? L.sets[n - 1] : null;
-  setBtn($('liveSetBtn'), L.list, cs ? cs.i : -1); renderPast($('liveSets'), L.sets.slice(0, -1).map((_, k) => setSummary(k)));
+  setBtn($('liveSetBtn'), L.list, cs ? cs.i : -1, cs && cs.name); renderPast($('liveSets'), L.sets.slice(0, -1).map((_, k) => setSummary(k)));
   const all = L.persons.map(p => ({ p, laps: liveLaps(p), last: p.cs[p.cs.length - 1].t })).filter(x => !cs || x.last >= cs.t);
   // 1周もしていない人（横切っただけ・まだ1回目）は出さない。数だけ下に出す
   const list = all.filter(x => x.laps.length).sort((a, b) => b.laps.length - a.laps.length || b.last - a.last);

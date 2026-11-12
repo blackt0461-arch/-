@@ -170,7 +170,7 @@ dialog::backdrop{background:rgb(0 0 0 / .6)}
     </span>
   </div>
   <input type="file" id="file" accept="video/*" class="hide">
-  <p class="note">版 2026-11-12k。動画はこのスマホの中だけで計算します。どこにも送りません（「みんなのスマホに出して、記録に残す」を使う時だけ、名前・練習メニュー・ラップの数字をネットに送って残します。見られるのはチームの合い言葉を知っている人だけです）。<br>「設置して測る」は、撮りながらラップだけを測ります。追いかけ動画は撮り終わってから作ります。</p>
+  <p class="note">版 2026-11-12l。動画はこのスマホの中だけで計算します。どこにも送りません（「みんなのスマホに出して、記録に残す」を使う時だけ、名前・練習メニュー・ラップの数字をネットに送って残します。見られるのはチームの合い言葉を知っている人だけです）。<br>「設置して測る」は、撮りながらラップだけを測ります。追いかけ動画は撮り終わってから作ります。</p>
   <h2 style="font-size:16px;margin:22px 0 6px">登録した部員</h2>
   <div id="memList"></div>
   <p class="note" id="memEmpty">選手の画面の「部員に登録」から登録できます。登録すると、次から自動で名前が付き、撮影中に自動で追いかけられます。</p>
@@ -192,7 +192,7 @@ dialog::backdrop{background:rgb(0 0 0 / .6)}
   </div>
   <div class="card hide" id="shareCard">
     <b>練習メニュー</b>
-    <p class="note" style="margin:4px 0">メニューの写真を入れると、1行ずつの一覧になります（まちがいは下で直せます）。撮影中に一覧をタップすると、そのメニューのラップとして分けて記録します。</p>
+    <p class="note" style="margin:4px 0">メニューの写真を入れると、1行ずつの一覧になります（まちがいは下で直せます）。ラップはタップしなくても全部とり、休みの時間で自動的に1本ずつ区切ります。一覧をタップすると、その1本にメニューの名前が付きます。</p>
     <label class="btn" for="menuPhoto" id="menuPhotoBtn">🖼 メニューの写真を入れる</label><input type="file" id="menuPhoto" accept="image/*" class="hide">
     <textarea id="menuList" rows="6" placeholder="1行に1つ（例）&#10;A スタートから1000m&#10;B スタートから1000m" style="width:100%;padding:10px;margin-top:8px;font-size:14px;border-radius:10px;border:1px solid var(--line);background:var(--ice);color:var(--text)"></textarea>
     <input id="menuText" placeholder="題名（例：10月27日 宇治）" style="width:100%;padding:10px;margin-top:8px;border-radius:10px;border:1px solid var(--line);background:var(--ice);color:var(--text)">
@@ -352,7 +352,7 @@ dialog::backdrop{background:rgb(0 0 0 / .6)}
 
 <dialog id="setDlg">
   <b>これから始めるメニューをタップ</b>
-  <p class="note" style="margin:4px 0">始まる少し前にタップしてください。次にタップするまでのラップが、そのメニューの記録になります。</p>
+  <p class="note" style="margin:4px 0">始まる少し前（または滑り始めてすぐ）にタップしてください。その1本にメニューの名前が付きます。タップしなくてもラップは全部とっています。</p>
   <div id="setList" style="max-height:60vh;overflow:auto"></div>
   <div class="row"><button class="btn grow" id="setCancel">やめる</button></div>
 </dialog>
