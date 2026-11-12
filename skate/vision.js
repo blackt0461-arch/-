@@ -599,6 +599,6 @@ export function liveCrossing(tr, measure) {
   const t = A[0] + (B[0] - A[0]) * (a.s / (a.s - b.s));
   if (tr.lastCross != null && t - tr.lastCross < 3) return null;
   tr.lastCross = t;
-  return { t, dir: b.s > a.s ? 1 : -1, track: tr.id, refined: false };
+  return { t, dir: b.s > a.s ? 1 : -1, track: tr.id, refined: false, ds: Math.abs(b.s - a.s) / Math.max(0.03, B[0] - A[0]), bh: B[4] - B[2] };
 }
 export function normHist(h, n) { const o = new Float32Array(h.length); for (let i = 0; i < h.length; i++) o[i] = n ? h[i] / n : 0; return o; }

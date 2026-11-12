@@ -95,6 +95,7 @@ table.laps tr.total td{font-weight:800;border-top:2px solid var(--dim)}
 .lcard .n{font-size:13px;color:var(--dim)}
 .lcard .last{font-family:var(--mono);font-size:26px;font-weight:800;line-height:1.1}
 .lcard .hist{font-family:var(--mono);font-size:12px;color:var(--dim);line-height:1.5;word-break:break-all}
+.lcard .multi{font-size:12px;color:var(--warn,#e0a020);margin-left:6px;font-family:inherit}
 .lcard.new{border-color:var(--ok);box-shadow:0 0 0 2px var(--ok)}
 #dark{position:fixed;inset:0;background:#000;z-index:20;display:flex;align-items:center;justify-content:center;text-align:center;color:#555}
 #dark div{display:flex;flex-direction:column;gap:6px}
@@ -119,7 +120,7 @@ dialog::backdrop{background:rgb(0 0 0 / .6)}
     <div class="row"><input id="watchCode" inputmode="numeric" maxlength="5" placeholder="合い言葉" class="grow" style="padding:12px;border-radius:10px;border:1px solid var(--line);background:var(--ice);color:var(--text);font-size:20px;letter-spacing:.2em"><button class="btn blue" id="watchBtn">見る</button></div>
   </div>
   <input type="file" id="file" accept="video/*" class="hide">
-  <p class="note">版 2026-11-12d。動画はこのスマホの中だけで計算します。どこにも送りません（「ほかのスマホに出す」を使う時だけ、名前・練習メニュー・ラップの数字を届けます）。<br>「その場で撮る」は、撮りながらラップだけを測ります。追いかけ動画は撮り終わってから作ります。</p>
+  <p class="note">版 2026-11-12e。動画はこのスマホの中だけで計算します。どこにも送りません（「ほかのスマホに出す」を使う時だけ、名前・練習メニュー・ラップの数字を届けます）。<br>「その場で撮る」は、撮りながらラップだけを測ります。追いかけ動画は撮り終わってから作ります。</p>
   <h2 style="font-size:16px;margin:22px 0 6px">登録した部員</h2>
   <div id="memList"></div>
   <p class="note" id="memEmpty">選手の画面の「部員に登録」から登録できます。登録すると、次から自動で名前が付き、撮影中に自動で追いかけられます。</p>

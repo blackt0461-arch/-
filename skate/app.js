@@ -282,7 +282,7 @@ function buildSession(rawTracks, W, H, duration, tiles, preset, motion) {
   } else groups = groupTracks(tracks.map(t => ({ ...t, hist: Float32Array.from(t.hist) })));
   const s = {
     id: 's' + Date.now(), date: Date.now(), videoName: S.videoFile.name, videoSize: S.videoFile.size, duration, W, H, line, tiles, dir, motion: mrows, lineImg: S.lineImg,
-    minLap: lsGet('skate-minlap', 15), tracks, crossings, persons: groups.map(ids => ({ id: 'p' + ids[0], name: '', tracks: ids })),
+    minLap: lsGet('skate-minlap2', 6), tracks, crossings, persons: groups.map(ids => ({ id: 'p' + ids[0], name: '', tracks: ids })),
   };
   // 名前の仮番号：ラインを越えた回数が多い順
   topPersons(s).forEach((p, i) => p.name = `選手${i + 1}`);
@@ -643,7 +643,7 @@ function fillFaces(box, s, list, onTap) {
     box.append(el);
   }
 }
-$('minLap').onchange = async e => { const s = S.session; s.minLap = Math.max(3, +e.target.value || 15); lsSet('skate-minlap', s.minLap); await saveSession(s); showResult(); };
+$('minLap').onchange = async e => { const s = S.session; s.minLap = Math.max(3, +e.target.value || 6); lsSet('skate-minlap2', s.minLap); await saveSession(s); showResult(); };
 
 // ---------- 選手の画面 ----------
 const P = { mode: 'chase', shape: 'h', zoom: 'tv', rate: 1, path: null, raf: 0, refining: false, check: null };
@@ -1177,7 +1177,7 @@ async function startLive() {
   S.lineImg = frameImage(v);
   L.lt = new LineTracker(new LineAnchor(grabGray(v, W, H), S.line.map(p => p.slice()))); L.chain = new MotionChain(); L.motion = []; L.meas = new Map();
   const measure = (t, x1, y2, x2) => { const m = L.meas.get(Math.round(t * 1000)); if (!m) return null; return m.sn ? lineMetric(m.line, W, H, x1, y2, x2) : footMetric(S.line, W, H, m.Hk, x1, y2, x2); };
-  L.minLap = lsGet('skate-minlap', 15); L.tiles = lsGet('skate-tiles', 1);
+  L.minLap = lsGet('skate-minlap2', 6); L.tiles = lsGet('skate-tiles', 1);
   // ほかのスマホに出す（名前・練習メニュー・ラップの数字だけ）
   L.menu = $('menuText').value.trim(); lsSet('skate-menu', L.menu); lsSet('skate-share', $('optShare').checked ? 1 : 0);
   $('shareLive').classList.toggle('hide', !$('optShare').checked); L.share = null;
@@ -1236,19 +1236,39 @@ function drawAim(cx, W, H, tg) {
 }
 // 前向き＝いちばん多い通過の向き
 const liveDir = () => { const p = L.crossings.filter(c => c.dir > 0).length; return p >= L.crossings.length - p ? 1 : -1; };
+const median = a => { const b = a.slice().sort((x, y) => x - y); return b.length ? b[b.length >> 1] : 0; };
+// 練習でない通過（歩いて横切る・ゆっくり流している人）を見分けるための速さの境目。
+// 速い方から4分の1あたりの速さの 35% より遅い通過は数えない（通過が6回たまってから）
+function liveSlow() {
+  const d = liveDir(), v = L.crossings.filter(c => c.dir === d && c.v > 0).map(c => c.v).sort((x, y) => y - x);
+  return v.length >= 6 ? v[Math.floor(v.length / 4)] * 0.35 : 0;
+}
+const liveOk = (c, d, slow) => c.dir === d && !(c.v > 0 && c.v < slow);
+// みんなのふつうの1周（その人のラップがまだ無い時の予想に使う）
+function liveTypical() { const a = []; for (const p of L.persons) a.push(...liveLaps(p)); return a.length ? median(a) : 0; }
 function onLiveCross(c, tr) {
+  const H = $('vLive').videoHeight || 1; c.v = c.ds && c.bh ? c.ds / (c.bh * H) : 0; // 1秒に体いくつ分進むか
   L.crossings.push(c);
   let p = L.byTrack.get(tr.id);
-  if (!p) { // 服の色がいちばん似ていて、少し前に通った人を探す
-    const h = normHist(tr.hist, tr.hn); let best = null, bv = 0.95; // 別の人とまちがえないよう厳しめ（部員なら下で見分ける）
+  if (!p) {
+    // だれの通過かを決める：①服の色がどれだけ似ているか ②その人が「そろそろ来る時刻」にどれだけ近いか
+    const h = normHist(tr.hist, tr.hn), typ = liveTypical(); let best = null, bv = 0;
     const busy = new Set(L.tracker.active.filter(x => x !== tr).map(x => L.byTrack.get(x.id)).filter(Boolean));
     for (const q of L.persons) {
-      if (busy.has(q)) continue;
-      const last = q.cs.length ? q.cs[q.cs.length - 1].t : -1e9;
-      if (c.t - last < L.minLap * 0.6) continue;
-      const qh = normHist(q.hist, q.hn), v = histSim(h, qh); if (v > bv && headSim(h, qh) >= 0.92) { bv = v; best = q; }
+      if (busy.has(q) || !q.cs.length) continue;
+      const last = q.cs[q.cs.length - 1].t, gap = c.t - last;
+      if (gap < Math.max(3, L.minLap * 0.6)) continue;
+      const qh = normHist(q.hist, q.hn), sim = histSim(h, qh), hd = headSim(h, qh);
+      const ql = liveLaps(q), exp = ql.length ? median(ql.slice(-3)) : typ;
+      // 予想とのずれ（1周分・2周分のどちらか近い方。2周分は少し不利にする）
+      let te = 1; if (exp > 0) { const k = Math.max(1, Math.min(3, Math.round(gap / exp))); te = Math.abs(gap - k * exp) / exp + (k - 1) * 0.12; }
+      const due = te < 0.2;
+      // 色だけで決めてよいのは、とてもよく似ている時だけ。時刻が合っていれば、色は「まあ似ている」でよい
+      if (!(sim > 0.95 && hd >= 0.92) && !(due && sim > 0.82)) continue;
+      const sc = sim - Math.min(te, 1) * 0.35;
+      if (!best || sc > bv) { bv = sc; best = q; }
     }
-    const mm = matchMember(normHist(tr.hist, tr.hn));
+    const mm = matchMember(h);
     if (!best && mm) best = L.persons.find(q => q.member === mm.member.id && !busy.has(q)) || null;
     p = best || { id: 'p' + tr.id, member: mm ? mm.member.id : null, name: mm ? mm.member.name : String.fromCharCode(65 + L.persons.length % 26) + (L.persons.length >= 26 ? Math.floor(L.persons.length / 26) : ''), tracks: [], cs: [], hist: new Float32Array(tr.hist.length), hn: 0, thumb: null };
     if (!best) L.persons.push(p);
@@ -1260,21 +1280,24 @@ function onLiveCross(c, tr) {
   renderLiveCards();
 }
 function liveLaps(p) {
-  const d = liveDir(), cs = p.cs.filter(c => c.dir === d).sort((a, b) => a.t - b.t), out = [];
+  const d = liveDir(), slow = liveSlow(), cs = p.cs.filter(c => liveOk(c, d, slow)).sort((a, b) => a.t - b.t), out = [];
   for (const c of cs) if (!out.length || c.t - out[out.length - 1].t >= L.minLap) out.push(c);
   const laps = []; for (let i = 1; i < out.length; i++) laps.push(out[i].t - out[i - 1].t);
   return laps;
 }
+// 2周分がつながっていそうなラップ（その人のふつうの1.7倍より長い）に印をつける
+function lapMark(laps, i, typ) { const m = laps.length >= 3 ? median(laps) : typ; if (!m) return ''; const k = Math.round(laps[i] / m); return laps[i] > m * 1.7 && k >= 2 ? `<small class="multi">${k}周分？</small>` : ''; }
+const lapHist = (laps, typ) => laps.map((x, i) => fmt(x) + (lapMark(laps, i, typ) ? '？' : '')).slice(0, -1).reverse().slice(0, 12).join(' ');
 // ほかのスマホへ届ける中身：練習メニュー・たった時間・人ごとの名前とラップ
 function liveState() {
   return { menu: L.menu || '', elapsed: Math.round((performance.now() - L.t0) / 1000), newest: L.newName || '',
-    persons: L.persons.map(p => ({ name: p.name, laps: liveLaps(p).map(x => Math.round(x * 100) / 100), last: Math.round(p.cs[p.cs.length - 1].t * 10) / 10 })) };
+    persons: L.persons.map(p => ({ name: p.name, laps: liveLaps(p).map(x => Math.round(x * 100) / 100), last: Math.round(p.cs[p.cs.length - 1].t * 10) / 10 })).filter(p => p.laps.length) };
 }
 function lapCards(box, list, newest) { // list: [{name, laps, last}]。周の多い順 → 新しい順
-  box.innerHTML = '';
-  for (const p of list.slice().sort((a, b) => b.laps.length - a.laps.length || b.last - a.last)) {
+  box.innerHTML = ''; const typ = median(list.flatMap(q => q.laps));
+  for (const p of list.filter(q => q.laps.length).sort((a, b) => b.laps.length - a.laps.length || b.last - a.last)) {
     const el = document.createElement('div'); el.className = 'lcard' + (p.name === newest ? ' new' : '');
-    el.innerHTML = `<div><div class="n"></div><div class="last">${p.laps.length ? fmt(p.laps[p.laps.length - 1]) : '—'}</div><div class="hist">${p.laps.slice(0, -1).reverse().slice(0, 12).map(fmt).join(' ')}</div></div>`;
+    el.innerHTML = `<div><div class="n"></div><div class="last">${p.laps.length ? fmt(p.laps[p.laps.length - 1]) + lapMark(p.laps, p.laps.length - 1, typ) : '—'}</div><div class="hist">${lapHist(p.laps, typ)}</div></div>`;
     el.querySelector('.n').textContent = `${p.name}・${p.laps.length}周`;
     box.append(el);
   }
@@ -1287,8 +1310,8 @@ async function openWatch(code) {
   let st = null, last = 0, startAt = 0;
   const show = () => {
     $('watchMenu').firstChild.textContent = st.menu || 'ラップ';
-    $('watchState').textContent = `合い言葉 ${code}・${st.persons.length}人`;
-    $('watchEmpty').classList.toggle('hide', st.persons.length > 0);
+    $('watchState').textContent = `合い言葉 ${code}・${st.persons.filter(q => q.laps.length).length}人`;
+    $('watchEmpty').classList.toggle('hide', st.persons.some(q => q.laps.length));
     lapCards($('watchCards'), st.persons, st.newest);
   };
   try {
@@ -1311,22 +1334,29 @@ async function openWatch(code) {
 $('watchBtn').onclick = () => openWatch($('watchCode').value);
 function renderLiveCards() {
   const box = $('liveCards'); box.innerHTML = '';
-  const list = L.persons.map(p => ({ p, laps: liveLaps(p), last: p.cs[p.cs.length - 1].t })).sort((a, b) => b.laps.length - a.laps.length || b.last - a.last);
-  let total = 0;
+  const all = L.persons.map(p => ({ p, laps: liveLaps(p), last: p.cs[p.cs.length - 1].t }));
+  // 1周もしていない人（横切っただけ・まだ1回目）は出さない。数だけ下に出す
+  const list = all.filter(x => x.laps.length).sort((a, b) => b.laps.length - a.laps.length || b.last - a.last);
+  let total = 0; const typ = liveTypical();
   for (const { p, laps } of list) {
     total += laps.length;
     const el = document.createElement('div'); el.className = 'lcard' + (p.id === L.newId ? ' new' : '');
-    el.innerHTML = `<img alt=""><div><div class="n"></div><div class="last">${laps.length ? fmt(laps[laps.length - 1]) : '—'}</div><div class="hist">${laps.slice(0, -1).reverse().slice(0, 12).map(fmt).join(' ')}</div></div>`;
+    el.innerHTML = `<img alt=""><div><div class="n"></div><div class="last">${fmt(laps[laps.length - 1])}${lapMark(laps, laps.length - 1, typ)}</div><div class="hist">${lapHist(laps, typ)}</div></div>`;
     el.querySelector('img').src = p.thumb || 'icon.svg';
     el.querySelector('.n').textContent = `${p.name}・${laps.length}周`;
     box.append(el);
   }
+  const once = all.length - list.length;
+  $('liveInfo').textContent = list.length ? (once ? `ほかに${once}人が1回通過（2回目からラップが出ます）` : '') : once ? `${once}人が1回通過。2回目からラップが出ます` : 'ラインを越えた人がここに出ます';
   $('darkInfo').textContent = `${list.length}人・${total}周`;
   const np = L.persons.find(p => p.id === L.newId); L.newName = np ? np.name : '';
-  // ほかのスマホへは、いま通った1人分だけを小さく送る（データ量をおさえる）
+  // ほかのスマホへは、ラップが出た1人分だけを小さく送る（データ量をおさえる）
   if (L.share && np) {
     const lp = liveLaps(np);
-    if (np.sentK !== lp.length) { L.share.lap({ n: np.name, k: lp.length, l: lp.length ? Math.round(lp[lp.length - 1] * 100) / 100 : null, t: Math.round(np.cs[np.cs.length - 1].t * 10) / 10 }); np.sentK = lp.length; }
+    if (lp.length && np.sentK !== lp.length) {
+      // 周の数が1つずつ増えた時だけ「1周分」。そうでない時（数え直しで変わった時）は、見る側が全部をもらい直す
+      L.share.lap({ n: np.name, k: lp.length, l: Math.round(lp[lp.length - 1] * 100) / 100, t: Math.round(np.cs[np.cs.length - 1].t * 10) / 10 }); np.sentK = lp.length;
+    }
   }
 }
 $('darkBtn').onclick = () => $('dark').classList.remove('hide');
@@ -1373,7 +1403,7 @@ window.addEventListener('error', e => toast('エラー：' + (e.message || e.err
 window.addEventListener('unhandledrejection', e => toast('エラー：' + ((e.reason && e.reason.message) || e.reason)));
 
 // 試験用：いまの線と記録を外から見られるようにする
-window.__skateDebug = () => ({ line: S.line, session: S.session });
+window.__skateDebug = () => ({ line: S.line, session: S.session, live: L });
 
 // ---------- はじめ ----------
 showHome();
