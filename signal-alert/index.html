@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1e293b">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="電波チェッカー">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<title>電波チェッカー</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body class="state-idle">
+<main>
+  <section id="hero">
+    <div id="bars" class="lv-0" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+    <div id="speed">--</div>
+    <div id="meaning">開始を押すと測定します</div>
+    <div id="latency"></div>
+  </section>
+
+  <div id="warn-banner" hidden></div>
+
+  <nav id="tabs" role="tablist">
+    <button type="button" role="tab" data-tab="graph" class="on">グラフ</button>
+    <button type="button" role="tab" data-tab="map">マップ</button>
+    <button type="button" role="tab" data-tab="log">記録</button>
+  </nav>
+
+  <section id="tab-graph" class="panel">
+    <canvas id="chart" height="160"></canvas>
+  </section>
+
+  <section id="tab-map" class="panel" hidden>
+    <div class="row">
+      <div class="seg">
+        <button type="button" id="map-view">全体</button>
+        <button type="button" id="map-demo">デモ</button>
+      </div>
+      <span id="map-info"></span>
+    </div>
+    <canvas id="map" height="260"></canvas>
+    <label class="switch"><span>場所を記録</span><input type="checkbox" id="opt-location"><b></b></label>
+    <label class="switch"><span>圏外を予告</span><input type="checkbox" id="opt-predict"><b></b></label>
+    <button type="button" id="map-clear" class="danger">マップを消去</button>
+  </section>
+
+  <section id="tab-log" class="panel" hidden>
+    <ul id="log"></ul>
+    <button type="button" id="clear-log" class="danger">記録を消去</button>
+  </section>
+</main>
+
+<div id="dock"><button id="toggle" type="button">開始</button></div>
+
+<script src="app.js"></script>
+<script src="map.js"></script>
+</body>
+</html>
