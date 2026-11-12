@@ -1784,7 +1784,7 @@ function photoMode() {
 
 // =========================== 更新のお知らせ ===========================
 // このプログラムの版（version.json と同じにする。公開のたびに上げる）
-const APP_VERSION = '1.18.4';
+const APP_VERSION = '1.19.0';
 ERR.setVersion(APP_VERSION);
 // 新しい版が出たら、みんな同じタイミングでそろうように強制で再起動する。
 // 開いた時・画面に戻った時・1分ごとに version.json を見る
@@ -2479,7 +2479,7 @@ function pickAvatar(after) {
     <div class="av-preview"></div>
     <div class="av-grid">${AVATARS.map(a => { const lock = a.lv && rk < a.lv && !isAdmin(); return `<button class="av-pick" data-a="${a.id}" ${lock ? 'disabled' : ''} aria-label="${a.name}${lock ? `（Lv${a.lv}から）` : ''}">${avatarHTML({ avatar: a.id, avatarColor: col }, 'avatar')}${lock ? `<span class="av-lock">${icon('lock')}Lv${a.lv}</span>` : ''}</button>`; }).join('')}</div>
     <h4 class="av-sub">${icon('star')}ガチャのごほうびのアイコン<small>${GACHA_AVATARS.filter(a => hasG(a.id)).length} / ${GACHA_AVATARS.length}</small></h4>
-    <div class="av-grid">${GACHA_AVATARS.map(a => { const lock = !hasG(a.id); return `<button class="av-pick g" data-a="${a.id}" ${lock ? 'disabled' : ''} aria-label="${a.name}${lock ? `（${a.series === 'band' ? 'OVERDRIVE' : 'スタンダード'}のガチャを${a.at}回引くともらえる）` : ''}">${avatarHTML({ avatar: a.id, avatarColor: 0 }, 'avatar')}${lock ? `<span class="av-lock">${icon('lock')}${a.at}回</span>` : ''}</button>`; }).join('')}</div>
+    <div class="av-grid">${GACHA_AVATARS.map(a => { const lock = !hasG(a.id); return `<button class="av-pick g" data-a="${a.id}" ${lock ? 'disabled' : ''} aria-label="${a.name}${lock ? `（${a.series ? (G.seriesById(a.series)?.title || a.series) : 'スタンダード'}のガチャを${a.at}回引くともらえる）` : ''}">${avatarHTML({ avatar: a.id, avatarColor: 0 }, 'avatar')}${lock ? `<span class="av-lock">${icon('lock')}${a.at}回</span>` : ''}</button>`; }).join('')}</div>
     <div class="av-colors"></div>
     <div class="row2"><button class="btn ghost back2">やめる</button><button class="btn primary ok">これにする</button></div>`, 'news-sheet av-sheet');
   const draw = () => {

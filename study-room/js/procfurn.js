@@ -2236,6 +2236,27 @@ function door(s) {
       bag.mesh(leaf, dm);
       break;
     }
+    case 'koshi': {
+      // 格子戸（旅館の入口の引き戸）：細い縦格子のうしろに障子紙、下は板。くぼんだ引き手
+      const sw = 0.06, tr = 0.08, br = 0.07, my = -LH / 2 + 0.55;
+      for (const sx of [-1, 1]) mk(leaf, B(sw, LH, LT, 0.004), dm, sx * (LW / 2 - sw / 2), 0, 0);
+      mk(leaf, B(LW - sw * 2, tr, LT, 0.003), dm, 0, LH / 2 - tr / 2, 0);
+      mk(leaf, B(LW - sw * 2, br, LT, 0.003), dm, 0, -LH / 2 + br / 2, 0);
+      mk(leaf, B(LW - sw * 2, 0.05, LT, 0.003), dm, 0, my + 0.025, 0);
+      mk(leaf, B(LW - sw * 2, my + LH / 2 - br, LT - 0.016, 0.002), dm, 0, (my - LH / 2 + br) / 2, 0); // 腰板
+      const paper = cm('koshipaper', () => std({ color: '#f6efdc', roughness: 0.95, emissive: '#ffe6c0', emissiveIntensity: 0.12, side: THREE.DoubleSide }));
+      const y0 = my + 0.05, y1 = LH / 2 - tr, ph = y1 - y0;
+      mk(leaf, new THREE.PlaneGeometry(LW - sw * 2, ph), paper, 0, (y0 + y1) / 2, 0).castShadow = false;
+      const bag = new Bag();
+      const n = Math.round((LW - sw * 2) / 0.042);
+      for (let i = 1; i < n; i++) for (const sz of [1, -1]) bag.add(new THREE.BoxGeometry(0.016, ph, 0.016), -LW / 2 + sw + i * (LW - sw * 2) / n, (y0 + y1) / 2, sz * 0.01);
+      for (const y of [y0 + ph * 0.33, y0 + ph * 0.66]) for (const sz of [1, -1]) bag.add(new THREE.BoxGeometry(LW - sw * 2, 0.014, 0.012), 0, y, sz * 0.012);
+      bag.mesh(leaf, dm);
+      // 引き手（黒いだ円のくぼみ）
+      for (const sz of [1, -1]) { const h = mk(leaf, C(0.022, 0.022, 0.006, 20), paint('#1d1a17', 0.4, 0.3), LW / 2 - sw / 2, -0.05, sz * (zf - 0.001), PI / 2); h.scale.z = 1.8; }
+      g.traverse(o => { if (o.isMesh) o.userData.door = true; });
+      return g;
+    }
     case 'barn': {
       // 引き戸：壁の前に吊る板の扉
       leaf.position.z = 0.05;
@@ -2915,7 +2936,7 @@ export const PROC_TYPES = {
   mirror: { place: 'wall', params: { shape: ['round', 'rect', 'arch', 'sunburst'], frame: MATKEY } },
   clock: { place: 'wall', params: { style: ['simple', 'station', 'wood', 'minimal'], rim: MATKEY } },
   wallshelf: { place: 'wall', params: { style: ['plank', 'box', 'bracket'], mat: MATKEY, items: 'true/false', w: '幅 m' } },
-  door: { place: 'surface', surface: 'door', params: { style: ['flat', 'panel2', 'panel4', 'glass', 'barn', 'louver', 'shaker'], color: '#色 または木の材質キー', handle: MATKEY, frameColor: '枠の色' } },
+  door: { place: 'surface', surface: 'door', params: { style: ['flat', 'panel2', 'panel4', 'glass', 'barn', 'louver', 'shaker', 'koshi'], color: '#色 または木の材質キー', handle: MATKEY, frameColor: '枠の色' } },
   window: { place: 'surface', surface: 'window', params: { style: ['grid4', 'grid6', 'single', 'transom', 'cross', 'slim', 'arched'], frame: '#色 または材質キー' } },
   guitar: { place: 'floor', params: { style: ['acoustic', 'electric', 'bass', 'classic'], color: '本体の色' } },
   keyboard: { place: 'floor', params: { style: ['stand', 'piano'], color: '本体の色', mat: '本体の材質（piano を木にするとき）' } },
