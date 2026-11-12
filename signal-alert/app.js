@@ -304,15 +304,10 @@ function renderLog() {
 const CHARS = [
   { id: 'antenna', name: 'アンテナ', icons: null },
   { id: 'runner',  name: '爆走ランナー', scene: 'run',  icons: ['🏃‍♂️', '🏃‍♂️', '🚶‍♂️', '🚶‍♂️', '🛌'] },
-  { id: 'ride',    name: '乗り物',   scene: 'run',  icons: ['🚄', '🚙', '🛵', '🚲', '🚧'] },
-  { id: 'animal',  name: '動物リレー', scene: 'run', icons: ['🐆', '🐇', '🐢', '🐌', '💤'] },
-  { id: 'cat',     name: 'ネコ',     scene: 'run',  icons: ['🐈', '🐈', '🐈', '🐈', '😿'] },
-  { id: 'dog',     name: 'イヌ',     scene: 'run',  icons: ['🐕', '🐕', '🐕', '🐩', '🐶'] },
-  { id: 'horse',   name: '競馬',     scene: 'run',  icons: ['🏇', '🐎', '🐎', '🐴', '🐴'] },
-  { id: 'bird',    name: '鳥',       scene: 'fly',  icons: ['🦅', '🕊️', '🐦', '🐦', '🪺'] },
-  { id: 'sky',     name: '飛行機',   scene: 'fly',  icons: ['✈️', '🛩️', '🚁', '🎈', '🪂'], rot: { '✈️': -135 } },
-  { id: 'space',   name: '宇宙',     scene: 'fly',  icons: ['🚀', '🛸', '🛰️', '🛰️', '🌑'], rot: { '🚀': -135 } },
-  { id: 'sea',     name: '海',       scene: 'swim', icons: ['🐬', '🐟', '🐠', '🐡', '🐚'] },
+  { id: 'animal',  name: '動物リレー', scene: 'run',  icons: ['🐆', '🐇', '🐢', '🐌', '💤'] },
+  { id: 'cat',     name: 'ネコ',       scene: 'run',  icons: ['🐈', '🐈', '🐈', '🐈', '😿'] },
+  { id: 'space',   name: '宇宙',       scene: 'fly',  icons: ['🚀', '🛸', '🛰️', '🛰️', '🌑'], rot: { '🚀': -45 } },
+  { id: 'sea',     name: '海',         scene: 'swim', icons: ['🐬', '🐟', '🐠', '🐡', '🐚'] },
 ];
 // 流れていく景色(2つ並べて、つなぎ目が見えないように回す)
 const SCENERY = {
@@ -351,18 +346,59 @@ function setChar(id) {
   showAvatar(lastLv);
   renderCharGrid();
 }
+// 選ぶ画面:キャラごとに、走っている見本と、速さごとの姿を並べる
+const STEP_NAMES = ['速い', '普通', 'やや遅い', '遅い', '圏外'];
+function el(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text != null) e.textContent = text;
+  return e;
+}
+function miniScene(c) {
+  const sc = el('div', 'scene mini');
+  if (!c.icons) {
+    const bars = el('div', 'bars-anim');
+    for (let i = 0; i < 4; i++) bars.append(el('i'));
+    sc.append(bars);
+    return sc;
+  }
+  sc.dataset.scene = c.scene;
+  const strip = el('div', 'strip');
+  strip.append(el('span', '', SCENERY[c.scene]), el('span', '', SCENERY[c.scene]));
+  const runner = el('div', 'runner');
+  const lines = el('div', 'lines');
+  for (let i = 0; i < 3; i++) lines.append(el('i'));
+  const emo = el('span', 'emo', c.icons[0]);
+  if (c.rot && c.rot[c.icons[0]]) emo.style.rotate = `${c.rot[c.icons[0]]}deg`;
+  runner.append(lines, emo);
+  sc.append(strip, el('div', 'ground'), runner);
+  return sc;
+}
 function renderCharGrid() {
   els.charGrid.innerHTML = '';
   for (const c of CHARS) {
-    const b = document.createElement('button');
+    const on = c.id === charId;
+    const b = el('button', `char-card lv0${on ? ' on' : ''}`);
     b.type = 'button';
-    b.className = c.id === charId ? 'on' : '';
-    const ic = document.createElement('span');
-    ic.className = 'ic';
-    ic.textContent = c.icons ? [...new Set(c.icons.slice(0, 4))].join('') : '📶';
-    const nm = document.createElement('span');
-    nm.textContent = c.name;
-    b.append(ic, nm);
+    b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    const head = el('div', 'head');
+    head.append(el('span', 'nm', c.name), el('span', 'pick', on ? '✓ 使用中' : 'えらぶ'));
+    const steps = el('div', 'steps');
+    STEP_NAMES.forEach((name, i) => {
+      const cell = el('span');
+      if (c.icons) {
+        const ic = el('span', '', c.icons[i]);
+        if (i === 4) ic.style.filter = 'grayscale(1)';
+        cell.append(ic);
+      } else {
+        const bm = el('span', 'bars-mini');
+        for (let k = 0; k < 4; k++) bm.append(el('i', k < 4 - i ? 'f' : ''));
+        cell.append(bm);
+      }
+      cell.append(el('small', '', name));
+      steps.append(cell);
+    });
+    b.append(miniScene(c), head, steps);
     b.addEventListener('click', () => setChar(c.id));
     els.charGrid.appendChild(b);
   }
