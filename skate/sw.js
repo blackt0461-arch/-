@@ -1,6 +1,6 @@
 // スケートラップ：電波がなくても開けるようにする（Service Worker）
 // 画面は「まずネットから・だめなら保存した分」。モデルと読みこむ部品（jsDelivr）は「保存した分を先に」。
-const CACHE = 'skate-v11';
+const CACHE = 'skate-v12';
 const SHELL = ['./', './index.html', './app.js', './vision.js', './motion.js', './members.js', './stand.js', './icon.svg', './manifest.webmanifest', './models/efficientdet_lite0.tflite'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())); });

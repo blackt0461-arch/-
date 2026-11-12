@@ -422,7 +422,8 @@ function followPath(s, { model, pins = [], bans = [] }) {
   // カメラの動きを差し引いた位置（基準の座標）と、そこでの速さ・向き。「この速さなら次はここ」の予想に使う
   const Tmap = new Map(); for (const m of (s.motion || [])) if (m.length >= 10) Tmap.set(Math.round(m[0] * 1000), m);
   // 答え合わせで選んだ値：速さからの予想は「予想から背の高さ2倍より離れた枠へは移らない」という決まりとして使う
-  const FP = Object.assign({ wp: 0, wv: 0, wi: 0.3, cw: 2, sw: 0.5, gate: 2, ov: 0 }, globalThis.__FP || {});
+  // ov：同じ時刻に別々に写っていた枠（＝別の人）へ移る時の重さ。8 にすると乗っ取りが 19回→3回（本人の動画）
+  const FP = Object.assign({ wp: 0, wv: 0, wi: 0.3, cw: 2, sw: 0.5, gate: 2, ov: 8 }, globalThis.__FP || {});
   // 同じ時刻に別々に写っていた2つの切れはしは、別の人
   const span = new Map(s.tracks.filter(t => !t.virtual && t.s.length).map(t => [t.id, [t.s[0][0], t.s[t.s.length - 1][0]]]));
   const OVc = new Map(), together = (a, b) => { const k = a < b ? a + ',' + b : b + ',' + a; if (!OVc.has(k)) { const x = span.get(a), y = span.get(b); OVc.set(k, Math.min(x[1], y[1]) - Math.max(x[0], y[0])); } return OVc.get(k); };
