@@ -7,6 +7,7 @@
   --line: rgba(255,255,255,.18);
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 html, body { margin: 0; min-height: 100%; }
 body {
   font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", sans-serif;
@@ -28,9 +29,37 @@ main {
 
 /* ===== 上部:アンテナと速さ ===== */
 #hero { text-align: center; padding: 8px 0 24px; }
-#bars {
-  display: inline-flex; align-items: flex-end; gap: 8px; height: 88px; margin-bottom: 16px;
+#avatar {
+  height: 104px; margin-bottom: 12px; display: flex; align-items: flex-end; justify-content: center;
+  cursor: pointer;
 }
+#bars {
+  display: inline-flex; align-items: flex-end; gap: 8px; height: 88px; margin-bottom: 8px;
+}
+/* キャラ:速いほど元気に跳ねる。圏外は色が抜けて傾く */
+#emoji {
+  font-size: 84px; line-height: 1; display: inline-block; white-space: nowrap;
+  transform-origin: 50% 100%;
+  font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif;
+}
+#avatar.idle #emoji { opacity: .55; }
+#avatar.lv0 #emoji { animation: hop .32s ease-in-out infinite; }
+#avatar.lv1 #emoji { animation: hop .7s ease-in-out infinite; }
+#avatar.lv2 #emoji { animation: sway 1.6s ease-in-out infinite; }
+#avatar.lv3 #emoji { animation: sway 3s ease-in-out infinite; }
+#avatar.lv4 #emoji { filter: grayscale(1); opacity: .7; transform: rotate(-12deg); }
+@keyframes hop { 50% { transform: translateY(-12px) scaleY(1.04); } }
+@keyframes sway { 25% { transform: rotate(-5deg); } 75% { transform: rotate(5deg); } }
+
+/* キャラ選び */
+#char-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+#char-grid button {
+  font: inherit; color: inherit; border: 2px solid transparent; border-radius: 12px;
+  padding: 10px 6px; background: rgba(0,0,0,.2); display: flex; flex-direction: column;
+  align-items: center; gap: 4px; font-size: 14px; font-weight: 600;
+}
+#char-grid button.on { border-color: #fff; background: rgba(255,255,255,.2); }
+#char-grid .ic { font-size: 24px; letter-spacing: 2px; white-space: nowrap; }
 #bars i {
   width: 22px; border-radius: 5px; background: rgba(255,255,255,.22);
   transition: background .3s;
@@ -55,7 +84,7 @@ main {
 
 /* ===== タブ ===== */
 #tabs {
-  display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px;
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px;
   background: rgba(0,0,0,.22); border-radius: 12px; padding: 4px; margin-bottom: 10px;
 }
 #tabs button {
@@ -66,7 +95,13 @@ main {
 
 .panel { background: var(--card); border-radius: 16px; padding: 14px; }
 canvas { width: 100%; display: block; }
-#map { border-radius: 10px; margin: 10px 0 6px; }
+#map-wrap { position: relative; margin: 10px 0 6px; }
+#map { border-radius: 10px; touch-action: none; }
+#map-zoom { position: absolute; right: 8px; top: 8px; display: flex; flex-direction: column; gap: 6px; }
+#map-zoom button {
+  font: inherit; font-size: 20px; font-weight: 700; color: #fff; width: 40px; height: 40px;
+  border: 0; border-radius: 10px; background: rgba(0,0,0,.45); padding: 0;
+}
 
 .row { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 #map-info { font-size: 13px; opacity: .8; font-variant-numeric: tabular-nums; }

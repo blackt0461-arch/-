@@ -15,7 +15,10 @@
 <body class="state-idle">
 <main>
   <section id="hero">
-    <div id="bars" class="lv-0" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+    <div id="avatar" class="idle" aria-hidden="true">
+      <div id="bars" class="lv-0"><i></i><i></i><i></i><i></i></div>
+      <span id="emoji" hidden></span>
+    </div>
     <div id="speed">--</div>
     <div id="meaning">開始を押すと測定します</div>
     <div id="latency"></div>
@@ -27,6 +30,7 @@
     <button type="button" role="tab" data-tab="graph" class="on">グラフ</button>
     <button type="button" role="tab" data-tab="map">マップ</button>
     <button type="button" role="tab" data-tab="log">記録</button>
+    <button type="button" role="tab" data-tab="char">キャラ</button>
   </nav>
 
   <section id="tab-graph" class="panel">
@@ -41,10 +45,21 @@
       </div>
       <span id="map-info"></span>
     </div>
-    <canvas id="map" height="260"></canvas>
+    <div id="map-wrap">
+      <canvas id="map" height="320"></canvas>
+      <div id="map-zoom">
+        <button type="button" id="map-in" aria-label="拡大">＋</button>
+        <button type="button" id="map-out" aria-label="縮小">－</button>
+        <button type="button" id="map-home" aria-label="現在地に戻す">◎</button>
+      </div>
+    </div>
     <label class="switch"><span>場所を記録</span><input type="checkbox" id="opt-location"><b></b></label>
     <label class="switch"><span>圏外を予告</span><input type="checkbox" id="opt-predict"><b></b></label>
     <button type="button" id="map-clear" class="danger">マップを消去</button>
+  </section>
+
+  <section id="tab-char" class="panel" hidden>
+    <div id="char-grid"></div>
   </section>
 
   <section id="tab-log" class="panel" hidden>

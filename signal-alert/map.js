@@ -22,7 +22,9 @@
     locToggle: $('opt-location'), predictToggle: $('opt-predict'),
     canvas: $('map'), info: $('map-info'), viewBtn: $('map-view'),
     demoBtn: $('map-demo'), clearBtn: $('map-clear'), banner: $('warn-banner'),
+    zoomIn: $('map-in'), zoomOut: $('map-out'), home: $('map-home'),
   };
+  const MAP_H = 320;
 
   let settings = load(SET_KEY, { location: false, predict: true });
   let points = load(MAP_KEY, []);
@@ -32,6 +34,10 @@
   let lastWarn = 0;
   let view = 'near';         // near | all
   let demo = null;           // デモ表示中の点(保存しない)
+  // 指での拡大・移動。zoom は自動の縮尺に対する倍率、panX/panY は中心からのずれ(m)
+  let zoom = 1, panX = 0, panY = 0;
+  let lastScale = 1;         // 直前に描いた時の 1m あたりのピクセル(指の操作の計算に使う)
+  function resetView() { zoom = 1; panX = 0; panY = 0; }
 
   function load(key, def) {
     try { const v = JSON.parse(localStorage.getItem(key)); return v ?? def; } catch (e) { return def; }
@@ -130,7 +136,7 @@
   function draw() {
     const c = els.canvas;
     const dpr = window.devicePixelRatio || 1;
-    const w = c.clientWidth, h = 260;
+    const w = c.clientWidth, h = MAP_H;
     if (!w) return;
     if (c.width !== w * dpr) { c.width = w * dpr; c.height = h * dpr; }
     const g = c.getContext('2d');
@@ -155,27 +161,40 @@
       x: (p.lng - center.lng) * 111320 * Math.cos(center.lat * Math.PI / 180),
       y: (p.lat - center.lat) * 110540,
     });
-    let shown = list, half;
+    const shown = list;
+    let half;
     if (view === 'near') {
       half = MCFG.nearRadiusM;
-      shown = list.filter((p) => dist(center, p) <= half * 1.5);
     } else {
       half = 100;
       for (const p of list) { const q = toXY(p); half = Math.max(half, Math.abs(q.x) * h / w, Math.abs(q.y)); }
       half *= 1.1;
     }
-    const scale = (h / 2 - 10) / half;           // 1m あたりのピクセル
-    const px = (p) => { const q = toXY(p); return { x: w / 2 + q.x * scale, y: h / 2 - q.y * scale }; };
+    const scale = (h / 2 - 10) / half * zoom;    // 1m あたりのピクセル
+    lastScale = scale;
+    const px = (p) => { const q = toXY(p); return { x: w / 2 + (q.x - panX) * scale, y: h / 2 - (q.y - panY) * scale }; };
+
+    // 通った道を線でつなぐ(時間や距離が大きく離れた点はつながない)
+    const color = { good: '#86efac', slow: '#fde047', bad: '#f87171' };
+    g.lineWidth = 4; g.lineCap = 'round'; g.globalAlpha = .55;
+    for (let i = 1; i < shown.length; i++) {
+      const a = shown[i - 1], b = shown[i];
+      if (Math.abs(b.t - a.t) > 3 * 60 * 1000 || dist(a, b) > 300) continue;
+      const qa = px(a), qb = px(b);
+      if ((qa.x < 0 && qb.x < 0) || (qa.x > w && qb.x > w) || (qa.y < 0 && qb.y < 0) || (qa.y > h && qb.y > h)) continue;
+      g.strokeStyle = color[b.k === 'good' && a.k !== 'good' ? a.k : b.k];
+      g.beginPath(); g.moveTo(qa.x, qa.y); g.lineTo(qb.x, qb.y); g.stroke();
+    }
+    g.globalAlpha = 1;
 
     // 点(良好→遅い→圏外の順に重ねる)
-    const color = { good: '#86efac', slow: '#fde047', bad: '#f87171' };
     for (const k of ['good', 'slow', 'bad']) {
       g.fillStyle = color[k];
       for (const p of shown) {
         if (p.k !== k) continue;
         const q = px(p);
         if (q.x < -5 || q.x > w + 5 || q.y < -5 || q.y > h + 5) continue;
-        g.beginPath(); g.arc(q.x, q.y, k === 'good' ? 3 : 5, 0, Math.PI * 2); g.fill();
+        g.beginPath(); g.arc(q.x, q.y, k === 'good' ? 3.5 : 6, 0, Math.PI * 2); g.fill();
       }
     }
 
@@ -194,7 +213,7 @@
     // 北の向きと縮尺
     g.fillStyle = 'rgba(255,255,255,.85)'; g.font = '12px sans-serif';
     g.fillText('↑北', 8, 16);
-    const nice = [50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000];
+    const nice = [5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000, 100000, 200000];
     const target = (w * 0.3) / scale;
     const len = nice.find((n) => n >= target) || nice[nice.length - 1];
     const lpx = len * scale;
@@ -256,11 +275,13 @@
   });
   els.viewBtn.addEventListener('click', () => {
     view = view === 'near' ? 'all' : 'near';
+    resetView();
     els.viewBtn.textContent = view === 'near' ? '全体' : '周辺';
     draw();
   });
   els.demoBtn.addEventListener('click', () => {
     demo = demo ? null : makeDemo();
+    resetView();
     els.demoBtn.textContent = demo ? '終了' : 'デモ';
     if (demo && settings.predict) showBanner('約200m先は圏外になりやすい');
     if (!demo) setInfo('');
@@ -270,6 +291,65 @@
     points = []; lastSaved = null; save(MAP_KEY, points); setInfo(''); draw();
   });
   els.banner.addEventListener('click', () => { els.banner.hidden = true; });
+
+  // ===== 指で動かす(1本指=移動、2本指=拡大・縮小) =====
+  const ptrs = new Map();
+  let pinch = null;
+  function zoomAt(f, sx, sy) {
+    const w = els.canvas.clientWidth, h = MAP_H;
+    const nz = Math.min(Math.max(zoom * f, 0.05), 80);
+    f = nz / zoom;
+    // 指の下の場所が動かないように、中心のずれを合わせる
+    const wx = panX + (sx - w / 2) / lastScale, wy = panY - (sy - h / 2) / lastScale;
+    const ns = lastScale * f;
+    panX = wx - (sx - w / 2) / ns;
+    panY = wy + (sy - h / 2) / ns;
+    zoom = nz;
+    draw();
+  }
+  function local(e) {
+    const r = els.canvas.getBoundingClientRect();
+    return { x: e.clientX - r.left, y: e.clientY - r.top };
+  }
+  els.canvas.addEventListener('pointerdown', (e) => {
+    try { els.canvas.setPointerCapture(e.pointerId); } catch (err) {}
+    ptrs.set(e.pointerId, local(e));
+    pinch = null;
+  });
+  els.canvas.addEventListener('pointermove', (e) => {
+    if (!ptrs.has(e.pointerId)) return;
+    const prev = ptrs.get(e.pointerId);
+    const now = local(e);
+    ptrs.set(e.pointerId, now);
+    if (ptrs.size === 1) {
+      panX -= (now.x - prev.x) / lastScale;
+      panY += (now.y - prev.y) / lastScale;
+      draw();
+    } else if (ptrs.size === 2) {
+      const [a, b] = [...ptrs.values()];
+      const d = Math.hypot(a.x - b.x, a.y - b.y);
+      const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+      if (pinch && pinch.d > 0) {
+        panX -= (mid.x - pinch.mid.x) / lastScale;
+        panY += (mid.y - pinch.mid.y) / lastScale;
+        zoomAt(d / pinch.d, mid.x, mid.y);
+      }
+      pinch = { d, mid };
+    }
+  });
+  const up = (e) => { ptrs.delete(e.pointerId); pinch = null; };
+  els.canvas.addEventListener('pointerup', up);
+  els.canvas.addEventListener('pointercancel', up);
+  els.canvas.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const q = local(e);
+    zoomAt(e.deltaY < 0 ? 1.2 : 1 / 1.2, q.x, q.y);
+  }, { passive: false });
+  // iPhone の「2本指で画面全体が拡大される」動きを地図の上では止める
+  els.canvas.addEventListener('gesturestart', (e) => e.preventDefault());
+  els.zoomIn.addEventListener('click', () => zoomAt(1.6, els.canvas.clientWidth / 2, MAP_H / 2));
+  els.zoomOut.addEventListener('click', () => zoomAt(1 / 1.6, els.canvas.clientWidth / 2, MAP_H / 2));
+  els.home.addEventListener('click', () => { resetView(); draw(); });
   window.addEventListener('resize', draw);
 
   // 位置情報は「アプリを開いている間」だけ使う

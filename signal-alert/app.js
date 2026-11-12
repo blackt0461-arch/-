@@ -2,13 +2,14 @@
 
 // ===== 設定(判定基準) =====
 const CONFIG = {
-  intervalMs: 3000,      // 何ミリ秒ごとに測るか
-  timeoutMs: 3000,       // これを超えたら「通信できない」扱い
+  intervalMs: 1500,      // 何ミリ秒ごとに測るか
+  confirmMs: 600,        // 様子が変わった時は、これだけ待ってすぐ測り直す(確かめを速くする)
+  timeoutMs: 2000,       // これを超えたら「通信できない」扱い
   slowMs: 1000,          // これを超えたら「遅い」(警告の基準)
-  slowCount: 3,          // 「遅い」が何回連続したら警告するか
+  slowCount: 2,          // 「遅い」が何回連続したら警告するか
   failCount: 2,          // 通信失敗が何回連続したら「圏外」とするか
-  recoverCount: 3,       // 正常が何回連続したら「回復」とするか
-  historySize: 100,      // グラフに残す測定数(3秒×100=5分)
+  recoverCount: 2,       // 正常が何回連続したら「回復」とするか
+  historySize: 200,      // グラフに残す測定数(1.5秒×200=5分)
   logMax: 200,           // 記録の最大件数
   pingUrl: 'ping.txt',
 };
@@ -33,11 +34,12 @@ let slowStreak = 0, failStreak = 0, goodStreak = 0;
 let badSince = null;
 let history = [];        // {ms: number|null}
 let audioCtx = null;
+let quickJudge = false;  // 開始直後・アプリに戻った直後は、1回目の結果ですぐ判定する
 let wakeLock = null;
 
 const $ = (id) => document.getElementById(id);
 const els = {
-  body: document.body, bars: $('bars'), speed: $('speed'), meaning: $('meaning'),
+  body: document.body, avatar: $('avatar'), bars: $('bars'), emoji: $('emoji'), charGrid: $('char-grid'), speed: $('speed'), meaning: $('meaning'),
   latency: $('latency'), toggle: $('toggle'), chart: $('chart'),
   log: $('log'), clear: $('clear-log'),
 };
@@ -109,8 +111,9 @@ async function tick(id) {
   if (!running || id !== loopId) return;
   const ms = await measure();
   if (!running || id !== loopId) return;
-  handleResult(ms);
-  timer = setTimeout(() => tick(id), CONFIG.intervalMs);
+  const changed = handleResult(ms);
+  // いつもと違う結果が出たら、待たずにすぐ測り直して確かめる
+  timer = setTimeout(() => tick(id), changed ? CONFIG.confirmMs : CONFIG.intervalMs);
 }
 
 function handleResult(ms) {
@@ -121,8 +124,10 @@ function handleResult(ms) {
   else if (ms > CONFIG.slowMs) { slowStreak++; failStreak = 0; goodStreak = 0; }
   else { goodStreak++; slowStreak = 0; failStreak = 0; }
 
+  const kind = ms === null ? 'bad' : ms > CONFIG.slowMs ? 'slow' : 'good';
   let next = state;
-  if (failStreak >= CONFIG.failCount) next = 'bad';
+  if (quickJudge && ms !== null) { next = kind; quickJudge = false; }
+  else if (failStreak >= CONFIG.failCount) next = 'bad';
   else if (slowStreak >= CONFIG.slowCount) next = 'slow';
   else if (state === 'idle' && ms !== null && ms <= CONFIG.slowMs) next = 'good';
   else if ((state === 'slow' || state === 'bad') && goodStreak >= CONFIG.recoverCount) next = 'good';
@@ -130,6 +135,7 @@ function handleResult(ms) {
   setState(next);
   render();
   if (window.SignalMap) window.SignalMap.onSample(ms);
+  return kind !== state; // まだ判定が追いついていない(=すぐ測り直したい)
 }
 
 function setState(next) {
@@ -150,26 +156,26 @@ function setState(next) {
 }
 
 // ===== 表示 =====
+// 直近2回の平均で判定(速く反映しつつ、1回だけの揺れでちらつかないように)
 function currentLevel() {
-  const recent = history.slice(-3).map((p) => p.ms);
+  const recent = history.slice(-2).map((p) => p.ms);
   if (!recent.length) return null;
   if (state === 'bad') return OFFLINE;
-  const vals = recent.filter((v) => v !== null).sort((a, b) => a - b);
+  const vals = recent.filter((v) => v !== null);
   if (!vals.length) return OFFLINE;
-  const median = vals[Math.floor(vals.length / 2)];
-  return LEVELS.find((l) => median <= l.max);
+  const avg = vals.reduce((a, b) => a + b, 0) / vals.length;
+  return LEVELS.find((l) => avg <= l.max);
 }
 
 function render() {
   const lv = currentLevel();
   const last = history.length ? history[history.length - 1].ms : undefined;
+  showAvatar(lv);
   if (!lv) {
-    els.bars.className = 'lv-0';
     els.speed.textContent = '測定中';
     els.meaning.textContent = '';
     els.latency.textContent = '';
   } else {
-    els.bars.className = `lv-${lv.bars}`;
     els.speed.textContent = lv.word;
     els.meaning.textContent = lv.meaning;
     els.latency.textContent = last === null ? '' : `応答 ${last} ms`;
@@ -291,11 +297,71 @@ function renderLog() {
   }
 }
 
+// ===== キャラクター(速さの見せ方を切り替える) =====
+// 絵文字は iPhone の文字として表示する(画像ファイルは使わない)。並びは[速い, 普通, やや遅い, 遅い, 圏外]
+const CHARS = [
+  { id: 'antenna', name: 'アンテナ', icons: null },
+  { id: 'runner',  name: '爆走ランナー', icons: ['🏃‍♂️💨', '🏃‍♂️', '🚶‍♂️', '🧎‍♂️', '🛌'] },
+  { id: 'ride',    name: '乗り物',   icons: ['✈️', '🚄', '🚗', '🚲', '🚧'] },
+  { id: 'animal',  name: '動物リレー', icons: ['🐆', '🐇', '🐢', '🐌', '💤'] },
+  { id: 'cat',     name: 'ネコ',     icons: ['😸', '😺', '🐱', '😿', '🙀'] },
+  { id: 'weather', name: 'お天気',   icons: ['☀️', '🌤️', '☁️', '🌧️', '⛈️'] },
+  { id: 'face',    name: '顔',       icons: ['🤩', '😊', '😐', '😩', '😵'] },
+  { id: 'bird',    name: '鳥',       icons: ['🦅', '🕊️', '🐓', '🐧', '🪺'] },
+  { id: 'flower',  name: '花',       icons: ['🌻', '🌷', '🌱', '🥀', '🍂'] },
+  { id: 'space',   name: '宇宙',     icons: ['🚀', '🛸', '🛰️', '🌕', '🌑'] },
+  { id: 'sea',     name: '海',       icons: ['🐬', '🐟', '🐠', '🦀', '🐚'] },
+];
+const CHAR_KEY = 'signal-alert-char-v1';
+let charId = (() => { try { return localStorage.getItem(CHAR_KEY) || 'antenna'; } catch (e) { return 'antenna'; } })();
+if (!CHARS.some((c) => c.id === charId)) charId = 'antenna';
+let lastLv = null;
+
+function showAvatar(lv) {
+  lastLv = lv;
+  const ch = CHARS.find((c) => c.id === charId);
+  const bars = lv ? lv.bars : 0;
+  els.bars.className = `lv-${bars}`;
+  els.bars.hidden = !!ch.icons;
+  els.emoji.hidden = !ch.icons;
+  // 5段階:0=速い … 3=遅い、4=圏外。測定前は idle
+  const idx = lv ? 4 - bars : null;
+  els.avatar.className = idx === null ? 'idle' : `lv${idx}`;
+  if (ch.icons) els.emoji.textContent = ch.icons[idx === null ? 0 : idx];
+}
+function setChar(id) {
+  charId = id;
+  try { localStorage.setItem(CHAR_KEY, id); } catch (e) {}
+  showAvatar(lastLv);
+  renderCharGrid();
+}
+function renderCharGrid() {
+  els.charGrid.innerHTML = '';
+  for (const c of CHARS) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = c.id === charId ? 'on' : '';
+    const ic = document.createElement('span');
+    ic.className = 'ic';
+    ic.textContent = c.icons ? c.icons.slice(0, 4).join('') : '📶';
+    const nm = document.createElement('span');
+    nm.textContent = c.name;
+    b.append(ic, nm);
+    b.addEventListener('click', () => setChar(c.id));
+    els.charGrid.appendChild(b);
+  }
+}
+// キャラをタップすると次のキャラに変わる
+els.avatar.addEventListener('click', () => {
+  const i = CHARS.findIndex((c) => c.id === charId);
+  setChar(CHARS[(i + 1) % CHARS.length].id);
+});
+
 // ===== タブ =====
 document.querySelectorAll('#tabs button').forEach((btn) => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('#tabs button').forEach((b) => b.classList.toggle('on', b === btn));
-    for (const name of ['graph', 'map', 'log']) $(`tab-${name}`).hidden = btn.dataset.tab !== name;
+    for (const name of ['graph', 'map', 'log', 'char']) $(`tab-${name}`).hidden = btn.dataset.tab !== name;
     if (btn.dataset.tab === 'graph') drawChart();
     if (btn.dataset.tab === 'map' && window.SignalMap) window.SignalMap.draw();
   });
@@ -306,6 +372,7 @@ function start() {
   initAudio();
   running = true;
   slowStreak = failStreak = goodStreak = 0;
+  quickJudge = true;
   history = [];
   state = 'idle';
   els.body.className = 'state-idle';
@@ -322,7 +389,7 @@ function stop() {
   if (badSince) { addLog(badSince, new Date(), state); badSince = null; }
   state = 'idle';
   els.body.className = 'state-idle';
-  els.bars.className = 'lv-0';
+  showAvatar(null);
   els.speed.textContent = '--';
   els.meaning.textContent = '開始を押すと測定します';
   els.latency.textContent = '';
@@ -341,6 +408,7 @@ document.addEventListener('visibilitychange', () => {
     initAudio();
     requestWakeLock();
     slowStreak = failStreak = goodStreak = 0;
+    quickJudge = true;   // 戻った瞬間に測り、1回目の結果ですぐ判定する
     restartLoop();
   } else {
     loopId++;
@@ -364,4 +432,6 @@ try {
 } catch (e) { /* プレビュー環境などでは使えないので無視 */ }
 
 renderLog();
+renderCharGrid();
+showAvatar(null);
 drawChart();
