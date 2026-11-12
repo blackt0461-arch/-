@@ -438,7 +438,7 @@ function followPath(s, { model, pins = [], bans = [] }) {
   const Tmap = new Map(); for (const m of (s.motion || [])) if (m.length >= 10) Tmap.set(Math.round(m[0] * 1000), m);
   // 答え合わせで選んだ値：速さからの予想は「予想から背の高さ2倍より離れた枠へは移らない」という決まりとして使う
   // ov：同じ時刻に別々に写っていた枠（＝別の人）へ移る時の重さ。8 にすると乗っ取りが 19回→3回（本人の動画）
-  const FP = Object.assign({ wp: 0, wv: 0, wi: 0.3, cw: 2, sw: 0.5, gate: 2, ov: 8 }, globalThis.__FP || {});
+  const FP = Object.assign({ wp: 0, wv: 0, wi: 0.3, cw: 2, sw: 0.5, gate: 2, ov: 8, st: 2, sv: 0.6 }, globalThis.__FP || {});
   // 同じ時刻に別々に写っていた2つの切れはしは、別の人
   const span = new Map(s.tracks.filter(t => !t.virtual && t.s.length).map(t => [t.id, [t.s[0][0], t.s[t.s.length - 1][0]]]));
   const OVc = new Map(), together = (a, b) => { const k = a < b ? a + ',' + b : b + ',' + a; if (!OVc.has(k)) { const x = span.get(a), y = span.get(b); OVc.set(k, Math.min(x[1], y[1]) - Math.max(x[0], y[0])); } return OVc.get(k); };
@@ -456,7 +456,9 @@ function followPath(s, { model, pins = [], bans = [] }) {
       let vx = dtv > 0.05 ? (pb[0] - pa[0]) / dtv : 0, vy = dtv > 0.05 ? (pb[1] - pa[1]) / dtv : 0;
       const hasV = dtv > 0.05 && isFinite(vx) && isFinite(vy); if (!hasV) vx = vy = 0;
       const k = Math.round(r[0] * 1000); if (!byT.has(k)) byT.set(k, []);
-      byT.get(k).push({ tr: t.id, t: r[0], cx: (r[1] + r[3]) / 2, y2: r[4], h: r[4] - r[2], r, vx, vy, hasV, T: Tm[n], Ti: Ti[n] });
+      // 速さ（1秒に体いくつ分。カメラの動きは差し引いてある）。立って休んでいる人はほぼ 0
+      const spd = hasV ? Math.hypot(vx * A, vy) / Math.max(0.03, r[4] - r[2]) : -1;
+      byT.get(k).push({ tr: t.id, t: r[0], cx: (r[1] + r[3]) / 2, y2: r[4], h: r[4] - r[2], r, vx, vy, hasV, spd, T: Tm[n], Ti: Ti[n] });
     });
   }
   const times = [...byT.keys()].sort((a, b) => a - b); if (!times.length) return null;
@@ -474,7 +476,7 @@ function followPath(s, { model, pins = [], bans = [] }) {
   let path = null;
   for (let it = 0; it < 3; it++) {
     // まん中に近い（×2）＋ この人らしい色（×6）。この人らしい人がいないコマは、だれも選ばない（-0.6）
-    const em = fr.map(cs => cs.map(c => wS * ((model ? FP.cw : 2) * (1 - Math.abs(c.cx - 0.5) * 2.2) + (model ? 6 * (looks(hist.get(c.tr), model) - 0.88) - 0.6 : 0) + (pinTr.has(c.tr) ? 1.5 : 0))));
+    const em = fr.map(cs => cs.map(c => wS * ((model ? FP.cw : 2) * (1 - Math.abs(c.cx - 0.5) * 2.2) + (model ? 6 * (looks(hist.get(c.tr), model) - 0.88) - 0.6 : 0) + (pinTr.has(c.tr) ? 1.5 : 0) - (c.spd >= 0 && c.spd < FP.sv ? FP.st : 0))));
     const best = em.map(r => r.slice()), back = fr.map(cs => cs.map(() => null));
     const forced = new Set(); for (const pn of pins) fr.forEach((cs, k) => { if (cs.length === 1 && cs[0].tr === pn.tr && Math.abs(cs[0].t - pn.t) < 0.06) forced.add(k); });
     for (let i = 1; i < fr.length; i++) for (let j = 0; j < fr[i].length; j++) {
@@ -582,13 +584,20 @@ function missedCrossings(s, mine) {
 function personCrossings(s, p) {
   const set = new Set(p.tracks);
   const cs = s.crossings.filter(c => set.has(c.track) && c.dir === s.dir).sort((a, b) => a.t - b.t);
-  const out = [];
+  let out = [];
   for (const c of cs) if (!out.length || c.t - out[out.length - 1].t >= s.minLap) out.push(c);
+  // 本人が手で直した分：消した通過を外し、足した通過を入れる（赤いラインを見失った周の直し）
+  const man = p.manual || [];
+  if (man.length) {
+    out = out.filter(c => !man.some(m => !m.on && Math.abs(m.t - c.t) < 0.4));
+    for (const m of man) if (m.on && !out.some(c => Math.abs(c.t - m.t) < 0.4)) out.push({ t: m.t, dir: s.dir, track: p.tracks[0], refined: true, manual: true });
+    out.sort((a, b) => a.t - b.t);
+  }
   return out;
 }
 function laps(s, p) {
   const cs = personCrossings(s, p), L = [];
-  for (let i = 1; i < cs.length; i++) L.push({ n: i, lap: cs[i].t - cs[i - 1].t, total: cs[i].t - cs[0].t, at: cs[i].t, from: cs[i - 1].t, refined: cs[i].refined && cs[i - 1].refined, est: !!(cs[i].est || cs[i - 1].est) });
+  for (let i = 1; i < cs.length; i++) L.push({ n: i, lap: cs[i].t - cs[i - 1].t, total: cs[i].t - cs[0].t, at: cs[i].t, from: cs[i - 1].t, refined: cs[i].refined && cs[i - 1].refined, est: !!(cs[i].est || cs[i - 1].est), manual: !!(cs[i].manual || cs[i - 1].manual) });
   return { cs, L };
 }
 // 集団のラップ：だれかが線を越えた「ひとかたまり」ごとに、先頭の時刻をとる。人の見分けをまちがえても変わらない
@@ -732,7 +741,7 @@ function renderLaps() {
   tb.innerHTML = '<tr><th>周</th><th>ラップ</th><th>合計</th></tr>';
   for (const x of L) {
     const tr = document.createElement('tr'); tr.className = 'tap';
-    tr.innerHTML = `<td>${x.n}</td><td class="${x.lap === best && L.length > 1 ? 'best' : ''}">${fmt(x.lap)}${x.refined ? '' : '<span class="pill">見直し前</span>'}${x.est ? '<span class="pill">推定</span>' : ''}${multi(x) ? `<span class="pill" style="background:var(--red);color:#fff">${multi(x)}周分？</span>` : ''}</td><td>${fmt(x.total)}</td>`;
+    tr.innerHTML = `<td>${x.n}</td><td class="${x.lap === best && L.length > 1 ? 'best' : ''}">${fmt(x.lap)}${x.refined ? '' : '<span class="pill">見直し前</span>'}${x.est ? '<span class="pill">推定</span>' : ''}${x.manual ? '<span class="pill">手で直した</span>' : ''}${multi(x) ? `<span class="pill" style="background:var(--red);color:#fff">${multi(x)}周分？</span>` : ''}</td><td>${fmt(x.total)}</td>`;
     tr.onclick = () => checkCrossing(x.at);
     tb.append(tr);
   }
@@ -742,6 +751,19 @@ function renderLaps() {
   st.innerHTML = `<td colspan="3" class="note" style="font-family:var(--font);font-size:13px;text-align:left">スタート（1回目の通過）${clock(cs[0].t)} をスローで見る</td>`;
   st.onclick = () => checkCrossing(cs[0].t); tb.append(st);
 }
+// ラップを手で直す：いま見ている場面を通過にする／近くの通過を消す
+$('lapAdd').onclick = async () => {
+  const s = S.session, p = S.person, t = $('vPlay').currentTime; if (!s || !p) return;
+  p.manual = (p.manual || []).filter(m => Math.abs(m.t - t) >= 0.4); p.manual.push({ t: Math.round(t * 100) / 100, on: true });
+  await saveSession(s); renderLaps(); toast(clock(t) + ' を通過にしました');
+};
+$('lapDel').onclick = async () => {
+  const s = S.session, p = S.person, t = $('vPlay').currentTime; if (!s || !p) return;
+  const cs = personCrossings(s, p); let b = null; for (const c of cs) if (!b || Math.abs(c.t - t) < Math.abs(b.t - t)) b = c;
+  if (!b || Math.abs(b.t - t) > 2) return toast('この場面の近く（前後2秒）に通過はありません');
+  p.manual = (p.manual || []).filter(m => Math.abs(m.t - b.t) >= 0.4); if (!b.manual) p.manual.push({ t: b.t, on: false });
+  await saveSession(s); renderLaps(); toast(clock(b.t) + ' の通過を消しました');
+};
 $('copyLaps').onclick = async () => {
   const s = S.session, p = S.person, { L } = laps(s, p); if (!L.length) return toast('ラップがありません');
   const d = new Date(s.date);

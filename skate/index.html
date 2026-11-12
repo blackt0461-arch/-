@@ -170,7 +170,7 @@ dialog::backdrop{background:rgb(0 0 0 / .6)}
     </span>
   </div>
   <input type="file" id="file" accept="video/*" class="hide">
-  <p class="note">版 2026-11-12m。動画はこのスマホの中だけで計算します。どこにも送りません（「みんなのスマホに出して、記録に残す」を使う時だけ、名前・練習メニュー・ラップの数字をネットに送って残します。見られるのはチームの合い言葉を知っている人だけです）。<br>「設置して測る」は、撮りながらラップだけを測ります。追いかけ動画は撮り終わってから作ります。</p>
+  <p class="note">版 2026-11-13a。動画はこのスマホの中だけで計算します。どこにも送りません（「みんなのスマホに出して、記録に残す」を使う時だけ、名前・練習メニュー・ラップの数字をネットに送って残します。見られるのはチームの合い言葉を知っている人だけです）。<br>「設置して測る」は、撮りながらラップだけを測ります。追いかけ動画は撮り終わってから作ります。</p>
   <h2 style="font-size:16px;margin:22px 0 6px">登録した部員</h2>
   <div id="memList"></div>
   <p class="note" id="memEmpty">選手の画面の「部員に登録」から登録できます。登録すると、次から自動で名前が付き、撮影中に自動で追いかけられます。</p>
@@ -316,6 +316,8 @@ dialog::backdrop{background:rgb(0 0 0 / .6)}
     <div class="row"><b class="grow">ラップ</b><button class="btn small" id="copyLaps">コピー</button></div>
     <table class="laps" id="lapTable"></table>
     <p class="note" style="margin-bottom:0">行をタップすると、ラインを越える所をスローで確かめられます。</p>
+    <div class="row" style="margin-top:10px"><button class="btn small grow" id="lapAdd">＋ いまの場面を通過にする</button><button class="btn small grow" id="lapDel">− 近くの通過を消す</button></div>
+    <p class="note" style="margin-bottom:0">赤いラインを見失った周は、動画をゴールの瞬間で止めて「＋」を押すと直せます。</p>
   </div>
   <div class="card hide" id="followCard">
     <b>通しの確認</b>
