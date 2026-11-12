@@ -1252,6 +1252,55 @@ K.setlist = () => {
 // =====================================================================
 // 入口
 // =====================================================================
+
+// ───────── 旅館シリーズの小物（テーブルや茶だんすの上に） ─────────
+// 湯のみと急須：朱泥の急須と、白い湯のみ2つを木の盆に
+K.yunomi = () => {
+  const tray = P('#5a3220', 0.35);
+  bx(0.26, 0.012, 0.17, tray, 0, 0, 0, 0.005);
+  for (const sz of [-1, 1]) bx(0.26, 0.016, 0.01, tray, 0, 0.01, sz * 0.08, 0.003);
+  const clay = P('#9a4a2a', 0.45);
+  las([[0.001, 0], [0.04, 0.003], [0.053, 0.027], [0.051, 0.052], [0.035, 0.068], [0.022, 0.071]], clay, -0.06, 0.012, 0, 24);
+  cy(0.023, 0.025, 0.01, clay, -0.06, 0.082, 0, 16); sp(0.007, clay, -0.06, 0.096, 0, 1, 1, 1, 8, 6);
+  const spout = cy(0.005, 0.01, 0.045, clay, -0.106, 0.045, 0, 8); spout.rotation.z = 0.9;
+  const hd = cy(0.008, 0.01, 0.06, clay, -0.06, 0.05, 0.065, 8); hd.rotation.x = PI / 2 - 0.25; hd.position.set(-0.06, 0.05, 0.075); // 横手（注ぎ口と直角の取っ手）
+  const cup = CER('#ece6d8'), tea = P('#a8b85a', 0.15);
+  for (const [x, z] of [[0.045, -0.035], [0.09, 0.035]]) {
+    las([[0.001, 0], [0.022, 0], [0.025, 0.008], [0.028, 0.062], [0.025, 0.062], [0.023, 0.01], [0.001, 0.01]], cup, x, 0.012, z, 22);
+    cy(0.024, 0.024, 0.002, tea, x, 0.065, z, 18);
+    cy(0.0285, 0.0285, 0.008, P(AI2, 0.3), x, 0.05, z, 22, true); // 藍の線
+  }
+};
+const AI2 = '#2a3b66';
+// 温泉まんじゅう：ふたを開けた木箱に、焼き印の茶色いおまんじゅう
+K.manju = () => {
+  const box = WOOD('pine');
+  bx(0.2, 0.01, 0.14, box, 0, 0, 0, 0.002);
+  for (const sz of [-1, 1]) bx(0.2, 0.035, 0.008, box, 0, 0.01, sz * 0.066); for (const sx of [-1, 1]) bx(0.008, 0.035, 0.124, box, sx * 0.096, 0.01, 0);
+  const lid = bx(0.2, 0.008, 0.14, box, 0.03, 0.0, 0.11, 0.002); lid.rotation.y = 0.2; lid.position.set(0.06, 0.004, 0.17);
+  const mark = faceMat('manjuyaki', (x, w, h) => { x.fillStyle = '#9a5a2c'; x.fillRect(0, 0, w, h); const g = x.createRadialGradient(w / 2, h / 2, 4, w / 2, h / 2, w / 2); g.addColorStop(0, 'rgba(255,220,170,0.25)'); g.addColorStop(1, 'rgba(60,25,10,0.3)'); x.fillStyle = g; x.fillRect(0, 0, w, h); x.fillStyle = '#4a2410'; x.font = 'bold 30px serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText('♨', w / 2, h / 2 + 2); }, 64, 64);
+  const body = P('#9a5a2c', 0.55);
+  mark.transparent = true;
+  for (let i = 0; i < 6; i++) {
+    const x = -0.06 + (i % 3) * 0.06, z = -0.03 + Math.floor(i / 3) * 0.06;
+    sp(0.024, body, x, 0.022, z, 1, 0.58, 1, 18, 10);
+    const d = new THREE.Mesh(new THREE.CircleGeometry(0.013, 20), mark); d.rotation.x = -PI / 2; d.position.set(x, 0.0362, z); G.add(d); // 焼き印
+  }
+  const lab = faceMat('manjulabel', (x, w, h) => { x.fillStyle = '#f3ead6'; x.fillRect(0, 0, w, h); x.fillStyle = '#7c3b2e'; x.font = 'bold 22px serif'; x.textAlign = 'center'; x.fillText('温泉', w / 2, 28); x.fillText('まんじゅう', w / 2, 56); }, 128, 64);
+  const l = new THREE.Mesh(new THREE.PlaneGeometry(0.1, 0.05), lab); l.rotation.set(-PI / 2, 0, 0.2); l.position.set(0.06, 0.0095, 0.17); G.add(l);
+};
+// ルームキー：大きな木札に部屋の名前、真ちゅうの鍵
+K.roomkey = () => {
+  const tag = faceMat('roomkeytag', (x, w, h) => { x.fillStyle = '#d9b47a'; x.fillRect(0, 0, w, h); for (let i = 0; i < 30; i++) { x.strokeStyle = 'rgba(140,95,40,0.2)'; x.beginPath(); x.moveTo(0, i * h / 30); x.lineTo(w, i * h / 30 + 3); x.stroke(); } x.fillStyle = '#2a1d10'; x.font = 'bold 34px "Hiragino Mincho ProN","Yu Mincho",serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText('ゆけむり', w / 2, h * 0.42); x.font = 'bold 22px serif'; x.fillText('の間', w / 2, h * 0.72); x.fillStyle = '#7c3b2e'; x.fillRect(w * 0.1, h * 0.1, 8, 8); }, 192, 96);
+  const t = faced(0.13, 0.016, 0.065, WOOD('oak'), WOOD('oak'), 0, 0, 0, tag); t.rotation.y = 0.35;
+  const br = MET('#c9a14e', 0.3);
+  const ring = to(0.016, 0.0025, br, -0.08, 0.004, 0.035, TAU, 6, 20); ring.rotation.x = PI / 2;
+  const key = new THREE.Group(); G.add(key); key.position.set(-0.11, 0.003, 0.06); key.rotation.y = 0.6;
+  const k = (geo, x, z) => { const m = new THREE.Mesh(geo, br); m.position.set(x, 0, z); m.castShadow = true; key.add(m); return m; };
+  k(new THREE.TorusGeometry(0.011, 0.003, 6, 16), 0, 0).rotation.x = PI / 2;
+  k(new THREE.BoxGeometry(0.045, 0.004, 0.006), 0.032, 0);
+  k(new THREE.BoxGeometry(0.004, 0.004, 0.01), 0.048, 0.006); k(new THREE.BoxGeometry(0.004, 0.004, 0.008), 0.04, 0.005);
+};
 export const SMALL_KINDS = Object.keys(K);
 // spec = { type: 'small', kind, ... }。matOf = procfurn の材質（木目など）
 export function buildSmall(spec, matOf) {

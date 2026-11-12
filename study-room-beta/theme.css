@@ -238,6 +238,10 @@ b, strong { font-weight: 700; }
 .banner .bn-picks { position: relative; z-index: 2; }
 .banner .bn-kicker { margin: 6px 0 0; font-size: 11px; letter-spacing: .3em; color: #ff8fb8; font-weight: 700; }
 .banner .bn-title { margin: 0 0 2px; font-family: "Dela Gothic One", var(--sk-head); font-size: 34px; letter-spacing: .06em; line-height: 1.05; color: #fff; text-shadow: 0 0 18px rgba(255, 60, 120, .65), 0 2px 0 rgba(0,0,0,.6); }
+/* 旅館シリーズ：湯けむりのように、白いもやがゆっくり右上へ */
+.banner.b-ryokan::before { content: ""; position: absolute; inset: 0; z-index: 1; pointer-events: none; background: linear-gradient(100deg, rgba(20,13,8,.82) 0%, rgba(20,13,8,.55) 50%, rgba(20,13,8,.1) 100%); }
+.banner.b-ryokan .bn-kicker { color: #f3d9a6; }
+.banner.b-ryokan .bn-title { font-family: "Shippori Mincho B1", "Hiragino Mincho ProN", "Yu Mincho", serif; text-shadow: 0 0 18px rgba(255, 220, 160, .55), 0 2px 0 rgba(0,0,0,.6); letter-spacing: .12em; }
 .banner.b-band > p:not(.bn-kicker) { color: rgba(255,255,255,.88); text-shadow: 0 1px 3px rgba(0,0,0,.8); }
 .bn-tabs .bn-tab b { font-family: var(--sk-font); }
 .half-sheet .hs-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }

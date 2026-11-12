@@ -6,6 +6,7 @@
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { buildGacha } from './js/gachafurn.js';
+import { buildProc } from './js/procfurn.js';
 const q = new URLSearchParams(location.search), W = 640, H = 640;
 const r = new THREE.WebGLRenderer({ antialias: true }); r.setSize(W, H); r.toneMapping = THREE.ACESFilmicToneMapping; r.shadowMap.enabled = true; document.body.append(r.domElement);
 const sc = new THREE.Scene(); const dark = q.get('dark');
@@ -13,7 +14,7 @@ sc.background = new THREE.Color(dark ? '#141218' : '#e9e4da');
 const pm = new THREE.PMREMGenerator(r); sc.environment = pm.fromScene(new RoomEnvironment(), 0.04).texture; sc.environmentIntensity = dark ? 0.12 : 0.8;
 const sun = new THREE.DirectionalLight('#fff3e0', dark ? 0.1 : 1.6); sun.position.set(2, 4, 3); sun.castShadow = true; sc.add(sun);
 const fl = new THREE.Mesh(new THREE.PlaneGeometry(10, 10).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: dark ? '#2a2420' : '#b9a58a', roughness: 0.8 })); fl.receiveShadow = true; sc.add(fl);
-const obj = buildGacha({ type: q.get('t') }); sc.add(obj);
+const t0 = q.get('t'); const obj = t0.startsWith('small-') ? buildProc({ type: 'small', kind: t0.slice(6) }) : buildGacha({ type: t0 }); sc.add(obj);
 obj.traverse(o => { if (o.isMesh) { o.castShadow ??= true; } });
 const L = obj.userData.light; if (L) { const pl = new THREE.PointLight(L.color, L.intensity * 2, 3, 2); pl.position.set(0, L.y, 0.05); sc.add(pl); }
 obj.userData.tick?.(+(q.get('time') || 0), 0.016);

@@ -6,7 +6,7 @@ import { GACHA_AVATARS } from './avatars.js';
 // レア度：★3（70%）・★4（25%）・★5（5%）。10連は★4以上が1つ以上かならず出る。
 // ★4・★5 がかぶったら「かけら」（★4のかけら・★5のかけら）になる。SHARD_COST 個で、同じレア度の好きな家具と交換できる。
 // ★3 は少し豪華な単品、★4 は個性の強い物、★5 は「恒常」（いつでも出る最上級の定番）と
-// 「限定」（期間限定ガチャのシリーズ。バンド・星空・ゴシック・和の雅）の2種類。
+// 「限定」（期間限定ガチャのシリーズ。旅館・バンド・星空・ゴシック・和の雅）の2種類。
 // 限定シリーズには ★5 だけでなく ★4 の家具もある（バンドシリーズ。壁紙・床・ドアもふくめ全ジャンル）。
 // バナー：'standard'（★4・★5 は恒常だけ）／シリーズ id（★5・★4 の半分はそのシリーズ、残りは恒常）。
 
@@ -19,7 +19,8 @@ export const SHARD_COST = 5;
 // 限定のシリーズ。start / end は開催期間（ISO 日付文字列。null = 未定）。いちばん上が今のピックアップ
 // （もとの「ロックシリーズ」の家具は、id はそのままでバンドシリーズに入った）
 export const SERIES = [
-  { id: 'band', name: 'バンドシリーズ', title: 'OVERDRIVE', desc: 'アンプをいっぱいに上げて。ライブハウスの熱気を、自分の部屋に。', start: null, end: null },
+  { id: 'ryokan', name: '旅館シリーズ', title: 'YUKEMURI', desc: '湯けむりと畳の香り、木のぬくもり。山あいの温泉宿で、ひと休み。', start: null, end: null },
+  { id: 'band', name: 'バンドシリーズ', title: 'OVERDRIVE', desc: 'アンプをいっぱいに上げて。ライブハウスの熱気を、自分の部屋に。', start: null, end: '2026-11-19T23:59:59+09:00' }, // 日本時間 11/19 の終わりまで（そのあとはお休み。持っている家具はそのまま）
   { id: 'starry', name: '星空シリーズ', desc: '濃紺と金に、またたく星。夜空の中で暮らすような部屋に。', start: '2099-01-01', end: null }, // お休み中（持っている家具はそのまま）
   { id: 'gothic', name: 'ゴシックシリーズ', desc: '黒檀と深紅のベルベット、ゆらめくろうそく。古城の一室のような部屋に。', start: '2099-01-01', end: null }, // まだ開いていない
   { id: 'wa', name: '和の雅シリーズ', desc: '黒漆と金箔、舞う桜。雅な日本の部屋に。', start: '2099-01-01', end: null }, // まだ開いていない
@@ -149,6 +150,35 @@ add(4, [
   ['g4-band-setlist', 'セットリストとライブチケット', 'decor', 'ir', { proc: { type: 'small', kind: 'setlist' } }, 0.2, { zone: 'desk' }],
 ], { series: 'band' });
 
+// ───────── 限定：旅館シリーズ（★5 と ★4。12ジャンルすべてに1つ以上。形は js/ryokanfurn.js） ─────────
+add(5, [
+  ['g5-ryokan-rotenburo', 'ひのきの露天風呂', 'fixture', 'n', { gacha: 'rotenburo' }, 2.1],
+  ['g5-ryokan-irori', '囲炉裏と自在かぎ', 'hobby', 'nr', { gacha: 'irori' }, 2.4, { light: '#ff9a4a' }],
+  ['g5-ryokan-yukimi', '雪見障子の丸窓', 'wallart', 'n', { gacha: 'yukimiWindow' }, 1.4, { ...W, light: '#e9f0ff' }],
+  ['g5-ryokan-zataku', 'ひのきの座卓と座椅子', 'table', 'n', { gacha: 'zatakuSet' }, 1.9],
+  ['g5-ryokan-noren', '「ゆ」ののれん', 'textile', 'nr', { gacha: 'norenEntrance' }, 1.4, W],
+  ['g5-ryokan-tokonoma', '椿と掛け軸の床の間', 'decor', 'n', { gacha: 'tokonoma' }, 2.1],
+], { series: 'ryokan' });
+add(4, [
+  ['g4-ryokan-andon', '白木の角行灯', 'light', 'n', { gacha: 'kakuAndon' }, 0.8, { light: '#ffc98a' }],
+  ['g4-ryokan-futon', 'ふかふかの布団', 'sofa', 'n', { gacha: 'futon' }, 2.1],
+  ['g4-ryokan-zaisu', 'えんじの座椅子', 'chair', 'nr', { gacha: 'zaisu' }, 0.75],
+  ['g4-ryokan-engawa', '窓辺の籐のいすとテーブル', 'table', 'nr', { gacha: 'engawaSet' }, 1.9],
+  ['g4-ryokan-chadansu', 'こげ茶の茶だんす', 'storage', 'nr', { gacha: 'chadansu' }, 0.95],
+  ['g4-ryokan-bonsai', '松の盆栽', 'plant', 'n', { gacha: 'bonsai' }, 0.72],
+  ['g4-ryokan-yukata', '衣桁と浴衣', 'decor', 'n', { gacha: 'ikoYukata' }, 1.6],
+  ['g4-ryokan-shogi', 'かやの将棋盤', 'hobby', 'nr', { gacha: 'shogiBan' }, 0.75],
+  ['g4-ryokan-scroll', '湯けむりの掛け軸', 'wallart', 'n', { gacha: 'yukemuriScroll' }, 1.4, W],
+  ['g4-ryokan-rug', 'い草の花ござ', 'textile', 'n', { gacha: 'igusaRug', w: 2.0, d: 1.4 }, 2.0, RUG],
+  ['g4-ryokan-wall', 'あたたかい塗り壁', 'interior', 'nr', { tex: 'painted_plaster_wall', rep: 2, tint: '#ffe9c8' }, 6, SF('wall')],
+  ['g4-ryokan-floor', '青々とした畳', 'interior', 'n', { tex: 'tatami_mat', rep: 2.5, tint: '#d9e8b0' }, 6, SF('floor')],
+  ['g4-ryokan-door', '白木の格子戸', 'fixture', 'n', { proc: { type: 'door', style: 'koshi', color: 'pine' } }, 2.1, SF('door')],
+  // 小物（js/smallfurn.js）。テーブルや棚の上に置ける
+  ['g4-ryokan-yunomi', '湯のみと急須', 'decor', 'n', { proc: { type: 'small', kind: 'yunomi' } }, 0.27, { zone: 'desk' }],
+  ['g4-ryokan-manju', '温泉まんじゅう', 'decor', 'n', { proc: { type: 'small', kind: 'manju' } }, 0.26, { zone: 'desk' }],
+  ['g4-ryokan-key', '木札のルームキー', 'decor', 'nr', { proc: { type: 'small', kind: 'roomkey' } }, 0.16, { zone: 'desk' }],
+], { series: 'ryokan' });
+
 // ───────── ★5 限定：お休み中のシリーズ ─────────
 add(5, [
   ['g5-star-pendant', '天球儀のペンダントライト', 'light', 'rm', { gacha: 'starPendant' }, 1.2, { ...CE, light: '#ffe2b8' }],
@@ -193,6 +223,8 @@ add(5, [
 const AV = { place: 'avatar' };
 const avRow = (a) => ['av-' + a.id, 'アイコン：' + a.name, 'avatar', 'i', { avatar: a.id }, 1, AV];
 add(4, GACHA_AVATARS.filter(a => a.r === 4 && a.series === 'band').map(avRow), { series: 'band' });
+add(4, GACHA_AVATARS.filter(a => a.r === 4 && a.series === 'ryokan').map(avRow), { series: 'ryokan' });
+add(5, GACHA_AVATARS.filter(a => a.r === 5 && a.series === 'ryokan').map(avRow), { series: 'ryokan' });
 add(5, GACHA_AVATARS.filter(a => a.r === 5 && a.series === 'band').map(avRow), { series: 'band' });
 add(4, GACHA_AVATARS.filter(a => a.r === 4 && !a.series).map(avRow));
 add(5, GACHA_AVATARS.filter(a => a.r === 5 && !a.series).map(avRow));
