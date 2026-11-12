@@ -8,7 +8,7 @@
 const fs = require('fs'), path = require('path'), { execSync } = require('child_process');
 const ROOT = path.resolve(__dirname, '..', '..'), DIST = path.join(ROOT, 'dist');
 const TOP_FILES = ['index.html', '_redirects', 'manifest.webmanifest', 'フーリエ解析計算機.html'];
-const TOP_DIRS = ['assets', 'study-room', 'study-room-beta', 'test-study', 'lyric-book', 'chord-analyzer', 'alarm', 'smagro-memory', 'yotei', 'skate', 'baito', 'route'];
+const TOP_DIRS = ['assets', 'study-room', 'study-room-beta', 'test-study', 'lyric-book', 'chord-analyzer', 'alarm', 'smagro-memory', 'yotei', 'skate', 'baito', 'route', 'shrink'];
 const SKIP_DIRS = new Set(['tools', 'supabase', 'docs', 'server', 'node_modules', '.git', 'tests']);
 const MAX = 25 * 1024 * 1024; // Cloudflare Pages の1ファイルの上限
 fs.rmSync(DIST, { recursive: true, force: true });
