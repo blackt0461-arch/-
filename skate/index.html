@@ -96,6 +96,12 @@ table.laps tr.total td{font-weight:800;border-top:2px solid var(--dim)}
 .lcard .last{font-family:var(--mono);font-size:26px;font-weight:800;line-height:1.1}
 .lcard .hist{font-family:var(--mono);font-size:12px;color:var(--dim);line-height:1.5;word-break:break-all}
 .lcard .multi{font-size:12px;color:var(--warn,#e0a020);margin-left:6px;font-family:inherit}
+.lcard .diff{font-size:13px;margin-left:6px;font-family:var(--mono);color:var(--dim)}
+.setbtn{width:100%;text-align:left;margin:8px 0;white-space:normal;line-height:1.3}
+.setrow{display:block;width:100%;text-align:left;padding:10px;margin:4px 0;border-radius:10px;border:1px solid var(--line);background:var(--ice);color:var(--text);font-size:14px}
+.setrow.cur{border-color:var(--ok);box-shadow:0 0 0 2px var(--ok)}
+.past{margin-top:10px}.past .pr{font-family:var(--mono);font-size:12px;line-height:1.6;word-break:break-all;border-top:1px solid var(--line);padding:4px 0}
+.past .pr b{font-family:inherit;font-size:13px}
 .lcard.new{border-color:var(--ok);box-shadow:0 0 0 2px var(--ok)}
 #dark{position:fixed;inset:0;background:#000;z-index:20;display:flex;align-items:center;justify-content:center;text-align:center;color:#555}
 #dark div{display:flex;flex-direction:column;gap:6px}
@@ -118,9 +124,10 @@ dialog::backdrop{background:rgb(0 0 0 / .6)}
     <b>ほかのスマホのラップを見る</b>
     <p class="note" style="margin:4px 0">撮影しているスマホに出ている合い言葉（5けた）を入れます。</p>
     <div class="row"><input id="watchCode" inputmode="numeric" maxlength="5" placeholder="合い言葉" class="grow" style="padding:12px;border-radius:10px;border:1px solid var(--line);background:var(--ice);color:var(--text);font-size:20px;letter-spacing:.2em"><button class="btn blue" id="watchBtn">見る</button></div>
+    <button class="btn hide" id="watchLast" style="margin-top:8px">前に見たラップをもう一度見る</button>
   </div>
   <input type="file" id="file" accept="video/*" class="hide">
-  <p class="note">版 2026-11-12e。動画はこのスマホの中だけで計算します。どこにも送りません（「ほかのスマホに出す」を使う時だけ、名前・練習メニュー・ラップの数字を届けます）。<br>「その場で撮る」は、撮りながらラップだけを測ります。追いかけ動画は撮り終わってから作ります。</p>
+  <p class="note">版 2026-11-12f。動画はこのスマホの中だけで計算します。どこにも送りません（「ほかのスマホに出す」を使う時だけ、名前・練習メニュー・ラップの数字を届けます）。<br>「その場で撮る」は、撮りながらラップだけを測ります。追いかけ動画は撮り終わってから作ります。</p>
   <h2 style="font-size:16px;margin:22px 0 6px">登録した部員</h2>
   <div id="memList"></div>
   <p class="note" id="memEmpty">選手の画面の「部員に登録」から登録できます。登録すると、次から自動で名前が付き、撮影中に自動で追いかけられます。</p>
@@ -141,9 +148,12 @@ dialog::backdrop{background:rgb(0 0 0 / .6)}
     <label class="row note" style="margin:0"><input type="checkbox" id="optFine" checked> ていねいに解析（時間は約2倍・取りちがえが減る）</label>
   </div>
   <div class="card hide" id="shareCard">
-    <b>ほかのスマホに出す</b>
-    <p class="note" style="margin:4px 0">名前・練習メニュー・ラップの数字だけを届けます（写真や動画は送りません）。ネットにつながっている時だけ使えます。</p>
-    <input id="menuText" placeholder="練習メニュー（例：111m×10周 2本目）" style="width:100%;padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--ice);color:var(--text)">
+    <b>練習メニュー</b>
+    <p class="note" style="margin:4px 0">メニューの写真を入れると、1行ずつの一覧になります（まちがいは下で直せます）。撮影中に一覧をタップすると、そのメニューのラップとして分けて記録します。</p>
+    <label class="btn" for="menuPhoto" id="menuPhotoBtn">🖼 メニューの写真を入れる</label><input type="file" id="menuPhoto" accept="image/*" class="hide">
+    <textarea id="menuList" rows="6" placeholder="1行に1つ（例）&#10;A スタートから1000m&#10;B スタートから1000m" style="width:100%;padding:10px;margin-top:8px;font-size:14px;border-radius:10px;border:1px solid var(--line);background:var(--ice);color:var(--text)"></textarea>
+    <input id="menuText" placeholder="題名（例：10月27日 宇治）" style="width:100%;padding:10px;margin-top:8px;border-radius:10px;border:1px solid var(--line);background:var(--ice);color:var(--text)">
+    <p class="note" style="margin:8px 0 4px"><b>ほかのスマホに出す</b>：名前・練習メニュー・ラップの数字だけを届けます（写真や動画は送りません）。ネットにつながっている時だけ使えます。</p>
     <label class="row note"><input type="checkbox" id="optShare"> 撮影を始めたら、ほかのスマホに出す</label>
   </div>
   <div class="card hide" id="standCard">
@@ -163,7 +173,9 @@ dialog::backdrop{background:rgb(0 0 0 / .6)}
   </div>
   <p class="note" id="liveInfo"></p>
   <div class="card hide" id="shareLive"><div class="row"><span class="grow">合い言葉 <b class="big" id="shareCode" style="letter-spacing:.15em"></b></span><span class="note" id="shareState" style="margin:0"></span></div><p class="note" style="margin:4px 0 0">ほかのスマホで kotetsuworks.com/skate を開き、この数字を入れると見られます。</p></div>
+  <button class="btn blue hide setbtn" id="liveSetBtn"></button>
   <div class="grid live" id="liveCards"></div>
+  <div id="liveSets"></div>
   <div class="row" style="margin-top:12px">
     <button class="btn grow" id="darkBtn">🌙 画面を暗くする</button>
     <button class="btn main grow" id="stopLive">■ 撮影を止める</button>
@@ -175,8 +187,10 @@ dialog::backdrop{background:rgb(0 0 0 / .6)}
 <!-- ほかのスマホのラップを見る -->
 <section class="scr" id="sWatch">
   <header class="top"><button class="back" data-go="sHome">‹</button><h1 id="watchMenu">ラップ<small id="watchState">つないでいます…</small></h1><span class="big" id="watchTime" style="font-size:22px"></span></header>
+  <button class="btn blue hide setbtn" id="watchSetBtn"></button>
   <div class="grid live" id="watchCards"></div>
   <p class="note" id="watchEmpty">線を越えた人が、ここに出ます。</p>
+  <div id="watchSets"></div>
 </section>
 
 <!-- 解析中 -->
@@ -200,6 +214,7 @@ dialog::backdrop{background:rgb(0 0 0 / .6)}
     <p class="note" style="margin-top:0">撮った動画はまだ端末に保存されていません。あとで見返すなら保存してください。</p>
     <div class="row"><button class="btn blue grow" id="saveRec">撮った動画を保存</button><button class="btn grow" id="deepScan">くわしく解析し直す</button></div>
   </div>
+  <div id="resSets"></div>
   <p class="note">まん中に長く写っていた人から並んでいます。赤い数字は周の数です。</p>
   <div class="grid" id="faces"></div>
   <details class="card"><summary>ほかの人</summary><div class="grid" id="facesOther"></div></details>
@@ -280,6 +295,13 @@ dialog::backdrop{background:rgb(0 0 0 / .6)}
   <b id="pickTitle">この場面の本人をタップ</b>
   <div class="stage" style="margin:8px 0"><canvas id="pickCv"></canvas></div>
   <div class="row"><button class="btn grow" id="pickNone">ここにはいない</button><button class="btn grow" id="pickCancel">やめる</button></div>
+</dialog>
+
+<dialog id="setDlg">
+  <b>これから始めるメニューをタップ</b>
+  <p class="note" style="margin:4px 0">始まる少し前にタップしてください。次にタップするまでのラップが、そのメニューの記録になります。</p>
+  <div id="setList" style="max-height:60vh;overflow:auto"></div>
+  <div class="row"><button class="btn grow" id="setCancel">やめる</button></div>
 </dialog>
 
 <dialog id="mergeDlg">

@@ -104,7 +104,7 @@ async function openLine() {
   $('lineNote').textContent = S.live ? '赤いラインが写る向きで線を合わせてください。撮影中に選手を追って首を振っても大丈夫です（立つ場所は変えないでください）。' : '下の帯を動かして、赤いラインがはっきり見えて人が重なっていない場面を選んでください。カメラが動く動画でも大丈夫です。';
   $('startScan').textContent = S.live ? '⏺ この線で撮影スタート' : 'この線で解析する';
   $('standCard').classList.toggle('hide', !S.live); $('shareCard').classList.toggle('hide', !S.live);
-  $('menuText').value = lsGet('skate-menu', ''); $('optShare').checked = lsGet('skate-share', 0) === 1;
+  $('menuText').value = lsGet('skate-menu', ''); $('menuList').value = lsGet('skate-menulist', ''); $('optShare').checked = lsGet('skate-share', 0) === 1;
   $('optFine').checked = lsGet('skate-fine', 1) === 1;
   if (!S.live) {
     // カメラが動く動画では、前に合わせた線の位置は使えない。壁の赤い帯（ゴールラインの目印）が写る場面を自動で探す
@@ -622,6 +622,7 @@ function showResult() {
   go('sResult');
   const d = new Date(s.date);
   $('resTitle').innerHTML = `選手一覧<small></small>`; $('resTitle').querySelector('small').textContent = `${d.getMonth() + 1}/${d.getDate()}・${s.videoName}`;
+  renderPast($('resSets'), s.liveSets || []);
   $('needVideo').classList.toggle('hide', !!S.videoURL);
   $('recSave').classList.toggle('hide', !(S.recBlob && S.session.live && S.session.videoName === S.videoFile?.name));
   $('minLap').value = s.minLap;
@@ -1159,7 +1160,7 @@ function pickTarget(t) {
   return { tr: best.tr, name: best.tr.member ? best.tr.member.name : '', x: (last[1] + last[3]) / 2, box: last, vx: best.tr.vx };
 }
 
-const L = { rec: null, chunks: [], t0: 0, tracker: null, persons: [], byTrack: new Map(), crossings: [], lastDet: 0, timer: 0, tiles: 1, newId: null };
+const L = { sets: [], list: [], rec: null, chunks: [], t0: 0, tracker: null, persons: [], byTrack: new Map(), crossings: [], lastDet: 0, timer: 0, tiles: 1, newId: null };
 async function startLive() {
   lsSet('skate-line-live', S.line); lsSet('skate-line', S.line);
   const v = $('vLive'), W = v.videoWidth, H = v.videoHeight;
@@ -1179,11 +1180,13 @@ async function startLive() {
   const measure = (t, x1, y2, x2) => { const m = L.meas.get(Math.round(t * 1000)); if (!m) return null; return m.sn ? lineMetric(m.line, W, H, x1, y2, x2) : footMetric(S.line, W, H, m.Hk, x1, y2, x2); };
   L.minLap = lsGet('skate-minlap2', 6); L.tiles = lsGet('skate-tiles', 1);
   // ほかのスマホに出す（名前・練習メニュー・ラップの数字だけ）
-  L.menu = $('menuText').value.trim(); lsSet('skate-menu', L.menu); lsSet('skate-share', $('optShare').checked ? 1 : 0);
+  L.menu = $('menuText').value.trim(); lsSet('skate-menu', L.menu);
+  lsSet('skate-menulist', $('menuList').value); L.list = menuLines($('menuList').value); L.sets = [];
+  $('liveSets').innerHTML = ''; setBtn($('liveSetBtn'), L.list, -1); lsSet('skate-share', $('optShare').checked ? 1 : 0);
   $('shareLive').classList.toggle('hide', !$('optShare').checked); L.share = null;
   if ($('optShare').checked) {
     const code = share.newCode(); $('shareCode').textContent = code; $('shareState').textContent = 'つないでいます…';
-    share.host(code, liveState, st => { $('shareState').textContent = st; }).then(h => { L.share = h; }).catch(e => { $('shareState').textContent = e.message; });
+    share.host(code, liveState, st => { $('shareState').textContent = st; }, i => armSet(i)).then(h => { L.share = h; }).catch(e => { $('shareState').textContent = e.message; });
   }
   await new Promise(r => { L.rec.onstart = r; L.rec.start(1000); });
   L.t0 = performance.now();
@@ -1246,6 +1249,89 @@ function liveSlow() {
 const liveOk = (c, d, slow) => c.dir === d && !(c.v > 0 && c.v < slow);
 // みんなのふつうの1周（その人のラップがまだ無い時の予想に使う）
 function liveTypical() { const a = []; for (const p of L.persons) a.push(...liveLaps(p)); return a.length ? median(a) : 0; }
+// ---------- 練習メニュー（1本ごとにラップを分ける） ----------
+const menuLines = txt => String(txt || '').split('\n').map(x => x.trim()).filter(Boolean).slice(0, 60);
+// メニューの1行から、予定の周の数と指定タイムを読み取る（読めない時は 0）。111.12m のリンクとして数える
+function menuInfo(list, i) {
+  const s = list[i] || '', nx = list.slice(i + 1, i + 4).find(x => /指定/.test(x)) || ''; let exp = 0, tgt = 0; // 指定は少し下の行に書かれることがある
+  const m = s.match(/(\d{3,4})\s*m/);
+  if (m) exp = Math.round(+m[1] / 111.12 * 2) / 2;
+  else { const ls = [...s.matchAll(/(\d+(?:\.\d+)?)\s*L(?![a-zA-Z])/g)];
+    if (ls.length) exp = ls.reduce((a, x) => a + +x[1], 0);
+    else { const d = s.match(/(\d)-(\d)(?:-(\d))?/); if (d) exp = +d[1] + +d[2] + +(d[3] || 0); } }
+  const g = (s.match(/^\s*([ABC])(?![A-Za-z])/) || [])[1];
+  const src = s + ' ' + (/指定/.test(nx) ? nx : '');
+  const a = g && src.match(new RegExp(g + '\\s*Last\\s*lap\\s*指定\\s*(\\d{1,2}\\.\\d)', 'i'));
+  const nums = a ? [a[1]] : [...src.matchAll(/(?:指定|[(（])\s*(\d{1,2}\.\d)(?!\s*L)/g)].map(x => x[1]);
+  for (const x of nums) if (+x >= 5 && +x < 60) { tgt = +x; break; } // 「0.7」のような書き方は意味を決めつけない（文字のまま見せる）
+  return { exp, tgt };
+}
+function setWin(k) { // k 番目の「本」の時間のはんい。メニューを使っていない時は全部
+  if (k == null) k = L.sets.length - 1;
+  if (k < 0 || !L.sets.length) return [-1e9, 1e9];
+  return [L.sets[k].t, k + 1 < L.sets.length ? L.sets[k + 1].t : 1e9];
+}
+function armSet(i) {
+  if (!L.rec || !L.list || !(i >= 0 && i < L.list.length)) return;
+  const t = (performance.now() - L.t0) / 1000, last = L.sets[L.sets.length - 1];
+  // まちがえてタップした時：まだだれも通っていなければ、前のタップを取り消して入れかえる
+  if (last && !L.crossings.some(c => c.t >= last.t)) L.sets.pop();
+  L.sets.push({ i, name: L.list[i], t, ...menuInfo(L.list, i) });
+  for (const p of L.persons) p.sentK = -1;
+  L.newId = null; renderLiveCards(); if (L.share) L.share.full();
+  toast('「' + L.list[i] + '」のラップを記録します');
+}
+function setSummary(k) {
+  const st = L.sets[k];
+  return { name: st ? st.name : '', exp: st ? st.exp : 0, tgt: st ? st.tgt : 0,
+    persons: L.persons.map(p => ({ name: p.name, laps: liveLaps(p, k).map(x => Math.round(x * 100) / 100), last: Math.round(p.cs[p.cs.length - 1].t * 10) / 10 })).filter(p => p.laps.length) };
+}
+const esc = x => String(x).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const diffHtml = (lap, tgt) => tgt ? `<small class="diff">指定${tgt.toFixed(1)} ${lap - tgt >= 0 ? '+' : '−'}${Math.abs(lap - tgt).toFixed(2)}</small>` : '';
+const cntText = (n, exp, done) => `${n}周` + (exp ? `／予定${exp}` + (done && n < exp - 1.5 ? ' ⚠' : '') : '');
+// 終わった「本」を、新しい順に並べる
+function renderPast(box, past) {
+  box.innerHTML = '';
+  for (const st of past.slice().reverse()) {
+    if (!st.persons.length) continue;
+    const el = document.createElement('div'); el.className = 'card past';
+    const typ = median(st.persons.flatMap(q => q.laps));
+    el.innerHTML = `<b>${esc(st.name || 'メニューなし')}</b>` + st.persons.slice().sort((a, b) => b.laps.length - a.laps.length).map(p =>
+      `<div class="pr"><b>${esc(p.name)}</b> ${cntText(p.laps.length, st.exp, true)}${diffHtml(p.laps[p.laps.length - 1], st.tgt)}<br>${p.laps.map((x, i) => fmt(x) + (lapMark(p.laps, i, typ) ? '？' : '')).join(' ')}</div>`).join('');
+    box.append(el);
+  }
+}
+function setBtn(btn, list, cur, name) {
+  btn.classList.toggle('hide', !(list && list.length));
+  btn.textContent = cur >= 0 || name ? `今：${name || list[cur]}　▸ 切りかえる` : '▸ 始めるメニューをタップで選ぶ';
+}
+let setPick = null;
+function openSetDlg(list, cur, pick) {
+  const box = $('setList'); box.innerHTML = ''; setPick = pick;
+  list.forEach((x, i) => { const b = document.createElement('button'); b.className = 'setrow' + (i === cur ? ' cur' : ''); b.textContent = x; b.onclick = () => { $('setDlg').close(); setPick && setPick(i); }; box.append(b); });
+  $('setDlg').showModal(); const c = box.querySelector('.cur'); if (c) c.scrollIntoView({ block: 'center' });
+}
+$('setCancel').onclick = () => $('setDlg').close();
+$('liveSetBtn').onclick = () => openSetDlg(L.list, L.sets.length ? L.sets[L.sets.length - 1].i : -1, armSet);
+// メニューの写真を文字にする（このスマホの中で読む。写真は送らない。読むための部品と辞書は、はじめの1回だけネットから取る）
+$('menuPhoto').onchange = async e => {
+  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  const btn = $('menuPhotoBtn'), old = btn.textContent; btn.textContent = '読み取っています…（はじめは1分ほど）';
+  try {
+    if (!window.Tesseract) await new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js'; sc.onload = res; sc.onerror = () => rej(new Error('net')); document.head.append(sc); });
+    const im = await createImageBitmap(f), k = Math.min(3, Math.max(1, 1600 / im.width)), c = document.createElement('canvas');
+    c.width = Math.round(im.width * k); c.height = Math.round(im.height * k); c.getContext('2d').drawImage(im, 0, 0, c.width, c.height);
+    const w = await window.Tesseract.createWorker(['jpn', 'eng']); const r = await w.recognize(c); await w.terminate();
+    const txt = cleanMenu(r.data.text);
+    if (!txt) toast('文字を読み取れませんでした'); else { $('menuList').value = txt; lsSet('skate-menulist', txt); toast('読み取りました。まちがいがあれば直してください'); }
+  } catch (err) { toast('読み取れませんでした（はじめの1回は電波が必要です）'); }
+  btn.textContent = old;
+};
+// 読み取った文字の後しまつ：日本語のあいだの空白を取る・準備や製氷の行は外す
+function cleanMenu(t) {
+  return String(t || '').split('\n').map(x => x.replace(/\s+(?=[^\x00-\x7f])|(?<=[^\x00-\x7f])\s+/g, '').replace(/\s+/g, ' ').trim())
+    .filter(x => x.length >= 3 && /[0-9A-Za-z\u3040-\u30ff\u4e00-\u9fff]{2}/.test(x) && !/マット|製氷|^\W*$/.test(x)).join('\n');
+}
 function onLiveCross(c, tr) {
   const H = $('vLive').videoHeight || 1; c.v = c.ds && c.bh ? c.ds / (c.bh * H) : 0; // 1秒に体いくつ分進むか
   L.crossings.push(c);
@@ -1279,8 +1365,8 @@ function onLiveCross(c, tr) {
   p.cs.push(c); L.newId = p.id;
   renderLiveCards();
 }
-function liveLaps(p) {
-  const d = liveDir(), slow = liveSlow(), cs = p.cs.filter(c => liveOk(c, d, slow)).sort((a, b) => a.t - b.t), out = [];
+function liveLaps(p, k) {
+  const d = liveDir(), slow = liveSlow(), w = setWin(k), cs = p.cs.filter(c => c.t >= w[0] && c.t < w[1] && liveOk(c, d, slow)).sort((a, b) => a.t - b.t), out = [];
   for (const c of cs) if (!out.length || c.t - out[out.length - 1].t >= L.minLap) out.push(c);
   const laps = []; for (let i = 1; i < out.length; i++) laps.push(out[i].t - out[i - 1].t);
   return laps;
@@ -1290,15 +1376,19 @@ function lapMark(laps, i, typ) { const m = laps.length >= 3 ? median(laps) : typ
 const lapHist = (laps, typ) => laps.map((x, i) => fmt(x) + (lapMark(laps, i, typ) ? '？' : '')).slice(0, -1).reverse().slice(0, 12).join(' ');
 // ほかのスマホへ届ける中身：練習メニュー・たった時間・人ごとの名前とラップ
 function liveState() {
+  const n = L.sets.length, cur = n ? setSummary(n - 1) : null;
   return { menu: L.menu || '', elapsed: Math.round((performance.now() - L.t0) / 1000), newest: L.newName || '',
-    persons: L.persons.map(p => ({ name: p.name, laps: liveLaps(p).map(x => Math.round(x * 100) / 100), last: Math.round(p.cs[p.cs.length - 1].t * 10) / 10 })).filter(p => p.laps.length) };
+    list: L.list || [], cur: n ? L.sets[n - 1].i : -1, sn: n, set: cur ? cur.name : '', exp: cur ? cur.exp : 0, tgt: cur ? cur.tgt : 0,
+    persons: cur ? cur.persons : setSummary(-1).persons,
+    past: L.sets.slice(0, -1).map((_, k) => setSummary(k)).filter(x => x.persons.length) };
 }
-function lapCards(box, list, newest) { // list: [{name, laps, last}]。周の多い順 → 新しい順
+function lapCards(box, list, newest, info) { // list: [{name, laps, last}]。周の多い順 → 新しい順
   box.innerHTML = ''; const typ = median(list.flatMap(q => q.laps));
   for (const p of list.filter(q => q.laps.length).sort((a, b) => b.laps.length - a.laps.length || b.last - a.last)) {
     const el = document.createElement('div'); el.className = 'lcard' + (p.name === newest ? ' new' : '');
     el.innerHTML = `<div><div class="n"></div><div class="last">${p.laps.length ? fmt(p.laps[p.laps.length - 1]) + lapMark(p.laps, p.laps.length - 1, typ) : '—'}</div><div class="hist">${lapHist(p.laps, typ)}</div></div>`;
-    el.querySelector('.n').textContent = `${p.name}・${p.laps.length}周`;
+    el.querySelector('.n').textContent = `${p.name}・${cntText(p.laps.length, info && info.exp)}`;
+    if (info && info.tgt) el.querySelector('.last').insertAdjacentHTML('afterend', diffHtml(p.laps[p.laps.length - 1], info.tgt));
     box.append(el);
   }
 }
@@ -1309,22 +1399,25 @@ async function openWatch(code) {
   // 撮影側のデータ量を小さくするため、届くのは「全部」（見始めた時・ずれた時だけ）と「1周分」（ラップが出るたび）
   let st = null, last = 0, startAt = 0;
   const show = () => {
-    $('watchMenu').firstChild.textContent = st.menu || 'ラップ';
+    $('watchMenu').firstChild.textContent = st.set || st.menu || 'ラップ';
+    setBtn($('watchSetBtn'), st.list, st.cur, st.set); renderPast($('watchSets'), st.past || []);
+    lsSet('skate-watch-last', { at: Date.now(), st }); $('watchLast').classList.remove('hide');
     $('watchState').textContent = `合い言葉 ${code}・${st.persons.filter(q => q.laps.length).length}人`;
     $('watchEmpty').classList.toggle('hide', st.persons.some(q => q.laps.length));
-    lapCards($('watchCards'), st.persons, st.newest);
+    lapCards($('watchCards'), st.persons, st.newest, st);
   };
   try {
     watching = await share.watch(code, {
       state: x => { last = Date.now(); st = x; startAt = Date.now() - (x.elapsed || 0) * 1000; show(); },
       lap: d => { // d: {n 名前, k その人の周の数（この通過のあと）, l いま出たラップ（最初の通過は null）, t 通過の時刻}
-        last = Date.now(); if (!st) return watching.hello();
+        last = Date.now(); if (!st || (d.s || 0) !== (st.sn || 0)) return watching.hello();
         let p = st.persons.find(q => q.name === d.n); if (!p) { p = { name: d.n, laps: [], last: 0 }; st.persons.push(p); }
         if (d.l != null) { if (p.laps.length !== d.k - 1) return watching.hello(); p.laps.push(d.l); } // 取りこぼしていたら全部もらい直す
         p.last = d.t; st.newest = d.n; show();
       },
-      end: () => { $('watchState').textContent = '撮影は終わりました'; },
+      end: () => { $('watchState').textContent = '撮影は終わりました'; $('watchSetBtn').classList.add('hide'); },
     }, s2 => { if (!last) $('watchState').textContent = s2; });
+    $('watchSetBtn').onclick = () => st && openSetDlg(st.list, st.cur, i => { if (confirm('「' + st.list[i] + '」を始めますか？')) { if (watching && watching.arm(i)) toast('撮影側に伝えました'); else toast('つながっていません'); } });
     const tm = setInterval(() => {
       if (!$('sWatch').classList.contains('on')) { clearInterval(tm); watching && watching.stop(); watching = null; return; }
       if (startAt) $('watchTime').textContent = clock((Date.now() - startAt) / 1000);
@@ -1332,9 +1425,20 @@ async function openWatch(code) {
   } catch (e) { $('watchState').textContent = e.message; }
 }
 $('watchBtn').onclick = () => openWatch($('watchCode').value);
+// 前に見たラップ（このスマホに残してある最後の表示）をもう一度見る
+$('watchLast').classList.toggle('hide', !lsGet('skate-watch-last', null));
+$('watchLast').onclick = () => {
+  const sv = lsGet('skate-watch-last', null); if (!sv) return; const st = sv.st, d = new Date(sv.at);
+  go('sWatch'); $('watchMenu').firstChild.textContent = st.set || st.menu || 'ラップ'; $('watchTime').textContent = '';
+  $('watchState').textContent = `${d.getMonth() + 1}/${d.getDate()} に見た記録`; $('watchSetBtn').classList.add('hide');
+  $('watchEmpty').classList.toggle('hide', st.persons.some(q => q.laps.length));
+  lapCards($('watchCards'), st.persons, '', st); renderPast($('watchSets'), st.past || []);
+};
 function renderLiveCards() {
   const box = $('liveCards'); box.innerHTML = '';
-  const all = L.persons.map(p => ({ p, laps: liveLaps(p), last: p.cs[p.cs.length - 1].t }));
+  const n = L.sets.length, cs = n ? L.sets[n - 1] : null;
+  setBtn($('liveSetBtn'), L.list, cs ? cs.i : -1); renderPast($('liveSets'), L.sets.slice(0, -1).map((_, k) => setSummary(k)));
+  const all = L.persons.map(p => ({ p, laps: liveLaps(p), last: p.cs[p.cs.length - 1].t })).filter(x => !cs || x.last >= cs.t);
   // 1周もしていない人（横切っただけ・まだ1回目）は出さない。数だけ下に出す
   const list = all.filter(x => x.laps.length).sort((a, b) => b.laps.length - a.laps.length || b.last - a.last);
   let total = 0; const typ = liveTypical();
@@ -1343,7 +1447,8 @@ function renderLiveCards() {
     const el = document.createElement('div'); el.className = 'lcard' + (p.id === L.newId ? ' new' : '');
     el.innerHTML = `<img alt=""><div><div class="n"></div><div class="last">${fmt(laps[laps.length - 1])}${lapMark(laps, laps.length - 1, typ)}</div><div class="hist">${lapHist(laps, typ)}</div></div>`;
     el.querySelector('img').src = p.thumb || 'icon.svg';
-    el.querySelector('.n').textContent = `${p.name}・${laps.length}周`;
+    el.querySelector('.n').textContent = `${p.name}・${cntText(laps.length, cs && cs.exp)}`;
+    if (cs && cs.tgt) el.querySelector('.last').insertAdjacentHTML('afterend', diffHtml(laps[laps.length - 1], cs.tgt));
     box.append(el);
   }
   const once = all.length - list.length;
@@ -1355,7 +1460,7 @@ function renderLiveCards() {
     const lp = liveLaps(np);
     if (lp.length && np.sentK !== lp.length) {
       // 周の数が1つずつ増えた時だけ「1周分」。そうでない時（数え直しで変わった時）は、見る側が全部をもらい直す
-      L.share.lap({ n: np.name, k: lp.length, l: Math.round(lp[lp.length - 1] * 100) / 100, t: Math.round(np.cs[np.cs.length - 1].t * 10) / 10 }); np.sentK = lp.length;
+      L.share.lap({ n: np.name, s: L.sets.length, k: lp.length, l: Math.round(lp[lp.length - 1] * 100) / 100, t: Math.round(np.cs[np.cs.length - 1].t * 10) / 10 }); np.sentK = lp.length;
     }
   }
 }
@@ -1381,6 +1486,7 @@ $('stopLive').onclick = async () => {
   // その場で付けた名前（A・B…）を引きつぐ
   for (const lp of L.persons) { const sp = s.persons.find(x => x.tracks.includes(lp.tracks[0])); if (sp) sp.name = lp.name; }
   s.live = true; s.title = name.replace(/\.\w+$/, '');
+  if (L.sets.length) s.liveSets = L.sets.map((_, k) => setSummary(k)); // メニューごとのラップ（その場で測ったもの）
   await saveSession(s); S.session = s; S.live = false;
   showResult();
 };
