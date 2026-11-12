@@ -1,8 +1,8 @@
 // スケートラップ：画面と記録
 import * as stand from './stand.js';
 import { loadMembers, saveMembers, matchMember, addMember, addSample, priorityOf } from './members.js';
-import { grabGray, LineAnchor, MotionChain, apply, inv3, homFrom4 } from './motion.js';
-import { loadDetector, usedDelegate, scanVideo, seekTo, findRedLine, trackCrossings, refineCrossing, interpBox, groupTracks, Tracker, detectFrame, grabSmall, liveCrossing, lineMetric, footMetric, LineTracker, histSim, headSim, normHist } from './vision.js';
+import { grabGray, LineAnchor, MotionChain, apply, inv3, mul3, homFrom4 } from './motion.js';
+import { loadDetector, usedDelegate, scanVideo, seekTo, findRedLine, trackCrossings, refineCrossing, interpBox, groupTracks, Tracker, detectFrame, grabSmall, liveCrossing, lineMetric, footMetric, LineTracker, findWallStripe, lineFromStripe, histSim, headSim, normHist } from './vision.js';
 
 const $ = id => document.getElementById(id);
 const S = { session: null, videoURL: null, videoFile: null, person: null, line: null, live: false, stream: null, recBlob: null };
@@ -103,8 +103,15 @@ async function openLine() {
   $('lineNote').textContent = S.live ? '赤いラインが写る向きで線を合わせてください。撮影中に選手を追って首を振っても大丈夫です（立つ場所は変えないでください）。' : '下の帯を動かして、赤いラインがはっきり見えて人が重なっていない場面を選んでください。カメラが動く動画でも大丈夫です。';
   $('startScan').textContent = S.live ? '⏺ この線で撮影スタート' : 'この線で解析する';
   $('standCard').classList.toggle('hide', !S.live);
-  if (!S.live) await seekTo(v, 0.5);
-  if (!S.line) S.line = findRedLine(v, v.videoWidth, v.videoHeight) || [[0.3, 0.75], [0.7, 0.6]];
+  $('optFine').checked = lsGet('skate-fine', 1) === 1;
+  if (!S.live) {
+    // カメラが動く動画では、前に合わせた線の位置は使えない。壁の赤い帯（ゴールラインの目印）が写る場面を自動で探す
+    await seekTo(v, 0.5); S.line = null;
+    const found = await findLineScene(v);
+    if (found) { S.line = found.line; $('lineTime').value = Math.round(found.t / v.duration * 1000); toast('ゴールの目印（壁の赤い帯）が写る場面を選びました。線を確かめてください'); }
+    else { await seekTo(v, 0.5); toast('ゴールラインが写る場面を下の帯で選び、線を合わせてください'); }
+  }
+  if (!S.line) S.line = autoLine(v) || lsGet('skate-line', null) || [[0.5, 0.6], [0.5, 0.95]];
   drawLine();
   if (S.live) { const loop = () => { if (!$('sLine').classList.contains('on')) return; drawLine(); requestAnimationFrame(loop); }; requestAnimationFrame(loop); }
 }
@@ -117,7 +124,28 @@ function drawLine() {
   for (const p of [a, b]) { lineCx.beginPath(); lineCx.arc(p[0] * W, p[1] * H, r, 0, 7); lineCx.fillStyle = 'rgb(255 59 79 / .55)'; lineCx.fill(); lineCx.lineWidth = Math.max(2, W / 400); lineCx.strokeStyle = '#fff'; lineCx.stroke(); }
 }
 $('lineTime').oninput = async e => { const v = $('vWork'); await seekTo(v, v.duration * e.target.value / 1000); drawLine(); };
-$('lineAuto').onclick = () => { const v = lineSrc(); const l = findRedLine(v, v.videoWidth, v.videoHeight); if (l) { S.line = l; drawLine(); toast('赤い線を見つけました'); } else toast('赤い線が見つかりません。丸を動かしてください'); };
+// 線の候補：壁の赤い帯があれば、その真下の氷の上に引く。なければ氷の上の赤い線を探す
+function autoLine(v) {
+  const st = findWallStripe(v, v.videoWidth, v.videoHeight);
+  return st ? lineFromStripe(st) : findRedLine(v, v.videoWidth, v.videoHeight);
+}
+// 壁の赤い帯が、画面のまん中あたりに写っている場面を探す（0.5秒ごと・最初の60秒まで）
+async function findLineScene(v) {
+  let best = null;
+  for (let t = 0.5; t < Math.min(v.duration, 60); t += 0.5) {
+    if (!$('sLine').classList.contains('on')) return null;
+    await seekTo(v, t);
+    const st = findWallStripe(v, v.videoWidth, v.videoHeight);
+    if (!st) continue;
+    const sc = st.sum * (1 - Math.abs(st.x - 0.5) * 1.6);
+    if (st.x > 0.2 && st.x < 0.8 && (!best || sc > best.sc)) best = { t, st, sc };
+    if (best && t - best.t > 4) break; // 最初に見えたひとかたまりの中で、いちばんよい場面
+  }
+  if (!best) return null;
+  await seekTo(v, best.t);
+  return { t: best.t, line: lineFromStripe(best.st) };
+}
+$('lineAuto').onclick = () => { const v = lineSrc(); const l = autoLine(v); if (l) { S.line = l; drawLine(); toast('線の候補を引きました。ずれていたら丸を動かしてください'); } else toast('赤い線が見つかりません。丸を動かしてください'); };
 {
   let drag = -1;
   const pos = e => { const r = lineCv.getBoundingClientRect(); return [(e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height]; };
@@ -138,6 +166,7 @@ $('startScan').onclick = async () => {
   if (S.live) return startLive();
   lsSet('skate-line', S.line);
   const tiles = $('optTiles').checked ? 2 : 1; lsSet('skate-tiles', tiles);
+  const fine = $('optFine').checked; lsSet('skate-fine', fine ? 1 : 0);
   // 線を合わせたコマを覚える（カメラが動いても、毎回このコマに重ねて線の位置を求める）
   const lw = $('vWork');
   if (!S.lineK) { S.lineK = grabGray(lw, lw.videoWidth, lw.videoHeight); S.lineImg = frameImage(lw); }
@@ -151,7 +180,7 @@ $('startScan').onclick = async () => {
     const W = v.videoWidth, H = v.videoHeight; cv.width = W; cv.height = H;
     const t0 = performance.now();
     const { tracks, frames, motion } = await scanVideo(v, {
-      tiles, anchor,
+      tiles, anchor, step: fine ? 0.05 : 0.1,
       isStopped: () => stopFlag,
       onProgress: p => { const n = Math.min(100, Math.round(p * 100)); $('scanBar').style.width = n + '%'; $('scanPct').textContent = n + '%'; },
       onFrame: (t, dets, rate, ln) => {
@@ -221,6 +250,14 @@ function buildSession(rawTracks, W, H, duration, tiles, preset, motion) {
   const r5 = x => Math.round(x * 1e5) / 1e5;
   // 1行：[時刻, いま→基準(9), K に重なったか, いま→K(9), 線が分かったか, 線(4), 赤い線で合わせ直したか]
   const Z9 = [0, 0, 0, 0, 0, 0, 0, 0, 0];
+  // 線のコマに重ねられなかったコマ：すぐ後（1秒以内）に重なったコマから、カメラの動いた分だけ戻して求める
+  if (motion) for (let i = motion.length - 2, src = -1; i >= 0; i--) {
+    const m = motion[i], nx = motion[i + 1];
+    if (m[2]) { if (!m.filled) src = i; continue; }
+    if (!nx[2] || src < 0 || motion[src][0] - m[0] > 0.5) continue;
+    m[2] = mul3(nx[2], mul3(inv3(nx[1]), m[1])); m.filled = true;
+    const Hi = inv3(m[2]); m[3] = line.map(q => apply(Hi, q[0], q[1])); m[4] = false;
+  }
   const mrows = (motion || []).map(([t, T, Hk, ln, sn]) => [r5(t), ...T.map(r5), Hk ? 1 : 0, ...(Hk ? Hk.map(r5) : Z9), ln ? 1 : 0, ...(ln ? ln.flat().map(r5) : [0, 0, 0, 0]), sn ? 1 : 0]);
   const measure = makeLineAt({ line, motion: mrows, W, H }).measure;
   // 短すぎる切れはし（見まちがい）は外す。ただしラインを越えたものは残す
@@ -378,16 +415,39 @@ function autoChain(s) {
 // まん中に近い（カメラが追っている）・前のコマから動きが続く・色が続く、の3つで、動画全体として一番筋が通る選び方（ビタビ）。
 // 本人がタップした「これが自分」（pins）と「これは違う」（bans）を必ず守る。結果は「通しの枠」1本として記録に入れる。
 function followPath(s, { model, pins = [], bans = [] }) {
-  const A = s.W / s.H, K = 30, MISS = 0.15;
+  const A = s.W / s.H, LOOK = 3.0, MISS = 1.5; // 見失ってよいのは3秒まで。見失い1秒あたりの重さ 1.5
   const hist = new Map(s.tracks.filter(t => t.hn && !t.virtual).map(t => [t.id, Float32Array.from(t.hist, v => v / t.hn)]));
   const banned = (id, t) => bans.some(b => b.tr === id && (b.all || Math.abs(b.t - t) < 0.6));
   const byT = new Map();
+  // カメラの動きを差し引いた位置（基準の座標）と、そこでの速さ・向き。「この速さなら次はここ」の予想に使う
+  const Tmap = new Map(); for (const m of (s.motion || [])) if (m.length >= 10) Tmap.set(Math.round(m[0] * 1000), m);
+  // 答え合わせで選んだ値：速さからの予想は「予想から背の高さ2倍より離れた枠へは移らない」という決まりとして使う
+  const FP = Object.assign({ wp: 0, wv: 0, wi: 0.3, cw: 2, sw: 0.5, gate: 2, ov: 0 }, globalThis.__FP || {});
+  // 同じ時刻に別々に写っていた2つの切れはしは、別の人
+  const span = new Map(s.tracks.filter(t => !t.virtual && t.s.length).map(t => [t.id, [t.s[0][0], t.s[t.s.length - 1][0]]]));
+  const OVc = new Map(), together = (a, b) => { const k = a < b ? a + ',' + b : b + ',' + a; if (!OVc.has(k)) { const x = span.get(a), y = span.get(b); OVc.set(k, Math.min(x[1], y[1]) - Math.max(x[0], y[0])); } return OVc.get(k); };
   for (const t of s.tracks) {
     if (!hist.has(t.id)) continue;
-    for (const r of t.s) { if (banned(t.id, r[0])) continue; const k = Math.round(r[0] * 1000); if (!byT.has(k)) byT.set(k, []); byT.get(k).push({ tr: t.id, t: r[0], cx: (r[1] + r[3]) / 2, y2: r[4], h: r[4] - r[2], r }); }
+    // 各コマの「そのコマ→基準」と、その逆。位置や速さは基準の座標には直さず、いつも「そのコマの座標」で持つ
+    const Tm = t.s.map(r => { const m = Tmap.get(Math.round(r[0] * 1000)); return m ? m.slice(1, 10) : null; }), Ti = Tm.map(T => T ? inv3(T) : null);
+    const foot = r => [(r[1] + r[3]) / 2, r[4]];
+    const into = (n, a) => { const f = foot(t.s[a]); return Tm[a] && Ti[n] ? apply(mul3(Ti[n], Tm[a]), f[0], f[1]) : f; }; // コマ a の足もとを、コマ n の座標で
+    t.s.forEach((r, n) => {
+      if (banned(t.id, r[0])) return;
+      // 前後 0.3 秒の動きから速さ（1秒あたり・コマ n の座標で）
+      let a = n, b = n; while (a > 0 && r[0] - t.s[a - 1][0] <= 0.3) a--; while (b < t.s.length - 1 && t.s[b + 1][0] - r[0] <= 0.3) b++;
+      const dtv = t.s[b][0] - t.s[a][0], pa = into(n, a), pb = into(n, b);
+      let vx = dtv > 0.05 ? (pb[0] - pa[0]) / dtv : 0, vy = dtv > 0.05 ? (pb[1] - pa[1]) / dtv : 0;
+      const hasV = dtv > 0.05 && isFinite(vx) && isFinite(vy); if (!hasV) vx = vy = 0;
+      const k = Math.round(r[0] * 1000); if (!byT.has(k)) byT.set(k, []);
+      byT.get(k).push({ tr: t.id, t: r[0], cx: (r[1] + r[3]) / 2, y2: r[4], h: r[4] - r[2], r, vx, vy, hasV, T: Tm[n], Ti: Ti[n] });
+    });
   }
   const times = [...byT.keys()].sort((a, b) => a - b); if (!times.length) return null;
   const fr = times.map(k => byT.get(k));
+  // コマの間かく（細かい解析なら 0.05 秒）。1コマの点数は時間に合わせる（細かくしても全体のつり合いが変わらないように）
+  const gaps = []; for (let i = 1; i < times.length; i++) gaps.push((times[i] - times[i - 1]) / 1000);
+  gaps.sort((a, b) => a - b); const stepT = gaps.length ? gaps[gaps.length >> 1] : 0.1, wS = stepT / 0.1;
   // 「これが自分」のコマは、その枠だけにする
   for (const pn of pins) {
     let i = 0, bd = Infinity; fr.forEach((cs, k) => { const d = Math.abs(cs[0].t - pn.t); if (d < bd) { bd = d; i = k; } });
@@ -398,25 +458,36 @@ function followPath(s, { model, pins = [], bans = [] }) {
   let path = null;
   for (let it = 0; it < 3; it++) {
     // まん中に近い（×2）＋ この人らしい色（×6）。この人らしい人がいないコマは、だれも選ばない（-0.6）
-    const em = fr.map(cs => cs.map(c => 2 * (1 - Math.abs(c.cx - 0.5) * 2.2) + (model ? 6 * (looks(hist.get(c.tr), model) - 0.88) - 0.6 : 0) + (pinTr.has(c.tr) ? 1.5 : 0)));
+    const em = fr.map(cs => cs.map(c => wS * ((model ? FP.cw : 2) * (1 - Math.abs(c.cx - 0.5) * 2.2) + (model ? 6 * (looks(hist.get(c.tr), model) - 0.88) - 0.6 : 0) + (pinTr.has(c.tr) ? 1.5 : 0))));
     const best = em.map(r => r.slice()), back = fr.map(cs => cs.map(() => null));
     const forced = new Set(); for (const pn of pins) fr.forEach((cs, k) => { if (cs.length === 1 && cs[0].tr === pn.tr && Math.abs(cs[0].t - pn.t) < 0.06) forced.add(k); });
     for (let i = 1; i < fr.length; i++) for (let j = 0; j < fr[i].length; j++) {
       const q = fr[i][j];
-      for (let k = Math.max(0, i - K); k < i; k++) {
+      for (let k = i - 1; k >= 0 && q.t - fr[k][0].t <= LOOK; k--) {
         // 「これが自分」のコマは飛ばせない
         let jumpsPin = false; for (const f of forced) if (f > k && f < i) { jumpsPin = true; break; }
         if (jumpsPin) continue;
-        const skip = i - k - 1, dt = q.t - fr[k][0].t;
+        const dt = q.t - fr[k][0].t, skip = Math.max(0, dt - stepT * 1.5);
         for (let m = 0; m < fr[k].length; m++) {
           const p = fr[k][m]; let cost;
           if (p.tr === q.tr) cost = skip * MISS;
           else {
             // 別の枠へ移る：遠すぎる時だけ禁止し、あとは距離と色の違いを少しずつ重く見る（厳しすぎると正しい枠へ移れない）
-            const d = Math.hypot((p.cx - q.cx) * A, p.y2 - q.y2) / Math.max(p.h, q.h, 0.03);
+            const hh = Math.max(p.h, q.h, 0.03);
+            const d = Math.hypot((p.cx - q.cx) * A, p.y2 - q.y2) / hh;
             if (d > 4 + dt * 2) continue;
+            // 速さから予想した位置とのずれ（背の高さの何倍か）と、速さ・向きの変わり方（1秒あたり背の高さの何倍か）
+            // p の「予想した位置」と速さを、q のコマの座標に写してから比べる
+            let dp = d, dv = 1;
+            if (p.hasV && p.T && q.Ti) {
+              const R = mul3(q.Ti, p.T), e0 = apply(R, p.cx, p.y2), e1 = apply(R, p.cx + p.vx * 0.1, p.y2 + p.vy * 0.1);
+              const pvx = (e1[0] - e0[0]) / 0.1, pvy = (e1[1] - e0[1]) / 0.1;
+              const v1 = Math.hypot((e0[0] + pvx * dt - q.cx) * A, e0[1] + pvy * dt - q.y2) / hh;
+              if (isFinite(v1)) { dp = v1; if (q.hasV) dv = Math.min(4, Math.hypot((pvx - q.vx) * A, pvy - q.vy) / hh); }
+            }
+            if (p.hasV && dp > FP.gate * (1 + dt)) continue; // 人は瞬間移動しない：予想から離れすぎた枠へは移らない
             const pl = PL(p.tr, q.tr);
-            cost = 0.5 + d * 0.3 + Math.max(0, 0.92 - pl) * 4 + skip * MISS;
+            cost = FP.sw + (together(p.tr, q.tr) > 0.25 ? FP.ov : 0) + d * FP.wi + dp * FP.wp + dv * FP.wv + Math.max(0, 0.92 - pl) * 4 + skip * MISS;
           }
           const v = best[k][m] - cost + em[i][j];
           if (v > best[i][j]) { best[i][j] = v; back[i][j] = [k, m]; }
@@ -480,7 +551,8 @@ function personThumb(s, p) {
 function personTime(s, p) { return p.tracks.reduce((a, id) => { const t = trackById(s, id); return a + (t ? t.s[t.s.length - 1][0] - t.s[0][0] : 0); }, 0); }
 // 滑っている速さ（自分の背の高さの何倍/秒）。立っている人は小さい。カメラの動きは差し引いた座標（r）で測る
 function moveRate(tr) {
-  const r = tr.r || tr.s, v = [];
+  if (tr.spd && tr.spd.length) { const v = tr.spd.slice().sort((x, y) => x - y); return Math.round(v[v.length >> 1] * 100) / 100; }
+  const r = tr.s, v = [];
   for (let i = 1; i < r.length; i++) {
     const a = r[i - 1], b = r[i], dt = b[0] - a[0], h = (b[4] - b[2]) || 1e-3;
     if (dt > 0 && dt < 0.5) v.push(Math.hypot((a[1] + a[3]) / 2 - (b[1] + b[3]) / 2, (a[2] + a[4]) / 2 - (b[2] + b[4]) / 2) / h / dt);
@@ -1204,6 +1276,9 @@ $('deepScan').onclick = async () => {
 // ---------- 思わぬエラーを画面に出す（スクショで原因が分かるように）----------
 window.addEventListener('error', e => toast('エラー：' + (e.message || e.error)));
 window.addEventListener('unhandledrejection', e => toast('エラー：' + ((e.reason && e.reason.message) || e.reason)));
+
+// 試験用：いまの線と記録を外から見られるようにする
+window.__skateDebug = () => ({ line: S.line, session: S.session });
 
 // ---------- はじめ ----------
 showHome();

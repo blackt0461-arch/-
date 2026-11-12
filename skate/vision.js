@@ -183,38 +183,83 @@ export function snapRedLine(line, boxes = []) {
 // 毎コマの線の位置：線のコマ（K）に重ねて計算 → 写っている赤い線で合わせ直す。
 // K に重ならない時は、前のコマの線をカメラの動きで動かして予想し、赤い線が見つかった時だけ使う。
 export class LineTracker {
-  constructor(anchor) { this.anchor = anchor; this.prev = null; this.prevT = null; this.prevAt = -1; }
+  constructor(anchor) { this.anchor = anchor; this.lastHk = null; this.lastT = null; this.lastAt = -1; }
   step(t, P, T, dets) {
     const loc = this.anchor.locate(P, T, dets);
-    let pred = loc ? loc.line : null;
-    if (!pred && this.prev && t - this.prevAt < 0.5) { const R = mul3(inv3(T), this.prevT); pred = this.prev.map(q => apply(R, q[0], q[1])); }
-    const snapped = pred ? snapRedLine(pred, dets) : null;
-    const line = snapped || (loc ? loc.line : null);
-    if (line) { this.prev = line; this.prevT = T; this.prevAt = t; }
-    return { Hk: loc ? loc.H : null, line, snapped: !!snapped };
+    let Hk = loc ? loc.H : null, direct = !!loc;
+    // ぶれたコマなどで重ねられない時：直前に重なったコマから、カメラの動いた分だけ動かす（1秒まで）
+    if (!Hk && this.lastHk && t - this.lastAt < 0.5) Hk = mul3(this.lastHk, mul3(inv3(this.lastT), T));
+    if (direct) { this.lastHk = Hk; this.lastT = T; this.lastAt = t; }
+    if (!Hk) return { Hk: null, line: null, snapped: false };
+    const Hi = inv3(Hk), pred = this.anchor.line.map(q => apply(Hi, q[0], q[1]));
+    // 写っている赤い線での合わせ直しは、計算した位置のすぐ近く（画面の幅の1.5%以内）の時だけ使う。
+    // 線は氷の上の決まった1本でないと、ラップがコマごとにずれるため
+    let sn = snapRedLine(pred, dets);
+    if (sn && Math.max(Math.hypot(sn[0][0] - pred[0][0], sn[0][1] - pred[0][1]), Math.hypot(sn[1][0] - pred[1][0], sn[1][1] - pred[1][1])) > 0.015) sn = null;
+    return { Hk, line: sn || pred, snapped: !!sn };
   }
+}
+
+// ---------- 壁の赤い帯（ゴールラインが壁に当たる所の目印）----------
+// はっきりした赤で、細くて縦に長いかたまりを探す。返り値：{x, top, bottom}（0〜1）。なければ null
+export function findWallStripe(src, W, H) {
+  const w = 320, h = Math.round(320 * H / W);
+  const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+  const c = cv.getContext('2d', { willReadFrequently: true }); c.drawImage(src, 0, 0, w, h);
+  const d = c.getImageData(0, 0, w, h).data, col = new Int32Array(w), top = new Int32Array(w).fill(h), bot = new Int32Array(w).fill(-1);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const i = (y * w + x) * 4, r = d[i], g = d[i + 1], b = d[i + 2];
+    if (r > 130 && r > g * 1.9 && r > b * 1.6) { col[x]++; if (y < top[x]) top[x] = y; if (y > bot[x]) bot[x] = y; }
+  }
+  const need = Math.max(6, h * 0.045); let best = null;
+  for (let x = 0; x < w; x++) {
+    if (col[x] < need) continue;
+    let x2 = x, sum = 0, t0 = h, b0 = -1;
+    while (x2 < w && col[x2] >= need) { sum += col[x2]; t0 = Math.min(t0, top[x2]); b0 = Math.max(b0, bot[x2]); x2++; }
+    const bw = x2 - x, bh = b0 - t0 + 1;
+    // 細い・縦長・中がほぼ赤で埋まっている（服やヘルメットは形がちがう）
+    if (bw <= w * 0.05 && bh >= bw * 2 && bh >= h * 0.06 && sum >= bw * bh * 0.7 && (!best || sum > best.sum)) best = { x: (x + x2) / 2 / w, top: t0 / h, bottom: (b0 + 1) / h, sum };
+    x = x2;
+  }
+  if (!best) return null;
+  const edge = wallEdge(d, w, h); // 壁の下のはしの近くまで届いていること
+  if (edge && Math.abs(edge(best.x * w) / h - best.bottom) > 0.08) return null;
+  return best;
+}
+// 壁の赤い帯の真下に、氷の上の線の候補を引く（手前に向かってまっすぐ下へ）
+export function lineFromStripe(st) {
+  // 長い・画面の下まで届く赤い縦線は、それ自体が氷の上の線
+  if (st.bottom - st.top > 0.3 || st.bottom > 0.85) return [[st.x, st.top], [st.x, st.bottom]];
+  return [[st.x, Math.min(0.97, st.bottom + 0.01)], [st.x, 0.98]];
 }
 
 // ---------- 追いかけ ----------
 export class Tracker {
   constructor(W, H) { this.W = W; this.H = H; this.aspect = W / H; this.active = []; this.done = []; this.next = 1; }
-  // T：いまのコマ→基準 の変換（カメラが動いても、人の動きだけを比べるため）。動かないカメラなら null
+  // T：いまのコマ→基準 の変換。カメラの動きを差し引くのに使うが、「基準の座標」には直さない
+  // （カメラがぐるっと回る動画では、基準から離れるほど座標がゆがむため）。
+  // 前に見たコマの位置と速さを、そのコマ→いまのコマ の変換で「いまのコマの座標」に写してから比べる。
   update(t, dets, src, T) {
-    const A = this.aspect, cand = [];
-    const rds = dets.map(d => T ? mapBox(T, d) : d);
+    const A = this.aspect, cand = [], Tinv = T ? inv3(T) : null; this.Tcur = T;
     const dhs = dets.map(d => colorHist(d)); // 服とヘルメットの色（取り違え防止）
     for (const tr of this.active) {
       const th = tr.hn >= 3 ? norm(tr.hist, tr.hn) : null;
-      const L = tr.r[tr.r.length - 1], dt = t - L[0];
-      const lh = L[4] - L[2], cx = (L[1] + L[3]) / 2 + tr.vx * dt, cy = (L[2] + L[4]) / 2 + tr.vy * dt;
+      const I0 = tr.s[tr.s.length - 1], dt = t - I0[0];
+      const R = Tinv && tr.T0 ? mul3(Tinv, tr.T0) : null; // 前に見たコマ → いまのコマ
+      const c0 = [(I0[1] + I0[3]) / 2, (I0[2] + I0[4]) / 2];
+      const pc = R ? apply(R, c0[0], c0[1]) : c0, pe = R ? apply(R, c0[0] + tr.vx * 0.1, c0[1] + tr.vy * 0.1) : [c0[0] + tr.vx * 0.1, c0[1] + tr.vy * 0.1];
+      const pv = [(pe[0] - pc[0]) / 0.1, (pe[1] - pc[1]) / 0.1];
+      const pb = R ? mapBox(R, { x1: I0[1], y1: I0[2], x2: I0[3], y2: I0[4] }) : null;
+      const lh = pb ? pb.y2 - pb.y1 : I0[4] - I0[2], cx = pc[0] + pv[0] * dt, cy = pc[1] + pv[1] * dt;
+      tr._pc = pc; tr._pv = pv;
       // 画面の中の位置でも比べる（カメラがその人を追っている時は、画面の中ではあまり動かない。
       // ぶれたコマで画面の動きの計算が外れても、見失わないように）
       const I = tr.s[tr.s.length - 1], ih = I[4] - I[2];
       const icx = (I[1] + I[3]) / 2 + (tr.ivx || 0) * dt, icy = (I[2] + I[4]) / 2 + (tr.ivy || 0) * dt;
-      rds.forEach((d, j) => {
+      dets.forEach((d, j) => {
         const dh = d.y2 - d.y1, r = dh / lh;
         let cost = Infinity;
-        if (r >= 0.55 && r <= 1.8) {
+        if (isFinite(cx) && r >= 0.55 && r <= 1.8) {
           const dx = ((d.x1 + d.x2) / 2 - cx) * A, dy = (d.y1 + d.y2) / 2 - cy;
           cost = Math.hypot(dx, dy) / Math.max(lh, dh);
         }
@@ -241,42 +286,44 @@ export class Tracker {
     const usedT = new Set(amb), usedD = new Set();
     for (const [, tr, j] of cand) {
       if (usedT.has(tr) || usedD.has(j)) continue;
-      usedT.add(tr); usedD.add(j); this._add(tr, t, dets[j], rds[j], src, dhs[j]);
+      usedT.add(tr); usedD.add(j); this._add(tr, t, dets[j], src, dhs[j]);
     }
     dets.forEach((d, j) => {
       if (usedD.has(j)) return;
       // 周りの人の枠と大きく重なる新しい枠は、重なりの見まちがいとして作らない
-      if (this.active.some(tr => usedT.has(tr) && iou(lastBox(tr), rds[j]) > 0.5)) return;
-      const tr = { id: this.next++, s: [], r: [], vx: 0, vy: 0, hist: new Float32Array(NB), hn: 0, thumbArea: 0, thumb: null };
-      this.active.push(tr); this._add(tr, t, d, rds[j], src, dhs[j]);
+      if (this.active.some(tr => usedT.has(tr) && !amb.has(tr) && iou(lastBox(tr), d) > 0.5)) return;
+      const tr = { id: this.next++, s: [], spd: [], vx: 0, vy: 0, hist: new Float32Array(NB), hn: 0, thumbArea: 0, thumb: null };
+      this.active.push(tr); this._add(tr, t, d, src, dhs[j]);
     });
     this.active = this.active.filter(tr => {
       if (t - tr.s[tr.s.length - 1][0] > 0.8) { this.done.push(tr); return false; }
       return true;
     });
   }
-  _add(tr, t, d, rd, src, h) {
-    const p = tr.r[tr.r.length - 1];
-    if (p) {
-      const dt = Math.max(1e-3, t - p[0]);
-      const vx = ((rd.x1 + rd.x2) / 2 - (p[1] + p[3]) / 2) / dt, vy = ((rd.y1 + rd.y2) / 2 - (p[2] + p[4]) / 2) / dt;
-      tr.vx = tr.r.length > 1 ? tr.vx * 0.5 + vx * 0.5 : vx; tr.vy = tr.r.length > 1 ? tr.vy * 0.5 + vy * 0.5 : vy;
-    }
+  _add(tr, t, d, src, h) {
     const q = tr.s[tr.s.length - 1];
+    if (q && tr._pc) { // カメラの動きを差し引いた速さ（いまのコマの座標で）
+      const dt = Math.max(1e-3, t - q[0]);
+      const vx = ((d.x1 + d.x2) / 2 - tr._pc[0]) / dt, vy = ((d.y1 + d.y2) / 2 - tr._pc[1]) / dt;
+      if (isFinite(vx) && isFinite(vy)) {
+        tr.vx = tr.s.length > 1 ? tr._pv[0] * 0.5 + vx * 0.5 : vx; tr.vy = tr.s.length > 1 ? tr._pv[1] * 0.5 + vy * 0.5 : vy;
+        if (dt < 0.5) tr.spd.push(Math.hypot(vx * this.aspect, vy) / Math.max(1e-3, d.y2 - d.y1));
+      }
+    }
+    tr.T0 = this.Tcur;
     if (q) { // 画面の中での動き
       const dt = Math.max(1e-3, t - q[0]);
       const vx = ((d.x1 + d.x2) / 2 - (q[1] + q[3]) / 2) / dt, vy = ((d.y1 + d.y2) / 2 - (q[2] + q[4]) / 2) / dt;
       tr.ivx = tr.s.length > 1 ? tr.ivx * 0.5 + vx * 0.5 : vx; tr.ivy = tr.s.length > 1 ? tr.ivy * 0.5 + vy * 0.5 : vy;
     }
     tr.s.push([t, d.x1, d.y1, d.x2, d.y2, d.score]);
-    tr.r.push([t, rd.x1, rd.y1, rd.x2, rd.y2]);
     if (h) { for (let i = 0; i < NB; i++) tr.hist[i] += h[i]; tr.hn++; }
     const area = (d.x2 - d.x1) * (d.y2 - d.y1) * d.score;
     if (area > tr.thumbArea * 1.15 && d.x1 > 0.003 && d.x2 < 0.997) { tr.thumbArea = area; tr.thumb = cropThumb(src, d, this.W, this.H); }
   }
   finish() { this.done.push(...this.active); this.active = []; return this.done; }
 }
-const lastBox = tr => { const L = tr.r[tr.r.length - 1]; return { x1: L[1], y1: L[2], x2: L[3], y2: L[4] }; };
+const lastBox = tr => { const L = tr.s[tr.s.length - 1]; return { x1: L[1], y1: L[2], x2: L[3], y2: L[4] }; };
 function mapBox(T, d) {
   const ps = [apply(T, d.x1, d.y1), apply(T, d.x2, d.y1), apply(T, d.x1, d.y2), apply(T, d.x2, d.y2)];
   const xs = ps.map(p => p[0]), ys = ps.map(p => p[1]);
@@ -295,7 +342,7 @@ function cropThumb(src, d, W, H) {
 // onFrame(t, dets) は画面の表示用。速さは検出にかかる時間に合わせて 1〜4 倍で自動調整。
 // anchor：線を合わせたコマ（LineAnchor）。毎回そのコマに重ねて、いまのコマでの線の位置を求める。
 // motion：各コマの [時刻, いまのコマ→基準(9), いまのコマ→線のコマ(9 または null)]
-export async function scanVideo(video, { tiles = 1, anchor, onFrame, onProgress, isStopped }) {
+export async function scanVideo(video, { tiles = 1, step: gap = 0.1, anchor, onFrame, onProgress, isStopped }) {
   const W = video.videoWidth, H = video.videoHeight;
   const tracker = new Tracker(W, H), chain = new MotionChain(), motion = [], lt = anchor ? new LineTracker(anchor) : null;
   await seekTo(video, 0);
@@ -314,9 +361,9 @@ export async function scanVideo(video, { tiles = 1, anchor, onFrame, onProgress,
       gaps.push(t - lastT);
       if (gaps.length >= 6) { // 1回の間に進む動画の時間を 0.07 秒くらいにする
         const g = gaps.reduce((a, b) => a + b) / gaps.length; gaps = [];
-        if (g > 0.12 && rate <= 1) slow = true; // 等倍でも追いつかない端末：止めて 0.1 秒ずつ送る
-        else if (g > 0.1 && rate > 1) rate = Math.max(1, rate - 0.5);
-        else if (g < 0.055 && rate < 4) rate = Math.min(4, rate + 0.25);
+        if (g > gap * 1.2 && rate <= 1) slow = true; // 等倍でも追いつかない端末：止めて gap 秒ずつ送る
+        else if (g > gap && rate > 1) rate = Math.max(1, rate - 0.5);
+        else if (g < gap * 0.55 && rate < 4) rate = Math.min(4, rate + 0.25);
         video.playbackRate = rate;
       }
     }
@@ -334,7 +381,7 @@ export async function scanVideo(video, { tiles = 1, anchor, onFrame, onProgress,
         if (isStopped && isStopped()) return end(video.duration);
         try { work(meta.mediaTime); } catch (e) { ended = true; video.pause(); return rej(e); }
         if (video.ended) return end(video.duration);
-        if (slow) return end(meta.mediaTime + 0.1);
+        if (slow) return end(meta.mediaTime + gap);
         video.requestVideoFrameCallback(step);
       };
       video.onended = () => setTimeout(() => end(video.duration), 50);
@@ -343,7 +390,7 @@ export async function scanVideo(video, { tiles = 1, anchor, onFrame, onProgress,
     });
   }
   // 古いブラウザや遅い端末：0.1 秒ずつ送って解析
-  for (let t = from; t < video.duration - 0.02; t += 0.1) {
+  for (let t = from; t < video.duration - 0.02; t += gap) {
     if (isStopped && isStopped()) break;
     const mt = await seekTo(video, t); work(mt);
   }
