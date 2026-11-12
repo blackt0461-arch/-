@@ -1,0 +1,23 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>anchor test</title>
+<body style="margin:0;background:#000;color:#fff;font:12px monospace">
+<video id="v" muted playsinline style="width:427px"></video><pre id="o"></pre>
+<script type="module">
+// 線のコマ（K）に、ほかの時刻のコマを重ねられるかを調べる：?v=動画&k=線のコマの時刻&from=&to=&step=
+import { grabGray, LineAnchor, I3, estimate } from '../motion.js';
+import { seekTo } from '../vision.js';
+const q = new URLSearchParams(location.search), v = document.getElementById('v');
+v.src = URL.createObjectURL(await (await fetch(q.get('v'))).blob()); await new Promise(r => v.onloadeddata = r); // かたまりで読みこむ（手元のサーバーは途中からの読み出しができないため）
+const W = v.videoWidth, H = v.videoHeight;
+await seekTo(v, +q.get('k'));
+const K = grabGray(v, W, H), an = new LineAnchor(K, [[0.26, 0.67], [0.26, 0.98]]);
+const out = [];
+for (let t = +q.get('from'); t <= +q.get('to'); t += +(q.get('step') || 0.2)) {
+  await seekTo(v, t); const P = grabGray(v, W, H);
+  const r = estimate(P, K, I3(), [], true);
+  const loc = an.locate(P, I3(), []);
+  out.push([+t.toFixed(2), r ? r.inl : 0, r ? +r.ratio.toFixed(2) : 0, loc ? +loc.line[0][0].toFixed(2) : null]);
+}
+window.result = out; document.getElementById('o').textContent = JSON.stringify(out);
+</script>

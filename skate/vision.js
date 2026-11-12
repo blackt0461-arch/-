@@ -195,11 +195,11 @@ export class LineTracker {
       // 手前を横切る人や立っている人で景色がかくれ、線のコマに重ねられない時：
       // 壁の赤い帯そのものを探し、その真下に線を引く（人の上の赤・大きさがちがいすぎる赤は使わない）
       if (this.stripe && src) {
-        const st = findWallStripe(src, src.videoWidth || src.width, src.videoHeight || src.height);
+        const st = findWallStripe(src, src.videoWidth || src.width, src.videoHeight || src.height, true);
         if (st && st.x > 0.03 && st.x < 0.97) {
           const hh = st.bottom - st.top, y = (st.top + st.bottom) / 2;
           const onP = (dets || []).some(d => { const mx = (d.x2 - d.x1) * 0.25, my = (d.y2 - d.y1) * 0.1; return st.x > d.x1 - mx && st.x < d.x2 + mx && y > d.y1 - my && y < d.y2 + my; });
-          if (!onP && hh > this.stripe.h * 0.5 && hh < this.stripe.h * 2) return { Hk: null, line: lineFromStripe(st), snapped: true, byStripe: true };
+          if (!onP && hh > this.stripe.h * 0.33 && hh < this.stripe.h * 3 && sameWall(this.stripe.ctx, st.ctx)) return { Hk: null, line: lineFromStripe(st), snapped: true, byStripe: true };
         }
       }
       return { Hk: null, line: null, snapped: false };
@@ -213,9 +213,19 @@ export class LineTracker {
   }
 }
 
+// 帯の左右の色が、最初に見つけた時とほぼ同じか（明るさの変わりは少し許す）
+function sameWall(a, b) {
+  if (!a || !b) return false;
+  for (let k = 0; k < 2; k++) { const p = a[k], q = b[k]; if (!p || !q) return false;
+    const lp = (p[0] + p[1] + p[2]) / 3, lq = (q[0] + q[1] + q[2]) / 3, s = lp > 1 ? lq / lp : 1;
+    if (s < 0.6 || s > 1.6) return false;
+    for (let c = 0; c < 3; c++) if (Math.abs(p[c] * s - q[c]) > 28) return false; }
+  return true;
+}
 // ---------- 壁の赤い帯（ゴールラインが壁に当たる所の目印）----------
 // はっきりした赤で、細くて縦に長いかたまりを探す。返り値：{x, top, bottom}（0〜1）。なければ null
-export function findWallStripe(src, W, H) {
+// loose：解析中の引き直し用。ズームを引いた画では帯が小さく写るので、小さい帯も拾う（人の上の赤は呼ぶ側で外す）
+export function findWallStripe(src, W, H, loose = false) {
   const w = 320, h = Math.round(320 * H / W);
   const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
   const c = cv.getContext('2d', { willReadFrequently: true }); c.drawImage(src, 0, 0, w, h);
@@ -224,19 +234,24 @@ export function findWallStripe(src, W, H) {
     const i = (y * w + x) * 4, r = d[i], g = d[i + 1], b = d[i + 2];
     if (r > 130 && r > g * 1.9 && r > b * 1.6) { col[x]++; if (y < top[x]) top[x] = y; if (y > bot[x]) bot[x] = y; }
   }
-  const need = Math.max(6, h * 0.045); let best = null;
+  const need = loose ? Math.max(3, h * 0.02) : Math.max(6, h * 0.045), minH = loose ? 0.03 : 0.06; let best = null;
   for (let x = 0; x < w; x++) {
     if (col[x] < need) continue;
     let x2 = x, sum = 0, t0 = h, b0 = -1;
     while (x2 < w && col[x2] >= need) { sum += col[x2]; t0 = Math.min(t0, top[x2]); b0 = Math.max(b0, bot[x2]); x2++; }
     const bw = x2 - x, bh = b0 - t0 + 1;
     // 細い・縦長・中がほぼ赤で埋まっている（服やヘルメットは形がちがう）
-    if (bw <= w * 0.05 && bh >= bw * 2 && bh >= h * 0.06 && sum >= bw * bh * 0.7 && (!best || sum > best.sum)) best = { x: (x + x2) / 2 / w, top: t0 / h, bottom: (b0 + 1) / h, sum };
+    if (bw <= w * 0.05 && bh >= bw * 2 && bh >= h * minH && sum >= bw * bh * 0.7 && (!best || sum > best.sum)) best = { x: (x + x2) / 2 / w, top: t0 / h, bottom: (b0 + 1) / h, sum, px: [x, x2, t0, b0] };
     x = x2;
   }
   if (!best) return null;
   const edge = wallEdge(d, w, h); // 壁の下のはしの近くまで届いていること
   if (edge && Math.abs(edge(best.x * w) / h - best.bottom) > 0.08) return null;
+  // 帯のすぐ左と右の色（＝壁の色）。解析中に帯を探し直す時、同じ壁の上の帯かどうかを見分けるのに使う
+  const [bx0, bx1, by0, by1] = best.px, side = (xa, xb) => { let r = 0, g = 0, b = 0, n = 0;
+    for (let y = by0; y <= by1; y++) for (let x = Math.max(0, xa); x <= Math.min(w - 1, xb); x++) { const i = (y * w + x) * 4; r += d[i]; g += d[i + 1]; b += d[i + 2]; n++; }
+    return n ? [r / n, g / n, b / n] : null; };
+  best.ctx = [side(bx0 - 5, bx0 - 2), side(bx1 + 1, bx1 + 4)]; delete best.px;
   return best;
 }
 // 壁の赤い帯の真下に、氷の上の線の候補を引く（手前に向かってまっすぐ下へ）
@@ -461,9 +476,16 @@ export function findRedLine(src, W, H) {
     if (vert && span < 0.35) continue;   // 短い縦の帯＝壁の赤い帯
     if (low < 0.5) continue;              // 画面の上半分だけ＝壁や観客席
     if (Math.hypot((e2[0] - e1[0]) * w, (e2[1] - e1[1]) * h) < 40) continue; // 短すぎる
+    // 本物の線は「とぎれずに・ぎっしり」赤い。氷のうすい色むらを拾っただけの線（まばら・とぎれとぎれ）は線としない
+    const segL = Math.max(1, u2 - u1), bins = new Uint8Array(12); let inSeg = 0;
+    for (const u of us) if (u >= u1 && u <= u2) { inSeg++; bins[Math.min(11, Math.floor((u - u1) / segL * 12))] = 1; }
+    const filled = bins.reduce((s, x) => s + x, 0), dens = inSeg / segL;
+    if (globalThis.__RL) globalThis.__RL.push({ dens: +dens.toFixed(2), filled, n, e1, e2 });
+    if (filled < 10 || dens < 1.2) continue;
+    if (Math.min(e1[1], e2[1]) > 0.93) continue; // 画面のいちばん下にはりついた横線＝写り込みや氷の色むら
     if (edge) { // 境目と平行で、境目に近い線は、壁の帯の写り込み
       const d1 = e1[1] * h - edge(e1[0] * w), d2 = e2[1] * h - edge(e2[0] * w);
-      if (Math.abs(d1 - d2) < h * 0.04 && Math.max(d1, d2) < h * 0.12) continue;
+      if (Math.abs(d1 - d2) < h * 0.05 && Math.max(d1, d2) < h * 0.2) continue;
     }
     return e1[1] < e2[1] ? [e1, e2] : [e2, e1];
   }

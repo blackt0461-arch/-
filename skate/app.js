@@ -3,7 +3,7 @@ import * as stand from './stand.js';
 import * as share from './share.js';
 import { loadMembers, saveMembers, matchMember, addMember, addSample, priorityOf } from './members.js';
 import { grabGray, LineAnchor, MotionChain, apply, inv3, mul3, homFrom4 } from './motion.js';
-import { loadDetector, usedDelegate, scanVideo, seekTo, findRedLine, trackCrossings, refineCrossing, interpBox, groupTracks, Tracker, detectFrame, grabSmall, liveCrossing, lineMetric, footMetric, LineTracker, findWallStripe, lineFromStripe, histSim, headSim, normHist } from './vision.js';
+import { loadDetector, usedDelegate, scanVideo, seekTo, findRedLine, trackCrossings, refineCrossing, interpBox, groupTracks, Tracker, detectFrame, grabSmall, liveCrossing, lineMetric, footMetric, LineTracker, findWallStripe, lineFromStripe, histSim, headSim, normHist, wallEdge } from './vision.js';
 
 const $ = id => document.getElementById(id);
 const S = { session: null, videoURL: null, videoFile: null, person: null, line: null, live: false, stream: null, recBlob: null };
@@ -110,7 +110,7 @@ async function openLine() {
     // カメラが動く動画では、前に合わせた線の位置は使えない。壁の赤い帯（ゴールラインの目印）が写る場面を自動で探す
     await seekTo(v, 0.5); S.line = null;
     const found = await findLineScene(v);
-    S.lineSure = !!found; S.stripe = found ? { h: found.st.bottom - found.st.top } : null;
+    S.lineSure = !!found; S.stripe = found ? { h: found.st.bottom - found.st.top, ctx: found.st.ctx } : null;
     if (found) { S.line = found.line; $('lineTime').value = Math.round(found.t / v.duration * 1000); toast('ゴールの目印らしい赤い帯が写る場面を選びました。線が合っているか確かめてください'); }
     else { // 見つからない時は、当てずっぽうの線を出さない（まちがった線で測るより、本人に合わせてもらう）
       await seekTo(v, 0.5); S.line = [[0.5, 0.6], [0.5, 0.95]];
@@ -131,10 +131,21 @@ function drawLine() {
   for (const p of [a, b]) { lineCx.beginPath(); lineCx.arc(p[0] * W, p[1] * H, r, 0, 7); lineCx.fillStyle = 'rgb(255 59 79 / .55)'; lineCx.fill(); lineCx.lineWidth = Math.max(2, W / 400); lineCx.strokeStyle = '#fff'; lineCx.stroke(); }
 }
 $('lineTime').oninput = async e => { const v = $('vWork'); await seekTo(v, v.duration * e.target.value / 1000); drawLine(); };
+// 線が、壁と氷の境目に沿って寝ていないか（境目とほぼ平行・境目の近く）。そういう線は選手が越えないので、始める前に止める
+function lineAlongWall(v, line) {
+  try {
+    const w = 320, h = Math.round(320 * v.videoHeight / v.videoWidth), cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+    const c = cv.getContext('2d', { willReadFrequently: true }); c.drawImage(v, 0, 0, w, h);
+    const edge = wallEdge(c.getImageData(0, 0, w, h).data, w, h); if (!edge) return false;
+    const [a, b] = line, len = Math.hypot((b[0] - a[0]) * w, (b[1] - a[1]) * h); if (len < 10) return false;
+    const d1 = a[1] * h - edge(a[0] * w), d2 = b[1] * h - edge(b[0] * w);
+    return Math.abs(d1 - d2) < len * 0.2 && Math.max(Math.abs(d1), Math.abs(d2)) < h * 0.25;
+  } catch (e) { return false; }
+}
 // 線の候補：壁の赤い帯があれば、その真下の氷の上に引く。なければ氷の上の赤い線を探す
 function autoLine(v) {
   let st = findWallStripe(v, v.videoWidth, v.videoHeight); if (st && onPerson(v, st)) st = null;
-  S.stripe = st ? { h: st.bottom - st.top } : null;
+  S.stripe = st ? { h: st.bottom - st.top, ctx: st.ctx } : null;
   return st ? lineFromStripe(st) : findRedLine(v, v.videoWidth, v.videoHeight);
 }
 // 壁の赤い帯が、画面のまん中あたりに写っている場面を探す（0.5秒ごと・最初の60秒まで）
@@ -179,6 +190,7 @@ $('stopScan').onclick = () => { stopFlag = true; };
 $('startScan').onclick = async () => {
   if (S.live) return startLive();
   if (!S.lineSure && !confirm('線はまだ仮の位置です。ゴールの線に合わせていないと、ラップは正しく出ません。このまま解析しますか？')) return;
+  if (lineAlongWall(lineSrc(), S.line) && !confirm('線が壁に沿って横に寝ています。ゴールの線は、コースを横切る向き（壁から手前へ）に引きます。このままだと選手が線を越えず、ラップが出ません。このまま解析しますか？')) return;
   lsSet('skate-line', S.line);
   const tiles = $('optTiles').checked ? 2 : 1; lsSet('skate-tiles', tiles);
   const fine = $('optFine').checked; lsSet('skate-fine', fine ? 1 : 0);

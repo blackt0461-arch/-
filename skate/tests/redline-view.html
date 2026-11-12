@@ -13,7 +13,7 @@ const d = x.getImageData(0, 0, W, H).data;
 for (let y = 0; y < H; y++) for (let i = 0; i < W; i++) { const k = (y * W + i) * 4; if (isLineRed(d[k], d[k + 1], d[k + 2])) { x.fillStyle = 'rgb(0 255 0 / .6)'; x.fillRect(i, y, 1, 1); } }
 const e = wallEdge(d, W, H);
 if (e) { x.strokeStyle = '#ff0'; x.lineWidth = 2; x.beginPath(); x.moveTo(0, e(0)); x.lineTo(W, e(W)); x.stroke(); }
-const l = findRedLine(im, W, H);
+globalThis.__RL = []; const l = findRedLine(im, W, H);
 if (l) { x.strokeStyle = '#f0f'; x.lineWidth = 4; x.beginPath(); x.moveTo(l[0][0] * W, l[0][1] * H); x.lineTo(l[1][0] * W, l[1][1] * H); x.stroke(); }
-window.result = { edge: !!e, line: l };
+window.result = { edge: !!e, line: l, c: globalThis.__RL.slice(0, 3) };
 </script>

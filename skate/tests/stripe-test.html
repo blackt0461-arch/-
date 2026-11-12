@@ -1,0 +1,14 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>stripe test</title>
+<script type="module">
+// 壁の赤い帯を、ふつうの条件とゆるい条件で探して数字を出す：?imgs=a.jpg,b.jpg
+import { findWallStripe } from '../vision.js';
+const out = {};
+for (const f of new URLSearchParams(location.search).get('imgs').split(',')) {
+  const im = new Image(); im.src = f; await im.decode();
+  const r = k => { const s = findWallStripe(im, im.naturalWidth, im.naturalHeight, k); return s ? { x: +s.x.toFixed(3), top: +s.top.toFixed(3), bottom: +s.bottom.toFixed(3), sum: s.sum, ctx: s.ctx && s.ctx.map(c => c && c.map(Math.round)) } : null; };
+  out[f] = { strict: r(false), loose: r(true) };
+}
+window.result = out; document.body.textContent = JSON.stringify(out);
+</script>
