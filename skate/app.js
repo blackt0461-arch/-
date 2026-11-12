@@ -1263,7 +1263,7 @@ function menuInfo(list, i) {
   const src = s + ' ' + (/指定/.test(nx) ? nx : '');
   const a = g && src.match(new RegExp(g + '\\s*Last\\s*lap\\s*指定\\s*(\\d{1,2}\\.\\d)', 'i'));
   const nums = a ? [a[1]] : [...src.matchAll(/(?:指定|[(（])\s*(\d{1,2}\.\d)(?!\s*L)/g)].map(x => x[1]);
-  for (const x of nums) if (+x >= 5 && +x < 60) { tgt = +x; break; } // 「0.7」のような書き方は意味を決めつけない（文字のまま見せる）
+  if (nums.length) { const x = +nums[0]; tgt = x < 5 ? 10 + x : x < 60 ? x : 0; } // 「0.7」は10.7秒、「2.5」は12.5秒の略（本人に確認 2026-11-12）。9.8 はそのまま
   return { exp, tgt };
 }
 function setWin(k) { // k 番目の「本」の時間のはんい。メニューを使っていない時は全部
