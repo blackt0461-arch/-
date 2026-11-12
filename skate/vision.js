@@ -183,14 +183,27 @@ export function snapRedLine(line, boxes = []) {
 // 毎コマの線の位置：線のコマ（K）に重ねて計算 → 写っている赤い線で合わせ直す。
 // K に重ならない時は、前のコマの線をカメラの動きで動かして予想し、赤い線が見つかった時だけ使う。
 export class LineTracker {
-  constructor(anchor) { this.anchor = anchor; this.lastHk = null; this.lastT = null; this.lastAt = -1; }
-  step(t, P, T, dets) {
+  // stripe：線を「壁の赤い帯の真下」に引いた時の、その帯の大きさ { h }。景色で重ねられない時の手がかりにする
+  constructor(anchor, stripe) { this.anchor = anchor; this.stripe = stripe || null; this.lastHk = null; this.lastT = null; this.lastAt = -1; }
+  step(t, P, T, dets, src) {
     const loc = this.anchor.locate(P, T, dets);
     let Hk = loc ? loc.H : null, direct = !!loc;
     // ぶれたコマなどで重ねられない時：直前に重なったコマから、カメラの動いた分だけ動かす（1秒まで）
     if (!Hk && this.lastHk && t - this.lastAt < 0.5) Hk = mul3(this.lastHk, mul3(inv3(this.lastT), T));
     if (direct) { this.lastHk = Hk; this.lastT = T; this.lastAt = t; }
-    if (!Hk) return { Hk: null, line: null, snapped: false };
+    if (!Hk) {
+      // 手前を横切る人や立っている人で景色がかくれ、線のコマに重ねられない時：
+      // 壁の赤い帯そのものを探し、その真下に線を引く（人の上の赤・大きさがちがいすぎる赤は使わない）
+      if (this.stripe && src) {
+        const st = findWallStripe(src, src.videoWidth || src.width, src.videoHeight || src.height);
+        if (st && st.x > 0.03 && st.x < 0.97) {
+          const hh = st.bottom - st.top, y = (st.top + st.bottom) / 2;
+          const onP = (dets || []).some(d => { const mx = (d.x2 - d.x1) * 0.25, my = (d.y2 - d.y1) * 0.1; return st.x > d.x1 - mx && st.x < d.x2 + mx && y > d.y1 - my && y < d.y2 + my; });
+          if (!onP && hh > this.stripe.h * 0.5 && hh < this.stripe.h * 2) return { Hk: null, line: lineFromStripe(st), snapped: true, byStripe: true };
+        }
+      }
+      return { Hk: null, line: null, snapped: false };
+    }
     const Hi = inv3(Hk), pred = this.anchor.line.map(q => apply(Hi, q[0], q[1]));
     // 写っている赤い線での合わせ直しは、計算した位置のすぐ近く（画面の幅の1.5%以内）の時だけ使う。
     // 線は氷の上の決まった1本でないと、ラップがコマごとにずれるため
@@ -342,9 +355,9 @@ function cropThumb(src, d, W, H) {
 // onFrame(t, dets) は画面の表示用。速さは検出にかかる時間に合わせて 1〜4 倍で自動調整。
 // anchor：線を合わせたコマ（LineAnchor）。毎回そのコマに重ねて、いまのコマでの線の位置を求める。
 // motion：各コマの [時刻, いまのコマ→基準(9), いまのコマ→線のコマ(9 または null)]
-export async function scanVideo(video, { tiles = 1, step: gap = 0.1, anchor, onFrame, onProgress, isStopped }) {
+export async function scanVideo(video, { tiles = 1, step: gap = 0.1, anchor, stripe, onFrame, onProgress, isStopped }) {
   const W = video.videoWidth, H = video.videoHeight;
-  const tracker = new Tracker(W, H), chain = new MotionChain(), motion = [], lt = anchor ? new LineTracker(anchor) : null;
+  const tracker = new Tracker(W, H), chain = new MotionChain(), motion = [], lt = anchor ? new LineTracker(anchor, stripe) : null;
   await seekTo(video, 0);
   video.muted = true;
   let rate = 2; video.playbackRate = rate;
@@ -353,7 +366,7 @@ export async function scanVideo(video, { tiles = 1, step: gap = 0.1, anchor, onF
     grabSmall(video, W, H);
     const dets = detectFrame(video, W, H, tiles);
     const P = grabGray(video, W, H), T = chain.step(P, dets);
-    const loc = lt ? lt.step(t, P, T, dets) : null;
+    const loc = lt ? lt.step(t, P, T, dets, video) : null;
     motion.push([t, T, loc ? loc.Hk : null, loc ? loc.line : null, loc ? loc.snapped : false]);
     tracker.update(t, dets, video, T);
     frames++;

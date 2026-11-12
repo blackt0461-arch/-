@@ -110,9 +110,14 @@ async function openLine() {
     // カメラが動く動画では、前に合わせた線の位置は使えない。壁の赤い帯（ゴールラインの目印）が写る場面を自動で探す
     await seekTo(v, 0.5); S.line = null;
     const found = await findLineScene(v);
-    if (found) { S.line = found.line; $('lineTime').value = Math.round(found.t / v.duration * 1000); toast('ゴールの目印（壁の赤い帯）が写る場面を選びました。線を確かめてください'); }
-    else { await seekTo(v, 0.5); toast('ゴールラインが写る場面を下の帯で選び、線を合わせてください'); }
-  }
+    S.lineSure = !!found; S.stripe = found ? { h: found.st.bottom - found.st.top } : null;
+    if (found) { S.line = found.line; $('lineTime').value = Math.round(found.t / v.duration * 1000); toast('ゴールの目印らしい赤い帯が写る場面を選びました。線が合っているか確かめてください'); }
+    else { // 見つからない時は、当てずっぽうの線を出さない（まちがった線で測るより、本人に合わせてもらう）
+      await seekTo(v, 0.5); S.line = [[0.5, 0.6], [0.5, 0.95]];
+      $('lineNote').textContent = '⚠ ゴールの目印を自動では見つけられませんでした。下の帯でゴールが写る場面を選び、両はしの丸を動かしてゴールの線に重ねてください。';
+      toast('ゴールの線を自分で合わせてください');
+    }
+  } else { S.lineSure = true; S.stripe = null; }
   if (!S.line) S.line = autoLine(v) || lsGet('skate-line', null) || [[0.5, 0.6], [0.5, 0.95]];
   drawLine();
   if (S.live) { const loop = () => { if (!$('sLine').classList.contains('on')) return; drawLine(); requestAnimationFrame(loop); }; requestAnimationFrame(loop); }
@@ -128,26 +133,33 @@ function drawLine() {
 $('lineTime').oninput = async e => { const v = $('vWork'); await seekTo(v, v.duration * e.target.value / 1000); drawLine(); };
 // 線の候補：壁の赤い帯があれば、その真下の氷の上に引く。なければ氷の上の赤い線を探す
 function autoLine(v) {
-  const st = findWallStripe(v, v.videoWidth, v.videoHeight);
+  let st = findWallStripe(v, v.videoWidth, v.videoHeight); if (st && onPerson(v, st)) st = null;
+  S.stripe = st ? { h: st.bottom - st.top } : null;
   return st ? lineFromStripe(st) : findRedLine(v, v.videoWidth, v.videoHeight);
 }
 // 壁の赤い帯が、画面のまん中あたりに写っている場面を探す（0.5秒ごと・最初の60秒まで）
+function onPerson(v, st) {
+  let dets; try { dets = detectFrame(v, v.videoWidth, v.videoHeight, 2); } catch (e) { return false; }
+  const y = (st.top + st.bottom) / 2;
+  return dets.some(d => { const mx = (d.x2 - d.x1) * 0.25, my = (d.y2 - d.y1) * 0.1; return st.x > d.x1 - mx && st.x < d.x2 + mx && y > d.y1 - my && y < d.y2 + my; });
+}
 async function findLineScene(v) {
   let best = null;
+  try { await loadDetector(); } catch (e) {}
   for (let t = 0.5; t < Math.min(v.duration, 60); t += 0.5) {
     if (!$('sLine').classList.contains('on')) return null;
     await seekTo(v, t);
     const st = findWallStripe(v, v.videoWidth, v.videoHeight);
-    if (!st) continue;
+    if (!st || onPerson(v, st)) continue; // 赤い服の人を、壁の赤い帯とまちがえない
     const sc = st.sum * (1 - Math.abs(st.x - 0.5) * 1.6);
     if (st.x > 0.2 && st.x < 0.8 && (!best || sc > best.sc)) best = { t, st, sc };
     if (best && t - best.t > 4) break; // 最初に見えたひとかたまりの中で、いちばんよい場面
   }
   if (!best) return null;
   await seekTo(v, best.t);
-  return { t: best.t, line: lineFromStripe(best.st) };
+  return { t: best.t, st: best.st, line: lineFromStripe(best.st) };
 }
-$('lineAuto').onclick = () => { const v = lineSrc(); const l = autoLine(v); if (l) { S.line = l; drawLine(); toast('線の候補を引きました。ずれていたら丸を動かしてください'); } else toast('赤い線が見つかりません。丸を動かしてください'); };
+$('lineAuto').onclick = () => { const v = lineSrc(); const l = autoLine(v); if (l) { S.line = l; S.lineSure = true; drawLine(); toast('線の候補を引きました。ずれていたら丸を動かしてください'); } else toast('赤い線が見つかりません。丸を動かしてください'); };
 {
   let drag = -1;
   const pos = e => { const r = lineCv.getBoundingClientRect(); return [(e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height]; };
@@ -158,7 +170,7 @@ $('lineAuto').onclick = () => { const v = lineSrc(); const l = autoLine(v); if (
     lineCv.setPointerCapture(e.pointerId);
   });
   lineCv.addEventListener('pointermove', e => { if (drag < 0) return; const p = pos(e); S.line[drag] = [Math.min(1, Math.max(0, p[0])), Math.min(1, Math.max(0, p[1]))]; drawLine(); });
-  lineCv.addEventListener('pointerup', () => drag = -1);
+  lineCv.addEventListener('pointerup', () => { if (drag >= 0) { S.lineSure = true; S.stripe = null; } drag = -1; }); // 自分で動かした線は、赤い帯の真下とは限らない
 }
 
 // ---------- 解析 ----------
@@ -166,6 +178,7 @@ let stopFlag = false;
 $('stopScan').onclick = () => { stopFlag = true; };
 $('startScan').onclick = async () => {
   if (S.live) return startLive();
+  if (!S.lineSure && !confirm('線はまだ仮の位置です。ゴールの線に合わせていないと、ラップは正しく出ません。このまま解析しますか？')) return;
   lsSet('skate-line', S.line);
   const tiles = $('optTiles').checked ? 2 : 1; lsSet('skate-tiles', tiles);
   const fine = $('optFine').checked; lsSet('skate-fine', fine ? 1 : 0);
@@ -182,7 +195,7 @@ $('startScan').onclick = async () => {
     const W = v.videoWidth, H = v.videoHeight; cv.width = W; cv.height = H;
     const t0 = performance.now();
     const { tracks, frames, motion } = await scanVideo(v, {
-      tiles, anchor, step: fine ? 0.05 : 0.1,
+      tiles, anchor, stripe: S.stripe, step: fine ? 0.05 : 0.1,
       isStopped: () => stopFlag,
       onProgress: p => { const n = Math.min(100, Math.round(p * 100)); $('scanBar').style.width = n + '%'; $('scanPct').textContent = n + '%'; },
       onFrame: (t, dets, rate, ln) => {
@@ -578,6 +591,21 @@ function laps(s, p) {
   for (let i = 1; i < cs.length; i++) L.push({ n: i, lap: cs[i].t - cs[i - 1].t, total: cs[i].t - cs[0].t, at: cs[i].t, from: cs[i - 1].t, refined: cs[i].refined && cs[i - 1].refined, est: !!(cs[i].est || cs[i - 1].est) });
   return { cs, L };
 }
+// 集団のラップ：だれかが線を越えた「ひとかたまり」ごとに、先頭の時刻をとる。人の見分けをまちがえても変わらない
+function packLaps(s) {
+  const cs = s.crossings.filter(c => c.dir === s.dir && !c.est).sort((a, b) => a.t - b.t), gap = Math.max(3, s.minLap * 0.5), packs = [];
+  for (const c of cs) { const p = packs[packs.length - 1]; if (p && c.t - p.last < gap) { p.last = c.t; p.ids.add(c.track); } else packs.push({ t: c.t, last: c.t, ids: new Set([c.track]) }); }
+  return packs.map((p, i) => ({ t: p.t, n: p.ids.size, lap: i ? p.t - packs[i - 1].t : null }));
+}
+function renderPack(s) {
+  const box = $('resPack'), pk = packLaps(s); box.innerHTML = '';
+  if (pk.length < 3) return;
+  const laps = pk.slice(1).map(p => p.lap), m = [...laps].sort((a, b) => a - b)[laps.length >> 1];
+  const el = document.createElement('div'); el.className = 'card past';
+  el.innerHTML = `<b>集団の先頭のラップ</b><p class="note" style="margin:4px 0">先頭が線を越えるたびの時間です。選手の見分けに左右されません。</p><div class="pr">` +
+    pk.slice(1).map(p => { const k = Math.round(p.lap / m); return `${fmt(p.lap)}${p.lap > m * 1.7 && k >= 2 ? `<small class="multi">${k}周分？</small>` : ''}`; }).join('　') + `</div><p class="note" style="margin:4px 0 0">${pk.length}回の通過（1回に ${Math.min(...pk.map(p => p.n))}〜${Math.max(...pk.map(p => p.n))}人）</p>`;
+  box.append(el);
+}
 const trackById = (s, id) => s.tracks.find(t => t.id === id);
 function personThumb(s, p) {
   let best = null; for (const id of p.tracks) { const t = trackById(s, id); if (t && t.thumb && (!best || t.thumbArea > best.thumbArea)) best = t; }
@@ -622,7 +650,7 @@ function showResult() {
   go('sResult');
   const d = new Date(s.date);
   $('resTitle').innerHTML = `選手一覧<small></small>`; $('resTitle').querySelector('small').textContent = `${d.getMonth() + 1}/${d.getDate()}・${s.videoName}`;
-  renderPast($('resSets'), s.liveSets || []);
+  renderPast($('resSets'), s.liveSets || []); renderPack(s);
   $('needVideo').classList.toggle('hide', !!S.videoURL);
   $('recSave').classList.toggle('hide', !(S.recBlob && S.session.live && S.session.videoName === S.videoFile?.name));
   $('minLap').value = s.minLap;
@@ -1177,7 +1205,7 @@ async function startLive() {
   L.tracker = new Tracker(W, H); L.persons = []; L.byTrack = new Map(); L.crossings = []; L.lastDet = 0;
   // いま写っているコマを「線のコマ」にする。首を振っても、毎回このコマに重ねて線の位置を求める
   S.lineImg = frameImage(v);
-  L.lt = new LineTracker(new LineAnchor(grabGray(v, W, H), S.line.map(p => p.slice()))); L.chain = new MotionChain(); L.motion = []; L.meas = new Map();
+  L.lt = new LineTracker(new LineAnchor(grabGray(v, W, H), S.line.map(p => p.slice())), S.stripe); L.chain = new MotionChain(); L.motion = []; L.meas = new Map();
   const measure = (t, x1, y2, x2) => { const m = L.meas.get(Math.round(t * 1000)); if (!m) return null; return m.sn ? lineMetric(m.line, W, H, x1, y2, x2) : footMetric(S.line, W, H, m.Hk, x1, y2, x2); };
   L.minLap = lsGet('skate-minlap2', 6); L.tiles = lsGet('skate-tiles', 1);
   // ほかのスマホに出す（名前・練習メニュー・ラップの数字だけ）
@@ -1206,7 +1234,7 @@ async function startLive() {
       if (t >= 0) {
         grabSmall(v, W, H);
         const dets = detectFrame(v, W, H, L.tiles);
-        const P = grabGray(v, W, H), T = L.chain.step(P, dets), loc = L.lt.step(t, P, T, dets);
+        const P = grabGray(v, W, H), T = L.chain.step(P, dets), loc = L.lt.step(t, P, T, dets, v);
         L.motion.push([t, T, loc.Hk, loc.line, loc.snapped]);
         if (loc.snapped || loc.Hk) L.meas.set(Math.round(t * 1000), { sn: loc.snapped, line: loc.line, Hk: loc.Hk });
         L.tracker.update(t, dets, v, T);
@@ -1567,7 +1595,7 @@ $('deepScan').onclick = async () => {
   if (!confirm('撮った動画を最初から解析し直します（数分かかります）。新しい記録として追加されます。')) return;
   S.line = S.session.line; S.live = false;
   S.lineK = await lineKOf(S.session); S.lineImg = S.session.lineImg;
-  $('startScan').onclick();
+  S.lineSure = true; $('startScan').onclick();
 };
 
 // ---------- 思わぬエラーを画面に出す（スクショで原因が分かるように）----------
@@ -1575,7 +1603,7 @@ window.addEventListener('error', e => toast('エラー：' + (e.message || e.err
 window.addEventListener('unhandledrejection', e => toast('エラー：' + ((e.reason && e.reason.message) || e.reason)));
 
 // 試験用：いまの線と記録を外から見られるようにする
-window.__skateDebug = () => ({ line: S.line, session: S.session, live: L });
+window.__skateDebug = () => ({ sure: S.lineSure, line: S.line, session: S.session, live: L });
 
 // ---------- はじめ ----------
 showHome();
