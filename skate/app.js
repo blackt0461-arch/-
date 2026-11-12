@@ -104,7 +104,7 @@ async function openLine() {
   $('lineNote').textContent = S.live ? '赤いラインが写る向きで線を合わせてください。撮影中に選手を追って首を振っても大丈夫です（立つ場所は変えないでください）。' : '下の帯を動かして、赤いラインがはっきり見えて人が重なっていない場面を選んでください。カメラが動く動画でも大丈夫です。';
   $('startScan').textContent = S.live ? '⏺ この線で撮影スタート' : 'この線で解析する';
   $('standCard').classList.toggle('hide', !S.live); $('shareCard').classList.toggle('hide', !S.live);
-  $('menuText').value = lsGet('skate-menu', ''); $('menuList').value = lsGet('skate-menulist', ''); $('optShare').checked = lsGet('skate-share', 0) === 1;
+  $('menuText').value = lsGet('skate-menu', ''); $('teamPass').value = lsGet('skate-team', ''); $('menuList').value = lsGet('skate-menulist', ''); $('optShare').checked = lsGet('skate-share', 0) === 1;
   $('optFine').checked = lsGet('skate-fine', 1) === 1;
   if (!S.live) {
     // カメラが動く動画では、前に合わせた線の位置は使えない。壁の赤い帯（ゴールラインの目印）が写る場面を自動で探す
@@ -1162,6 +1162,7 @@ function pickTarget(t) {
 
 const L = { sets: [], list: [], rec: null, chunks: [], t0: 0, tracker: null, persons: [], byTrack: new Map(), crossings: [], lastDet: 0, timer: 0, tiles: 1, newId: null };
 async function startLive() {
+  if ($('optShare').checked && $('teamPass').value.trim().length < 4) return toast('チームの合い言葉を4文字以上で入れてください');
   lsSet('skate-line-live', S.line); lsSet('skate-line', S.line);
   const v = $('vLive'), W = v.videoWidth, H = v.videoHeight;
   const cv = $('liveCv'), cx = cv.getContext('2d'); cv.width = W; cv.height = H;
@@ -1184,13 +1185,16 @@ async function startLive() {
   lsSet('skate-menulist', $('menuList').value); L.list = menuLines($('menuList').value); L.sets = [];
   $('liveSets').innerHTML = ''; setBtn($('liveSetBtn'), L.list, -1); lsSet('skate-share', $('optShare').checked ? 1 : 0);
   $('shareLive').classList.toggle('hide', !$('optShare').checked); L.share = null;
+  L.team = null; L.recId = crypto.randomUUID(); L.dirty = false; L.day = Date.now();
   if ($('optShare').checked) {
-    const code = share.newCode(); $('shareCode').textContent = code; $('shareState').textContent = 'つないでいます…';
+    const pass = $('teamPass').value.trim(); lsSet('skate-team', pass); teamUI();
+    const code = L.team = await share.teamKey(pass); $('shareCode').textContent = '「' + pass + '」'; $('shareState').textContent = 'つないでいます…';
     share.host(code, liveState, st => { $('shareState').textContent = st; }, i => armSet(i)).then(h => { L.share = h; }).catch(e => { $('shareState').textContent = e.message; });
   }
   await new Promise(r => { L.rec.onstart = r; L.rec.start(1000); });
   L.t0 = performance.now();
   $('liveInfo').textContent = 'ラインを越えた人がここに出ます';
+  L.saveTm = setInterval(() => { if (L.dirty) saveLive(); }, 60000);
   L.timer = setInterval(() => { const t = clock((performance.now() - L.t0) / 1000); $('liveTime').textContent = t; $('darkTime').textContent = t; }, 500);
   const step = (now, meta) => {
     if (!L.rec || L.rec.state === 'inactive') return;
@@ -1278,8 +1282,17 @@ function armSet(i) {
   if (last && !L.crossings.some(c => c.t >= last.t)) L.sets.pop();
   L.sets.push({ i, name: L.list[i], t, ...menuInfo(L.list, i) });
   for (const p of L.persons) p.sentK = -1;
-  L.newId = null; renderLiveCards(); if (L.share) L.share.full();
+  L.newId = null; renderLiveCards(); if (L.share) L.share.full(); saveLive();
   toast('「' + L.list[i] + '」のラップを記録します');
+}
+// 記録をネットに残す（名前・練習メニュー・ラップの数字だけ）。メニューを切りかえた時・1分ごと（変わった時だけ）・止めた時
+async function saveLive() {
+  if (!L.team) return;
+  const sets = (L.sets.length ? L.sets.map((_, k) => setSummary(k)) : [setSummary(-1)]).filter(x => x.persons.length);
+  if (!sets.length) return;
+  const d = new Date(L.day), title = L.menu || `${d.getMonth() + 1}月${d.getDate()}日の練習`;
+  L.dirty = false;
+  try { await share.saveRecord(L.team, L.recId, title, { at: L.day, menu: L.menu || '', sets }); } catch (e) { L.dirty = true; }
 }
 function setSummary(k) {
   const st = L.sets[k];
@@ -1393,8 +1406,8 @@ function lapCards(box, list, newest, info) { // list: [{name, laps, last}]。周
   }
 }
 let watching = null;
-async function openWatch(code) {
-  code = String(code || '').replace(/\D/g, ''); if (code.length !== 5) return toast('合い言葉は5けたの数字です');
+async function openWatch() {
+  const code = await share.teamKey(lsGet('skate-team', ''));
   go('sWatch'); $('watchMenu').firstChild.textContent = 'ラップ'; $('watchCards').innerHTML = ''; $('watchEmpty').classList.remove('hide'); $('watchTime').textContent = '';
   // 撮影側のデータ量を小さくするため、届くのは「全部」（見始めた時・ずれた時だけ）と「1周分」（ラップが出るたび）
   let st = null, last = 0, startAt = 0;
@@ -1402,7 +1415,7 @@ async function openWatch(code) {
     $('watchMenu').firstChild.textContent = st.set || st.menu || 'ラップ';
     setBtn($('watchSetBtn'), st.list, st.cur, st.set); renderPast($('watchSets'), st.past || []);
     lsSet('skate-watch-last', { at: Date.now(), st }); $('watchLast').classList.remove('hide');
-    $('watchState').textContent = `合い言葉 ${code}・${st.persons.filter(q => q.laps.length).length}人`;
+    $('watchState').textContent = `撮影中・${st.persons.filter(q => q.laps.length).length}人`;
     $('watchEmpty').classList.toggle('hide', st.persons.some(q => q.laps.length));
     lapCards($('watchCards'), st.persons, st.newest, st);
   };
@@ -1424,7 +1437,42 @@ async function openWatch(code) {
     }, 1000);
   } catch (e) { $('watchState').textContent = e.message; }
 }
-$('watchBtn').onclick = () => openWatch($('watchCode').value);
+// ---------- チームの記録（合い言葉は最初の1回だけ） ----------
+function teamUI() { const has = !!lsGet('skate-team', ''); $('teamRow').classList.toggle('hide', has); $('teamChange').classList.toggle('hide', !has); }
+teamUI();
+$('teamChange').onclick = () => { $('watchCode').value = lsGet('skate-team', ''); lsSet('skate-team', ''); teamUI(); };
+$('watchBtn').onclick = () => {
+  if (!lsGet('skate-team', '')) { const pass = $('watchCode').value.trim(); if (pass.length < 4) return toast('チームの合い言葉を4文字以上で入れてください'); lsSet('skate-team', pass); teamUI(); }
+  openTeam();
+};
+let teamProbe = null;
+async function openTeam() {
+  go('sTeam'); $('teamLive').classList.add('hide'); $('teamList').innerHTML = ''; $('teamEmpty').classList.add('hide'); $('teamState').textContent = '読みこんでいます…';
+  let team; try { team = await share.teamKey(lsGet('skate-team', '')); } catch (e) { $('teamState').textContent = 'このスマホでは使えません'; return; }
+  // いま撮影しているスマホがあれば、上に出す
+  share.watch(team, { state: st => { $('teamLive').classList.remove('hide'); $('teamLiveNote').textContent = (st.set || st.menu || 'ラップ') + '・' + st.persons.length + '人'; }, lap: () => {}, end: () => $('teamLive').classList.add('hide') }, () => {})
+    .then(w => { teamProbe = w; const tm = setInterval(() => { if (!$('sTeam').classList.contains('on')) { clearInterval(tm); w.stop(); if (teamProbe === w) teamProbe = null; } }, 500); }).catch(() => {});
+  try {
+    const list = await share.listRecords(team);
+    $('teamState').textContent = `${list.length}回分`; $('teamEmpty').classList.toggle('hide', list.length > 0);
+    for (const r of list) {
+      const d = new Date(r.started_at), sets = (r.data && r.data.sets) || [], names = new Set(sets.flatMap(x => x.persons.map(p => p.name)));
+      const el = document.createElement('div'); el.className = 'rec';
+      el.innerHTML = `<div class="t"><b></b><span>${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}・${sets.length}本・${names.size}人</span></div><button class="btn small" aria-label="消す">🗑</button>`;
+      el.querySelector('b').textContent = r.title || '練習';
+      el.querySelector('button').onclick = async e => { e.stopPropagation(); if (!confirm('この記録を、みんなのスマホから消しますか？')) return; try { await share.deleteRecord(team, r.id); openTeam(); } catch (err) { toast('消せませんでした'); } };
+      el.onclick = () => showRecord(r);
+      $('teamList').append(el);
+    }
+  } catch (e) { $('teamState').textContent = '読みこめませんでした（電波を確かめてください）'; }
+}
+$('teamLive').onclick = () => openWatch();
+function showRecord(r) {
+  const d = new Date(r.started_at), sets = (r.data && r.data.sets) || [];
+  go('sWatch'); $('watchMenu').firstChild.textContent = r.title || '練習'; $('watchTime').textContent = '';
+  $('watchState').textContent = `${d.getMonth() + 1}/${d.getDate()} の記録`; $('watchSetBtn').classList.add('hide');
+  $('watchCards').innerHTML = ''; $('watchEmpty').classList.add('hide'); renderPast($('watchSets'), sets);
+}
 // 前に見たラップ（このスマホに残してある最後の表示）をもう一度見る
 $('watchLast').classList.toggle('hide', !lsGet('skate-watch-last', null));
 $('watchLast').onclick = () => {
@@ -1460,7 +1508,7 @@ function renderLiveCards() {
     const lp = liveLaps(np);
     if (lp.length && np.sentK !== lp.length) {
       // 周の数が1つずつ増えた時だけ「1周分」。そうでない時（数え直しで変わった時）は、見る側が全部をもらい直す
-      L.share.lap({ n: np.name, s: L.sets.length, k: lp.length, l: Math.round(lp[lp.length - 1] * 100) / 100, t: Math.round(np.cs[np.cs.length - 1].t * 10) / 10 }); np.sentK = lp.length;
+      L.dirty = true; L.share.lap({ n: np.name, s: L.sets.length, k: lp.length, l: Math.round(lp[lp.length - 1] * 100) / 100, t: Math.round(np.cs[np.cs.length - 1].t * 10) / 10 }); np.sentK = lp.length;
     }
   }
 }
@@ -1472,6 +1520,7 @@ $('stopLive').onclick = async () => {
   $('stopLive').disabled = true;
   clearInterval(L.timer);
   const v = $('vLive'), W = v.videoWidth, H = v.videoHeight, dur = (performance.now() - L.t0) / 1000;
+  clearInterval(L.saveTm); saveLive().then(() => { L.team = null; });
   stand.stop(); if (L.share) { L.share.end(); L.share.stop(); L.share = null; }
   await new Promise(r => { L.rec.onstop = r; L.rec.stop(); });
   try { L.wake?.release(); } catch {}
@@ -1513,5 +1562,5 @@ window.__skateDebug = () => ({ line: S.line, session: S.session, live: L });
 
 // ---------- はじめ ----------
 showHome();
-{ const w = new URLSearchParams(location.search).get('watch'); if (w) openWatch(w); }
+if (new URLSearchParams(location.search).has('watch') && lsGet('skate-team', '')) openTeam();
 if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});

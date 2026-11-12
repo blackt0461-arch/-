@@ -15,8 +15,16 @@ function client() {
   });
   return clientP;
 }
-const chanName = code => 'skate-lap-' + String(code).replace(/\D/g, '');
-export const newCode = () => String(Math.floor(10000 + Math.random() * 90000)); // 5けたの合い言葉
+// チームの合い言葉から作る印（64文字）。合い言葉そのものはどこにも送らない
+export async function teamKey(pass) {
+  const h = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('laps:' + String(pass).trim()));
+  return [...new Uint8Array(h)].map(x => x.toString(16).padStart(2, '0')).join('');
+}
+const chanName = team => 'skate-lap-' + String(team).replace(/[^0-9a-f]/g, '').slice(0, 24);
+// 記録（名前・練習メニュー・ラップの数字）を残す・一覧をもらう・消す。合い言葉の印が合うものだけ出し入れできる
+export async function saveRecord(team, id, title, data) { const sb = await client(); const { error } = await sb.rpc('skate_save', { p_team: team, p_id: id, p_title: title, p_data: data }); if (error) throw error; }
+export async function listRecords(team) { const sb = await client(); const { data, error } = await sb.rpc('skate_list', { p_team: team }); if (error) throw error; return data || []; }
+export async function deleteRecord(team, id) { const sb = await client(); const { error } = await sb.rpc('skate_delete', { p_team: team, p_id: id }); if (error) throw error; }
 
 // 撮影する側。データ量を小さくするため、送るのは
 //   ・ラップが出た時の「1周分」（数十文字）

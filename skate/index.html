@@ -163,13 +163,14 @@ dialog::backdrop{background:rgb(0 0 0 / .6)}
   </label>
   <div class="mode watch">
     <svg viewBox="0 0 96 96" aria-hidden="true"><circle cx="48" cy="52" r="30" fill="none" stroke="#fff" stroke-width="5"/><path d="M48 52V34" stroke="#ff3b4f" stroke-width="6" stroke-linecap="round"/><circle cx="48" cy="52" r="5" fill="#fff"/><rect x="41" y="8" width="14" height="10" rx="3" fill="#fff"/></svg>
-    <span><b>ラップを見る</b><small>撮影しているスマホに出ている合い言葉（5けた）を入れます。</small>
-      <span class="row" style="margin-top:8px;flex-wrap:nowrap"><input id="watchCode" inputmode="numeric" maxlength="5" placeholder="合い言葉" class="grow"><button class="btn blue" id="watchBtn">見る</button></span>
+    <span><b>記録を見る</b><small id="teamNote">いまの撮影のラップと、これまでの練習の記録を見られます。</small>
+      <span class="row" id="teamRow" style="margin-top:8px;flex-wrap:nowrap"><input id="watchCode" placeholder="チームの合い言葉" class="grow" autocomplete="off" style="font-size:16px;letter-spacing:0"></span>
+      <span class="row" style="margin-top:8px"><button class="btn blue grow" id="watchBtn">記録を見る</button><button class="btn small hide" id="teamChange">合い言葉を変える</button></span>
       <button class="btn small hide" id="watchLast" style="margin-top:8px">前に見たラップをもう一度見る</button>
     </span>
   </div>
   <input type="file" id="file" accept="video/*" class="hide">
-  <p class="note">版 2026-11-12j。動画はこのスマホの中だけで計算します。どこにも送りません（「ほかのスマホに出す」を使う時だけ、名前・練習メニュー・ラップの数字を届けます）。<br>「設置して測る」は、撮りながらラップだけを測ります。追いかけ動画は撮り終わってから作ります。</p>
+  <p class="note">版 2026-11-12k。動画はこのスマホの中だけで計算します。どこにも送りません（「みんなのスマホに出して、記録に残す」を使う時だけ、名前・練習メニュー・ラップの数字をネットに送って残します。見られるのはチームの合い言葉を知っている人だけです）。<br>「設置して測る」は、撮りながらラップだけを測ります。追いかけ動画は撮り終わってから作ります。</p>
   <h2 style="font-size:16px;margin:22px 0 6px">登録した部員</h2>
   <div id="memList"></div>
   <p class="note" id="memEmpty">選手の画面の「部員に登録」から登録できます。登録すると、次から自動で名前が付き、撮影中に自動で追いかけられます。</p>
@@ -196,7 +197,8 @@ dialog::backdrop{background:rgb(0 0 0 / .6)}
     <textarea id="menuList" rows="6" placeholder="1行に1つ（例）&#10;A スタートから1000m&#10;B スタートから1000m" style="width:100%;padding:10px;margin-top:8px;font-size:14px;border-radius:10px;border:1px solid var(--line);background:var(--ice);color:var(--text)"></textarea>
     <input id="menuText" placeholder="題名（例：10月27日 宇治）" style="width:100%;padding:10px;margin-top:8px;border-radius:10px;border:1px solid var(--line);background:var(--ice);color:var(--text)">
     <p class="note" style="margin:8px 0 4px"><b>ほかのスマホに出す</b>：名前・練習メニュー・ラップの数字だけを届けます（写真や動画は送りません）。ネットにつながっている時だけ使えます。</p>
-    <label class="row note"><input type="checkbox" id="optShare"> 撮影を始めたら、ほかのスマホに出す</label>
+    <input id="teamPass" placeholder="チームの合い言葉（4文字以上。見る人と同じもの）" autocomplete="off" style="width:100%;padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--ice);color:var(--text)">
+    <label class="row note"><input type="checkbox" id="optShare"> みんなのスマホに出して、記録に残す</label>
   </div>
   <div class="card hide" id="standCard">
     <div class="row"><b class="grow">自動で追いかける</b><span class="note" id="standState" style="margin:0">台なし</span></div>
@@ -214,7 +216,7 @@ dialog::backdrop{background:rgb(0 0 0 / .6)}
     <div class="stage grow" style="flex:1 1 55%"><video id="vLive" playsinline muted autoplay></video><canvas class="over" id="liveCv"></canvas></div>
   </div>
   <p class="note" id="liveInfo"></p>
-  <div class="card hide" id="shareLive"><div class="row"><span class="grow">合い言葉 <b class="big" id="shareCode" style="letter-spacing:.15em"></b></span><span class="note" id="shareState" style="margin:0"></span></div><p class="note" style="margin:4px 0 0">ほかのスマホで kotetsuworks.com/skate を開き、この数字を入れると見られます。</p></div>
+  <div class="card hide" id="shareLive"><div class="row"><span class="grow">チームの合い言葉 <b id="shareCode"></b></span><span class="note" id="shareState" style="margin:0"></span></div><p class="note" style="margin:4px 0 0">ほかのスマホで kotetsuworks.com/skate を開き、「記録を見る」から見られます（合い言葉は最初の1回だけ）。</p></div>
   <button class="btn blue hide setbtn" id="liveSetBtn"></button>
   <div class="grid live" id="liveCards"></div>
   <div id="liveSets"></div>
@@ -228,11 +230,20 @@ dialog::backdrop{background:rgb(0 0 0 / .6)}
 
 <!-- ほかのスマホのラップを見る -->
 <section class="scr" id="sWatch">
-  <header class="top"><button class="back" data-go="sHome">‹</button><h1 id="watchMenu">ラップ<small id="watchState">つないでいます…</small></h1><span class="big" id="watchTime" style="font-size:22px"></span></header>
+  <header class="top"><button class="back" data-go="sTeam">‹</button><h1 id="watchMenu">ラップ<small id="watchState">つないでいます…</small></h1><span class="big" id="watchTime" style="font-size:22px"></span></header>
   <button class="btn blue hide setbtn" id="watchSetBtn"></button>
   <div class="grid live" id="watchCards"></div>
   <p class="note" id="watchEmpty">線を越えた人が、ここに出ます。</p>
   <div id="watchSets"></div>
+</section>
+
+<!-- チームの記録 -->
+<section class="scr" id="sTeam">
+  <header class="top"><button class="back" data-go="sHome">‹</button><h1>記録<small id="teamState"></small></h1></header>
+  <button class="mode live hide" id="teamLive"><span><b>🔴 いま撮影中</b><small id="teamLiveNote"></small></span><em>›</em></button>
+  <h2 style="font-size:16px;margin:16px 0 6px">これまでの練習</h2>
+  <div id="teamList"></div>
+  <p class="note" id="teamEmpty">まだ記録はありません。合い言葉が撮影する人と同じか、確かめてください。</p>
 </section>
 
 <!-- 解析中 -->
