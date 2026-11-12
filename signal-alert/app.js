@@ -39,7 +39,7 @@ let wakeLock = null;
 
 const $ = (id) => document.getElementById(id);
 const els = {
-  body: document.body, avatar: $('avatar'), bars: $('bars'), emoji: $('emoji'), charGrid: $('char-grid'), speed: $('speed'), meaning: $('meaning'),
+  body: document.body, avatar: $('avatar'), bars: $('bars'), emoji: $('emoji'), scene: $('scene'), charGrid: $('char-grid'), speed: $('speed'), meaning: $('meaning'),
   latency: $('latency'), toggle: $('toggle'), chart: $('chart'),
   log: $('log'), clear: $('clear-log'),
 };
@@ -299,19 +299,27 @@ function renderLog() {
 
 // ===== キャラクター(速さの見せ方を切り替える) =====
 // 絵文字は iPhone の文字として表示する(画像ファイルは使わない)。並びは[速い, 普通, やや遅い, 遅い, 圏外]
+// キャラは左向きに走り、景色と地面が右へ流れる。scene は景色の種類(run=道 / fly=空 / swim=海)
+// rot:左を向かせるための回転(斜めを向いている絵文字用)
 const CHARS = [
   { id: 'antenna', name: 'アンテナ', icons: null },
-  { id: 'runner',  name: '爆走ランナー', icons: ['🏃‍♂️💨', '🏃‍♂️', '🚶‍♂️', '🧎‍♂️', '🛌'] },
-  { id: 'ride',    name: '乗り物',   icons: ['✈️', '🚄', '🚗', '🚲', '🚧'] },
-  { id: 'animal',  name: '動物リレー', icons: ['🐆', '🐇', '🐢', '🐌', '💤'] },
-  { id: 'cat',     name: 'ネコ',     icons: ['😸', '😺', '🐱', '😿', '🙀'] },
-  { id: 'weather', name: 'お天気',   icons: ['☀️', '🌤️', '☁️', '🌧️', '⛈️'] },
-  { id: 'face',    name: '顔',       icons: ['🤩', '😊', '😐', '😩', '😵'] },
-  { id: 'bird',    name: '鳥',       icons: ['🦅', '🕊️', '🐓', '🐧', '🪺'] },
-  { id: 'flower',  name: '花',       icons: ['🌻', '🌷', '🌱', '🥀', '🍂'] },
-  { id: 'space',   name: '宇宙',     icons: ['🚀', '🛸', '🛰️', '🌕', '🌑'] },
-  { id: 'sea',     name: '海',       icons: ['🐬', '🐟', '🐠', '🦀', '🐚'] },
+  { id: 'runner',  name: '爆走ランナー', scene: 'run',  icons: ['🏃‍♂️', '🏃‍♂️', '🚶‍♂️', '🚶‍♂️', '🛌'] },
+  { id: 'ride',    name: '乗り物',   scene: 'run',  icons: ['🚄', '🚙', '🛵', '🚲', '🚧'] },
+  { id: 'animal',  name: '動物リレー', scene: 'run', icons: ['🐆', '🐇', '🐢', '🐌', '💤'] },
+  { id: 'cat',     name: 'ネコ',     scene: 'run',  icons: ['🐈', '🐈', '🐈', '🐈', '😿'] },
+  { id: 'dog',     name: 'イヌ',     scene: 'run',  icons: ['🐕', '🐕', '🐕', '🐩', '🐶'] },
+  { id: 'horse',   name: '競馬',     scene: 'run',  icons: ['🏇', '🐎', '🐎', '🐴', '🐴'] },
+  { id: 'bird',    name: '鳥',       scene: 'fly',  icons: ['🦅', '🕊️', '🐦', '🐦', '🪺'] },
+  { id: 'sky',     name: '飛行機',   scene: 'fly',  icons: ['✈️', '🛩️', '🚁', '🎈', '🪂'], rot: { '✈️': -135 } },
+  { id: 'space',   name: '宇宙',     scene: 'fly',  icons: ['🚀', '🛸', '🛰️', '🛰️', '🌑'], rot: { '🚀': -135 } },
+  { id: 'sea',     name: '海',       scene: 'swim', icons: ['🐬', '🐟', '🐠', '🐡', '🐚'] },
 ];
+// 流れていく景色(2つ並べて、つなぎ目が見えないように回す)
+const SCENERY = {
+  run:  '🌳\u3000\u3000🏠\u3000\u3000\u3000🌲\u3000🏢\u3000\u3000\u3000🌳\u3000\u3000🏡\u3000\u3000🌲\u3000\u3000',
+  fly:  '☁️\u3000\u3000\u3000\u3000☁️\u3000\u3000\u3000\u3000\u3000☁️\u3000\u3000\u3000☁️\u3000\u3000\u3000\u3000',
+  swim: '🫧\u3000\u3000🌿\u3000\u3000\u3000🫧\u3000🪸\u3000\u3000\u3000🫧\u3000\u3000🌿\u3000\u3000\u3000',
+};
 const CHAR_KEY = 'signal-alert-char-v1';
 let charId = (() => { try { return localStorage.getItem(CHAR_KEY) || 'antenna'; } catch (e) { return 'antenna'; } })();
 if (!CHARS.some((c) => c.id === charId)) charId = 'antenna';
@@ -323,11 +331,19 @@ function showAvatar(lv) {
   const bars = lv ? lv.bars : 0;
   els.bars.className = `lv-${bars}`;
   els.bars.hidden = !!ch.icons;
-  els.emoji.hidden = !ch.icons;
+  els.scene.hidden = !ch.icons;
+  if (ch.icons && els.scene.dataset.scene !== ch.scene) {
+    els.scene.dataset.scene = ch.scene;
+    els.scene.querySelectorAll('.strip span').forEach((sp) => { sp.textContent = SCENERY[ch.scene]; });
+  }
   // 5段階:0=速い … 3=遅い、4=圏外。測定前は idle
   const idx = lv ? 4 - bars : null;
   els.avatar.className = idx === null ? 'idle' : `lv${idx}`;
-  if (ch.icons) els.emoji.textContent = ch.icons[idx === null ? 0 : idx];
+  if (ch.icons) {
+    const icon = ch.icons[idx === null ? 0 : idx];
+    if (els.emoji.textContent !== icon) els.emoji.textContent = icon;
+    els.emoji.style.rotate = ch.rot && ch.rot[icon] ? `${ch.rot[icon]}deg` : '';
+  }
 }
 function setChar(id) {
   charId = id;
@@ -343,7 +359,7 @@ function renderCharGrid() {
     b.className = c.id === charId ? 'on' : '';
     const ic = document.createElement('span');
     ic.className = 'ic';
-    ic.textContent = c.icons ? c.icons.slice(0, 4).join('') : '📶';
+    ic.textContent = c.icons ? [...new Set(c.icons.slice(0, 4))].join('') : '📶';
     const nm = document.createElement('span');
     nm.textContent = c.name;
     b.append(ic, nm);

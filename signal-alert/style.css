@@ -30,26 +30,76 @@ main {
 /* ===== 上部:アンテナと速さ ===== */
 #hero { text-align: center; padding: 8px 0 24px; }
 #avatar {
-  height: 104px; margin-bottom: 12px; display: flex; align-items: flex-end; justify-content: center;
+  min-height: 104px; margin-bottom: 12px; display: flex; align-items: flex-end; justify-content: center;
   cursor: pointer;
 }
 #bars {
   display: inline-flex; align-items: flex-end; gap: 8px; height: 88px; margin-bottom: 8px;
 }
-/* キャラ:速いほど元気に跳ねる。圏外は色が抜けて傾く */
-#emoji {
-  font-size: 84px; line-height: 1; display: inline-block; white-space: nowrap;
-  transform-origin: 50% 100%;
+/* ===== キャラ:道を走る。速いほど速く走り、景色も速く流れる。圏外は止まって寝る ===== */
+#scene {
+  position: relative; width: 100%; height: 120px; overflow: hidden;
+  border-radius: 18px; background: rgba(0,0,0,.14);
   font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif;
 }
-#avatar.idle #emoji { opacity: .55; }
-#avatar.lv0 #emoji { animation: hop .32s ease-in-out infinite; }
-#avatar.lv1 #emoji { animation: hop .7s ease-in-out infinite; }
-#avatar.lv2 #emoji { animation: sway 1.6s ease-in-out infinite; }
-#avatar.lv3 #emoji { animation: sway 3s ease-in-out infinite; }
-#avatar.lv4 #emoji { filter: grayscale(1); opacity: .7; transform: rotate(-12deg); }
-@keyframes hop { 50% { transform: translateY(-12px) scaleY(1.04); } }
-@keyframes sway { 25% { transform: rotate(-5deg); } 75% { transform: rotate(5deg); } }
+#scene[data-scene="fly"]  { background: linear-gradient(rgba(125,211,252,.28), rgba(0,0,0,.08)); }
+#scene[data-scene="swim"] { background: linear-gradient(rgba(14,165,233,.30), rgba(30,64,175,.35)); }
+/* 景色:同じ並びを2つつなげて、右へ流し続ける */
+#scene .strip {
+  position: absolute; left: 0; top: 6px; white-space: nowrap; font-size: 22px; opacity: .5;
+  animation: flow var(--bg, 8s) linear infinite;
+}
+#scene[data-scene="fly"] .strip { top: 6px; font-size: 26px; opacity: .7; }
+#scene[data-scene="swim"] .strip { top: auto; bottom: 4px; }
+@keyframes flow { from { transform: translateX(-50%); } to { transform: translateX(0); } }
+/* 地面の線(空と海ではなし) */
+#scene .ground {
+  position: absolute; left: 0; right: 0; bottom: 16px; height: 4px;
+  background: repeating-linear-gradient(90deg, rgba(255,255,255,.55) 0 22px, transparent 22px 44px);
+  animation: road var(--gd, 1s) linear infinite;
+}
+#scene[data-scene="fly"] .ground, #scene[data-scene="swim"] .ground { display: none; }
+@keyframes road { from { background-position-x: 0; } to { background-position-x: 44px; } }
+
+#scene .runner {
+  position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%);
+  animation: hop var(--hop, .6s) ease-in-out infinite;
+}
+#scene[data-scene="fly"] .runner, #scene[data-scene="swim"] .runner {
+  bottom: 26px; animation-name: glide;
+}
+#emoji {
+  display: inline-block; font-size: 64px; line-height: 1;
+  transform: rotate(var(--lean, 0deg)); transform-origin: 50% 90%;
+}
+@keyframes hop { 50% { transform: translateX(-50%) translateY(var(--jump, -8px)); } }
+@keyframes glide { 50% { transform: translateX(-50%) translateY(-10px); } }
+/* 後ろ(右)に出る風の線 */
+#scene .lines { position: absolute; left: 100%; top: 18px; width: 50px; height: 34px; opacity: 0; }
+#scene .lines i {
+  position: absolute; left: 0; height: 3px; border-radius: 2px; background: rgba(255,255,255,.85);
+  animation: wind var(--wind, .4s) linear infinite;
+}
+#scene .lines i:nth-child(1) { top: 0;    width: 30px; }
+#scene .lines i:nth-child(2) { top: 14px; width: 42px; animation-delay: -.13s; }
+#scene .lines i:nth-child(3) { top: 28px; width: 24px; animation-delay: -.26s; }
+@keyframes wind { from { transform: translateX(-6px); opacity: 1; } to { transform: translateX(34px); opacity: 0; } }
+#scene .zzz { position: absolute; left: 78%; top: -14px; font: 800 20px/1 sans-serif; color: #fff; opacity: 0; }
+#scene .zzz b { font-size: .8em; margin-left: 2px; }
+
+/* 速さごとの走り方 */
+#avatar.lv0 { --bg: 2.4s; --gd: .28s; --hop: .2s;  --jump: -10px; --lean: -10deg; --wind: .35s; }
+#avatar.lv1 { --bg: 5s;   --gd: .6s;  --hop: .34s; --jump: -8px;  --lean: -5deg;  --wind: .6s; }
+#avatar.lv2 { --bg: 10s;  --gd: 1.3s; --hop: .6s;  --jump: -5px; }
+#avatar.lv3 { --bg: 22s;  --gd: 3s;   --hop: 1.1s; --jump: -3px; }
+#avatar.lv0 #scene .lines { opacity: 1; }
+#avatar.lv1 #scene .lines { opacity: .5; }
+/* 測定前と圏外は止まる */
+#avatar.idle #scene *, #avatar.lv4 #scene * { animation-play-state: paused; }
+#avatar.idle #emoji { opacity: .6; }
+#avatar.lv4 #emoji { filter: grayscale(1); opacity: .75; }
+#avatar.lv4 #scene .zzz { animation: zzz 2s ease-in-out infinite; animation-play-state: running; }
+@keyframes zzz { 0% { opacity: 0; transform: translateY(14px); } 40% { opacity: 1; } 100% { opacity: 0; transform: translateY(-6px); } }
 
 /* キャラ選び */
 #char-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
