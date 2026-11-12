@@ -113,8 +113,13 @@ dialog::backdrop{background:rgb(0 0 0 / .6)}
   <button class="btn main" id="liveBtn" style="width:100%">⏺ その場で撮ってラップを測る</button>
   <div style="height:10px"></div>
   <label class="btn blue" for="file">🎥 撮った動画を入れる</label>
+  <div class="card">
+    <b>ほかのスマホのラップを見る</b>
+    <p class="note" style="margin:4px 0">撮影しているスマホに出ている合い言葉（5けた）を入れます。</p>
+    <div class="row"><input id="watchCode" inputmode="numeric" maxlength="5" placeholder="合い言葉" class="grow" style="padding:12px;border-radius:10px;border:1px solid var(--line);background:var(--ice);color:var(--text);font-size:20px;letter-spacing:.2em"><button class="btn blue" id="watchBtn">見る</button></div>
+  </div>
   <input type="file" id="file" accept="video/*" class="hide">
-  <p class="note">版 2026-11-12c。動画はこのスマホの中だけで計算します。どこにも送りません。<br>「その場で撮る」は、撮りながらラップだけを測ります。追いかけ動画は撮り終わってから作ります。</p>
+  <p class="note">版 2026-11-12d。動画はこのスマホの中だけで計算します。どこにも送りません（「ほかのスマホに出す」を使う時だけ、名前・練習メニュー・ラップの数字を届けます）。<br>「その場で撮る」は、撮りながらラップだけを測ります。追いかけ動画は撮り終わってから作ります。</p>
   <h2 style="font-size:16px;margin:22px 0 6px">登録した部員</h2>
   <div id="memList"></div>
   <p class="note" id="memEmpty">選手の画面の「部員に登録」から登録できます。登録すると、次から自動で名前が付き、撮影中に自動で追いかけられます。</p>
@@ -134,6 +139,12 @@ dialog::backdrop{background:rgb(0 0 0 / .6)}
     <label class="row note" style="margin:0"><input type="checkbox" id="optTiles"> 遠くの人も探す（ゆっくり）</label>
     <label class="row note" style="margin:0"><input type="checkbox" id="optFine" checked> ていねいに解析（時間は約2倍・取りちがえが減る）</label>
   </div>
+  <div class="card hide" id="shareCard">
+    <b>ほかのスマホに出す</b>
+    <p class="note" style="margin:4px 0">名前・練習メニュー・ラップの数字だけを届けます（写真や動画は送りません）。ネットにつながっている時だけ使えます。</p>
+    <input id="menuText" placeholder="練習メニュー（例：111m×10周 2本目）" style="width:100%;padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--ice);color:var(--text)">
+    <label class="row note"><input type="checkbox" id="optShare"> 撮影を始めたら、ほかのスマホに出す</label>
+  </div>
   <div class="card hide" id="standCard">
     <div class="row"><b class="grow">自動で追いかける</b><span class="note" id="standState" style="margin:0">台なし</span></div>
     <p class="note">登録した部員を見つけて、自分 → 部員の順でまん中に向けます。台がない時は、画面の矢印の向きに手で向けてください。</p>
@@ -150,6 +161,7 @@ dialog::backdrop{background:rgb(0 0 0 / .6)}
     <div class="stage grow" style="flex:1 1 55%"><video id="vLive" playsinline muted autoplay></video><canvas class="over" id="liveCv"></canvas></div>
   </div>
   <p class="note" id="liveInfo"></p>
+  <div class="card hide" id="shareLive"><div class="row"><span class="grow">合い言葉 <b class="big" id="shareCode" style="letter-spacing:.15em"></b></span><span class="note" id="shareState" style="margin:0"></span></div><p class="note" style="margin:4px 0 0">ほかのスマホで kotetsuworks.com/skate を開き、この数字を入れると見られます。</p></div>
   <div class="grid live" id="liveCards"></div>
   <div class="row" style="margin-top:12px">
     <button class="btn grow" id="darkBtn">🌙 画面を暗くする</button>
@@ -158,6 +170,13 @@ dialog::backdrop{background:rgb(0 0 0 / .6)}
   <p class="note">画面を暗くしても、撮影とラップは続きます。電池の減りと熱をおさえられます。</p>
 </section>
 <div id="dark" class="hide"><div><b id="darkTime">0:00</b><span id="darkInfo"></span><small>タップでもどる</small></div></div>
+
+<!-- ほかのスマホのラップを見る -->
+<section class="scr" id="sWatch">
+  <header class="top"><button class="back" data-go="sHome">‹</button><h1 id="watchMenu">ラップ<small id="watchState">つないでいます…</small></h1><span class="big" id="watchTime" style="font-size:22px"></span></header>
+  <div class="grid live" id="watchCards"></div>
+  <p class="note" id="watchEmpty">線を越えた人が、ここに出ます。</p>
+</section>
 
 <!-- 解析中 -->
 <section class="scr" id="sScan">

@@ -1,5 +1,6 @@
 // スケートラップ：画面と記録
 import * as stand from './stand.js';
+import * as share from './share.js';
 import { loadMembers, saveMembers, matchMember, addMember, addSample, priorityOf } from './members.js';
 import { grabGray, LineAnchor, MotionChain, apply, inv3, mul3, homFrom4 } from './motion.js';
 import { loadDetector, usedDelegate, scanVideo, seekTo, findRedLine, trackCrossings, refineCrossing, interpBox, groupTracks, Tracker, detectFrame, grabSmall, liveCrossing, lineMetric, footMetric, LineTracker, findWallStripe, lineFromStripe, histSim, headSim, normHist } from './vision.js';
@@ -102,7 +103,8 @@ async function openLine() {
   $('lineTime').classList.toggle('hide', S.live);
   $('lineNote').textContent = S.live ? '赤いラインが写る向きで線を合わせてください。撮影中に選手を追って首を振っても大丈夫です（立つ場所は変えないでください）。' : '下の帯を動かして、赤いラインがはっきり見えて人が重なっていない場面を選んでください。カメラが動く動画でも大丈夫です。';
   $('startScan').textContent = S.live ? '⏺ この線で撮影スタート' : 'この線で解析する';
-  $('standCard').classList.toggle('hide', !S.live);
+  $('standCard').classList.toggle('hide', !S.live); $('shareCard').classList.toggle('hide', !S.live);
+  $('menuText').value = lsGet('skate-menu', ''); $('optShare').checked = lsGet('skate-share', 0) === 1;
   $('optFine').checked = lsGet('skate-fine', 1) === 1;
   if (!S.live) {
     // カメラが動く動画では、前に合わせた線の位置は使えない。壁の赤い帯（ゴールラインの目印）が写る場面を自動で探す
@@ -1176,6 +1178,13 @@ async function startLive() {
   L.lt = new LineTracker(new LineAnchor(grabGray(v, W, H), S.line.map(p => p.slice()))); L.chain = new MotionChain(); L.motion = []; L.meas = new Map();
   const measure = (t, x1, y2, x2) => { const m = L.meas.get(Math.round(t * 1000)); if (!m) return null; return m.sn ? lineMetric(m.line, W, H, x1, y2, x2) : footMetric(S.line, W, H, m.Hk, x1, y2, x2); };
   L.minLap = lsGet('skate-minlap', 15); L.tiles = lsGet('skate-tiles', 1);
+  // ほかのスマホに出す（名前・練習メニュー・ラップの数字だけ）
+  L.menu = $('menuText').value.trim(); lsSet('skate-menu', L.menu); lsSet('skate-share', $('optShare').checked ? 1 : 0);
+  $('shareLive').classList.toggle('hide', !$('optShare').checked); L.share = null;
+  if ($('optShare').checked) {
+    const code = share.newCode(); $('shareCode').textContent = code; $('shareState').textContent = 'つないでいます…';
+    share.host(code, liveState, st => { $('shareState').textContent = st; }).then(h => { L.share = h; }).catch(e => { $('shareState').textContent = e.message; });
+  }
   await new Promise(r => { L.rec.onstart = r; L.rec.start(1000); });
   L.t0 = performance.now();
   $('liveInfo').textContent = 'ラインを越えた人がここに出ます';
@@ -1256,6 +1265,50 @@ function liveLaps(p) {
   const laps = []; for (let i = 1; i < out.length; i++) laps.push(out[i].t - out[i - 1].t);
   return laps;
 }
+// ほかのスマホへ届ける中身：練習メニュー・たった時間・人ごとの名前とラップ
+function liveState() {
+  return { menu: L.menu || '', elapsed: Math.round((performance.now() - L.t0) / 1000), newest: L.newName || '',
+    persons: L.persons.map(p => ({ name: p.name, laps: liveLaps(p).map(x => Math.round(x * 100) / 100), last: Math.round(p.cs[p.cs.length - 1].t * 10) / 10 })) };
+}
+function lapCards(box, list, newest) { // list: [{name, laps, last}]。周の多い順 → 新しい順
+  box.innerHTML = '';
+  for (const p of list.slice().sort((a, b) => b.laps.length - a.laps.length || b.last - a.last)) {
+    const el = document.createElement('div'); el.className = 'lcard' + (p.name === newest ? ' new' : '');
+    el.innerHTML = `<div><div class="n"></div><div class="last">${p.laps.length ? fmt(p.laps[p.laps.length - 1]) : '—'}</div><div class="hist">${p.laps.slice(0, -1).reverse().slice(0, 12).map(fmt).join(' ')}</div></div>`;
+    el.querySelector('.n').textContent = `${p.name}・${p.laps.length}周`;
+    box.append(el);
+  }
+}
+let watching = null;
+async function openWatch(code) {
+  code = String(code || '').replace(/\D/g, ''); if (code.length !== 5) return toast('合い言葉は5けたの数字です');
+  go('sWatch'); $('watchMenu').firstChild.textContent = 'ラップ'; $('watchCards').innerHTML = ''; $('watchEmpty').classList.remove('hide'); $('watchTime').textContent = '';
+  // 撮影側のデータ量を小さくするため、届くのは「全部」（見始めた時・ずれた時だけ）と「1周分」（ラップが出るたび）
+  let st = null, last = 0, startAt = 0;
+  const show = () => {
+    $('watchMenu').firstChild.textContent = st.menu || 'ラップ';
+    $('watchState').textContent = `合い言葉 ${code}・${st.persons.length}人`;
+    $('watchEmpty').classList.toggle('hide', st.persons.length > 0);
+    lapCards($('watchCards'), st.persons, st.newest);
+  };
+  try {
+    watching = await share.watch(code, {
+      state: x => { last = Date.now(); st = x; startAt = Date.now() - (x.elapsed || 0) * 1000; show(); },
+      lap: d => { // d: {n 名前, k その人の周の数（この通過のあと）, l いま出たラップ（最初の通過は null）, t 通過の時刻}
+        last = Date.now(); if (!st) return watching.hello();
+        let p = st.persons.find(q => q.name === d.n); if (!p) { p = { name: d.n, laps: [], last: 0 }; st.persons.push(p); }
+        if (d.l != null) { if (p.laps.length !== d.k - 1) return watching.hello(); p.laps.push(d.l); } // 取りこぼしていたら全部もらい直す
+        p.last = d.t; st.newest = d.n; show();
+      },
+      end: () => { $('watchState').textContent = '撮影は終わりました'; },
+    }, s2 => { if (!last) $('watchState').textContent = s2; });
+    const tm = setInterval(() => {
+      if (!$('sWatch').classList.contains('on')) { clearInterval(tm); watching && watching.stop(); watching = null; return; }
+      if (startAt) $('watchTime').textContent = clock((Date.now() - startAt) / 1000);
+    }, 1000);
+  } catch (e) { $('watchState').textContent = e.message; }
+}
+$('watchBtn').onclick = () => openWatch($('watchCode').value);
 function renderLiveCards() {
   const box = $('liveCards'); box.innerHTML = '';
   const list = L.persons.map(p => ({ p, laps: liveLaps(p), last: p.cs[p.cs.length - 1].t })).sort((a, b) => b.laps.length - a.laps.length || b.last - a.last);
@@ -1269,6 +1322,12 @@ function renderLiveCards() {
     box.append(el);
   }
   $('darkInfo').textContent = `${list.length}人・${total}周`;
+  const np = L.persons.find(p => p.id === L.newId); L.newName = np ? np.name : '';
+  // ほかのスマホへは、いま通った1人分だけを小さく送る（データ量をおさえる）
+  if (L.share && np) {
+    const lp = liveLaps(np);
+    if (np.sentK !== lp.length) { L.share.lap({ n: np.name, k: lp.length, l: lp.length ? Math.round(lp[lp.length - 1] * 100) / 100 : null, t: Math.round(np.cs[np.cs.length - 1].t * 10) / 10 }); np.sentK = lp.length; }
+  }
 }
 $('darkBtn').onclick = () => $('dark').classList.remove('hide');
 $('dark').onclick = () => $('dark').classList.add('hide');
@@ -1278,7 +1337,7 @@ $('stopLive').onclick = async () => {
   $('stopLive').disabled = true;
   clearInterval(L.timer);
   const v = $('vLive'), W = v.videoWidth, H = v.videoHeight, dur = (performance.now() - L.t0) / 1000;
-  stand.stop();
+  stand.stop(); if (L.share) { L.share.end(); L.share.stop(); L.share = null; }
   await new Promise(r => { L.rec.onstop = r; L.rec.stop(); });
   try { L.wake?.release(); } catch {}
   const ext = (L.type || 'webm').includes('mp4') ? 'mp4' : 'webm';
@@ -1318,4 +1377,5 @@ window.__skateDebug = () => ({ line: S.line, session: S.session });
 
 // ---------- はじめ ----------
 showHome();
+{ const w = new URLSearchParams(location.search).get('watch'); if (w) openWatch(w); }
 if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
