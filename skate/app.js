@@ -526,12 +526,44 @@ function follow(s, person, { model = null, pins = person.pins || [], bans = pers
   s.tracks.push(vt);
   const measure = makeLineAt(s).measure;
   s.crossings.push(...trackCrossings(vt, measure));
+  // 追いかけが外れていた周：線の所で拾えた通過（だれのものでも）の中から、この人のものを選んで埋める
+  const mine = s.crossings.filter(c => c.track === vid && c.dir === s.dir).map(c => c.t);
+  for (const a of missedCrossings(s, mine)) s.crossings.push({ t: a.t, dir: s.dir, track: vid, refined: true, est: true });
   person.tracks = [vid]; person.follow = true; person.chain = true; person.pins = pins; person.bans = bans;
   person.model = Array.from(r.model, x => Math.round(x * 1e4) / 1e4);
   return true;
 }
 
 // ---------- ラップの計算 ----------
+// 線を通る「ひとかたまり」（集団の通過）のうち、この人の通過が入っていないものを探し、
+// その中から、画面のまん中にいちばん近い人（カメラが追っていた人）で、周の長さがいちばん自然な通過を選ぶ
+function missedCrossings(s, mine) {
+  const ev = s.crossings.filter(c => !String(c.track).startsWith('v') && c.dir === s.dir).sort((a, b) => a.t - b.t);
+  if (!ev.length) return [];
+  const groups = []; for (const e of ev) { const g = groups[groups.length - 1]; if (g && e.t - g[g.length - 1].t < 3) g.push(e); else groups.push([e]); }
+  const have = mine.slice().sort((a, b) => a - b);
+  // 1周の長さの目安：となり合う通過の間かくのうち、短い方から（見のがしで2倍・3倍になったものを除く）
+  const gaps = []; for (let i = 1; i < have.length; i++) gaps.push(have[i] - have[i - 1]); gaps.sort((a, b) => a - b);
+  const lap = gaps.length ? gaps[Math.floor((gaps.length - 1) * 0.25)] : null;
+  const out = [];
+  for (const g of groups) {
+    const t0 = g[0].t, t1 = g[g.length - 1].t;
+    if (have.some(t => t > t0 - 1 && t < t1 + 1)) continue;
+    let best = null;
+    for (const e of g) {
+      const tr = trackById(s, e.track); if (!tr) continue;
+      const r = tr.s.reduce((a, x) => Math.abs(x[0] - e.t) < Math.abs(a[0] - e.t) ? x : a);
+      let sc = -Math.abs((r[1] + r[3]) / 2 - 0.5) * 2;
+      if (lap) { // 前後の通過から数えて、周の長さの整数倍に近いほどよい
+        const near = have.reduce((a, t) => a == null || Math.abs(t - e.t) < Math.abs(a - e.t) ? t : a, null);
+        if (near != null) { const k = Math.max(1, Math.round(Math.abs(e.t - near) / lap)); sc -= Math.min(1, Math.abs(Math.abs(e.t - near) - k * lap) / 1.0); }
+      }
+      if (!best || sc > best.sc) best = { t: e.t, sc };
+    }
+    if (best) out.push(best);
+  }
+  return out;
+}
 function personCrossings(s, p) {
   const set = new Set(p.tracks);
   const cs = s.crossings.filter(c => set.has(c.track) && c.dir === s.dir).sort((a, b) => a.t - b.t);
@@ -541,7 +573,7 @@ function personCrossings(s, p) {
 }
 function laps(s, p) {
   const cs = personCrossings(s, p), L = [];
-  for (let i = 1; i < cs.length; i++) L.push({ n: i, lap: cs[i].t - cs[i - 1].t, total: cs[i].t - cs[0].t, at: cs[i].t, from: cs[i - 1].t, refined: cs[i].refined && cs[i - 1].refined });
+  for (let i = 1; i < cs.length; i++) L.push({ n: i, lap: cs[i].t - cs[i - 1].t, total: cs[i].t - cs[0].t, at: cs[i].t, from: cs[i - 1].t, refined: cs[i].refined && cs[i - 1].refined, est: !!(cs[i].est || cs[i - 1].est) });
   return { cs, L };
 }
 const trackById = (s, id) => s.tracks.find(t => t.id === id);
@@ -663,10 +695,13 @@ function renderLaps() {
   const s = S.session, { cs, L } = laps(s, S.person), tb = $('lapTable');
   if (cs.length < 2) { tb.innerHTML = `<tr><td class="note" style="font-family:var(--font);font-size:14px">${cs.length ? 'ラインを越えたのは1回だけです（1周分のタイムには2回必要）。' : 'この人はラインを越えていません。'}</td></tr>`; return; }
   const best = Math.min(...L.map(x => x.lap));
+  // 1周の目安（短い方の4分の1の所）。その2倍・3倍に近いラップは、通過の見のがしの疑い
+  const sorted = L.map(x => x.lap).sort((a, b) => a - b), base = sorted[Math.floor((sorted.length - 1) * 0.25)];
+  const multi = x => { const k = Math.round(x.lap / base); return k >= 2 && Math.abs(x.lap / k - base) < base * 0.18 ? k : 0; };
   tb.innerHTML = '<tr><th>周</th><th>ラップ</th><th>合計</th></tr>';
   for (const x of L) {
     const tr = document.createElement('tr'); tr.className = 'tap';
-    tr.innerHTML = `<td>${x.n}</td><td class="${x.lap === best && L.length > 1 ? 'best' : ''}">${fmt(x.lap)}${x.refined ? '' : '<span class="pill">見直し前</span>'}</td><td>${fmt(x.total)}</td>`;
+    tr.innerHTML = `<td>${x.n}</td><td class="${x.lap === best && L.length > 1 ? 'best' : ''}">${fmt(x.lap)}${x.refined ? '' : '<span class="pill">見直し前</span>'}${x.est ? '<span class="pill">推定</span>' : ''}${multi(x) ? `<span class="pill" style="background:var(--red);color:#fff">${multi(x)}周分？</span>` : ''}</td><td>${fmt(x.total)}</td>`;
     tr.onclick = () => checkCrossing(x.at);
     tb.append(tr);
   }
