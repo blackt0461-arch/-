@@ -63,6 +63,8 @@ header.top h1 small{display:block;font-size:12px;color:var(--dim);font-weight:40
 .mode em{font-style:normal;font-size:30px;opacity:.8;position:relative;z-index:1}
 .mode.live{background:linear-gradient(135deg,#ff5a3c,#e0143f);border-color:transparent;color:#fff;box-shadow:0 10px 26px rgb(255 59 79 / .28)}
 .mode.rec{background:linear-gradient(135deg,#37b6ff,#1668c9);border-color:transparent;color:#fff;box-shadow:0 10px 26px rgb(31 143 224 / .25)}
+#colList .rec{flex-wrap:wrap;gap:8px}#colList .rec .t{flex:1 1 100%}#colList .rec .btn[data-a=share],#colList .rec .btn[data-a=use]{flex:1}
+.mode.col>svg{background:var(--card)}.mode.col small{color:var(--dim)}
 .mode.watch{cursor:default;align-items:flex-start}
 .mode.watch>svg{background:var(--card)}
 .mode.watch small{color:var(--dim)}
@@ -161,6 +163,10 @@ dialog::backdrop{background:rgb(0 0 0 / .6)}
     <svg viewBox="0 0 96 96" aria-hidden="true"><rect x="10" y="22" width="76" height="52" rx="9" fill="none" stroke="#fff" stroke-width="5"/><path d="M42 36v24l20-12z" fill="#fff"/><path d="M10 34h10M10 48h10M10 62h10M76 34h10M76 48h10M76 62h10" stroke="#fff" stroke-width="4" opacity=".7"/></svg>
     <span><b>録画から読み取る</b><small>撮っておいた動画から、選手ごとのラップと追いかけ動画を作ります。</small></span><em>›</em>
   </label>
+  <button class="mode col" id="collectBtn">
+    <svg viewBox="0 0 96 96" aria-hidden="true"><rect x="12" y="26" width="52" height="44" rx="9" fill="none" stroke="#fff" stroke-width="5"/><path d="M64 42l20-10v32l-20-10z" fill="none" stroke="#fff" stroke-width="5" stroke-linejoin="round"/><circle cx="30" cy="42" r="6" fill="#ff3b4f"/></svg>
+    <span><b>参考動画を撮る</b><small>撮るだけのモード。送りやすい大きさで、2分ごとに区切って保存します。</small></span><em>›</em>
+  </button>
   <div class="mode watch">
     <svg viewBox="0 0 96 96" aria-hidden="true"><circle cx="48" cy="52" r="30" fill="none" stroke="#fff" stroke-width="5"/><path d="M48 52V34" stroke="#ff3b4f" stroke-width="6" stroke-linecap="round"/><circle cx="48" cy="52" r="5" fill="#fff"/><rect x="41" y="8" width="14" height="10" rx="3" fill="#fff"/></svg>
     <span><b>記録を見る</b><small id="teamNote">いまの撮影のラップと、これまでの練習の記録を見られます。</small>
@@ -170,7 +176,7 @@ dialog::backdrop{background:rgb(0 0 0 / .6)}
     </span>
   </div>
   <input type="file" id="file" accept="video/*" class="hide">
-  <p class="note">版 2026-11-13b。動画はこのスマホの中だけで計算します。どこにも送りません（「みんなのスマホに出して、記録に残す」を使う時だけ、名前・練習メニュー・ラップの数字をネットに送って残します。見られるのはチームの合い言葉を知っている人だけです）。<br>「設置して測る」は、撮りながらラップだけを測ります。追いかけ動画は撮り終わってから作ります。</p>
+  <p class="note">版 2026-11-13c。動画はこのスマホの中だけで計算します。どこにも送りません（「みんなのスマホに出して、記録に残す」を使う時だけ、名前・練習メニュー・ラップの数字をネットに送って残します。見られるのはチームの合い言葉を知っている人だけです）。<br>「設置して測る」は、撮りながらラップだけを測ります。追いかけ動画は撮り終わってから作ります。</p>
   <h2 style="font-size:16px;margin:22px 0 6px">登録した部員</h2>
   <div id="memList"></div>
   <p class="note" id="memEmpty">選手の画面の「部員に登録」から登録できます。登録すると、次から自動で名前が付き、撮影中に自動で追いかけられます。</p>
@@ -235,6 +241,26 @@ dialog::backdrop{background:rgb(0 0 0 / .6)}
   <div class="grid live" id="watchCards"></div>
   <p class="note" id="watchEmpty">線を越えた人が、ここに出ます。</p>
   <div id="watchSets"></div>
+</section>
+
+<!-- 参考動画を撮る -->
+<section class="scr" id="sCollect">
+  <header class="top"><button class="back" data-go="sHome">‹</button><h1>参考動画を撮る<small id="colState">止まっています</small></h1></header>
+  <div class="stage"><video id="colVideo" playsinline muted autoplay></video></div>
+  <div class="row" style="margin-top:10px;flex-wrap:nowrap">
+    <select id="colQual" style="padding:12px;border-radius:12px;border:1px solid var(--line);background:var(--ice2);color:var(--text)"><option value="small">送りやすい（小さめ）</option><option value="mid">きれい（大きめ）</option></select>
+    <button class="btn main grow" id="colStart" style="min-height:52px">⏺ スタート</button>
+    <button class="btn main grow hide" id="colStop" style="min-height:52px">■ 止める</button>
+  </div>
+  <button class="btn hide" id="colDarkBtn" style="width:100%;margin-top:8px">🌙 画面を暗くする（撮影は続きます）</button>
+  <div class="card">
+    <b>撮り方のコツ</b>
+    <p class="note" style="margin:6px 0 0">・スマホを<b>固定</b>して、ゴールの目印（壁の赤い帯・氷の赤い線）が画面に入るように向ける<br>・<b>ズームは途中で変えない</b><br>・練習の始まる前から終わりまで、休みの時間もそのまま撮る<br>・横切る人や休んでいる人が写っても大丈夫（そのまま役に立ちます）<br>・画面を閉じたりほかのアプリに移ると、そこで区切って止まります</p>
+  </div>
+  <div class="row" style="margin-top:14px"><h2 class="grow" style="font-size:16px;margin:0">撮った動画</h2><button class="btn small hide" id="colClear">ぜんぶ消す</button></div>
+  <p class="note" id="colTotal" style="margin:4px 0"></p>
+  <div id="colList"></div>
+  <p class="note" id="colEmpty">まだありません。撮った動画はこのスマホの中だけに入ります。「送る・保存」を押した時だけ外に出ます。</p>
 </section>
 
 <!-- チームの記録 -->

@@ -1,6 +1,7 @@
 // スケートラップ：画面と記録
 import * as stand from './stand.js';
 import * as share from './share.js';
+import * as collect from './collect.js';
 import { loadMembers, saveMembers, matchMember, addMember, addSample, priorityOf } from './members.js';
 import { grabGray, LineAnchor, MotionChain, apply, inv3, mul3, homFrom4 } from './motion.js';
 import { loadDetector, usedDelegate, scanVideo, seekTo, findRedLine, trackCrossings, refineCrossing, interpBox, groupTracks, Tracker, detectFrame, grabSmall, liveCrossing, lineMetric, footMetric, LineTracker, findWallStripe, lineFromStripe, histSim, headSim, normHist, wallEdge } from './vision.js';
@@ -9,7 +10,7 @@ const $ = id => document.getElementById(id);
 const S = { session: null, videoURL: null, videoFile: null, person: null, line: null, live: false, stream: null, recBlob: null };
 
 // ---------- 小さな道具 ----------
-function go(id) { document.querySelectorAll('.scr').forEach(s => s.classList.toggle('on', s.id === id)); window.scrollTo(0, 0); if (id !== 'sPerson') stopPlayer(); if (id !== 'sLine' && id !== 'sLive') stopCamera(); }
+function go(id) { document.querySelectorAll('.scr').forEach(s => s.classList.toggle('on', s.id === id)); window.scrollTo(0, 0); if (id !== 'sPerson') stopPlayer(); if (id !== 'sLine' && id !== 'sLive') stopCamera(); if (id !== 'sCollect') collect.leave(); }
 document.querySelectorAll('[data-go]').forEach(b => b.onclick = () => { if (b.dataset.go === 'sPerson') openPerson(S.person); else if (b.dataset.go === 'sResult') showResult(); else { go(b.dataset.go); if (b.dataset.go === 'sHome') showHome(); } });
 let toastTm; function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(toastTm); toastTm = setTimeout(() => t.classList.remove('on'), 2200); }
 const fmt = s => { if (s == null || !isFinite(s)) return '—'; const m = Math.floor(s / 60), r = s - m * 60; return m ? `${m}:${r.toFixed(2).padStart(5, '0')}` : r.toFixed(2); };
@@ -1638,6 +1639,10 @@ window.addEventListener('unhandledrejection', e => toast('エラー：' + ((e.re
 
 // 試験用：いまの線と記録を外から見られるようにする
 window.__skateDebug = () => ({ sure: S.lineSure, line: S.line, session: S.session, live: L });
+
+// ---------- 参考動画を撮るモード ----------
+collect.init({ toast, go, use: async file => { toast('動画を読みこんでいます…'); try { await setVideo(file); } catch (e) { return toast(e.message || 'この動画を開けませんでした'); } S.session = null; S.live = false; S.recBlob = null; openLine(); loadDetector().catch(() => {}); } });
+$('collectBtn').onclick = () => collect.open();
 
 // ---------- はじめ ----------
 showHome();
