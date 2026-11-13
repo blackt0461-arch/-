@@ -1,8 +1,11 @@
 // スケートラップ：電波がなくても開けるようにする（Service Worker）
 // 画面は「まずネットから・だめなら保存した分」。モデルと読みこむ部品（jsDelivr）は「保存した分を先に」。
-const CACHE = 'skate-v26';
+const CACHE = 'skate-v27';
 const SHELL = ['./', './index.html', './app.js', './vision.js', './motion.js', './members.js', './stand.js', './share.js', './collect.js', './relay-config.js', './icon.svg', './icon-192.png', './apple-touch-icon.png', './manifest.webmanifest', './models/efficientdet_lite0.tflite'];
-self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())); });
+// 人を見つける部品（外の置き場から読むもの）。電波のない所でも「設置して測る」が動くよう、先に取っておく。取れなくてもアプリは入れる
+const MP = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14';
+const EXTRA = [MP + '/vision_bundle.mjs', MP + '/wasm/vision_wasm_internal.js', MP + '/wasm/vision_wasm_internal.wasm'];
+self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL).then(() => Promise.allSettled(EXTRA.map(u => c.add(u))))).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
 self.addEventListener('fetch', e => {
   const req = e.request; if (req.method !== 'GET') return;

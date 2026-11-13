@@ -102,7 +102,7 @@ async function openLine() {
   S.line = lsGet(S.live ? 'skate-line-live' : 'skate-line', null) || lsGet('skate-line', null);
   $('optTiles').checked = lsGet('skate-tiles', 1) === 2;
   $('lineTime').classList.toggle('hide', S.live);
-  $('lineNote').textContent = S.live ? '赤いラインが写る向きで線を合わせてください。撮影中に選手を追って首を振っても大丈夫です（立つ場所は変えないでください）。' : '下の帯を動かして、赤いラインがはっきり見えて人が重なっていない場面を選んでください。カメラが動く動画でも大丈夫です。';
+  $('lineNote').textContent = S.live ? '赤いラインが写る向きで線を合わせてください。斜めから撮る時は、線の両はし（コースの内側のはしと壁側のはし）に丸を合わせます。撮影中はスマホを動かさないのが一番正確です。' : '下の帯を動かして、赤いラインがはっきり見えて人が重なっていない場面を選んでください。カメラが動く動画でも大丈夫です。';
   $('startScan').textContent = S.live ? '⏺ この線で撮影スタート' : 'この線で解析する';
   $('standCard').classList.toggle('hide', !S.live); $('shareCard').classList.toggle('hide', !S.live);
   $('menuText').value = lsGet('skate-menu', ''); $('teamPass').value = lsGet('skate-team', ''); $('menuList').value = lsGet('skate-menulist', ''); $('optShare').checked = lsGet('skate-share', 0) === 1;
@@ -1235,8 +1235,15 @@ async function startLive() {
   try { L.wake = await navigator.wakeLock?.request('screen'); } catch {}
   const types = ['video/mp4;codecs=avc1', 'video/mp4', 'video/webm;codecs=vp9', 'video/webm'];
   L.type = types.find(t => MediaRecorder.isTypeSupported(t)) || '';
-  L.rec = new MediaRecorder(S.stream, L.type ? { mimeType: L.type, videoBitsPerSecond: 6e6 } : {});
-  L.chunks = []; L.rec.ondataavailable = e => e.data.size && L.chunks.push(e.data);
+  L.rec = new MediaRecorder(S.stream, L.type ? { mimeType: L.type, videoBitsPerSecond: 3.5e6 } : {});
+  // 録画はメモリにため続けず、20秒ごとにスマホの中へ書き出す（長い練習でも止まらないように）
+  L.chunks = []; L.partKey = String(Date.now()); L.partN = 0; L.flushing = Promise.resolve();
+  collect.liveClear().catch(() => {});
+  const flush = () => { if (!L.chunks.length) return L.flushing; const b = new Blob(L.chunks, { type: L.type || 'video/webm' }), n = L.partN++; L.chunks = [];
+    L.flushing = L.flushing.then(() => collect.livePut(L.partKey, n, b)).catch(() => { L.lost = true; }); return L.flushing; };
+  L.flush = flush; L.lost = false;
+  L.lastFlush = performance.now();
+  L.rec.ondataavailable = e => { if (e.data.size) { L.chunks.push(e.data); if (performance.now() - L.lastFlush >= 20000) { L.lastFlush = performance.now(); flush(); } } };
   L.tracker = new Tracker(W, H); L.persons = []; L.byTrack = new Map(); L.crossings = []; L.lastDet = 0;
   // いま写っているコマを「線のコマ」にする。首を振っても、毎回このコマに重ねて線の位置を求める
   S.lineImg = frameImage(v);
@@ -1606,7 +1613,10 @@ $('stopLive').onclick = async () => {
   try { L.wake?.release(); } catch {}
   const ext = (L.type || 'webm').includes('mp4') ? 'mp4' : 'webm';
   const d = new Date(), name = `スケート_${d.getMonth() + 1}月${d.getDate()}日_${d.getHours()}時${String(d.getMinutes()).padStart(2, '0')}分.${ext}`;
-  S.recBlob = new Blob(L.chunks, { type: L.type || 'video/webm' }); L.chunks = [];
+  await L.flush(); let parts = []; try { parts = await collect.liveTake(L.partKey); } catch (e) {}
+  lsSet('skate-live-done', L.partKey); // ふつうに止めた印（次に開いた時、落ちた撮影とまちがえて拾わないように）
+  S.recBlob = new Blob(parts, { type: L.type || 'video/webm' }); L.chunks = [];
+  if (L.lost) toast('スマホの空きが足りず、録画の一部を保存できませんでした');
   const file = new File([S.recBlob], name, { type: S.recBlob.type });
   L.rec = null; stopCamera(); $('stopLive').disabled = false;
   try { await setVideo(file); } catch (e) { toast('撮った動画を開けませんでした'); }
@@ -1641,6 +1651,7 @@ window.addEventListener('unhandledrejection', e => toast('エラー：' + ((e.re
 window.__skateDebug = () => ({ sure: S.lineSure, line: S.line, session: S.session, live: L });
 
 // ---------- 参考動画を撮るモード ----------
+collect.liveRescue(lsGet('skate-live-done', '')).then(n => { if (n) toast('前の撮影の途中までの動画を「参考動画を撮る」の一覧に入れました'); });
 collect.init({ toast, go, use: async file => { toast('動画を読みこんでいます…'); try { await setVideo(file); } catch (e) { return toast(e.message || 'この動画を開けませんでした'); } S.session = null; S.live = false; S.recBlob = null; openLine(); loadDetector().catch(() => {}); } });
 $('collectBtn').onclick = () => collect.open();
 

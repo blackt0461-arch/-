@@ -176,7 +176,7 @@ dialog::backdrop{background:rgb(0 0 0 / .6)}
     </span>
   </div>
   <input type="file" id="file" accept="video/*" class="hide">
-  <p class="note">版 2026-11-13c。動画はこのスマホの中だけで計算します。どこにも送りません（「みんなのスマホに出して、記録に残す」を使う時だけ、名前・練習メニュー・ラップの数字をネットに送って残します。見られるのはチームの合い言葉を知っている人だけです）。<br>「設置して測る」は、撮りながらラップだけを測ります。追いかけ動画は撮り終わってから作ります。</p>
+  <p class="note">版 2026-11-13d。動画はこのスマホの中だけで計算します。どこにも送りません（「みんなのスマホに出して、記録に残す」を使う時だけ、名前・練習メニュー・ラップの数字をネットに送って残します。見られるのはチームの合い言葉を知っている人だけです）。<br>「設置して測る」は、撮りながらラップだけを測ります。追いかけ動画は撮り終わってから作ります。</p>
   <h2 style="font-size:16px;margin:22px 0 6px">登録した部員</h2>
   <div id="memList"></div>
   <p class="note" id="memEmpty">選手の画面の「部員に登録」から登録できます。登録すると、次から自動で名前が付き、撮影中に自動で追いかけられます。</p>
@@ -247,6 +247,7 @@ dialog::backdrop{background:rgb(0 0 0 / .6)}
 <section class="scr" id="sCollect">
   <header class="top"><button class="back" data-go="sHome">‹</button><h1>参考動画を撮る<small id="colState">止まっています</small></h1></header>
   <div class="stage"><video id="colVideo" playsinline muted autoplay></video></div>
+  <p class="note hide" id="colHint">⚠ たて向きです。スマホを<b>横向き</b>にすると、コースが広く写ります。</p>
   <div class="row" style="margin-top:10px;flex-wrap:nowrap">
     <select id="colQual" style="padding:12px;border-radius:12px;border:1px solid var(--line);background:var(--ice2);color:var(--text)"><option value="small">送りやすい（小さめ）</option><option value="mid">きれい（大きめ）</option></select>
     <button class="btn main grow" id="colStart" style="min-height:52px">⏺ スタート</button>
