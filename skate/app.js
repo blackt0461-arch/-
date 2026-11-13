@@ -1654,4 +1654,16 @@ $('collectBtn').onclick = () => collect.open();
 // ---------- はじめ ----------
 showHome();
 if (new URLSearchParams(location.search).has('watch') && lsGet('skate-team', '')) openTeam();
-if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
+// 電波なしでも使えるようにする。大きい部品（人を見つけるモデルなど）は、開いたあとで順に取りこみ、ホームに進み具合を出す
+const OFF_BIG = ['./models/efficientdet_lite0.tflite', ...['/vision_bundle.mjs', '/wasm/vision_wasm_internal.js', '/wasm/vision_wasm_internal.wasm'].map(x => 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14' + x)];
+async function offlineReady() {
+  const el = $('offState'); if (!el || !('serviceWorker' in navigator) || !window.caches) return;
+  const have = async () => { let n = 0; for (const u of OFF_BIG) if (await caches.match(u)) n++; return n; };
+  const show = n => { el.textContent = n >= OFF_BIG.length ? '✓ 電波なしでも使えます（このアイコン・この開き方のまま開いてください）' : `⏳ 電波なしで使う準備中…（${n}/${OFF_BIG.length}）このまま少し待ってください`; el.classList.remove('hide'); };
+  try {
+    await navigator.serviceWorker.ready; let n = await have(); show(n);
+    for (const u of OFF_BIG) { if (await caches.match(u)) continue; try { await fetch(u); } catch (e) {} await new Promise(r => setTimeout(r, 300)); n = await have(); show(n); }
+    if (n < OFF_BIG.length) el.textContent = '⚠ 電波なしで使う準備がまだ終わっていません。Wi-Fi のある所でもう一度開いてください';
+  } catch (e) {}
+}
+if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) navigator.serviceWorker.register('sw.js').then(offlineReady).catch(() => {});
