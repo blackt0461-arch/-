@@ -7,6 +7,7 @@ import { GENRES, ITEMS, itemById, itemsOf, SPECIAL_IDS, STARTER, decorZone } fro
 import { icon, GENRE_ICON, SUBJECT_ICON } from './icons.js';
 import { ticketSVG, TICKET_NAME } from './tickets.js';
 import * as G from './gacha.js';
+import { SECRET_ITEMS } from './secret.js'; // 補填だけで送る家具
 import { thumbHTML, hydrateThumbs } from './thumbs.js';
 import { loadModel, isLite } from './loaders.js';
 import { validProblems, SYMBOLS } from './problems.js';
@@ -1784,7 +1785,7 @@ function photoMode() {
 
 // =========================== 更新のお知らせ ===========================
 // このプログラムの版（version.json と同じにする。公開のたびに上げる）
-const APP_VERSION = '1.19.0';
+const APP_VERSION = '1.19.1';
 ERR.setVersion(APP_VERSION);
 // 新しい版が出たら、みんな同じタイミングでそろうように強制で再起動する。
 // 開いた時・画面に戻った時・1分ごとに version.json を見る
@@ -3264,7 +3265,7 @@ function compensate(name, lvNow) {
       <label class="comp-row"><span>レベル<small>このLvまで上げる（下がりません）</small></span><input name="lv" type="number" min="1" max="100" placeholder="${lvNow}" inputmode="numeric"></label>
       ${F.map(([k, n]) => `<label class="comp-row"><span>${n}</span><input name="${k}" type="number" min="0" max="99" placeholder="0" inputmode="numeric"></label>`).join('')}
       <label class="comp-row col"><span>家具<small>名前の一部を入れると候補が出ます（1つ）</small></span><input name="item" list="comp-items" placeholder="例：ソファ" autocomplete="off"></label>
-      <datalist id="comp-items">${[...ITEMS, ...G.GACHA_ITEMS].filter((it, i, a) => a.findIndex(x => x.id === it.id) === i).map(it => `<option value="${esc(it.name)}">`).join('')}</datalist>
+      <datalist id="comp-items">${[...ITEMS, ...G.GACHA_ITEMS, ...SECRET_ITEMS].filter((it, i, a) => a.findIndex(x => x.id === it.id) === i).map(it => `<option value="${esc(it.name)}">`).join('')}</datalist>
       <label class="comp-row col"><span>メッセージ（プレゼントBOXに出ます）</span><input name="title" value="データが消えてしまったおわび" maxlength="40"></label>
       <p class="err"></p>
       <button class="btn gold big" type="submit">${icon('gift')}確認する</button>
@@ -3277,7 +3278,7 @@ function compensate(name, lvNow) {
     if (lv > lvNow) gifts.push({ kind: 'item', amount: 1, item: 'lv:' + lv, label: `Lv${lv} まで上がる` });
     for (const [k, n] of F) { const v = Math.min(99, Math.max(0, +f[k].value || 0)); if (v) gifts.push({ kind: k, amount: v, label: `${n} ×${v}` }); }
     if (f.item.value.trim()) {
-      const all = [...ITEMS, ...G.GACHA_ITEMS], it = all.find(x => x.name === f.item.value.trim()) || all.find(x => x.name.includes(f.item.value.trim()));
+      const all = [...ITEMS, ...G.GACHA_ITEMS, ...SECRET_ITEMS], it = all.find(x => x.name === f.item.value.trim()) || all.find(x => x.name.includes(f.item.value.trim()));
       if (!it) { f.querySelector('.err').textContent = 'その名前の家具が見つかりません'; return; }
       gifts.push({ kind: 'item', amount: 1, item: it.id, label: it.name });
     }

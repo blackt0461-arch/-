@@ -51,8 +51,12 @@ export async function texturedMaterial(texId, opts = {}) {
   return mat;
 }
 
+// このアプリの中に置いた3Dモデル（Poly Haven ではない物）。ASSETS に入れないので、最初の一括ダウンロードには入らない
+export const LOCAL_MODELS = {
+  'myaku-plush': { url: 'models/myaku-plush.glb', mb: 1.7 }, // みゃくみゃくのぬいぐるみ（js/secret.js。補填だけで送る）
+};
 export function loadModel(id) {
-  const a = ASSETS.models[id];
+  const a = ASSETS.models[id] || LOCAL_MODELS[id];
   if (!a) return Promise.resolve(null);
   if (!modelCache.has(id)) {
     modelCache.set(id, new Promise(res => {

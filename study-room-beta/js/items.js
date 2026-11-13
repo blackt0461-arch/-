@@ -1,3 +1,4 @@
+import { SECRET_BY_ID } from './secret.js';
 import { addToPool, gachaById } from './gacha.js';
 // 家具リスト（ショップ・図鑑・部屋づくりで使う）。
 // 仕組みは docs/ITEMS-API.md を参照。
@@ -741,7 +742,7 @@ const BY_ID = new Map(ITEMS.map((it) => [it.id, it]));
 // 「レア」の家具はガチャでだけ出る（★3）。ガチャ専用の家具も itemById で引けるようにする
 addToPool(ITEMS.filter((it) => it.rare && !it.special), 3);
 export function itemById(id) {
-  return BY_ID.get(id) || gachaById(id) || null;
+  return BY_ID.get(id) || gachaById(id) || SECRET_BY_ID.get(id) || null; // SECRET：補填だけで送る家具（js/secret.js）
 }
 // 部屋に合う小物の置き場所（お風呂・洗面所＝bath、キッチン＝kitchen、書斎＝desk）。ほかの部屋は null（どれでも）
 export function decorZone(roomId) {
