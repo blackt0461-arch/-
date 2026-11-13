@@ -1,3 +1,4 @@
+import { ASSETS } from './assets.js';
 import { skinThumbURL } from './skins.js';
 import { avatarHTML } from './avatars.js';
 // 家具のサムネイル（小さな絵）
@@ -18,7 +19,7 @@ const SIZE = 256;
 // ---------------------------------------------------------------
 export function thumbURL(item) {
   const m = item && item.src && item.src.model;
-  if (!m || item.src.tint || item.src.paint) return null;
+  if (!m || item.src.tint || item.src.paint || !ASSETS.models[m]) return null; // Poly Haven の物だけ（アプリの中のモデルは3Dで描く）
   return `https://cdn.polyhaven.com/asset_img/thumbs/${m}.png?width=256&height=256`;
 }
 

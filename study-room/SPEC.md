@@ -486,6 +486,8 @@ v1（物理「式を立てる」練習ゲーム）を、本人・制作者への
   akariLamp（格子のあかりの間取りランプ・光る）／aburiDesk（虫めがねと古い設計図の机）／rokujoBoard（たたみ六畳のミニチュア棚）／hikkoshiCrates（積み上げた木箱の棚）／pzCrown（金のパズルピースのトロフィー・ゆれる）／streak100（百日の日めくりと金の砂時計）／bookTower（天井まで届く本の塔・上にランプ）／legendLaurel（金の月桂樹の飾り額・壁）／zukan25（回る地球儀ランプ）／zukan50（ガラスの陳列ケース・光る）／zukan75（回転する展示台）／zukan100（金の額のコレクターの間の飾り・壁）
   - 小物の道具（smallfurn.js の SF・buildWith・pushGroup）を使って作る。見本の確かめ：`node tools/check/rewardsheet.js`
 - **11月のイベント「物理強化月間」の家具**（rewardfurn.js。gacha.js の行は企画担当）：newtonCradle（ニュートンのゆりかご。端の玉が交互に揺れる）／pendulumClock（振り子の柱時計。高さ約1.9m、ガラス扉の中で振り子が1秒ごとに揺れ、針は今の時刻）／plasmaLamp（プラズマボールのランプ。光の筋はシェーダーでゆらし、向きは毎フレーム少し変える・光る）。どれも自作（Poly Haven の柱時計は扉が板で振り子が見えないため使わない）。大きな見本：`node tools/check/evsheet.js 'pendulumClock?view=close'`
+- **表に出さない家具（js/secret.js の SECRET_ITEMS、1.19.1〜）**：ガチャ・確率表示・図鑑（数と％）・お店・ごほうび・お知らせには出ない。管理者画面の「補填」の家具の候補にだけ出て、送った人の持ち物・模様がえではふつうの家具として置ける。itemById は SECRET_BY_ID も引く。3Dモデルはアプリの中（study-room-beta/models/）に置き、loaders.js の LOCAL_MODELS で読む（ASSETS に入れないので最初の一括ダウンロードには入らない。サムネイルは3Dで描く）。
+  - いま：x-myaku-plush「みゃくみゃくのぬいぐるみ」（models/myaku-plush.glb。Meshy で作った物を、模様 1024px・三角形 約5万に軽くした 1.7MB。高さ約0.44m、小物あつかいでテーブルの上にも置ける）。確かめ：`node tools/check/myaku.js`。
 - **旅館シリーズ（限定ガチャ「YUKEMURI」、1.19.0〜。いまのピックアップ）**：形は js/ryokanfurn.js（gachafurn.js の BUILDERS に `...RYOKAN_BUILDERS`）、行は gacha.js の `series: 'ryokan'`。湯けむり・畳・木のぬくもりの、素朴であたたかい雰囲気（和の雅＝黒漆と金とはかぶらないように、白木・藍染め・塗り壁）。
   - ★5：ひのきの露天風呂（湯けむり・竹の筧・竹垣）／囲炉裏と自在かぎ（炭が光る・鉄びん・川魚の串・光る）／雪見障子の丸窓（壁・雪の庭が見える・光る）／ひのきの座卓と座椅子／「ゆ」ののれん（壁・揺れる）／椿と掛け軸の床の間。
   - ★4：白木の角行灯（光る）・ふかふかの布団・えんじの座椅子・窓辺の籐のいすとテーブル・こげ茶の茶だんす・松の盆栽・衣桁と浴衣・かやの将棋盤・湯けむりの掛け軸（壁）・い草の花ござ・あたたかい塗り壁（Poly Haven painted_plaster_wall）・青々とした畳（tatami_mat）・白木の格子戸（procfurn の door style 'koshi'）、小物3つ（湯のみと急須・温泉まんじゅう・木札のルームキー。smallfurn.js の K.yunomi / manju / roomkey）。
