@@ -1,6 +1,6 @@
 // スケートラップ：電波がなくても開けるようにする（Service Worker）
 // 画面は「まずネットから・だめなら保存した分」。モデルと読みこむ部品（jsDelivr）は「保存した分を先に」。
-const CACHE = 'skate-v28';
+const CACHE = 'skate-v29';
 const SHELL = ['./', './index.html', './app.js', './vision.js', './motion.js', './members.js', './stand.js', './share.js', './collect.js', './liveid.js', './relay-config.js', './icon.svg', './icon-192.png', './apple-touch-icon.png', './manifest.webmanifest', './models/efficientdet_lite0.tflite'];
 // 人を見つける部品（外の置き場から読むもの）。電波のない所でも「設置して測る」が動くよう、先に取っておく。取れなくてもアプリは入れる
 const MP = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14';
