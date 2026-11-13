@@ -2,6 +2,7 @@
 import * as stand from './stand.js';
 import * as share from './share.js';
 import * as collect from './collect.js';
+import { LiveId } from './liveid.js';
 import { loadMembers, saveMembers, matchMember, addMember, addSample, priorityOf } from './members.js';
 import { grabGray, LineAnchor, MotionChain, apply, inv3, mul3, homFrom4 } from './motion.js';
 import { loadDetector, usedDelegate, scanVideo, seekTo, findRedLine, trackCrossings, refineCrossing, interpBox, groupTracks, Tracker, detectFrame, grabSmall, liveCrossing, lineMetric, footMetric, LineTracker, findWallStripe, lineFromStripe, histSim, headSim, normHist, wallEdge } from './vision.js';
@@ -1245,6 +1246,17 @@ async function startLive() {
   L.lastFlush = performance.now();
   L.rec.ondataavailable = e => { if (e.data.size) { L.chunks.push(e.data); if (performance.now() - L.lastFlush >= 20000) { L.lastFlush = performance.now(); flush(); } } };
   L.tracker = new Tracker(W, H); L.persons = []; L.byTrack = new Map(); L.crossings = []; L.lastDet = 0;
+  L.trById = new Map(); L.nameN = 0;
+  L.id = new LiveId({
+    minLap: lsGet('skate-minlap2', 6),
+    lapsOf: q => liveLaps(q, -1), typical: () => liveTypical(),
+    // いま別の所に写っている人は、同時にラインを通れない（集団の決め直しの間は、通ったばかりの人どうしを入れかえてよい）
+    busy: (q, x) => L.tracker.active.some(a => a.id !== x.track && L.byTrack.get(a.id) === q && !q.cs.some(y => y.track === a.id && x.t - y.t < 8)),
+    newPerson: x => { const mm = x.h ? matchMember(x.h) : null, has = mm && L.persons.some(q => q.member === mm.member.id), n = L.nameN++;
+      return { id: 'p' + x.track, member: mm && !has ? mm.member.id : null, name: mm && !has ? mm.member.name : String.fromCharCode(65 + n % 26) + (n >= 26 ? Math.floor(n / 26) : ''), tracks: [], cs: [], hist: new Float32Array(93), hn: 0, thumb: null }; },
+    claim: x => { const mm = x.h ? matchMember(x.h) : null; return mm ? L.persons.find(q => q.member === mm.member.id) || null : null; },
+    merged: (from, to) => { if (!to.member && from.member) { to.member = from.member; to.name = from.name; } if (from.thumb) to.thumb = from.thumb; },
+  });
   // いま写っているコマを「線のコマ」にする。首を振っても、毎回このコマに重ねて線の位置を求める
   S.lineImg = frameImage(v);
   L.lt = new LineTracker(new LineAnchor(grabGray(v, W, H), S.line.map(p => p.slice())), S.stripe); L.chain = new MotionChain(); L.motion = []; L.meas = new Map();
@@ -1435,34 +1447,18 @@ function onLiveCross(c, tr) {
     }
     L.sets[L.sets.length - 1].n++; L.lastX = c.t;
   }
-  let p = L.byTrack.get(tr.id);
-  if (!p) {
-    // だれの通過かを決める：①服の色がどれだけ似ているか ②その人が「そろそろ来る時刻」にどれだけ近いか
-    const h = normHist(tr.hist, tr.hn), typ = liveTypical(); let best = null, bv = 0;
-    const busy = new Set(L.tracker.active.filter(x => x !== tr).map(x => L.byTrack.get(x.id)).filter(Boolean));
-    for (const q of L.persons) {
-      if (busy.has(q) || !q.cs.length) continue;
-      const last = q.cs[q.cs.length - 1].t, gap = c.t - last;
-      if (gap < Math.max(3, L.minLap * 0.6)) continue;
-      const qh = normHist(q.hist, q.hn), sim = histSim(h, qh), hd = headSim(h, qh);
-      const ql = liveLaps(q), exp = ql.length ? median(ql.slice(-3)) : typ;
-      // 予想とのずれ（1周分・2周分のどちらか近い方。2周分は少し不利にする）
-      let te = 1; if (exp > 0) { const k = Math.max(1, Math.min(3, Math.round(gap / exp))); te = Math.abs(gap - k * exp) / exp + (k - 1) * 0.12; }
-      const due = te < 0.2;
-      // 色だけで決めてよいのは、とてもよく似ている時だけ。時刻が合っていれば、色は「まあ似ている」でよい
-      if (!(sim > 0.95 && hd >= 0.92) && !(due && sim > 0.82)) continue;
-      const sc = sim - Math.min(te, 1) * 0.35;
-      if (!best || sc > bv) { bv = sc; best = q; }
-    }
-    const mm = matchMember(h);
-    if (!best && mm) best = L.persons.find(q => q.member === mm.member.id && !busy.has(q)) || null;
-    p = best || { id: 'p' + tr.id, member: mm ? mm.member.id : null, name: mm ? mm.member.name : String.fromCharCode(65 + L.persons.length % 26) + (L.persons.length >= 26 ? Math.floor(L.persons.length / 26) : ''), tracks: [], cs: [], hist: new Float32Array(tr.hist.length), hn: 0, thumb: null };
-    if (!best) L.persons.push(p);
-    p.tracks.push(tr.id); L.byTrack.set(tr.id, p);
-    for (let i = 0; i < tr.hist.length; i++) p.hist[i] += tr.hist[i]; p.hn += tr.hn;
-  }
+  // だれの通過かを決める（liveid.js）：集団で続けて通った人は、時刻と並びがいちばんつじつまの合う組み合わせにまとめて決め直す
+  c.h = tr.hn ? normHist(tr.hist, tr.hn) : null;
+  L.trById.set(tr.id, tr);
+  const r = L.id.add(c), p = r.person;
+  L.persons = L.id.persons; L.byTrack = new Map();
+  for (const q of L.persons) { q.tracks = [...new Set(q.cs.map(x => x.track))]; for (const id of q.tracks) L.byTrack.set(id, q); }
   if (tr.thumb) p.thumb = tr.thumb.toDataURL('image/jpeg', 0.7);
-  p.cs.push(c); L.newId = p.id;
+  L.newId = p.id;
+  if (r.changed.length) { // 決め直しで持ち主が変わった：ほかのスマホにも全部送り直す
+    for (const x of r.changed) { const t2 = L.trById.get(x.track); if (t2 && t2.thumb && x.p.cs[x.p.cs.length - 1] === x) x.p.thumb = t2.thumb.toDataURL('image/jpeg', 0.7); }
+    for (const q of L.persons) q.sentK = -1; if (L.share) L.share.full();
+  }
   renderLiveCards();
 }
 function liveLaps(p, k) {
