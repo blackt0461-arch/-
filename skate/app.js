@@ -110,12 +110,15 @@ async function openLine() {
   $('optFine').checked = lsGet('skate-fine', 1) === 1;
   if (!S.live) {
     // カメラが動く動画では、前に合わせた線の位置は使えない。壁の赤い帯（ゴールラインの目印）が写る場面を自動で探す
-    await seekTo(v, 0.5); S.line = null;
+    await seekTo(v, 0.5); S.line = null; S.pickScene = false; drawLine();
+    $('lineNote').textContent = '⏳ ゴールが写る場面を自動で探しています…（待たずに、下の帯を動かして自分で選んでもかまいません）';
     const found = await findLineScene(v);
+    $('lineNote').textContent = '下の帯を動かして、赤いラインがはっきり見えて人が重なっていない場面を選んでください。カメラが動く動画でも大丈夫です。';
     S.lineSure = !!found; S.stripe = found ? { h: found.st.bottom - found.st.top, ctx: found.st.ctx } : null;
     if (found) { S.line = found.line; $('lineTime').value = Math.round(found.t / v.duration * 1000); toast('ゴールの目印らしい赤い帯が写る場面を選びました。線が合っているか確かめてください'); }
     else { // 見つからない時は、当てずっぽうの線を出さない（まちがった線で測るより、本人に合わせてもらう）
-      await seekTo(v, 0.5); S.line = [[0.5, 0.6], [0.5, 0.95]];
+      if (!S.pickScene) await seekTo(v, 0.5); // 自分で場面を選んだ時は、その場面のままにする
+      S.line = [[0.5, 0.6], [0.5, 0.95]];
       $('lineNote').textContent = '⚠ ゴールの目印を自動では見つけられませんでした。下の帯でゴールが写る場面を選び、両はしの丸を動かしてゴールの線に重ねてください。';
       toast('ゴールの線を自分で合わせてください');
     }
@@ -127,12 +130,13 @@ async function openLine() {
 function drawLine() {
   const v = lineSrc(), W = lineCv.width, H = lineCv.height;
   lineCx.drawImage(v, 0, 0, W, H);
+  if (!S.line) return; // 場面を探している間は、線がまだ無い
   const [a, b] = S.line, r = Math.max(10, W / 50);
   lineCx.lineWidth = Math.max(3, W / 300); lineCx.strokeStyle = '#ffffff'; lineCx.setLineDash([W / 60, W / 90]);
   lineCx.beginPath(); lineCx.moveTo(a[0] * W, a[1] * H); lineCx.lineTo(b[0] * W, b[1] * H); lineCx.stroke(); lineCx.setLineDash([]);
   for (const p of [a, b]) { lineCx.beginPath(); lineCx.arc(p[0] * W, p[1] * H, r, 0, 7); lineCx.fillStyle = 'rgb(255 59 79 / .55)'; lineCx.fill(); lineCx.lineWidth = Math.max(2, W / 400); lineCx.strokeStyle = '#fff'; lineCx.stroke(); }
 }
-$('lineTime').oninput = async e => { const v = $('vWork'); await seekTo(v, v.duration * e.target.value / 1000); drawLine(); };
+$('lineTime').oninput = async e => { const v = $('vWork'); S.pickScene = true; await seekTo(v, v.duration * e.target.value / 1000); drawLine(); };
 // 線が、壁と氷の境目に沿って寝ていないか（境目とほぼ平行・境目の近く）。そういう線は選手が越えないので、始める前に止める
 function lineAlongWall(v, line) {
   try {
@@ -160,8 +164,9 @@ async function findLineScene(v) {
   let best = null;
   try { await loadDetector(); } catch (e) {}
   for (let t = 0.5; t < Math.min(v.duration, 60); t += 0.5) {
-    if (!$('sLine').classList.contains('on')) return null;
+    if (!$('sLine').classList.contains('on') || S.pickScene) return null; // 本人が帯を動かしたら、自動で探すのをやめる
     await seekTo(v, t);
+    if (S.pickScene) return null;
     const st = findWallStripe(v, v.videoWidth, v.videoHeight);
     if (!st || onPerson(v, st)) continue; // 赤い服の人を、壁の赤い帯とまちがえない
     const sc = st.sum * (1 - Math.abs(st.x - 0.5) * 1.6);
@@ -177,6 +182,7 @@ $('lineAuto').onclick = () => { const v = lineSrc(); const l = autoLine(v); if (
   let drag = -1;
   const pos = e => { const r = lineCv.getBoundingClientRect(); return [(e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height]; };
   lineCv.addEventListener('pointerdown', e => {
+    if (!S.line) return;
     const p = pos(e), r = lineCv.getBoundingClientRect(), asp = r.width / r.height;
     const d = S.line.map(q => Math.hypot((q[0] - p[0]) * asp, q[1] - p[1]));
     drag = d[0] < d[1] ? 0 : 1; if (d[drag] > 0.15) { drag = -1; return; }

@@ -1,6 +1,6 @@
 // スケートラップ：電波がなくても開けるようにする（Service Worker）
 // 画面は「まずネットから・だめなら保存した分」。モデルと読みこむ部品（jsDelivr）は「保存した分を先に」。
-const CACHE = 'skate-v30';
+const CACHE = 'skate-v31';
 // 大きくて中身の変わらないもの（人を見つけるモデルと部品）は、版が上がっても消さない別の入れ物に入れる
 const BIG = 'skate-big-v1';
 const SHELL = ['./', './index.html', './app.js', './vision.js', './motion.js', './members.js', './stand.js', './share.js', './collect.js', './liveid.js', './relay-config.js', './icon.svg', './icon-192.png', './apple-touch-icon.png', './manifest.webmanifest'];
