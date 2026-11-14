@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>ルーンランド</title>
+<meta name="description" content="みんなのスマホで同じ部屋に入って遊ぶ、ファンタジーの陣取りゲーム">
+<meta name="theme-color" content="#16261c">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+  <!-- はじめの画面 -->
+  <section id="home" class="screen">
+    <div class="logo"><img src="icon.svg" alt=""><h1>ルーンランド</h1><p>みんなで遊ぶ ファンタジー陣取り</p></div>
+    <label class="field">ニックネーム<input id="nick" maxlength="12" placeholder="例：こてつ" autocomplete="off"></label>
+    <button id="btnCreate" class="big">部屋を作る</button>
+    <div class="or">または</div>
+    <div class="joinrow"><input id="code" inputmode="numeric" maxlength="4" placeholder="4けたの番号" autocomplete="off"><button id="btnJoin">入る</button></div>
+    <button id="btnHelp" class="link">遊び方</button>
+    <p id="homeMsg" class="msg"></p>
+    <p class="foot">KOTETSU WORKS ・ 名前はニックネームだけ。何も保存しません</p>
+  </section>
+
+  <!-- 待合室 -->
+  <section id="lobby" class="screen" hidden>
+    <div class="roomcode">部屋の番号<b id="lobbyCode">----</b></div>
+    <button id="btnShare">友だちを招待する</button>
+    <h2>入っている人 <span id="lobbyCount"></span></h2>
+    <ul id="lobbyList" class="plist"></ul>
+    <div id="hostBox">
+      <h2>長さ</h2>
+      <div class="seg" id="roundsSeg">
+        <button data-r="12">短め<small>約9分</small></button><button data-r="18">ふつう<small>約13分</small></button><button data-r="24">長め<small>約18分</small></button>
+      </div>
+      <button id="btnStart" class="big">はじめる</button>
+    </div>
+    <p id="lobbyWait" class="msg">部屋を作った人がはじめるのを待っています…</p>
+    <button id="btnLeave" class="link">部屋を出る</button>
+  </section>
+
+  <!-- ゲーム -->
+  <section id="game" class="screen" hidden>
+    <header class="bar">
+      <div><small>ラウンド</small><b id="gRound">1/18</b></div>
+      <div class="timer"><small id="gStep">作戦</small><b id="gTime">35</b></div>
+      <div><small>兵</small><b id="gTroops">0</b></div>
+      <div><small>点</small><b id="gScore">0</b></div>
+      <button id="btnMenu" class="icon" aria-label="メニュー">☰</button>
+    </header>
+    <div id="players" class="chips"></div>
+    <div id="boardWrap"><svg id="board" xmlns="http://www.w3.org/2000/svg"></svg></div>
+    <div id="toast"></div>
+    <footer class="panel">
+      <p id="hint" class="hint"></p>
+      <div id="hand" class="hand"></div>
+      <div class="actions">
+        <button id="btnUndo">1つ戻す</button>
+        <button id="btnZoom">拡大</button>
+        <button id="btnGo" class="big go">決定</button>
+      </div>
+    </footer>
+  </section>
+
+  <!-- おわり -->
+  <section id="end" class="screen" hidden>
+    <h1 class="title">おしまい！</h1>
+    <ol id="rank" class="rank"></ol>
+    <button id="btnAgain" class="big">もう一回（待合室へ）</button>
+    <p id="endWait" class="msg">部屋を作った人が次をはじめるのを待っています…</p>
+    <button id="btnEndLeave" class="link">部屋を出る</button>
+  </section>
+</div>
+
+<dialog id="help">
+  <h2>遊び方</h2>
+  <ol>
+    <li>みんな同時に、配られた<b>兵</b>を置きます。置けるのは<b>自分のマス</b>か、その<b>となり</b>。マスをタップするたびに1つ置けます。</li>
+    <li>置けたら「決定」。全員が決定するか、時間が来たら結果が出ます。</li>
+    <li>マスごとに兵の数をくらべて、<b>いちばん多い人</b>のものに。持ち主は <b>＋1</b> と土地の守り（森＋1・山＋2・お城＋3）が足されます。引き分けは持ち主のまま。</li>
+    <li><b>魔法カード</b>は毎ラウンド1枚もらえて、1ラウンドに1枚使えます。</li>
+    <li>最後に点数がいちばん多い人の勝ち。マス1点・<b>ルーンの石</b>3点・お城2点。ルーンの石を持つと兵も増えます。</li>
+  </ol>
+  <h3>魔法カード</h3>
+  <ul id="helpCards"></ul>
+  <form method="dialog"><button class="big">わかった</button></form>
+</dialog>
+
+<dialog id="menu">
+  <h2>メニュー</h2>
+  <p>部屋の番号 <b id="menuCode"></b></p>
+  <button id="btnMHelp">遊び方</button>
+  <button id="btnSound">音：オン</button>
+  <button id="btnMShare">友だちを招待する</button>
+  <button id="btnMLeave">部屋を出る</button>
+  <form method="dialog"><button class="big">とじる</button></form>
+</dialog>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>
