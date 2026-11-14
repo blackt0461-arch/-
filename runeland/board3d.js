@@ -224,7 +224,7 @@ export class Board3D {
       body.traverse(c => { if (c.isMesh) c.castShadow = true; }); o.add(body);
       const ch = new THREE.Box3().setFromObject(body).max.y; const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.45, 5), new THREE.MeshStandardMaterial({ color: '#5b4636' })); pole.position.set(0, ch + 0.2, 0); o.add(pole);
       const flag = new THREE.Mesh(new THREE.PlaneGeometry(0.28, 0.17), new THREE.MeshStandardMaterial({ color: st.players[pi].color, side: THREE.DoubleSide, roughness: 0.7 })); flag.position.set(0.14, ch + 0.33, 0); o.add(flag); o.userData.flag = flag;
-      const [x, z] = this.hp(i); o.position.set(x, this.topY(i), z); o.rotation.y = -0.4; W.add(o); this.castleObjs.set(i, o);
+      const [x, z] = this.hp(i); o.position.set(x, this.topY(i), z); o.rotation.y = this.models.castle ? Math.PI / 6 : -0.4; W.add(o); this.castleObjs.set(i, o); // Meshy のお城は城壁の角が x 向きなので、マスの六角形に合わせて30度回す
     }
     // 宝箱・兵のコマ（あとで並べかえる）
     this.chestObjs = new Map();
