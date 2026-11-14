@@ -319,3 +319,16 @@ button.mini { min-height: 32px; padding: 2px 12px; border-radius: 99px; font-siz
 #duel .die { width: 26px; height: 26px; } #duel .die-sp { width: 26px; }
 #duel .tot { font-size: 1rem; }
 #duel .res { font-size: .95rem; }
+
+/* アイコン */
+.av { width: 22px; height: 22px; flex: none; vertical-align: middle; display: inline-block; }
+.av.big { width: 44px; height: 44px; display: block; margin: 0 auto 2px; }
+.chip .av { width: 22px; height: 22px; }
+.sboard .av { width: 16px; height: 16px; }
+#duel li .av { width: 26px; height: 26px; }
+.plist .av, #rank .av { width: 28px; height: 28px; }
+.avpick { display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; margin-top: 4px; }
+.avpick button { min-height: 0; padding: 2px; background: none; border: none; box-shadow: none; border-radius: 50%; }
+.avpick button .av { width: 100%; height: auto; aspect-ratio: 1; }
+.avpick button.on { transform: scale(1.12); }
+#lBorder path { fill: none; stroke-width: 2.8; stroke-linecap: round; pointer-events: none; }

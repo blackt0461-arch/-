@@ -128,7 +128,7 @@ export function newGame({ seed, players, rounds = 18, planMs = 35000 }) {
     terrain[c] = T.PLAIN; owner[c] = i;
     for (const j of m.nb[c]) if (terrain[j] === T.LAKE) terrain[j] = T.PLAIN;
     const cr = rng(mix(seed, 3, i));
-    return { id: p.id, name: p.name, color: p.color ?? COLORS[i % COLORS.length], castle: c, hand: dealHand(cr, 0.5), bonus: 0, joined: 1, ...(p.bot ? { bot: p.bot } : {}) };
+    return { id: p.id, name: p.name, av: p.av || '', color: p.color ?? COLORS[i % COLORS.length], castle: c, hand: dealHand(cr, 0.5), bonus: 0, joined: 1, ...(p.bot ? { bot: p.bot } : {}) };
   });
   // ルーンの石：お城から離れたところに、人数＋2こ
   const runes = pickSpread(m, n + 2, castles, r).filter(i => !castles.includes(i));
@@ -404,7 +404,7 @@ export function addLatePlayer(st, p) {
   if (best < 0) return false;
   st.owner[best] = pi; st.terrain[best] = T.PLAIN;
   const cr = rng(mix(st.seed, 3, pi, st.round));
-  st.players.push({ id: p.id, name: p.name, color: COLORS[pi % COLORS.length], castle: best, hand: dealHand(cr, 0.5), bonus: 0, joined: st.round, ...(p.bot ? { bot: p.bot } : {}) });
+  st.players.push({ id: p.id, name: p.name, av: p.av || '', color: COLORS[pi % COLORS.length], castle: best, hand: dealHand(cr, 0.5), bonus: 0, joined: st.round, ...(p.bot ? { bot: p.bot } : {}) });
   return true;
 }
 

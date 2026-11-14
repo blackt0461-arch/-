@@ -264,7 +264,7 @@ export class Board3D {
       this.caps = this.sides = t; W.add(t);
       // 色ののせ板：だれの土地か・湖・ルーンの石が、草の上でも分かるように
       const tg = new THREE.ShapeGeometry(hexShape(0.93)); tg.rotateX(-Math.PI / 2);
-      this.tint = new THREE.InstancedMesh(tg, new THREE.MeshStandardMaterial({ color: '#ffffff', transparent: true, opacity: 0.55, depthWrite: false, roughness: 0.9 }), N);
+      this.tint = new THREE.InstancedMesh(tg, new THREE.MeshStandardMaterial({ color: '#ffffff', transparent: true, opacity: 0.32, depthWrite: false, roughness: 0.9 }), N);
       this.tint.renderOrder = 1; this.tint.frustumCulled = false; this.tint.receiveShadow = true;
       for (let i = 0; i < N; i++) { this.tint.setMatrixAt(i, new THREE.Matrix4().makeScale(0, 0, 0)); this.tint.setColorAt(i, C('#ffffff')); }
       W.add(this.tint);
@@ -277,6 +277,10 @@ export class Board3D {
     const hide = new THREE.Matrix4().makeScale(0, 0, 0);
     for (let i = 0; i < N; i++) { this.rings.setMatrixAt(i, hide); this.glow.setMatrixAt(i, hide); this.rings.setColorAt(i, C('#ffffff')); }
     W.add(this.rings, this.glow);
+    // 土地のまわりの色の線（持ち主がちがうマスとの境目）
+    const bgeo = new THREE.BoxGeometry(1, 0.1, 0.2);
+    this.borders = new THREE.InstancedMesh(bgeo, new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.5, emissive: '#ffffff', emissiveIntensity: 0.15 }), N * 6);
+    this.borders.count = 0; this.borders.frustumCulled = false; this.borders.renderOrder = 2; W.add(this.borders);
     this.rings.frustumCulled = this.glow.frustumCulled = this.caps.frustumCulled = this.sides.frustumCulled = false;
     // 地形の物：山・木・ルーン・お城
     const mtn = [], trees = [], runes = [], spec = { 5: [], 6: [], 7: [], 8: [] };
@@ -358,10 +362,17 @@ export class Board3D {
         c.set(TILE_TINT[t]);
       }
       this.caps.setColorAt(i, c);
-      if (o >= 0) { const [x, z] = this.hp(i); mt.makeTranslation(x, this.topY(i) + 0.006, z); this.rings.setMatrixAt(i, mt); this.rings.setColorAt(i, C(st.players[o].color).multiplyScalar(0.62)); }
+      if (false) { const [x, z] = this.hp(i); mt.makeTranslation(x, this.topY(i) + 0.006, z); this.rings.setMatrixAt(i, mt); this.rings.setColorAt(i, C(st.players[o].color).multiplyScalar(0.62)); }
       else this.rings.setMatrixAt(i, hide);
     }
     this.caps.instanceColor.needsUpdate = true; if (this.tint) { this.tint.instanceMatrix.needsUpdate = true; this.tint.instanceColor.needsUpdate = true; } this.rings.instanceMatrix.needsUpdate = true; if (this.rings.instanceColor) this.rings.instanceColor.needsUpdate = true;
+    // 境目の線
+    { const NB = [[1, 0], [0, 1], [-1, 1], [-1, 0], [0, -1], [1, -1]], q = new THREE.Quaternion(), Y = new THREE.Vector3(0, 1, 0), sc = new THREE.Vector3(0.95, 1, 1), p = new THREE.Vector3(); let n = 0;
+      for (let i = 0; i < owners.length; i++) { const o = owners[i]; if (o < 0) continue; const h = this.m.tiles[i], [x, z] = this.hp(i), y = this.topY(i) + 0.04;
+        for (let k = 0; k < 6; k++) { const j = this.m.at.get((h.q + NB[k][0]) + ',' + (h.r + NB[k][1])); if (j != null && owners[j] === o) continue;
+          const a = Math.PI / 180 * 60 * k, r = 0.78; p.set(x + Math.cos(a) * r, y, z + Math.sin(a) * r); q.setFromAxisAngle(Y, -(a + Math.PI / 2));
+          mt.compose(p, q, sc); this.borders.setMatrixAt(n, mt); this.borders.setColorAt(n, C(st.players[o].color)); n++; } }
+      this.borders.count = n; this.borders.instanceMatrix.needsUpdate = true; if (this.borders.instanceColor) this.borders.instanceColor.needsUpdate = true; }
     // お城の旗の色（取られたら取った人の色に）
     for (const [i, k] of this.castleObjs || []) { const o = owners[i], col = C(o >= 0 ? st.players[o].color : '#ffffff'); if (this.flags) this.flags.setColorAt(k, col); if (this.castleTint) this.castleTint.setColorAt(k, col); }
     if (this.flags) this.flags.instanceColor.needsUpdate = true; if (this.castleTint && this.castleTint.instanceColor) this.castleTint.instanceColor.needsUpdate = true;

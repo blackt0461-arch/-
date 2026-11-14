@@ -52,3 +52,28 @@ const P = {
 export function ic(name, cls = '') { const b = P[name]; return b ? s(b).replace('class="gi"', `class="gi ${cls}"`) : ''; }
 // 盤面（SVG）の中に置く時
 export function icAt(name, x, y, size) { const b = P[name]; return b ? `<svg x="${x - size / 2}" y="${y - size / 2}" width="${size}" height="${size}" viewBox="0 0 32 32" fill="none" stroke="${INK}" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round">${b}</svg>` : ''; }
+
+// ---- 遊ぶ人のアイコン（自作。32×32） ----
+const E = (x, y, r = 1.6) => `<circle cx="${x}" cy="${y}" r="${r}" fill="${INK}" stroke="none"/>`;
+const eyes = (y = 16, d = 4.5) => E(16 - d, y) + E(16 + d, y);
+export const AVATARS = {
+  fox: `<path d="M6 6l6 6M26 6l-6 6" stroke-width="0"/><path d="M5 5l7 7-3 5zM27 5l-7 7 3 5z" fill="#e8843a"/><path d="M6 14c0-4 4-6 10-6s10 2 10 6c0 7-5 12-10 12S6 21 6 14z" fill="#e8843a"/><path d="M9 18c2 0 4 2 7 7 3-5 5-7 7-7-2 6-4 8-7 8s-5-2-7-8z" fill="#fff"/>${eyes(15)}<circle cx="16" cy="23" r="1.4" fill="${INK}" stroke="none"/>`,
+  cat: `<path d="M6 13L7 4l6 5zM26 13L25 4l-6 5z" fill="#9a9aa6"/><circle cx="16" cy="17" r="10" fill="#b4b4c0"/>${eyes(16)}<path d="M14.5 20l1.5 1.5 1.5-1.5M5 19l6 1M5 22l6 0M27 19l-6 1M27 22l-6 0"/>`,
+  dog: `<circle cx="16" cy="17" r="10" fill="#d9b48a"/><path d="M6 10c-2 4-1 9 2 10l2-8zM26 10c2 4 1 9-2 10l-2-8z" fill="#8a5a3b"/>${eyes(15)}<ellipse cx="16" cy="21" rx="3" ry="2.2" fill="${INK}" stroke="none"/>`,
+  bear: `<circle cx="8" cy="9" r="4" fill="#9a6a44"/><circle cx="24" cy="9" r="4" fill="#9a6a44"/><circle cx="16" cy="17" r="10.5" fill="#9a6a44"/><ellipse cx="16" cy="21" rx="4.5" ry="3.5" fill="#e3c9a3"/>${eyes(15)}<circle cx="16" cy="20" r="1.4" fill="${INK}" stroke="none"/>`,
+  rabbit: `<path d="M11 13c-2-6-2-11 1-11s3 5 2 11M21 13c2-6 2-11-1-11s-3 5-2 11" fill="#fff"/><circle cx="16" cy="19" r="9" fill="#fff"/>${eyes(18, 3.8)}<path d="M14.5 22l1.5 1 1.5-1"/><circle cx="10" cy="21" r="1.5" fill="#f7b7c6" stroke="none"/><circle cx="22" cy="21" r="1.5" fill="#f7b7c6" stroke="none"/>`,
+  owl: `<path d="M6 8l4 3M26 8l-4 3"/><ellipse cx="16" cy="18" rx="10" ry="11" fill="#a07a52"/><circle cx="11.5" cy="15" r="4" fill="#fff"/><circle cx="20.5" cy="15" r="4" fill="#fff"/>${E(11.5, 15, 1.8)}${E(20.5, 15, 1.8)}<path d="M14.5 19l1.5 3 1.5-3z" fill="#e3a93b"/>`,
+  frog: `<circle cx="10" cy="10" r="4.5" fill="#7cc06a"/><circle cx="22" cy="10" r="4.5" fill="#7cc06a"/><ellipse cx="16" cy="19" rx="11" ry="8.5" fill="#7cc06a"/>${E(10, 10)}${E(22, 10)}<path d="M9 21c3 3 11 3 14 0"/>`,
+  penguin: `<ellipse cx="16" cy="17" rx="10" ry="11" fill="#3d4250"/><ellipse cx="16" cy="19" rx="7" ry="8" fill="#fff"/><circle cx="12.5" cy="15" r="1.6" fill="${INK}" stroke="none"/><circle cx="19.5" cy="15" r="1.6" fill="${INK}" stroke="none"/><path d="M14 18l2 2.5 2-2.5z" fill="#e3a93b"/>`,
+  pig: `<path d="M8 10l2-5 4 4zM24 10l-2-5-4 4z" fill="#f2a8b8"/><circle cx="16" cy="17" r="10" fill="#f7c0cc"/>${eyes(14)}<ellipse cx="16" cy="20.5" rx="4" ry="3" fill="#f2a8b8"/>${E(14.5, 20.5, 0.9)}${E(17.5, 20.5, 0.9)}`,
+  panda: `<circle cx="8" cy="9" r="4" fill="#3d3d44"/><circle cx="24" cy="9" r="4" fill="#3d3d44"/><circle cx="16" cy="17" r="10.5" fill="#fff"/><ellipse cx="11.5" cy="16" rx="3" ry="3.6" fill="#3d3d44" stroke="none"/><ellipse cx="20.5" cy="16" rx="3" ry="3.6" fill="#3d3d44" stroke="none"/><circle cx="11.8" cy="15.6" r="1" fill="#fff" stroke="none"/><circle cx="20.2" cy="15.6" r="1" fill="#fff" stroke="none"/><circle cx="16" cy="21" r="1.4" fill="${INK}" stroke="none"/>`,
+  mouse: `<circle cx="8" cy="10" r="5.5" fill="#c4c0cc"/><circle cx="24" cy="10" r="5.5" fill="#c4c0cc"/><circle cx="16" cy="18" r="9" fill="#d8d4de"/>${eyes(17, 3.5)}<circle cx="16" cy="21" r="1.4" fill="#e88aa0" stroke="none"/>`,
+  chick: `<circle cx="16" cy="17" r="10" fill="#ffe066"/><path d="M15 7c0-3 2-4 3-3"/>${eyes(16)}<path d="M13.5 19l2.5 2.5 2.5-2.5z" fill="#e8843a"/>`,
+  knight: `<path d="M7 20V14a9 9 0 0 1 18 0v6c0 4-4 7-9 7s-9-3-9-7z" fill="#c8ccd6"/><rect x="9" y="15" width="14" height="3.5" rx="1.5" fill="#3d3d44"/><path d="M16 5V2M16 2c3 0 6 1 7 3" stroke="#d9573f" stroke-width="2"/><path d="M16 19v6"/>`,
+  wizard: `<path d="M5 15h22L19 2c-1 3-4 5-7 4z" fill="#6a4fc0"/><circle cx="16" cy="20" r="7" fill="#fbe3c8"/>${eyes(19, 3)}<path d="M10 23c2 6 10 6 12 0-2 2-10 2-12 0z" fill="#fff"/><path d="M14 8l1 2 2 0-1.5 1.5.5 2-2-1-2 1 .5-2L11 10h2z" fill="#ffe066" stroke="none"/>`,
+  king: `<path d="M8 12L7 4l4.5 4L16 3l4.5 5L25 4l-1 8z" fill="#f2c25a"/><circle cx="16" cy="19" r="8.5" fill="#fbe3c8"/>${eyes(18, 3.3)}<path d="M11 23c2 4 8 4 10 0" stroke="#8a5a3b" stroke-width="2.4"/>`,
+  slime: `<path d="M5 25c0-9 5-17 11-17s11 8 11 17z" fill="#7ab8f0"/>${eyes(18, 4)}<path d="M13 21.5c1.5 1.5 4.5 1.5 6 0"/><ellipse cx="11" cy="13" rx="2" ry="1.2" fill="#fff" stroke="none" opacity=".7"/>`,
+};
+export const AV_KEYS = Object.keys(AVATARS);
+// プレイヤーの色のふちどりつきで
+export function avatar(key, color = '#fff', cls = '') { const b = AVATARS[key] || AVATARS.slime; return `<svg class="av ${cls}" viewBox="0 0 32 32" aria-hidden="true" fill="none" stroke="${INK}" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round"><circle cx="16" cy="16" r="15" fill="#fffaf0" stroke="${color}" stroke-width="2.6"/><g transform="translate(16 16.5) scale(.8) translate(-16 -16)">${b}</g></svg>`; }

@@ -1,10 +1,10 @@
 // ルーンランド：画面
 import * as G from './game.js';
 import { Room, MAX_PLAYERS } from './net.js';
-import { LEVELS } from './ai.js';
+import { LEVELS, BOT_AV } from './ai.js';
 import { sfx, bgm, opt, setOpt, unlock } from './audio.js';
 import { RELAY_URL, RELAY_KEY } from './relay-config.js';
-import { ic, icAt } from './icons.js';
+import { ic, icAt, avatar, AV_KEYS } from './icons.js';
 
 const $ = s => document.querySelector(s);
 const LIB = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js';
@@ -26,6 +26,7 @@ async function init3d() {
   } catch (e) { console.warn('3D が使えないので 2D にします', e); gfx = '2d'; b3 = null; $('#boardWrap').classList.remove('is3d'); }
 }
 function setGfx(mode) { gfx = mode; store.set('gfx', mode); if (b3) { b3.dispose(); b3 = null; } $('#boardWrap').classList.remove('is3d', 'hiq'); $('#lOver').__h = null; if (mode !== '2d') init3d(); else if (room && room.state) render(); }
+const avOf = (p, cls = '') => avatar(p.av || BOT_AV[p.name] || 'slime', p.color, cls);
 const nameHtml = p => (p.bot ? ic('bot', 'bot') : '') + esc(p.name);
 // マスの守り（取るのに何人いるか）
 const TNAME = ['草原', '森', '山', '湖', 'ルーンの石', '村', '神殿', '金鉱', '見張りの塔'];
@@ -64,7 +65,7 @@ async function enter(code, creating) {
   try {
     const sb = await supa();
     for (let tries = 0; tries < 4 && !room; tries++) {
-      const r = new Room({ code, id: myId, name, sb, onChange: render, onStatus: t => { $('#homeMsg').textContent = t; } });
+      const r = new Room({ code, id: myId, name, av: myAv(), sb, onChange: render, onStatus: t => { $('#homeMsg').textContent = t; } });
       await r.connect();
       if (creating) { // 作る時：もう人がいる番号なら、べつの番号にする
         await new Promise(res => setTimeout(res, 1200));
@@ -209,13 +210,38 @@ function buildBoard(st) {
   $('#board').setAttribute('viewBox', `${B.vb.x} ${B.vb.y} ${B.vb.w} ${B.vb.h}`);
   if (fresh) { B.view = { k: 1, x: 0, y: 0 }; applyView(); }
 }
+// 土地のまわりを、持ち主の色の線で囲む（持ち主がちがうマスとの境目だけ）
+function borderEdges(st, owners) {
+  const m = G.mapOf(st), out = [];
+  for (let i = 0; i < owners.length; i++) {
+    const o = owners[i]; if (o < 0) continue;
+    const h = m.tiles[i];
+    for (let k = 0; k < 6; k++) { // k番目の辺（角 k と k+1 の間）の向こうのマス
+      const a = Math.PI / 180 * 60 * k, nq = [[1, 0], [0, 1], [-1, 1], [-1, 0], [0, -1], [1, -1]][k];
+      const j = m.at.get((h.q + nq[0]) + ',' + (h.r + nq[1]));
+      if (j != null && owners[j] === o) continue;
+      out.push({ i, o, k, a });
+    }
+  }
+  return out;
+}
+function drawBorders(st, owners) {
+  const by = new Map();
+  for (const e of borderEdges(st, owners)) {
+    const [x, y] = B.cx[e.i], r = S - 1.3, a1 = Math.PI / 180 * (60 * e.k - 30), a2 = Math.PI / 180 * (60 * e.k + 30);
+    by.set(e.o, (by.get(e.o) || '') + `M${(x + r * Math.cos(a1)).toFixed(1)},${(y + r * Math.sin(a1)).toFixed(1)}L${(x + r * Math.cos(a2)).toFixed(1)},${(y + r * Math.sin(a2)).toFixed(1)}`);
+  }
+  const html = [...by].map(([o, d]) => `<path d="${d}" stroke="${st.players[o].color}"/>`).join('');
+  const g = $('#lBorder'); if (g.__h !== html) { g.__h = html; g.innerHTML = html; }
+}
 function paintTiles(st, owners) {
   for (let i = 0; i < B.tiles.length; i++) {
     const t = st.terrain[i]; if (t === G.T.LAKE) continue;
     const o = owners[i];
-    const fill = o >= 0 ? mix(st.players[o].color, BASE[t], 0.38) : BASE[t];
+    const fill = o >= 0 ? mix(st.players[o].color, BASE[t], 0.72) : BASE[t];
     if (B.tiles[i].__f !== fill) { B.tiles[i].setAttribute('fill', fill); B.tiles[i].__f = fill; }
   }
+  drawBorders(st, owners);
 }
 function drawOverlay() {
   const st = room.state, pi = room.meIndex(), over = $('#lOver');
@@ -372,7 +398,7 @@ function playDuel(st, d) {
   const box = $('#duel'), L = st.last, { i, f, rows } = d;
   const total = r => r.base + (r.dice || 0) + (r.guard || 0);
   box.innerHTML = `<div class="dhead">${ic('dice')} とりあい！<small>${tileName(st, i)}${f && f.o >= 0 ? `（${nameHtml(st.players[f.o])}の土地）` : '（空き地）'}</small></div>
-    <ul>${rows.map((r, k) => r.land ? `<li data-k="${k}" class="land">${ic(st.terrain[i] === G.T.RUNE ? 'rune' : 'shield')}<span class="nm">土地の守り</span><span class="bs">${tileName(st, i)}</span><span class="die-sp"></span><b class="tot">= ${r.guard}</b></li>` : `<li data-k="${k}"><i class="dot" style="background:${st.players[r.p].color}"></i><span class="nm">${nameHtml(st.players[r.p])}${r.own ? '<small>守る</small>' : ''}</span>
+    <ul>${rows.map((r, k) => r.land ? `<li data-k="${k}" class="land">${ic(st.terrain[i] === G.T.RUNE ? 'rune' : 'shield')}<span class="nm">土地の守り</span><span class="bs">${tileName(st, i)}</span><span class="die-sp"></span><b class="tot">= ${r.guard}</b></li>` : `<li data-k="${k}">${avOf(st.players[r.p])}<span class="nm">${nameHtml(st.players[r.p])}${r.own ? '<small>守る</small>' : ''}</span>
       <span class="bs">${r.own ? `兵${r.base}＋守り${r.guard}` : `兵${r.base}`}</span>${r.dice == null ? '<span class="die-sp"></span>' : `<span class="dw">${dieSvg(0)}</span>`}<b class="tot">${r.dice == null ? '= ' + total(r) : ''}</b></li>`).join('')}</ul>
     <p class="res"></p>`;
   box.hidden = false; flashTile(i, 'shine'); if (b3) { b3.flyTo(i, 0.45); b3.fxFocus(i, duelMs(d)); }
@@ -440,7 +466,7 @@ function explain(i) {
   if (!f) { toast(`${tileName(st, i)}：このラウンドはだれも兵を置かなかった`); return; }
   const x = pi >= 0 ? fightText(st, f, pi) : null;
   const force = (st.last.force.find(z => z[0] === i) || [i, []])[1];
-  const lines = force.map(([p, v]) => `<li><i class="dot" style="background:${st.players[p].color}"></i>${nameHtml(st.players[p])}：${v}${p === f.o ? `＋守り${f.b + f.d}` : ''}</li>`).join('');
+  const lines = force.map(([p, v]) => `<li>${avOf(st.players[p])}${nameHtml(st.players[p])}：${v}${p === f.o ? `＋守り${f.b + f.d}` : ''}</li>`).join('');
   openWhy(`${tileName(st, i)}の勝負`, (x ? `<p class="${x.ok ? 'ok' : 'ng'}">${x.ok ? '◯' : '✕'} ${x.t}</p>` : '') + `<ul class="plain">${lines}</ul><p class="note">守る側は「持ち主+1」と土地の守り（森+1・山+2・ルーン+2・村+1・神殿+1・塔+2・お城+3。同じ人の塔のとなりは+1）が足されます。攻める側は、守りより多くないと取れません。お城は、持ち主のとなりの土地がなくなった（包囲された）時だけ攻められます。</p>`);
 }
 function openWhy(title, html) { $('#whyTitle').textContent = title; $('#whyBody').innerHTML = html; $('#why').showModal(); }
@@ -627,7 +653,7 @@ function renderChips(animate) {
   const html = rk.map((r, pos) => {
     const p = st.players[r.pi], off = !room.online(p.id), stt = st.step === 'plan' ? (room.got.includes(p.id) ? '<span class="st done">✓</span>' : '<span class="st think"></span>') : '';
     const d = chipDelta && chipDelta.get(r.pi), arrow = d > 0 ? `<span class="up">▲${d}</span>` : d < 0 ? `<span class="down">▼</span>` : '';
-    return `<span class="chip ${p.id === myId ? 'me' : ''} ${off ? 'off' : ''}" data-id="${p.id}">${pos === 0 && r.score > 0 ? ic('crown') : ''}<i class="dot" style="background:${p.color}"></i>${nameHtml(p)} <span class="sc">${r.score}</span>${arrow}${stt}</span>`;
+    return `<span class="chip ${p.id === myId ? 'me' : ''} ${off ? 'off' : ''}" data-id="${p.id}">${pos === 0 && r.score > 0 ? ic('crown') : ''}${avOf(p)}${nameHtml(p)} <span class="sc">${r.score}</span>${arrow}${stt}</span>`;
   }).join('');
   if (box.__h === html) return; box.__h = html; box.innerHTML = html;
   if (animate) for (const c of box.children) { // 順位が入れかわった動き（FLIP）
@@ -640,7 +666,7 @@ function renderChips(animate) {
 let sbOpen = false;
 function renderScore() {
   const st = room.state, rk = G.ranking(st), me = room.meIndex(), box = $('#sboard');
-  const row = (r, pos) => { const p = st.players[r.pi]; return `<li class="${r.pi === me ? 'me' : ''} ${p.out ? 'out' : ''}"><span class="rk">${pos + 1}</span><i class="dot" style="background:${p.color}"></i><span class="nm">${p.out ? ic('castle') : ''}${esc(p.name)}</span>${sbOpen ? `<span class="sub">${G.landOf(st, r.pi)}マス</span>` : ''}<span class="pt">${r.score}</span></li>`; };
+  const row = (r, pos) => { const p = st.players[r.pi]; return `<li class="${r.pi === me ? 'me' : ''} ${p.out ? 'out' : ''}"><span class="rk">${pos + 1}</span>${avOf(p)}<span class="nm">${p.out ? ic('castle') : ''}${esc(p.name)}</span>${sbOpen ? `<span class="sub">${G.landOf(st, r.pi)}マス</span>` : ''}<span class="pt">${r.score}</span></li>`; };
   let list = rk.map((r, pos) => ({ r, pos }));
   if (!sbOpen && list.length > 5) { const top = list.slice(0, 4), mine = list.find(x => x.r.pi === me && x.pos >= 4); list = mine ? [...top, mine] : list.slice(0, 5); }
   const html = `<ol>${list.map(x => row(x.r, x.pos)).join('')}</ol>${!sbOpen && rk.length > list.length ? `<div class="more">▲ 全員（${rk.length}人）</div>` : ''}`;
@@ -718,8 +744,8 @@ function renderLobby() {
   const host = room.isHost(), ms = room.members, bots = room.lobby.bots || [];
   const total = Math.min(ms.length, MAX_PLAYERS) + bots.length;
   $('#lobbyCount').textContent = `${total}人` + (ms.length > MAX_PLAYERS ? `（${MAX_PLAYERS}人まで。ほかの人は見学）` : '');
-  $('#lobbyList').innerHTML = ms.map((m, i) => `<li class="${m.id === myId ? 'me' : ''}"><i class="dot" style="background:${G.COLORS[i % G.COLORS.length]}"></i><span class="nm">${m.id === room.hostId() ? ic('crown') : ''}${esc(m.name)}</span></li>`).join('')
-    + bots.map((b, j) => `<li><i class="dot" style="background:${G.COLORS[(ms.length + j) % G.COLORS.length]}"></i><span class="nm">${nameHtml(b)}<small> ${LEVELS[b.bot]}</small></span>${host ? `<button data-rm="${b.id}" aria-label="外す">✕</button>` : ''}</li>`).join('');
+  $('#lobbyList').innerHTML = ms.map((m, i) => `<li class="${m.id === myId ? 'me' : ''}">${avatar(m.av, G.COLORS[i % G.COLORS.length])}<span class="nm">${m.id === room.hostId() ? ic('crown') : ''}${esc(m.name)}</span></li>`).join('')
+    + bots.map((b, j) => `<li>${avatar(b.av, G.COLORS[(ms.length + j) % G.COLORS.length])}<span class="nm">${nameHtml(b)}<small> ${LEVELS[b.bot]}</small></span>${host ? `<button data-rm="${b.id}" aria-label="外す">✕</button>` : ''}</li>`).join('');
   $('#hostBox').hidden = !host; $('#botBox').hidden = !host; $('#lobbyWait').hidden = host; $('#btnStart').hidden = !host;
   const cs = room.lobby.cardSec ?? 10, ps = room.lobby.planSec || 35;
   for (const b of $('#roundsSeg').children) { b.classList.toggle('on', +b.dataset.r === room.lobby.rounds); b.querySelector('small').textContent = `約${Math.round(+b.dataset.r * (cs + ps + 14) / 60)}分`; }
@@ -744,8 +770,8 @@ function renderEnd() {
   const t = 700 + aw.length * 1100;
   setTimeout(() => {
     const order = [rk[1], rk[0], rk[2]].filter(Boolean), h = { 0: 120, 1: 86, 2: 60 };
-    $('#podium').innerHTML = order.map(r => { const pos = rk.indexOf(r); return `<div class="pl" style="animation-delay:${(2 - pos) * 0.35}s"><span>${pos === 0 ? ic('crown', 'big') : ''}</span><span class="nm">${nameHtml(st.players[r.pi])}</span><span>${r.score}点</span><div class="blk" style="height:${h[pos]}px;background:${r.color}">${pos + 1}</div></div>`; }).join('');
-    $('#rank').innerHTML = rk.map((r, i) => `<li><span class="no">${i + 1}</span><i class="dot" style="background:${r.color}"></i><span class="nm">${nameHtml(st.players[r.pi])}${st.players[r.pi].id === myId ? '（自分）' : ''}</span><span class="sc">${r.score}点</span></li>`).join('');
+    $('#podium').innerHTML = order.map(r => { const pos = rk.indexOf(r); return `<div class="pl" style="animation-delay:${(2 - pos) * 0.35}s"><span>${pos === 0 ? ic('crown', 'big') : ''}</span><span class="nm">${avOf(st.players[r.pi], 'big')}${nameHtml(st.players[r.pi])}</span><span>${r.score}点</span><div class="blk" style="height:${h[pos]}px;background:${r.color}">${pos + 1}</div></div>`; }).join('');
+    $('#rank').innerHTML = rk.map((r, i) => `<li><span class="no">${i + 1}</span>${avOf(st.players[r.pi])}<span class="nm">${nameHtml(st.players[r.pi])}${st.players[r.pi].id === myId ? '（自分）' : ''}</span><span class="sc">${r.score}点</span></li>`).join('');
     $('#podium').scrollIntoView({ behavior: 'smooth', block: 'center' });
     setTimeout(() => { sfx.fanfare(); confetti(); }, 900);
   }, t);
@@ -773,6 +799,12 @@ setInterval(() => { if (b3) $('#btnFit').hidden = true; }, 400);
 
 // ---------- ボタン ----------
 $('#nick').value = store.get('name', '');
+// アイコンを選ぶ（はじめの画面）。この機械にだけ覚える
+function myAv() { const a = store.get('av', ''); return AV_KEYS.includes(a) ? a : AV_KEYS[0]; }
+function drawAvPick() { const cur = myAv(); $('#avPick').innerHTML = AV_KEYS.map(k => `<button data-av="${k}" class="${k === cur ? 'on' : ''}" aria-label="${k}">${avatar(k, k === cur ? '#c4862a' : '#e6dcc6')}</button>`).join(''); }
+$('#avPick').onclick = e => { const b = e.target.closest('button'); if (!b) return; store.set('av', b.dataset.av); drawAvPick(); sfx.pop(); };
+if (!store.get('av', '')) store.set('av', AV_KEYS[Math.floor(Math.random() * AV_KEYS.length)]);
+drawAvPick();
 const qs = new URLSearchParams(location.search).get('r'); if (qs) $('#code').value = qs.replace(/\D/g, '').slice(0, 4);
 $('#btnCreate').onclick = () => enter(randCode(), true);
 $('#btnJoin').onclick = () => { const c = $('#code').value.replace(/\D/g, ''); if (c.length !== 4) { $('#homeMsg').textContent = '4けたの番号を入れてください'; return; } enter(c, false); };

@@ -1,7 +1,8 @@
 // ルーンランド：部屋のつながり（Supabase Realtime の Broadcast と Presence。DB には何も保存しない）
 // 部屋でいちばん早く入った人が「親」。親が結果を計算して全員に配る。親がぬけたら次の人が引きつぐ。
 import * as G from './game.js';
-import { aiPlan, BOT_NAMES, LEVELS } from './ai.js';
+import { aiPlan, BOT_NAMES, LEVELS, BOT_AV } from './ai.js';
+import { AV_KEYS } from './icons.js';
 
 export const MAX_PLAYERS = 16;
 export const REVEAL_MS = 4000;
@@ -18,7 +19,7 @@ const chan = code => 'runeland-' + String(code).replace(/[^0-9]/g, '').slice(0, 
 export class Room {
   // opts: { code, id, name, sb（Supabase のクライアント）, onChange(room), onStatus(text), now() }
   constructor(opts) {
-    Object.assign(this, { code: opts.code, id: opts.id, name: opts.name, sb: opts.sb });
+    Object.assign(this, { code: opts.code, id: opts.id, name: opts.name, av: opts.av || '', sb: opts.sb });
     this.onChange = opts.onChange || (() => {}); this.onStatus = opts.onStatus || (() => {});
     this.now = opts.now || (() => Date.now());
     this.state = null;          // ゲームの状態（だれも持っていなければ null＝待合室）
@@ -44,7 +45,7 @@ export class Room {
       const was = this.ok; this.ok = st === 'SUBSCRIBED';
       this.onStatus(this.ok ? '' : st === 'CHANNEL_ERROR' || st === 'TIMED_OUT' ? 'つなぎ直しています…' : 'つないでいます…');
       if (this.ok) {
-        await ch.track({ id: this.id, name: this.name, at: this.joinedAt });
+        await ch.track({ id: this.id, name: this.name, av: this.av, at: this.joinedAt });
         if (!was) this.send('hello', {});
         res();
       }
@@ -57,7 +58,7 @@ export class Room {
 
   syncMembers() {
     const ps = this.ch.presenceState(), seen = new Map();
-    for (const k in ps) for (const m of ps[k]) if (m.id && (!seen.has(m.id) || seen.get(m.id).at > m.at)) seen.set(m.id, { id: m.id, name: String(m.name || '').slice(0, 12), at: +m.at || 0 });
+    for (const k in ps) for (const m of ps[k]) if (m.id && (!seen.has(m.id) || seen.get(m.id).at > m.at)) seen.set(m.id, { id: m.id, name: String(m.name || '').slice(0, 12), av: AV_KEYS.includes(m.av) ? m.av : '', at: +m.at || 0 });
     this.members = [...seen.values()].sort((a, b) => a.at - b.at || (a.id < b.id ? -1 : 1));
     const h = this.hostId();
     if (h !== this.lastHost) {
@@ -130,7 +131,7 @@ export class Room {
     if (this.members.length + bots.length >= MAX_PLAYERS) return;
     const used = new Set(bots.map(b => b.name));
     const nm = BOT_NAMES.find(n => !used.has(n)) || 'CPU';
-    this.lobby = { ...this.lobby, bots: [...bots, { id: 'cpu-' + Math.random().toString(36).slice(2, 8), name: nm, bot: level }] };
+    this.lobby = { ...this.lobby, bots: [...bots, { id: 'cpu-' + Math.random().toString(36).slice(2, 8), name: nm, bot: level, av: BOT_AV[nm] || 'slime' }] };
     this.send('lobby', this.lobby); this.onChange(this);
   }
   removeBot(id) { if (!this.isHost()) return; this.lobby = { ...this.lobby, bots: (this.lobby.bots || []).filter(b => b.id !== id) }; this.send('lobby', this.lobby); this.onChange(this); }
@@ -138,7 +139,7 @@ export class Room {
   setRounds(n) { if (this.isHost()) { this.lobby = { ...this.lobby, rounds: n }; this.send('lobby', this.lobby); this.onChange(this); } }
   start() {
     if (!this.isHost()) return;
-    const humans = this.members.slice(0, MAX_PLAYERS).map(m => ({ id: m.id, name: m.name }));
+    const humans = this.members.slice(0, MAX_PLAYERS).map(m => ({ id: m.id, name: m.name, av: m.av }));
     const ps = [...humans, ...(this.lobby.bots || []).slice(0, MAX_PLAYERS - humans.length)];
     if (ps.length < 1) return;
     const seed = (Math.random() * 2 ** 31) >>> 0;

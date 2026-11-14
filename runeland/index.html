@@ -22,6 +22,7 @@
     <div class="logo"><img src="icon.svg" alt=""><h1>ルーンランド</h1><p>みんなで遊ぶ ファンタジー陣取り</p></div>
     <div class="paper">
       <label class="field">ニックネーム<input id="nick" maxlength="12" placeholder="例：こてつ" autocomplete="off"></label>
+      <div class="field">アイコン<div id="avPick" class="avpick"></div></div>
       <button id="btnCreate" class="big">部屋を作る</button>
       <div class="or"><span>または 番号で入る</span></div>
       <div class="joinrow"><input id="code" inputmode="numeric" maxlength="4" placeholder="0000" autocomplete="off"><button id="btnJoin" class="sub">入る</button></div>
@@ -74,7 +75,7 @@
     </header>
     <div id="players" class="chips"></div>
     <div id="boardWrap">
-      <svg id="board" xmlns="http://www.w3.org/2000/svg"><g id="view"><g id="lCoast"></g><g id="lTiles"></g><g id="lIcons"></g><g id="lOver"></g></g></svg>
+      <svg id="board" xmlns="http://www.w3.org/2000/svg"><g id="view"><g id="lCoast"></g><g id="lTiles"></g><g id="lBorder"></g><g id="lIcons"></g><g id="lOver"></g></g></svg>
       <button id="btnFit" class="fit" hidden>全体</button>
       <div id="banner"></div>
       <div id="duelPin" class="duelPin" hidden><i class="ring"></i><b>ここで勝負！</b></div>

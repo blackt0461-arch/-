@@ -3,6 +3,8 @@
 import * as G from './game.js';
 
 export const LEVELS = { easy: 'やさしい', normal: 'ふつう', hard: 'つよい' };
+// コンピューターのアイコン（名前に近い動物）
+export const BOT_AV = { いのしし: 'pig', ふくろう: 'owl', きつね: 'fox', こぐま: 'bear', うさぎ: 'rabbit', たぬき: 'panda', ひつじ: 'mouse', かめ: 'frog', からす: 'chick', しか: 'dog', ねこ: 'cat', いぬ: 'dog', りす: 'mouse', かえる: 'frog', はりねずみ: 'mouse', ペンギン: 'penguin' };
 export const BOT_NAMES = ['いのしし', 'ふくろう', 'きつね', 'こぐま', 'うさぎ', 'たぬき', 'ひつじ', 'かめ', 'からす', 'しか', 'ねこ', 'いぬ', 'りす', 'かえる', 'はりねずみ', 'ペンギン'];
 
 // 盤面のようすをまとめて調べる（何度も数えないように）
