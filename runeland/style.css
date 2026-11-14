@@ -231,3 +231,20 @@ button.mini { min-height: 32px; padding: 2px 12px; border-radius: 99px; font-siz
 .dots i.on { background: var(--gold2); }
 .introNav { display: flex; gap: 8px; } .introNav .sub { flex: 1; } .introNav .big { flex: 2; }
 #duel li.land { background: #f1e9d6; } #duel li.land .gi { width: 22px; height: 22px; }
+
+/* 3D（ジオラマ） */
+#boardWrap .b3 { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+#boardWrap.is3d { background: radial-gradient(ellipse at 50% 40%, #f6ecd4 0, #e3d2ae 70%, #cdb98f 100%); }
+#boardWrap.is3d::after { display: none; }
+#boardWrap.is3d #board { visibility: hidden; }
+#boardWrap.hiq::before { content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 1; background: radial-gradient(ellipse at 50% 50%, transparent 60%, #5b463633 100%); }
+.b3labels { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 2; }
+.b3labels .l { position: absolute; left: 0; top: 0; font-weight: 800; white-space: nowrap; will-change: transform; }
+.b3labels .need { color: #5b4636; background: #fffaf0cc !important; border: 1.5px solid #c4a77a; border-radius: 8px; font-size: 11px; padding: 0 5px; }
+.b3labels .cnt { color: #fff; min-width: 24px; height: 24px; line-height: 20px; text-align: center; border-radius: 50%; border: 2px solid #fff; font-size: 14px; box-shadow: 0 2px 4px #0004; text-shadow: 0 1px 0 #0006; }
+.b3labels .cnt.small { min-width: 19px; height: 19px; line-height: 15px; font-size: 11px; }
+.b3labels .pill { color: #fff; font-size: 10px; padding: 1px 6px; border-radius: 99px; border: 1.5px solid #fff; box-shadow: 0 1px 3px #0004; }
+.b3labels .pill.ok { background: #5aa36a !important; } .b3labels .pill.ng { background: #e3832f !important; }
+.b3labels .tgt .gi { width: 28px; height: 28px; filter: drop-shadow(0 2px 2px #0006); }
+#boardWrap.is3d #banner { top: 5%; }
+#boardWrap.is3d #duel { top: auto; bottom: 8px; transform: translateX(-50%); }

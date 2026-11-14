@@ -11,6 +11,20 @@ const LIB = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/
 const store = { get(k, d) { try { return localStorage.getItem('runeland:' + k) ?? d; } catch { return d; } }, set(k, v) { try { localStorage.setItem('runeland:' + k, v); } catch {} } };
 let myId = store.get('id'); if (!myId) { myId = Math.random().toString(36).slice(2, 10); store.set('id', myId); }
 let room = null;
+// ---- 3D（ジオラマ）か 2D か ----
+let b3 = null, gfx = store.get('gfx', 'high'); // high＝3D きれい / light＝3D かるい / 2d
+function webglOK() { try { const c = document.createElement('canvas'); return !!(c.getContext('webgl2') || c.getContext('webgl')); } catch { return false; } }
+async function init3d() {
+  if (gfx === '2d' || b3) return;
+  if (!webglOK()) { gfx = '2d'; return; }
+  try {
+    const { Board3D } = await import('./board3d.js');
+    b3 = new Board3D($('#boardWrap'), { quality: gfx, onSlow: gfx === 'high' && !store.get('gfxKeep', '') ? () => { setGfx('light'); toast('動きが重いので、画質を「かるい」にしました（メニューで変えられます）', 4000); } : null });
+    $('#boardWrap').classList.add('is3d'); $('#boardWrap').classList.toggle('hiq', gfx === 'high');
+    if (room && room.state) render();
+  } catch (e) { console.warn('3D が使えないので 2D にします', e); gfx = '2d'; b3 = null; $('#boardWrap').classList.remove('is3d'); }
+}
+function setGfx(mode) { gfx = mode; store.set('gfx', mode); if (b3) { b3.dispose(); b3 = null; } $('#boardWrap').classList.remove('is3d', 'hiq'); $('#lOver').__h = null; if (mode !== '2d') init3d(); else if (room && room.state) render(); }
 const nameHtml = p => (p.bot ? ic('bot', 'bot') : '') + esc(p.name);
 // マスの守り（取るのに何人いるか）
 const TNAME = ['草原', '森', '山', '湖', 'ルーンの石'];
@@ -187,36 +201,46 @@ function paintTiles(st, owners) {
 function drawOverlay() {
   const st = room.state, pi = room.meIndex(), over = $('#lOver');
   const acting = canAct(), portal = acting && plan.card && plan.card.k === 'portal';
+  const d3 = { can: [], placed: [], force: [], chests: (B.anim && prevChests ? prevChests : st.chests) || [], target: null, targeting: acting && plan.targeting };
   let out = '';
-  for (const i of (B.anim && prevChests ? prevChests : st.chests) || []) { const [x, y] = B.cx[i]; out += chestIcon(x, y); }
+  for (const i of d3.chests) { const [x, y] = B.cx[i]; out += chestIcon(x, y); }
   if (acting && !plan.targeting) {
     for (let i = 0; i < B.tiles.length; i++) if (st.terrain[i] !== G.T.LAKE && st.owner[i] !== pi && G.canPlace(st, pi, i, portal)) {
       out += `<polygon class="can" points="${B.tiles[i].getAttribute('points')}"/>`;
-      if (!plan.place.has(i)) { const [x, y] = B.cx[i]; out += `<text class="need" x="${x + 5.2}" y="${y + 4.6}" font-size="4.4">${guardOf(st, i).total + 1}</text>`; } // 取るのに要る兵
+      const need = guardOf(st, i).total + 1;
+      d3.can.push({ i, need: plan.place.has(i) ? null : need });
+      if (!plan.place.has(i)) { const [x, y] = B.cx[i]; out += `<text class="need" x="${x + 5.2}" y="${y + 4.6}" font-size="4.4">${need}</text>`; } // 取るのに要る兵
     }
   }
   if (acting && plan.targeting) { // カードの相手を選ぶ時：選べるマスを光らせる
     const own = G.CARDS[plan.card.k].target === 'own';
-    for (let i = 0; i < B.tiles.length; i++) if (st.terrain[i] !== G.T.LAKE && (own ? st.owner[i] === pi : st.owner[i] >= 0 && st.owner[i] !== pi)) out += `<polygon class="can" points="${B.tiles[i].getAttribute('points')}"/>`;
+    for (let i = 0; i < B.tiles.length; i++) if (st.terrain[i] !== G.T.LAKE && (own ? st.owner[i] === pi : st.owner[i] >= 0 && st.owner[i] !== pi)) { out += `<polygon class="can" points="${B.tiles[i].getAttribute('points')}"/>`; d3.can.push({ i, need: null }); }
   }
-  if (acting && plan.card && plan.card.target != null) out += `<polygon class="tgt" points="${B.tiles[plan.card.target].getAttribute('points')}"/>${icAt(G.CARDS[plan.card.k].icon, B.cx[plan.card.target][0], B.cx[plan.card.target][1] - 9, 9)}`;
+  if (acting && plan.card && plan.card.target != null) { out += `<polygon class="tgt" points="${B.tiles[plan.card.target].getAttribute('points')}"/>${icAt(G.CARDS[plan.card.k].icon, B.cx[plan.card.target][0], B.cx[plan.card.target][1] - 9, 9)}`; d3.target = { i: plan.card.target, html: ic(G.CARDS[plan.card.k].icon) }; }
   if (acting) for (const [i, n] of plan.place) {
     const [x, y] = B.cx[i]; out += `<circle cx="${x}" cy="${y}" r="5.4" fill="${st.players[pi].color}" stroke="#fff" stroke-width="1.3"/><text class="cnt" x="${x}" y="${y + 0.3}" font-size="7.2">${n}</text>`;
+    const pd = { i, n, color: st.players[pi].color };
     if (st.owner[i] !== pi) { // 足りているか：あと何人
       const need = guardOf(st, i).total + 1, ok = n >= need;
       out += `<rect x="${x - 6}" y="${y + 4.6}" width="12" height="4.6" rx="2.3" fill="${ok ? '#5aa36a' : '#e3832f'}" stroke="#fff" stroke-width=".6"/><text class="pill" x="${x}" y="${y + 7}" font-size="3.4">${ok ? '取れる' : 'あと' + (need - n)}</text>`;
+      pd.ok = ok; pd.pill = ok ? '取れる' : 'あと' + (need - n);
     }
+    d3.placed.push(pd);
   }
   if (!acting && st.last && st.step === 'reveal' && !B.anim) for (const [i, f] of st.last.force) { // 結果：いちばん多く置いた人
     const top = [...f].sort((a, b) => b[1] - a[1])[0]; const [x, y] = B.cx[i];
     out += `<circle cx="${x + 5}" cy="${y - 5}" r="3.4" fill="${st.players[top[0]].color}" stroke="#5b4636" stroke-width=".6"/><text class="fc" x="${x + 5}" y="${y - 4.8}" font-size="4.6">${top[1]}</text>`;
+    d3.force.push({ i, n: top[1], color: st.players[top[0]].color });
   }
   if (over.__h !== out) { over.innerHTML = out; over.__h = out; }
+  if (b3) { const k = JSON.stringify(d3); if (b3.__k !== k) { b3.__k = k; b3.overlay(d3); } }
 }
+// 盤面の色：2Dと3Dの両方
+function paint(st, owners) { paintTiles(st, owners); if (b3) b3.paint(st, owners); }
 function drawBoard() {
   const st = room.state;
-  buildBoard(st);
-  if (!B.anim) paintTiles(st, st.owner);
+  buildBoard(st); if (b3) b3.build(st);
+  if (!B.anim) paint(st, st.owner);
   drawOverlay();
 }
 
@@ -250,13 +274,13 @@ wrap.addEventListener('pointerdown', e => {
   try { wrap.setPointerCapture(e.pointerId); } catch {}
   ptr.set(e.pointerId, { x: e.clientX, y: e.clientY });
   if (ptr.size === 1) {
-    gest = { sx: e.clientX, sy: e.clientY, moved: false, vx: B.view.x, vy: B.view.y, tile: tileAt(e.clientX, e.clientY) };
+    gest = { sx: e.clientX, sy: e.clientY, lx: e.clientX, ly: e.clientY, moved: false, vx: B.view.x, vy: B.view.y, tile: tileAt(e.clientX, e.clientY) };
     clearTimeout(pressT);
     pressT = setTimeout(() => { if (gest && !gest.moved && gest.tile >= 0 && plan && plan.place.has(gest.tile)) { removeAt(gest.tile); gest.done = true; } }, 480); // 長押しで1つ戻す
   } else if (ptr.size === 2) {
     clearTimeout(pressT);
     const [a, b] = [...ptr.values()];
-    gest = { pinch: true, d0: Math.hypot(a.x - b.x, a.y - b.y) || 1, k0: B.view.k, mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2, view0: { ...B.view } };
+    gest = { pinch: true, d0: Math.hypot(a.x - b.x, a.y - b.y) || 1, dl: Math.hypot(a.x - b.x, a.y - b.y) || 1, k0: B.view.k, mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2, view0: { ...B.view } };
   }
 });
 wrap.addEventListener('pointermove', e => {
@@ -265,12 +289,14 @@ wrap.addEventListener('pointermove', e => {
   if (!gest) return;
   if (gest.pinch && ptr.size === 2) {
     const [a, b] = [...ptr.values()], d = Math.hypot(a.x - b.x, a.y - b.y);
+    if (b3) { b3.zoomBy(d / gest.dl, (a.x + b.x) / 2, (a.y + b.y) / 2); gest.dl = d || 1; return; }
     Object.assign(B.view, gest.view0); zoomAt(gest.mx, gest.my, gest.k0 * d / gest.d0);
     return;
   }
   if (gest.pinch) return;
   const dx = e.clientX - gest.sx, dy = e.clientY - gest.sy;
   if (!gest.moved && Math.hypot(dx, dy) > 10) { gest.moved = true; clearTimeout(pressT); }
+  if (gest.moved && b3) { b3.panPixels(e.clientX - gest.lx, e.clientY - gest.ly); gest.lx = e.clientX; gest.ly = e.clientY; return; }
   if (gest.moved && B.view.k > 1.01) {
     const r = svg.getBoundingClientRect(), upp = Math.max(B.vb.w / r.width, B.vb.h / r.height);
     B.view.x = gest.vx + dx * upp; B.view.y = gest.vy + dy * upp; clampView(); applyView();
@@ -287,19 +313,20 @@ const endPtr = e => {
   const i = g.tile; if (i < 0) return;
   if (!canAct() && room?.state?.step === 'reveal') { explain(i); return; } // 結果の時：そのマスの勝負の内訳
   // 小さすぎて押しにくい時は、まず広げる
-  if (canAct() && hexPx() < 26) { zoomAt(e.clientX, e.clientY, Math.min(4, B.view.k * 40 / hexPx()), true); toast('広げました。もう一度タップして置こう'); return; }
+  if (canAct() && b3 && b3.hexPx() < 30) { b3.zoomToward(e.clientX, e.clientY, 44 / b3.hexPx()); toast('広げました。もう一度タップして置こう'); return; }
+  if (canAct() && !b3 && hexPx() < 26) { zoomAt(e.clientX, e.clientY, Math.min(4, B.view.k * 40 / hexPx()), true); toast('広げました。もう一度タップして置こう'); return; }
   tapTile(i);
 };
 wrap.addEventListener('pointerup', endPtr); wrap.addEventListener('pointercancel', endPtr);
-wrap.addEventListener('wheel', e => { e.preventDefault(); zoomAt(e.clientX, e.clientY, B.view.k * (e.deltaY < 0 ? 1.2 : 1 / 1.2)); }, { passive: false });
-function tileAt(x, y) { const t = document.elementFromPoint(x, y); const p = t && t.closest && t.closest('polygon.t'); return p ? +p.dataset.i : -1; }
-$('#btnFit').onclick = () => { B.view = { k: 1, x: 0, y: 0 }; applyView(); };
+wrap.addEventListener('wheel', e => { e.preventDefault(); if (b3) { b3.zoomBy(e.deltaY < 0 ? 1.2 : 1 / 1.2, e.clientX, e.clientY); return; } zoomAt(e.clientX, e.clientY, B.view.k * (e.deltaY < 0 ? 1.2 : 1 / 1.2)); }, { passive: false });
+function tileAt(x, y) { if (b3) return b3.pick(x, y); const t = document.elementFromPoint(x, y); const p = t && t.closest && t.closest('polygon.t'); return p ? +p.dataset.i : -1; }
+$('#btnFit').onclick = () => { if (b3) { b3.fit(); return; } B.view = { k: 1, x: 0, y: 0 }; applyView(); };
 
 // ---------- 結果の見せ方（順番に） ----------
 let revealDone = '', prevOwners = null, prevGidRound = '', prevRanks = null, animTimers = [];
 function later(ms, f) { animTimers.push(setTimeout(f, ms)); }
-function skipAnim() { animTimers.forEach(clearTimeout); animTimers = []; duelTimers.forEach(clearInterval); duelTimers = []; $('#duel').hidden = true; B.anim = false; if (room?.state?.last) celebrate(room.state); render(); }
-function flashTile(i, cls) { const p = el('polygon', { class: cls, points: B.tiles[i].getAttribute('points') }, $('#lOver')); $('#lOver').__h = null; setTimeout(() => p.remove(), 1600); }
+function skipAnim() { animTimers.forEach(clearTimeout); animTimers = []; if (b3) b3.restoreView(); duelTimers.forEach(clearInterval); duelTimers = []; $('#duel').hidden = true; B.anim = false; if (room?.state?.last) celebrate(room.state); render(); }
+function flashTile(i, cls) { const p = el('polygon', { class: cls, points: B.tiles[i].getAttribute('points') }, $('#lOver')); $('#lOver').__h = null; setTimeout(() => p.remove(), 1600); if (b3) b3.flash(i, { burn: '#ff5a1f', shine: '#9fe0ff', flash: '#ffffff' }[cls] || '#ffffff'); }
 function banner(text, sub = '', icon = '', subHtml = false) { const b = $('#banner'); b.innerHTML = `<div>${icon ? ic(icon) + ' ' : ''}${esc(text)}${sub ? `<small>${subHtml ? sub : esc(sub)}</small>` : ''}</div>`; }
 let celebrated = '';
 // ---- サイコロのとりあい（1人ずつ） ----
@@ -325,10 +352,10 @@ function playDuel(st, d) {
   const box = $('#duel'), L = st.last, { i, f, rows } = d;
   const total = r => r.base + (r.dice || 0) + (r.guard || 0);
   box.innerHTML = `<div class="dhead">${ic('dice')} とりあい！<small>${tileName(st, i)}${f && f.o >= 0 ? `（${nameHtml(st.players[f.o])}の土地）` : '（空き地）'}</small></div>
-    <ul>${rows.map((r, k) => r.land ? `<li data-k="${k}" class="land">${ic(st.terrain[i] === G.T.RUNE ? 'rune' : 'shield')}<span class="nm">土地の守り（${tileName(st, i)}）</span><span class="bs">これより多く必要</span><span class="die-sp"></span><b class="tot">= ${r.guard}</b></li>` : `<li data-k="${k}"><i class="dot" style="background:${st.players[r.p].color}"></i><span class="nm">${nameHtml(st.players[r.p])}${r.own ? '<small>守る</small>' : ''}</span>
+    <ul>${rows.map((r, k) => r.land ? `<li data-k="${k}" class="land">${ic(st.terrain[i] === G.T.RUNE ? 'rune' : 'shield')}<span class="nm">土地の守り</span><span class="bs">${tileName(st, i)}</span><span class="die-sp"></span><b class="tot">= ${r.guard}</b></li>` : `<li data-k="${k}"><i class="dot" style="background:${st.players[r.p].color}"></i><span class="nm">${nameHtml(st.players[r.p])}${r.own ? '<small>守る</small>' : ''}</span>
       <span class="bs">${r.own ? `兵${r.base}＋守り${r.guard}` : `兵${r.base}`}</span>${r.dice == null ? '<span class="die-sp"></span>' : `<span class="dw">${dieSvg(0)}</span>`}<b class="tot">${r.dice == null ? '= ' + total(r) : ''}</b></li>`).join('')}</ul>
     <p class="res"></p>`;
-  box.hidden = false; flashTile(i, 'shine');
+  box.hidden = false; flashTile(i, 'shine'); if (b3) { b3.flyTo(i, 0.45); b3.fxFocus(i); }
   let tt = 500;
   rows.forEach((r, k) => {
     if (r.dice == null) return;
@@ -398,7 +425,8 @@ function playReveal(st) {
   const from = prevOwners && prevGidRound === st.gid + ':' + L.round ? prevOwners.slice() : null;
   if (!from) { celebrate(st); return; }
   B.anim = true; $('#toast').innerHTML = '';
-  const disp = from; paintTiles(st, disp); drawOverlay();
+  const disp = from; paint(st, disp); drawOverlay();
+  if (b3) b3.saveView();
   sfx.hush();
   let t = 350;
   // 1) カードを1枚ずつ
@@ -406,28 +434,31 @@ function playReveal(st) {
     later(t, () => {
       banner(G.CARDS[l.card].name, nameHtml(st.players[l.pi]) + (l.card === 'dice' ? `（${G.diceRoll(st.seed, L.round, l.pi)}）` : ''), G.CARDS[l.card].icon, true);
       ({ dragon: sfx.dragon, shield: sfx.shield, storm: sfx.storm, treasure: sfx.coin }[l.card] || sfx.card)();
+      if (b3) b3.flyTo(l.card === 'dragon' ? (L.burned.length ? L.burned[0] : l.target) : l.card === 'shield' && L.shields.length ? L.shields[0] : l.card === 'storm' ? null : st.players[l.pi].castle, l.card === 'storm' ? 1 : 0.5);
+      if (b3) setTimeout(() => b3.fxCard(l.card, l.pi, { tiles: l.card === 'dragon' ? (L.burned.length ? L.burned : [l.target]) : l.card === 'shield' ? L.shields : [], value: l.card === 'dice' ? G.diceRoll(st.seed, L.round, l.pi) : 0 }), 350);
       if (l.card === 'dragon') for (const i of L.burned) { disp[i] = -1; flashTile(i, 'burn'); }
       if (l.card === 'shield') for (const i of L.shields) flashTile(i, 'shine');
-      paintTiles(st, disp);
+      paint(st, disp);
     });
-    t += 650;
+    t += 650 + (l.card === 'dragon' ? 1500 : 0);
   }
   // 1.5) サイコロ：とりあいのマスを、1人ずつ転がして見せる（自分のマスを先に。3か所まで）
   for (const d of pickDuels(st, pi)) { const dur = duelMs(d); later(t, () => playDuel(st, d)); t += dur; }
   if (L.dice && L.dice.length > 3) later(t - 200, () => toast(`ほかに${L.dice.length - 3}か所でもサイコロ`, 2000, 'dice'));
-  // 2) 取られたマスを、真ん中から順に
+  // 2) 取られたマスを、真ん中から順に（3Dは全体が見えるように引く）
+  if (b3 && L.changed.length) later(t - 300, () => b3.flyTo(null, 1, 400));
   const ch = [...L.changed].sort((a, b) => Math.hypot(...B.cx[a.i]) - Math.hypot(...B.cx[b.i]));
   const stepMs = ch.length ? Math.min(70, 1800 / ch.length) : 0;
   let k = 0;
   ch.forEach((c, n) => later(t + n * stepMs, () => {
-    disp[c.i] = c.to; paintTiles(st, disp);
-    const p = B.tiles[c.i]; p.classList.remove('pop'); void p.getBBox(); p.classList.add('pop'); flashTile(c.i, 'flash');
+    disp[c.i] = c.to; paint(st, disp);
+    const p = B.tiles[c.i]; p.classList.remove('pop'); void p.getBBox(); p.classList.add('pop'); flashTile(c.i, 'flash'); if (b3) b3.pop(c.i);
     if (c.to === pi || c.from === pi || ch.length < 10 || n % 3 === 0) sfx.capture(k++);
   }));
   t += ch.length * stepMs + 300;
   // 3) 宝箱を開ける
   for (const o of (L.opened || []).slice(0, 4)) {
-    later(t, () => { banner('宝箱！', `${nameHtml(st.players[o.pi])}：${o.card ? ic(G.CARDS[o.card].icon) + esc(G.CARDS[o.card].name) : '+' + o.pt + '点'}`, 'chest', true); sfx.chest(); flashTile(o.i, 'shine'); });
+    later(t, () => { banner('宝箱！', `${nameHtml(st.players[o.pi])}：${o.card ? ic(G.CARDS[o.card].icon) + esc(G.CARDS[o.card].name) : '+' + o.pt + '点'}`, 'chest', true); sfx.chest(); flashTile(o.i, 'shine'); if (b3) { b3.flyTo(o.i, 0.5); setTimeout(() => b3.fxChest(o.i), 350); } });
     t += 800;
   }
   // 4) イベント（予告なし）
@@ -435,12 +466,13 @@ function playReveal(st) {
     later(t, () => {
       const e = G.EVENTS[L.event.k]; banner(e.name, e.text, e.icon);
       ({ raid: sfx.dragon, wave: sfx.storm, gold: sfx.coin, glow: sfx.shield, fairy: sfx.card }[L.event.k] || sfx.card)();
-      for (const [i] of L.event.tiles) { disp[i] = -1; flashTile(i, 'burn'); }
-      paintTiles(st, disp);
+      if (b3) { b3.flyTo(L.event.k === 'raid' && L.event.tiles.length ? L.event.tiles[0][0] : null, L.event.k === 'raid' ? 0.6 : 1); b3.fxEvent(L.event.k, { tiles: L.event.tiles.map(x => x[0]) }); }
+      const late = b3 && (L.event.k === 'raid' || L.event.k === 'wave') ? 1200 : 0;
+      setTimeout(() => { for (const [i] of L.event.tiles) { disp[i] = -1; flashTile(i, 'burn'); } paint(st, disp); }, late);
     });
-    t += 1400;
+    t += 1400 + (L.event.k === 'raid' ? 1500 : 0);
   }
-  later(t, () => { B.anim = false; paintTiles(st, st.owner); celebrate(st); render(); });
+  later(t, () => { B.anim = false; paint(st, st.owner); if (b3) b3.restoreView(); celebrate(st); render(); });
 }
 // 3) 点数と順位の変化
 function celebrate(st) {
@@ -636,6 +668,7 @@ setInterval(() => {
   }
 }, 250);
 addEventListener('resize', () => updateCoach());
+setInterval(() => { if (b3) $('#btnFit').hidden = !b3.isZoomed(); }, 400);
 
 // ---------- ボタン ----------
 $('#nick').value = store.get('name', '');
@@ -681,10 +714,13 @@ $('#introPrev').onclick = () => { if (introPage > 0) { introPage--; drawIntro();
 $('#introNext').onclick = () => { if (introPage < INTRO.length - 1) { introPage++; drawIntro(); } else { $('#intro').close(); store.set('intro', '1'); } };
 $('#introRules').onclick = () => { $('#intro').close(); store.set('intro', '1'); $('#help').showModal(); };
 if (!store.get('intro', '')) setTimeout(() => openIntro(0), 300);
-const optText = () => { $('#btnBgm').textContent = '音楽：' + (opt.bgm ? 'オン' : 'オフ'); $('#btnSound').textContent = '効果音：' + (opt.sfx ? 'オン' : 'オフ'); };
+const GFXT = { high: '3D（きれい）', light: '3D（かるい）', '2d': '2D（いちばん軽い）' };
+const optText = () => { $('#btnGfx').textContent = '画質：' + GFXT[gfx]; $('#btnBgm').textContent = '音楽：' + (opt.bgm ? 'オン' : 'オフ'); $('#btnSound').textContent = '効果音：' + (opt.sfx ? 'オン' : 'オフ'); };
 $('#btnMenu').onclick = () => { $('#menuCode').textContent = room?.code || ''; optText(); $('#menu').showModal(); };
 $('#btnSound').onclick = () => { setOpt('sfx', !opt.sfx); optText(); };
+$('#btnGfx').onclick = () => { store.set('gfxKeep', '1'); const order = ['high', 'light', '2d'], nx = order[(order.indexOf(gfx) + 1) % 3]; setGfx(nx); optText(); };
+init3d();
 $('#btnBgm').onclick = () => { unlock(); setOpt('bgm', !opt.bgm); optText(); };
 document.addEventListener('pointerdown', () => unlock(), { once: true });
 if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
-window.__rl = { get room() { return room; }, render, B }; // 試験用
+window.__rl = { get room() { return room; }, render, B, get b3() { return b3; }, setGfx }; // 試験用

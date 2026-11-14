@@ -183,7 +183,7 @@ export function resolve(st0, plans) {
     if (c.card === 'shield') { shields.add(c.target); for (const j of mapOf(st).nb[c.target]) if (st0.owner[j] === pi) shields.add(j); }
     if (c.card === 'storm') stormers.push(pi);
     if (c.card === 'treasure') st.players[pi].bonus += BONUS_PT;
-    log.push({ pi, card: c.card, text: `${nm}：${def.name}` + (c.card === 'dice' ? `（${diceRoll(st.seed, st.round, pi)}）` : '') });
+    log.push({ pi, card: c.card, target: c.target, text: `${nm}：${def.name}` + (c.card === 'dice' ? `（${diceRoll(st.seed, st.round, pi)}）` : '') });
   });
   // 炎の竜（結界とお城には効かない）
   const burned = [];
