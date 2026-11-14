@@ -248,3 +248,7 @@ button.mini { min-height: 32px; padding: 2px 12px; border-radius: 99px; font-siz
 .b3labels .tgt .gi { width: 28px; height: 28px; filter: drop-shadow(0 2px 2px #0006); }
 #boardWrap.is3d #banner { top: 5%; }
 #boardWrap.is3d #duel { top: auto; bottom: 8px; transform: translateX(-50%); }
+.b3labels.tiny .need { font-size: 8px; padding: 0 3px; border-width: 1px; border-radius: 6px; }
+.b3labels.tiny .cnt { min-width: 18px; height: 18px; line-height: 15px; font-size: 11px; border-width: 1.5px; }
+.b3labels.tiny .cnt.small { min-width: 14px; height: 14px; line-height: 11px; font-size: 9px; }
+.b3labels.tiny .pill { font-size: 8px; padding: 0 4px; }

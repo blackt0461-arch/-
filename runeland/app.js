@@ -12,14 +12,15 @@ const store = { get(k, d) { try { return localStorage.getItem('runeland:' + k) ?
 let myId = store.get('id'); if (!myId) { myId = Math.random().toString(36).slice(2, 10); store.set('id', myId); }
 let room = null;
 // ---- 3D（ジオラマ）か 2D か ----
-let b3 = null, gfx = store.get('gfx', 'high'); // high＝3D きれい / light＝3D かるい / 2d
+let b3 = null, gfx = store.get('gfx', 'high');
+if (gfx === 'light' && !store.get('gfxKeep', '')) { gfx = 'high'; store.set('gfx', 'high'); } // 前の版で自動で「かるい」になった人は、きれいにもどす // high＝3D きれい / light＝3D かるい / 2d
 function webglOK() { try { const c = document.createElement('canvas'); return !!(c.getContext('webgl2') || c.getContext('webgl')); } catch { return false; } }
 async function init3d() {
   if (gfx === '2d' || b3) return;
   if (!webglOK()) { gfx = '2d'; return; }
   try {
     const { Board3D } = await import('./board3d.js');
-    b3 = new Board3D($('#boardWrap'), { quality: gfx, onSlow: gfx === 'high' && !store.get('gfxKeep', '') ? () => { setGfx('light'); toast('動きが重いので、画質を「かるい」にしました（メニューで変えられます）', 4000); } : null });
+    b3 = new Board3D($('#boardWrap'), { quality: gfx });
     $('#boardWrap').classList.add('is3d'); $('#boardWrap').classList.toggle('hiq', gfx === 'high');
     if (room && room.state) render();
   } catch (e) { console.warn('3D が使えないので 2D にします', e); gfx = '2d'; b3 = null; $('#boardWrap').classList.remove('is3d'); }
@@ -289,14 +290,14 @@ wrap.addEventListener('pointermove', e => {
   if (!gest) return;
   if (gest.pinch && ptr.size === 2) {
     const [a, b] = [...ptr.values()], d = Math.hypot(a.x - b.x, a.y - b.y);
-    if (b3) { b3.zoomBy(d / gest.dl, (a.x + b.x) / 2, (a.y + b.y) / 2); gest.dl = d || 1; return; }
+    if (b3) return; // 3Dは真上から固定（広げない）
     Object.assign(B.view, gest.view0); zoomAt(gest.mx, gest.my, gest.k0 * d / gest.d0);
     return;
   }
   if (gest.pinch) return;
   const dx = e.clientX - gest.sx, dy = e.clientY - gest.sy;
   if (!gest.moved && Math.hypot(dx, dy) > 10) { gest.moved = true; clearTimeout(pressT); }
-  if (gest.moved && b3) { b3.panPixels(e.clientX - gest.lx, e.clientY - gest.ly); gest.lx = e.clientX; gest.ly = e.clientY; return; }
+  if (gest.moved && b3) return; // 3Dは真上から固定（ずらさない）
   if (gest.moved && B.view.k > 1.01) {
     const r = svg.getBoundingClientRect(), upp = Math.max(B.vb.w / r.width, B.vb.h / r.height);
     B.view.x = gest.vx + dx * upp; B.view.y = gest.vy + dy * upp; clampView(); applyView();
@@ -313,12 +314,11 @@ const endPtr = e => {
   const i = g.tile; if (i < 0) return;
   if (!canAct() && room?.state?.step === 'reveal') { explain(i); return; } // 結果の時：そのマスの勝負の内訳
   // 小さすぎて押しにくい時は、まず広げる
-  if (canAct() && b3 && b3.hexPx() < 30) { b3.zoomToward(e.clientX, e.clientY, 44 / b3.hexPx()); toast('広げました。もう一度タップして置こう'); return; }
   if (canAct() && !b3 && hexPx() < 26) { zoomAt(e.clientX, e.clientY, Math.min(4, B.view.k * 40 / hexPx()), true); toast('広げました。もう一度タップして置こう'); return; }
   tapTile(i);
 };
 wrap.addEventListener('pointerup', endPtr); wrap.addEventListener('pointercancel', endPtr);
-wrap.addEventListener('wheel', e => { e.preventDefault(); if (b3) { b3.zoomBy(e.deltaY < 0 ? 1.2 : 1 / 1.2, e.clientX, e.clientY); return; } zoomAt(e.clientX, e.clientY, B.view.k * (e.deltaY < 0 ? 1.2 : 1 / 1.2)); }, { passive: false });
+wrap.addEventListener('wheel', e => { e.preventDefault(); if (b3) return; zoomAt(e.clientX, e.clientY, B.view.k * (e.deltaY < 0 ? 1.2 : 1 / 1.2)); }, { passive: false });
 function tileAt(x, y) { if (b3) return b3.pick(x, y); const t = document.elementFromPoint(x, y); const p = t && t.closest && t.closest('polygon.t'); return p ? +p.dataset.i : -1; }
 $('#btnFit').onclick = () => { if (b3) { b3.fit(); return; } B.view = { k: 1, x: 0, y: 0 }; applyView(); };
 
@@ -668,7 +668,7 @@ setInterval(() => {
   }
 }, 250);
 addEventListener('resize', () => updateCoach());
-setInterval(() => { if (b3) $('#btnFit').hidden = !b3.isZoomed(); }, 400);
+setInterval(() => { if (b3) $('#btnFit').hidden = true; }, 400);
 
 // ---------- ボタン ----------
 $('#nick').value = store.get('name', '');

@@ -9,12 +9,13 @@ import * as G from './game.js';
 const SQ = Math.sqrt(3);
 const H = [0.30, 0.36, 0.44, 0.10, 0.38]; // マスの高さ（草原・森・山・湖・ルーン）
 const TOP = ['#b9d585', '#8fbf6e', '#c9b48e', '#6fb2c8', '#cdbff0'];
+const TILE_TINT = ['#ffffff', '#b8d898', '#e8cfa0', '#cfe6f0', '#ece4ff']; // 草の地面モデルに掛ける色（地形ごと）
 const C = c => new THREE.Color(c);
 const ease = t => 1 - Math.pow(1 - t, 3);
 const lerp = (a, b, t) => a + (b - a) * t;
 
 // ---- Meshy のモデル（あれば使う。なければ自作の形） ----
-const MODEL_H = { castle: 0.9, soldier: 0.5, dragon: 1.1, tree: 0.7, chest: 0.3, runestone: 0.75, fairy: 0.3 };
+const MODEL_H = { tile: 0, castle: 0.9, soldier: 0.5, dragon: 1.1, tree: 0.7, chest: 0.3, runestone: 0.75, fairy: 0.3 };
 // 盤面の上で見えやすく：明るさ（色の倍率）と、横の太さ
 const MODEL_TUNE = { tree: { light: 1.6, wide: 1.7 }, chest: { light: 1.9, wide: 1 }, runestone: { light: 1.5, wide: 1.3 }, castle: { light: 1.15, wide: 1 }, soldier: { light: 1.1, wide: 1 } };
 async function loadModels(quality) {
@@ -26,7 +27,7 @@ async function loadModels(quality) {
       const g = await loader.loadAsync(`models/${name}.glb`);
       const obj = g.scene; obj.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; for (const m of [].concat(o.material)) { m.metalness = 0; m.metalnessMap = null; m.roughness = 0.85; if (MODEL_TUNE[name]) m.color.multiplyScalar(MODEL_TUNE[name].light); m.needsUpdate = true; } } }); // 金属あつかいだと暗く見えるので、木や石らしく
       const box = new THREE.Box3().setFromObject(obj), size = box.getSize(new THREE.Vector3());
-      const k = name === 'castle' ? 1.6 / Math.max(0.001, size.x, size.z) : MODEL_H[name] / Math.max(0.001, name === 'dragon' ? Math.max(size.x, size.z) / 2.6 : size.y); // お城は城壁がマスに収まる幅で
+      const k = name === 'tile' ? 1 : name === 'castle' ? 1.6 / Math.max(0.001, size.x, size.z) : MODEL_H[name] / Math.max(0.001, name === 'dragon' ? Math.max(size.x, size.z) / 2.6 : size.y); // お城は城壁がマスに収まる幅で
       obj.scale.setScalar(k); if (MODEL_TUNE[name]) { obj.scale.x *= MODEL_TUNE[name].wide; obj.scale.z *= MODEL_TUNE[name].wide; }
       const box2 = new THREE.Box3().setFromObject(obj), c = box2.getCenter(new THREE.Vector3());
       obj.position.set(-c.x, -box2.min.y, -c.z);
@@ -125,12 +126,12 @@ function dieTexture(v) { // サイコロの目の絵
 }
 
 export class Board3D {
-  constructor(host, { quality = 'high', onSlow = null } = {}) {
-    this.host = host; this.quality = quality; this.onSlow = onSlow; this.perf = [];
+  constructor(host, { quality = 'high' } = {}) {
+    this.host = host; this.quality = quality;
     const hi = quality === 'high';
     this.renderer = new THREE.WebGLRenderer({ antialias: hi, alpha: true, powerPreference: hi ? 'high-performance' : 'low-power' });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, hi ? 2 : 1));
-    this.renderer.shadowMap.enabled = hi; this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, hi ? 3 : 1.5)); // スマホの細かさそのままで描く
+    this.renderer.shadowMap.enabled = hi; this.renderer.shadowMap.type = THREE.PCFSoftShadowMap; this.renderer.shadowMap.autoUpdate = false;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping; this.renderer.toneMappingExposure = 1.05;
     this.canvas = this.renderer.domElement; this.canvas.className = 'b3';
     host.prepend(this.canvas);
@@ -138,19 +139,20 @@ export class Board3D {
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(32, 1, 0.1, 200);
     this.scene.add(new THREE.HemisphereLight('#fff6e0', '#7a8a6a', 1.1));
-    const sun = this.sun = new THREE.DirectionalLight('#fff1d6', 2.2); sun.position.set(-8, 14, 6); sun.castShadow = hi;
-    sun.shadow.mapSize.set(1024, 1024); sun.shadow.bias = -0.0008; sun.shadow.normalBias = 0.02;
+    const sun = this.sun = new THREE.DirectionalLight('#fff1d6', 2.2); sun.position.set(-7, 16, 5); sun.castShadow = hi;
+    sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -0.0008; sun.shadow.normalBias = 0.02;
     this.scene.add(sun, sun.target);
     this.cam = { tx: 0, tz: 0, dist: 20, fit: 20, yaw: 0 };
     this.fx = []; this.lbl = new Map(); this.key = ''; this.models = {}; this.dirty = true; this.lastT = 0;
     this.ray = new THREE.Raycaster(); this.v2 = new THREE.Vector2();
     this.ready = loadModels(quality).then(m => { this.models = m; this.key = ''; this.dirty = true; if (this.st) this.build(this.st); });
-    this.resize(); addEventListener('resize', () => this.resize());
+    // 画面の大きさが変わったら（はじめて見えた時も）、正しい大きさで描きなおす
+    this.resize(); this.ro = new ResizeObserver(() => this.resize()); this.ro.observe(host);
     const loop = t => { this.raf = requestAnimationFrame(loop); this.frame(t); };
     this.raf = requestAnimationFrame(loop);
   }
-  dispose() { cancelAnimationFrame(this.raf); this.renderer.dispose(); this.canvas.remove(); this.labels.remove(); }
-  resize() { const r = this.host.getBoundingClientRect(); if (!r.width) return; this.renderer.setSize(r.width, r.height, false); this.camera.aspect = r.width / r.height; this.camera.updateProjectionMatrix(); this.fitDist(); this.dirty = true; }
+  dispose() { cancelAnimationFrame(this.raf); if (this.ro) this.ro.disconnect(); this.renderer.dispose(); this.canvas.remove(); this.labels.remove(); }
+  resize() { const r = this.host.getBoundingClientRect(); if (!r.width) return; this.renderer.setSize(r.width, r.height, false); this.camera.aspect = r.width / r.height; this.camera.updateProjectionMatrix(); this.fitDist(); this.dirty = true; this.shadowDirty = true; }
   hp(i) { const h = this.m.tiles[i]; return [SQ * (h.q + h.r / 2), 1.5 * h.r]; }
   topY(i) { return this.isCastle(i) ? H[0] + 0.06 : H[this.st.terrain[i]]; }
   isCastle(i) { return this.castles.has(i); }
@@ -191,10 +193,24 @@ export class Board3D {
       this.caps.setColorAt(i, C(TOP[st.terrain[i]]));
     }
     W.add(this.sides, this.caps);
+    // 草の生えた地面のモデル（あれば、自作の上面・側面のかわりに使う）
+    this.tileModel = !!this.models.tile;
+    if (this.tileModel) {
+      W.remove(this.sides, this.caps);
+      const t = toInstanced(this.models.tile, N); t.castShadow = t.receiveShadow = true;
+      for (let i = 0; i < N; i++) { const [x, z] = this.hp(i), h = this.topY(i); mt.makeScale(1.94, h / 0.16, 1.94).setPosition(x, 0, z); t.setMatrixAt(i, mt); t.setColorAt(i, C(TILE_TINT[st.terrain[i]])); }
+      this.caps = this.sides = t; W.add(t);
+      // 色ののせ板：だれの土地か・湖・ルーンの石が、草の上でも分かるように
+      const tg = new THREE.ShapeGeometry(hexShape(0.93)); tg.rotateX(-Math.PI / 2);
+      this.tint = new THREE.InstancedMesh(tg, new THREE.MeshStandardMaterial({ color: '#ffffff', transparent: true, opacity: 0.55, depthWrite: false, roughness: 0.9 }), N);
+      this.tint.renderOrder = 1; this.tint.frustumCulled = false; this.tint.receiveShadow = true;
+      for (let i = 0; i < N; i++) { this.tint.setMatrixAt(i, new THREE.Matrix4().makeScale(0, 0, 0)); this.tint.setColorAt(i, C('#ffffff')); }
+      W.add(this.tint);
+    }
     // 持ち主のふち・光るマス（兵を置ける所）
     const ring = hexRing(0.95, 0.74);
     this.rings = new THREE.InstancedMesh(ring, new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.6 }), N);
-    this.glow = new THREE.InstancedMesh(hexRing(0.9, 0.62), new THREE.MeshBasicMaterial({ color: '#fff3a0', transparent: true, opacity: 0.8, depthWrite: false }), N);
+    this.glow = new THREE.InstancedMesh(hexRing(0.9, 0.62), new THREE.MeshBasicMaterial({ color: '#fff3a0', transparent: true, opacity: 0.75, depthWrite: false }), N);
     this.glow.renderOrder = 2;
     const hide = new THREE.Matrix4().makeScale(0, 0, 0);
     for (let i = 0; i < N; i++) { this.rings.setMatrixAt(i, hide); this.glow.setMatrixAt(i, hide); this.rings.setColorAt(i, C('#ffffff')); }
@@ -237,10 +253,10 @@ export class Board3D {
     // 影の範囲
     const s = this.sun.shadow.camera; s.left = s.bottom = -this.R - 2; s.right = s.top = this.R + 2; s.near = 1; s.far = 50; s.updateProjectionMatrix();
     this.owners = null;
-    if (fresh) { this.cam.tx = 0; this.cam.tz = 0; this.fitDist(); this.cam.dist = this.cam.fit; }
-    this.dirty = true;
+    this.fitDist();
+    this.dirty = true; this.shadowDirty = true;
   }
-  fitDist() { if (!this.R) return; const fov = THREE.MathUtils.degToRad(this.camera.fov), a = this.camera.aspect; const need = (this.R + 1.2) / Math.tan(fov / 2) / Math.min(1, a) * 0.98; this.cam.fit = need; this.cam.min = Math.max(5, need * 0.22); if (this.cam.dist > need) this.cam.dist = need; }
+  fitDist() { if (!this.R) return; const fov = THREE.MathUtils.degToRad(this.camera.fov), a = this.camera.aspect, need = (this.R + 0.7) / Math.tan(fov / 2) / Math.min(1, a); /* 島が画面いっぱいに入る大きさ（お盆のふちは少し切れてよい） */ this.cam.fit = this.cam.dist = need; this.cam.min = need; this.updateCamera(); this.camera.far = need + 20; this.camera.updateProjectionMatrix(); }
 
   // ---- 色をぬる（持ち主） ----
   paint(st, owners) {
@@ -250,11 +266,17 @@ export class Board3D {
       const o = owners[i], t = st.terrain[i];
       if (this.owners && this.owners[i] === o) continue;
       c.set(TOP[t]); if (o >= 0) c.lerp(C(st.players[o].color), t === G.T.PLAIN ? 0.62 : 0.5);
+      if (this.tileModel) {
+        const tc = o >= 0 ? st.players[o].color : t === G.T.LAKE ? '#5fb0d0' : t === G.T.RUNE ? '#b49cf2' : null;
+        const [x, z] = this.hp(i);
+        if (tc) { mt.makeTranslation(x, this.topY(i) + 0.004, z); this.tint.setMatrixAt(i, mt); this.tint.setColorAt(i, C(tc)); } else this.tint.setMatrixAt(i, hide);
+        c.set(TILE_TINT[t]);
+      }
       this.caps.setColorAt(i, c);
       if (o >= 0) { const [x, z] = this.hp(i); mt.makeTranslation(x, this.topY(i) + 0.006, z); this.rings.setMatrixAt(i, mt); this.rings.setColorAt(i, C(st.players[o].color).multiplyScalar(0.62)); }
       else this.rings.setMatrixAt(i, hide);
     }
-    this.caps.instanceColor.needsUpdate = true; this.rings.instanceMatrix.needsUpdate = true; if (this.rings.instanceColor) this.rings.instanceColor.needsUpdate = true;
+    this.caps.instanceColor.needsUpdate = true; if (this.tint) { this.tint.instanceMatrix.needsUpdate = true; this.tint.instanceColor.needsUpdate = true; } this.rings.instanceMatrix.needsUpdate = true; if (this.rings.instanceColor) this.rings.instanceColor.needsUpdate = true;
     // お城の旗の色（取られたら取った人の色に）
     for (const [i, obj] of this.castleObjs || []) { const o = owners[i]; obj.userData.flag.material.color.set(o >= 0 ? st.players[o].color : '#ffffff'); }
     this.owners = owners.slice(); this.dirty = true;
@@ -266,7 +288,7 @@ export class Board3D {
     const hide = new THREE.Matrix4().makeScale(0, 0, 0), mt = new THREE.Matrix4();
     const can = new Set(d.can.map(x => x.i));
     for (let i = 0; i < this.m.N; i++) { if (can.has(i)) { const [x, z] = this.hp(i); mt.makeTranslation(x, this.topY(i) + 0.012, z); this.glow.setMatrixAt(i, mt); } else this.glow.setMatrixAt(i, hide); }
-    this.glow.instanceMatrix.needsUpdate = true; this.glowOn = can.size > 0;
+    this.glow.instanceMatrix.needsUpdate = true;
     this.glow.material.color.set(d.targeting ? '#ff8ad8' : '#fff3a0');
     // 兵のコマ（1マス最大5こ並べ、数は札で）
     let k = 0; const col = new THREE.Color();
@@ -285,7 +307,7 @@ export class Board3D {
     for (const f of d.force) L.push({ key: 'f' + f.i, i: f.i, cls: 'cnt small', html: f.n, color: f.color, dy: 0.45 });
     if (d.target) L.push({ key: 't', i: d.target.i, cls: 'tgt', html: d.target.html, dy: 0.7 });
     this.setLabels(L);
-    this.dirty = true;
+    this.dirty = true; this.shadowDirty = true;
   }
   setLabels(list) {
     const seen = new Set();
@@ -300,6 +322,7 @@ export class Board3D {
   }
   placeLabels() {
     if (!this.lbl.size) return;
+    this.labels.classList.toggle('tiny', this.hexPx() < 34); // マスが小さい時は札も小さく
     const r = this.canvas.getBoundingClientRect(), v = new THREE.Vector3();
     for (const e of this.lbl.values()) {
       const [x, z] = this.hp(e.__i); v.set(x, this.topY(e.__i) + e.__dy, z).project(this.camera);
@@ -309,49 +332,29 @@ export class Board3D {
     }
   }
 
-  // ---- カメラ ----
+  // ---- カメラ：真上から固定。盤面（お盆ごと）を画面にぴったり収める ----
   updateCamera() {
-    const c = this.cam, tilt = THREE.MathUtils.degToRad(lerp(58, 46, 1 - (c.dist - c.min) / Math.max(1, c.fit - c.min)));
-    const lim = this.R + 0.5; c.tx = THREE.MathUtils.clamp(c.tx, -lim, lim); c.tz = THREE.MathUtils.clamp(c.tz, -lim, lim);
-    this.camera.position.set(c.tx, Math.sin(tilt) * c.dist, c.tz + Math.cos(tilt) * c.dist);
-    this.camera.lookAt(c.tx, 0.3, c.tz);
-    this.sun.position.set(c.tx - 8, 14, c.tz + 6); this.sun.target.position.set(c.tx, 0, c.tz);
+    const d = this.cam.dist;
+    this.camera.up.set(0, 0, -1);
+    this.camera.position.set(0, d, 0.0001); this.camera.lookAt(0, 0, 0);
   }
-  panPixels(dx, dy) { const r = this.canvas.getBoundingClientRect(), wpp = 2 * this.cam.dist * Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2)) / r.height; this.cam.tx -= dx * wpp; this.cam.tz -= dy * wpp * 1.25; this.dirty = true; }
-  zoomBy(f, px, py) {
-    const c = this.cam, before = this.groundAt(px, py), nd = THREE.MathUtils.clamp(c.dist / f, c.min, c.fit);
-    c.dist = nd; this.updateCamera(); const after = this.groundAt(px, py);
-    if (before && after) { c.tx += before.x - after.x; c.tz += before.z - after.z; }
-    this.dirty = true;
-  }
-  zoomToward(px, py, f) { const c = this.cam, t0 = performance.now(), d0 = c.dist; const step = t => { const a = Math.min(1, (t - t0) / 260); const want = d0 / Math.pow(f, ease(a)); this.zoomBy(c.dist / want, px, py); if (a < 1) requestAnimationFrame(step); }; requestAnimationFrame(step); }
-  fit() { const c = this.cam, s = { ...c }, t0 = performance.now(); const step = t => { const a = ease(Math.min(1, (t - t0) / 300)); c.dist = lerp(s.dist, c.fit, a); c.tx = lerp(s.tx, 0, a); c.tz = lerp(s.tz, 0, a); this.dirty = true; if (a < 1) requestAnimationFrame(step); }; requestAnimationFrame(step); }
-  // 演出の場所へカメラを動かす／もとにもどす
-  flyTo(i, frac = 0.55, ms = 450) { const c = this.cam, s = { ...c }, [x, z] = i == null ? [0, 0] : this.hp(i), d = Math.max(c.min, c.fit * frac), t0 = performance.now(); this.flying = true; const step = t => { const a = ease(Math.min(1, (t - t0) / ms)); c.tx = lerp(s.tx, x, a); c.tz = lerp(s.tz, z, a); c.dist = lerp(s.dist, d, a); this.dirty = true; if (a < 1) requestAnimationFrame(step); else this.flying = false; }; requestAnimationFrame(step); }
-  saveView() { this.saved = { tx: this.cam.tx, tz: this.cam.tz, dist: this.cam.dist }; }
-  restoreView() { if (!this.saved) return; const c = this.cam, s = { ...c }, to = this.saved, t0 = performance.now(); this.saved = null; const step = t => { const a = ease(Math.min(1, (t - t0) / 500)); c.tx = lerp(s.tx, to.tx, a); c.tz = lerp(s.tz, to.tz, a); c.dist = lerp(s.dist, to.dist, a); this.dirty = true; if (a < 1) requestAnimationFrame(step); }; requestAnimationFrame(step); }
-  isZoomed() { return this.cam.dist < this.cam.fit * 0.97; }
+  // 固定カメラなので、ずらす・広げる・カメラを動かす操作は何もしない
+  panPixels() {} zoomBy() {} zoomToward() {} fit() {} flyTo() {} saveView() {} restoreView() {}
+  isZoomed() { return false; }
   groundAt(px, py) { const r = this.canvas.getBoundingClientRect(); this.v2.set((px - r.left) / r.width * 2 - 1, -((py - r.top) / r.height) * 2 + 1); this.ray.setFromCamera(this.v2, this.camera); const p = new THREE.Vector3(); return this.ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), -0.3), p) ? p : null; }
-  pick(px, py) { if (!this.caps) return -1; const r = this.canvas.getBoundingClientRect(); this.v2.set((px - r.left) / r.width * 2 - 1, -((py - r.top) / r.height) * 2 + 1); this.ray.setFromCamera(this.v2, this.camera); const h = this.ray.intersectObjects([this.caps, this.sides], false)[0]; if (h && h.instanceId != null && this.st.terrain[h.instanceId] !== G.T.LAKE) return h.instanceId; const g = this.groundAt(px, py); if (!g) return -1; let best = -1, bd = 0.95; for (let i = 0; i < this.m.N; i++) { const [x, z] = this.hp(i), d = Math.hypot(x - g.x, z - g.z); if (d < bd) { bd = d; best = i; } } return best >= 0 && this.st.terrain[best] !== G.T.LAKE ? best : -1; }
+  pick(px, py) { if (!this.caps) return -1; const r = this.canvas.getBoundingClientRect(); this.v2.set((px - r.left) / r.width * 2 - 1, -((py - r.top) / r.height) * 2 + 1); this.ray.setFromCamera(this.v2, this.camera); const h = this.ray.intersectObjects(this.tileModel ? [this.caps] : [this.caps, this.sides], false)[0]; if (h && h.instanceId != null && this.st.terrain[h.instanceId] !== G.T.LAKE) return h.instanceId; const g = this.groundAt(px, py); if (!g) return -1; let best = -1, bd = 0.95; for (let i = 0; i < this.m.N; i++) { const [x, z] = this.hp(i), d = Math.hypot(x - g.x, z - g.z); if (d < bd) { bd = d; best = i; } } return best >= 0 && this.st.terrain[best] !== G.T.LAKE ? best : -1; }
   hexPx() { if (!this.m) return 40; const r = this.canvas.getBoundingClientRect(); const a = new THREE.Vector3(this.cam.tx, 0.3, this.cam.tz).project(this.camera), b = new THREE.Vector3(this.cam.tx + SQ, 0.3, this.cam.tz).project(this.camera); return Math.abs(b.x - a.x) / 2 * r.width; }
 
   // ---- 毎フレーム ----
   frame(t) {
     const dt = Math.min(0.05, (t - (this.lastT || t)) / 1000); this.lastT = t;
-    const busy = this.fx.length > 0 || this.glowOn;
-    if (!busy && !this.dirty) return;
-    if (!this.fx.length && !this.dirty && t - (this.lastDraw || 0) < 40) return; // 光るマスだけの時は、少しゆっくり描く
-    // カクつき見守り：続けて描いている時の間隔が長すぎたら知らせる（きれい→かるい に切りかえるため）
-    if (this.onSlow && this.lastDraw && t - this.lastDraw < 500) { this.perf.push(t - this.lastDraw); if (this.perf.length >= 90 || (this.perf.length >= 12 && this.perf.reduce((x, y) => x + y, 0) > 3000)) { const a = this.perf.slice().sort((x, y) => x - y), med = a[a.length >> 1]; this.perf = []; if (med > 48) { const f = this.onSlow; this.onSlow = null; setTimeout(f, 0); } } }
-    this.lastDraw = t;
-    if (!busy && this.quality === 'light' && this.dirty === 'soft') return;
-    this.updateCamera();
-    if (this.glowOn) this.glow.material.opacity = 0.45 + 0.35 * Math.sin(t / 260);
-    for (const r of this.runeObjs || []) if (r.o.userData.gem) { r.o.userData.gem.rotation.y = t / 900; r.o.userData.gem.position.y = 0.55 + Math.sin(t / 600 + r.i) * 0.03; }
+    // 何も変わっていない時は描かない（カメラは固定なので、変わった時と演出中だけ描く）
+    if (!this.fx.length && !this.dirty) return;
     this.fx = this.fx.filter(f => { const p = Math.min(1, (t - (f.t0 ??= t)) / f.dur); f.step(p, dt, t); if (p >= 1) { f.end && f.end(); return false; } return true; });
+    if (this.fx.length || this.shadowDirty) { this.renderer.shadowMap.needsUpdate = true; this.shadowDirty = !!this.fx.length; } // 影は動いた時だけ計算し直す
     this.renderer.render(this.scene, this.camera);
-    this.placeLabels();
-    this.dirty = false;
+    if (this.dirty) this.placeLabels();
+    this.dirty = this.fx.length > 0;
   }
   addFx(dur, step, end) { this.fx.push({ dur, step, end }); }
   tmp(obj) { this.world.add(obj); return () => { this.world.remove(obj); obj.traverse(o => { if (o.geometry) o.geometry.dispose(); }); }; }
@@ -373,6 +376,7 @@ export class Board3D {
   }
   pop(i) { // マスが取られた：ぽんっとはねる
     const mt = new THREE.Matrix4(), [x, z] = this.hp(i), h = this.topY(i);
+    if (this.tileModel) { this.addFx(500, q => { const b = Math.sin(q * Math.PI) * 0.25; mt.makeScale(1.94, (h + b) / 0.16, 1.94).setPosition(x, 0, z); this.caps.setMatrixAt(i, mt); this.caps.instanceMatrix.needsUpdate = true; }); this.particles(this.pos(i, 0.05), { n: 14, color: '#e8d8b0', size: 0.1, spread: 0.9, up: 0.8, life: 600, gravity: -1.5 }); return; }
     this.addFx(500, q => { const b = Math.sin(q * Math.PI) * 0.25; mt.makeScale(1, h + b, 1).setPosition(x, h + b, z); this.sides.setMatrixAt(i, mt); this.sides.instanceMatrix.needsUpdate = true; mt.makeTranslation(x, h + b + 0.001, z); this.caps.setMatrixAt(i, mt); this.caps.instanceMatrix.needsUpdate = true; const r = new THREE.Matrix4(); this.rings.getMatrixAt(i, r); if (r.elements[0]) { r.makeTranslation(x, h + b + 0.006, z); this.rings.setMatrixAt(i, r); this.rings.instanceMatrix.needsUpdate = true; } });
     this.particles(this.pos(i, 0.05), { n: 14, color: '#e8d8b0', size: 0.1, spread: 0.9, up: 0.8, life: 600, gravity: -1.5 });
   }

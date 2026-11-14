@@ -1,5 +1,5 @@
 // ルーンランド：ホーム画面に置けるようにする（画面とプログラムを保存。遊ぶにはネットが必要）
-const CACHE = 'runeland-v8';
+const CACHE = 'runeland-v9';
 const SHELL = ['./', './index.html', './style.css', './app.js', './game.js', './net.js', './ai.js', './audio.js', './icons.js', './board3d.js', './relay-config.js', './icon.svg', './icon-192.png', './apple-touch-icon.png', './manifest.webmanifest'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
