@@ -299,3 +299,23 @@ button.mini { min-height: 32px; padding: 2px 12px; border-radius: 99px; font-siz
 .intro .tb b { font-size: 2.4rem; color: #b25a14; }
 #introBody .moreHint { display: none; }
 #introBody.more .moreHint { display: block; position: sticky; bottom: 0; padding: 6px; font-size: .78rem; font-weight: 800; color: #b25a14; background: linear-gradient(transparent, var(--paper, #fffaf0) 45%); }
+
+/* とりあいのマスの目印 */
+.duelPin { position: absolute; z-index: 3; pointer-events: none; transform: translate(-50%, -50%); }
+.duelPin .ring { position: absolute; left: 50%; top: 50%; width: var(--sz, 50px); height: var(--sz, 50px); transform: translate(-50%, -50%); border-radius: 50%; border: 4px solid #ffd84a; box-shadow: 0 0 0 3px #b25a14, 0 0 18px 6px #ffd84a99; animation: pinring .9s ease-in-out infinite; }
+.duelPin b { position: absolute; left: 50%; bottom: calc(var(--sz, 50px) / 2 + 6px); transform: translateX(-50%); white-space: nowrap; background: #b25a14; color: #fff; font-size: .8rem; padding: 3px 9px; border-radius: 99px; animation: pinbob .7s ease-in-out infinite alternate; }
+.duelPin b::after { content: ""; position: absolute; left: 50%; top: 100%; transform: translateX(-50%); border: 6px solid transparent; border-top-color: #b25a14; }
+@keyframes pinring { 50% { transform: translate(-50%, -50%) scale(1.15); } }
+@keyframes pinbob { to { margin-bottom: 5px; } }
+#duel.atTop, #boardWrap.is3d #duel.atTop { top: 8px; bottom: auto; transform: translateX(-50%); }
+#duel.atBottom, #boardWrap.is3d #duel.atBottom { top: auto; bottom: 8px; transform: translateX(-50%); }
+#duel .dhead .where { margin-left: 6px; color: #b25a14; font-weight: 800; }
+
+/* サイコロの枠：小さめにして、盤面（戦っているマス）をかくさない */
+#duel { width: min(86%, 360px); padding: 6px 10px; max-height: 56%; overflow: hidden; }
+#duel .dhead { font-size: 1rem; }
+#duel ul { gap: 3px; margin: 4px 0 2px; }
+#duel li { min-height: 32px; padding: 2px 8px; border-radius: 10px; }
+#duel .die { width: 26px; height: 26px; } #duel .die-sp { width: 26px; }
+#duel .tot { font-size: 1rem; }
+#duel .res { font-size: .95rem; }

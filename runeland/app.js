@@ -344,7 +344,8 @@ $('#btnFit').onclick = () => { if (b3) { b3.fit(); return; } B.view = { k: 1, x:
 // ---------- 結果の見せ方（順番に） ----------
 let revealDone = '', prevOwners = null, prevGidRound = '', prevRanks = null, animTimers = [];
 function later(ms, f) { animTimers.push(setTimeout(f, ms)); }
-function skipAnim() { animTimers.forEach(clearTimeout); animTimers = []; if (b3) b3.restoreView(); duelTimers.forEach(clearInterval); duelTimers = []; $('#duel').hidden = true; B.anim = false; if (room?.state?.last) celebrate(room.state); render(); }
+function skipAnim() {
+  $('#duelPin').hidden = true; animTimers.forEach(clearTimeout); animTimers = []; if (b3) b3.restoreView(); duelTimers.forEach(clearInterval); duelTimers = []; $('#duel').hidden = true; B.anim = false; if (room?.state?.last) celebrate(room.state); render(); }
 function flashTile(i, cls) { const p = el('polygon', { class: cls, points: B.tiles[i].getAttribute('points') }, $('#lOver')); $('#lOver').__h = null; setTimeout(() => p.remove(), 1600); if (b3) b3.flash(i, { burn: '#ff5a1f', shine: '#9fe0ff', flash: '#ffffff' }[cls] || '#ffffff'); }
 function banner(text, sub = '', icon = '', subHtml = false) { const b = $('#banner'); b.innerHTML = `<div>${icon ? ic(icon) + ' ' : ''}${esc(text)}${sub ? `<small>${subHtml ? sub : esc(sub)}</small>` : ''}</div>`; }
 let celebrated = '';
@@ -374,7 +375,14 @@ function playDuel(st, d) {
     <ul>${rows.map((r, k) => r.land ? `<li data-k="${k}" class="land">${ic(st.terrain[i] === G.T.RUNE ? 'rune' : 'shield')}<span class="nm">土地の守り</span><span class="bs">${tileName(st, i)}</span><span class="die-sp"></span><b class="tot">= ${r.guard}</b></li>` : `<li data-k="${k}"><i class="dot" style="background:${st.players[r.p].color}"></i><span class="nm">${nameHtml(st.players[r.p])}${r.own ? '<small>守る</small>' : ''}</span>
       <span class="bs">${r.own ? `兵${r.base}＋守り${r.guard}` : `兵${r.base}`}</span>${r.dice == null ? '<span class="die-sp"></span>' : `<span class="dw">${dieSvg(0)}</span>`}<b class="tot">${r.dice == null ? '= ' + total(r) : ''}</b></li>`).join('')}</ul>
     <p class="res"></p>`;
-  box.hidden = false; flashTile(i, 'shine'); if (b3) { b3.flyTo(i, 0.45); b3.fxFocus(i); }
+  box.hidden = false; flashTile(i, 'shine'); if (b3) { b3.flyTo(i, 0.45); b3.fxFocus(i, duelMs(d)); }
+  // どのマスで戦っているか：マスの上に目印。サイコロの枠は、そのマスと反対側に出す
+  const wr = $('#boardWrap').getBoundingClientRect();
+  let sp; if (b3) sp = b3.screenPos(i); else { const r = B.tiles[i].getBoundingClientRect(); sp = { x: r.left + r.width / 2, y: r.top + r.height / 2, size: r.width }; }
+  const px = sp.x - wr.left, py = sp.y - wr.top, sz = Math.max(30, Math.min(90, sp.size * 1.15));
+  const pin = $('#duelPin'); pin.hidden = false; pin.style.left = px + 'px'; pin.style.top = py + 'px'; pin.style.setProperty('--sz', sz + 'px');
+  const below = py < wr.height / 2; box.classList.toggle('atTop', !below); box.classList.toggle('atBottom', below);
+  box.querySelector('.dhead small').insertAdjacentHTML('beforeend', `<span class="where">${below ? '▲ 上の光っているマス' : '▼ 下の光っているマス'}</span>`);
   let tt = 500;
   rows.forEach((r, k) => {
     if (r.dice == null) return;
@@ -400,7 +408,7 @@ function playDuel(st, d) {
     rows.forEach((r, k) => { if (r.p === winner) box.querySelector(`li[data-k="${k}"]`).classList.add('win'); });
     res.innerHTML = text; sfx.rankUp();
   });
-  later(duelMs(d) - 150, () => { box.hidden = true; });
+  later(duelMs(d) - 150, () => { box.hidden = true; $('#duelPin').hidden = true; });
 }
 // ---- 勝負の内訳（なぜ取れた／取れなかった） ----
 function fightText(st, f, pi) {
@@ -446,6 +454,7 @@ function playReveal(st) {
   const from = prevOwners && prevGidRound === st.gid + ':' + L.round ? prevOwners.slice() : null;
   if (!from) { celebrate(st); return; }
   B.anim = true; $('#toast').innerHTML = ''; let burnedShown = false;
+  if (!b3 && B.view.k > 1.01) { B.view = { k: 1, x: 0, y: 0 }; applyView(); } // 結果は盤面全体で見せる
   const disp = from; paint(st, disp); drawOverlay();
   if (b3) b3.saveView();
   sfx.hush();

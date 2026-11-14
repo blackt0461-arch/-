@@ -580,8 +580,9 @@ export class Board3D {
       }, () => { rm(); }, true);
     }
   }
-  fxFocus(i) { // とりあいのマスに光の輪
+  screenPos(i) { const [x, z] = this.hp(i), v = new THREE.Vector3(x, this.topY(i), z).project(this.camera), r = this.canvas.getBoundingClientRect(); return { x: r.left + (v.x + 1) / 2 * r.width, y: r.top + (1 - v.y) / 2 * r.height, size: this.hexPx() }; }
+  fxFocus(i, dur = 2200) { // とりあいのマスに光の輪
     const ring = new THREE.Mesh(new THREE.TorusGeometry(1.05, 0.05, 6, 6), new THREE.MeshBasicMaterial({ color: '#ffd84a', transparent: true, opacity: 0.9, depthWrite: false })); ring.rotation.x = Math.PI / 2; ring.rotation.z = Math.PI / 6; ring.position.copy(this.pos(i, 0.05)); const rm = this.tmp(ring);
-    this.addFx(2200, (q, dt, t) => { ring.material.opacity = 0.9 * (0.5 + 0.5 * Math.sin(t / 120)) * (q > 0.85 ? (1 - q) / 0.15 : 1); ring.position.y = this.topY(i) + 0.05 + Math.sin(t / 200) * 0.03; }, rm);
+    this.addFx(dur, (q, dt, t) => { ring.material.opacity = 0.9 * (0.5 + 0.5 * Math.sin(t / 120)) * (q > 0.85 ? (1 - q) / 0.15 : 1); ring.position.y = this.topY(i) + 0.05 + Math.sin(t / 200) * 0.03; }, rm);
   }
 }
