@@ -16,7 +16,7 @@ const ease = t => 1 - Math.pow(1 - t, 3);
 const lerp = (a, b, t) => a + (b - a) * t;
 
 // ---- Meshy のモデル（あれば使う。なければ自作の形） ----
-const MODEL_H = { tile: 0, castle: 0.9, soldier: 0.75, dragon: 1.1, tree: 0.8, chest: 0.45, runestone: 1.0, fairy: 0.3, mountain: 0.65 };
+const MODEL_H = { tile: 0, castle: 0.9, soldier: 0.75, dragon: 1.1, tree: 0.8, chest: 0.6, runestone: 1.0, fairy: 0.3, mountain: 0.65 };
 // 盤面の上で見えやすく：明るさ（色の倍率）と、横の太さ
 const MODEL_TUNE = { tree: { light: 1, wide: 1 }, chest: { light: 1, wide: 1 }, runestone: { light: 1, wide: 1 }, castle: { light: 1, wide: 1 }, soldier: { light: 1.1, wide: 1 } };
 // 模様の画像を、画面に出る大きさに合わせて小さくする（盤面の物は画面で数十〜数百ピクセルなので、1024 あれば見た目は変わらない。スマホの画像用メモリが大きく減る）
@@ -344,7 +344,7 @@ export class Board3D {
     // 宝箱
     const want = new Set(d.chests);
     for (const [i, o] of this.chestObjs) if (!want.has(i)) { this.world.remove(o); this.chestObjs.delete(i); }
-    for (const i of want) if (!this.chestObjs.has(i)) { const o = this.models.chest ? this.models.chest.clone() : procChest(); o.traverse(c => { if (c.isMesh) c.castShadow = true; }); const [x, z] = this.hp(i); o.position.set(x + 0.25, this.topY(i), z + 0.2); o.rotation.y = -0.5; this.world.add(o); this.chestObjs.set(i, o); }
+    for (const i of want) if (!this.chestObjs.has(i)) { const o = this.models.chest ? this.models.chest.clone() : procChest(); o.traverse(c => { if (c.isMesh) c.castShadow = true; }); const glow = new THREE.Mesh(new THREE.RingGeometry(0.3, 0.46, 24), new THREE.MeshBasicMaterial({ color: '#ffd84a', transparent: true, opacity: 0.85, depthWrite: false })); glow.rotation.x = -Math.PI / 2; glow.position.y = 0.012; o.add(glow); /* 宝箱の足もとに金色の輪（見つけやすく） */ const [x, z] = this.hp(i); o.position.set(x + 0.25, this.topY(i), z + 0.2); o.rotation.y = -0.5; this.world.add(o); this.chestObjs.set(i, o); }
     // 数字の札（HTML）
     const L = [];
     for (const c of d.can) if (c.need != null) L.push({ key: 'n' + c.i, i: c.i, cls: 'need', html: c.need, dy: 0 });
@@ -449,6 +449,15 @@ export class Board3D {
     if (k === 'hero') { for (let j = 0; j < 3; j++) { const sw = new THREE.Group(); const bl = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.7, 0.02), new THREE.MeshStandardMaterial({ color: '#e8eef5', metalness: 0.8, roughness: 0.2, emissive: '#fff3b0', emissiveIntensity: 0.4 })); bl.position.y = 0.35; const gd = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.05, 0.05), new THREE.MeshStandardMaterial({ color: '#c4862a', metalness: 0.5 })); gd.position.y = 0.72; sw.add(bl, gd); sw.rotation.z = Math.PI; sw.scale.setScalar(1.8); const off = new THREE.Vector3(Math.cos(j * 2.1) * 0.45, 0, Math.sin(j * 2.1) * 0.45); const rm = this.tmp(sw); this.addFx(1300 + j * 120, q => { const f = Math.min(1, q / 0.5); sw.position.copy(home).add(off).add(new THREE.Vector3(0, 0.8 + (1 - ease(f)) * 4, 0)); if (q > 0.5 && !sw.userData.hit) { sw.userData.hit = 1; this.particles(home.clone().add(off), { n: 16, color: '#fff1a0', size: 0.12, up: 1.2, life: 600 }); } }, rm, true); } this.flash(this.castleOf(pi), '#fff3b0', 1300); return; }
     if (k === 'dice') { const v = data.value || 1, faces = [1, 2, 3, 4, 5, 6].map(n => new THREE.MeshStandardMaterial({ map: dieTexture(n), roughness: 0.5 })); const cube = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.5), [faces[1], faces[5], faces[v - 1], faces[3], faces[2], faces[4]]); cube.castShadow = true; const rm = this.tmp(cube); this.addFx(1500, q => { const f = Math.min(1, q / 0.6); cube.position.copy(home).add(new THREE.Vector3(0.5, 0.25 + Math.abs(Math.sin(f * Math.PI * 2.5)) * (1 - f) * 2.5, 0.5)); cube.rotation.set((1 - f) * 9, (1 - f) * 5, (1 - f) * 7); cube.material.forEach(m => { m.transparent = q > 0.85; m.opacity = q > 0.85 ? (1 - q) / 0.15 : 1; }); }, rm, true); return; }
     if (k === 'storm') { const cloud = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 8), new THREE.MeshStandardMaterial({ color: '#6b7380', transparent: true, opacity: 0.75, roughness: 1 })); cloud.scale.set(this.R * 0.7, 0.5, this.R * 0.7); cloud.position.set(0, 4, 0); const rm = this.tmp(cloud); this.addFx(1800, (q, dt, t) => { cloud.rotation.y = t / 500; cloud.material.opacity = 0.75 * Math.sin(q * Math.PI); }, rm); for (let j = 0; j < 4; j++) setTimeout(() => this.particles(new THREE.Vector3((Math.random() - .5) * this.R, 3.5, (Math.random() - .5) * this.R), { n: 60, color: '#bcd7e8', size: 0.08, spread: 2.5, up: -3, life: 900, gravity: -4 }), j * 250); return; }
+    if (k === 'thunder') { const at = this.pos(data.target ?? this.castleOf(pi)); const bolt = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.12, 9, 6), new THREE.MeshBasicMaterial({ color: '#fff6a0', transparent: true, opacity: 0.95 })); bolt.position.copy(at).add(new THREE.Vector3(0, 4.5, 0)); const rm = this.tmp(bolt); this.addFx(700, q => { bolt.material.opacity = (Math.sin(q * 40) > 0 ? 0.95 : 0.3) * (1 - q); bolt.scale.x = bolt.scale.z = 1 + Math.sin(q * 30) * 0.5; }, rm); this.flash(data.target, '#fff6a0', 900); this.particles(at.clone().add(new THREE.Vector3(0, 0.1, 0)), { n: 30, color: '#ffe066', size: 0.14, up: 2.2, spread: 1.2, life: 800 }); return; }
+    if (k === 'knights') { const ring = new THREE.Mesh(new THREE.TorusGeometry(1, 0.06, 6, 6), new THREE.MeshBasicMaterial({ color: '#ffd84a', transparent: true, opacity: 0.9, depthWrite: false })); ring.rotation.x = Math.PI / 2; ring.rotation.z = Math.PI / 6; ring.position.copy(home).add(new THREE.Vector3(0, 0.1, 0)); const rm = this.tmp(ring); this.addFx(1300, q => { ring.scale.setScalar(1 + q * 4.2); ring.material.opacity = 0.9 * (1 - q); }, rm); this.particles(home.clone().add(new THREE.Vector3(0, 0.2, 0)), { n: 40, color: '#ffe8a0', size: 0.12, spread: 2.4, up: 0.8, life: 1000, gravity: -0.5 }); return; }
+    if (k === 'catapult') { const from = home.clone().add(new THREE.Vector3(0, 0.6, 0)), to = this.pos(data.target ?? 0, 0.1); const stone = new THREE.Mesh(new THREE.DodecahedronGeometry(0.2), new THREE.MeshStandardMaterial({ color: '#9a9288', roughness: 1, flatShading: true })); stone.castShadow = true; const rm = this.tmp(stone); let hit = false; this.addFx(1300, (q, dt) => { const f = Math.min(1, q / 0.75); stone.position.lerpVectors(from, to, f); stone.position.y += Math.sin(f * Math.PI) * 3; stone.rotation.x += dt * 8; stone.visible = f < 1; if (f >= 1 && !hit) { hit = true; this.flash(data.target, '#ffcf8a', 800); this.particles(to.clone(), { n: 40, color: '#c9b48e', size: 0.14, up: 2, spread: 1.4, life: 900 }); } }, rm, true); return; }
+    if (k === 'seal') { const at = this.pos(this.castleOf(data.owner ?? 0), 0.5); const ring = new THREE.Mesh(new THREE.TorusGeometry(0.75, 0.08, 8, 32), new THREE.MeshStandardMaterial({ color: '#b48cff', emissive: '#7a4fd6', emissiveIntensity: 1.2, transparent: true })); ring.position.copy(at); ring.rotation.x = Math.PI / 2; const rm = this.tmp(ring); this.addFx(1500, (q, dt, t) => { ring.rotation.z = t / 200; ring.scale.setScalar(1.6 - Math.min(1, q * 2) * 0.6); ring.material.opacity = q > 0.8 ? (1 - q) / 0.2 : 1; }, rm); this.particles(at, { n: 30, color: '#c9a8ff', size: 0.12, up: 1, spread: 1, life: 1200, gravity: -0.3 }); return; }
+    if (k === 'thief') { const from = this.pos(this.castleOf(data.owner ?? 0), 0.6), to = home.clone().add(new THREE.Vector3(0, 0.6, 0)); for (let j = 0; j < 6; j++) { const coin = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 0.04, 14), new THREE.MeshStandardMaterial({ color: '#f2c25a', metalness: 0.6, roughness: 0.3, emissive: '#7a5a10', emissiveIntensity: 0.3 })); const rm = this.tmp(coin); const d0 = j * 0.08; this.addFx(1500, (q, dt, t) => { const f = Math.max(0, Math.min(1, (q - d0) / 0.7)); coin.position.lerpVectors(from, to, ease(f)); coin.position.y += Math.sin(f * Math.PI) * 2; coin.rotation.x = t / 80; coin.visible = f > 0 && f < 1; }, rm, true); } return; }
+    if (k === 'swap') { if (data.target != null) { this.flash(data.target, this.st.players[pi].color, 1200); this.particles(this.pos(data.target, 0.2), { n: 36, color: this.st.players[pi].color, size: 0.14, up: 1.8, spread: 1, life: 1000 }); } return; }
+    if (k === 'wrath') return this.dragonFly(data.tiles || []);
+    if (k === 'legend') { const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.7, 6, 16, 1, true), new THREE.MeshBasicMaterial({ color: '#ffe066', transparent: true, opacity: 0.6, depthWrite: false, side: THREE.DoubleSide })); beam.position.copy(home).add(new THREE.Vector3(0, 3, 0)); const rm = this.tmp(beam); this.addFx(1800, q => { beam.material.opacity = 0.6 * Math.sin(q * Math.PI); beam.scale.x = beam.scale.z = 0.5 + q; }, rm); this.particles(home.clone().add(new THREE.Vector3(0, 0.4, 0)), { n: 60, color: '#fff1a0', size: 0.14, up: 3, spread: 1.4, life: 1500, gravity: -0.4 }); return; }
+    if (k === 'quake') { const W = this.world, y0 = W.position.clone(); this.addFx(1400, (q, dt, t) => { const a = (1 - q) * 0.12; W.position.set(y0.x + Math.sin(t / 25) * a, y0.y, y0.z + Math.cos(t / 31) * a); if (q >= 1) W.position.copy(y0); }, () => W.position.copy(y0)); for (const i of data.tiles || []) { this.flash(i, '#c9a27a', 1200); this.particles(this.pos(i, 0.1), { n: 16, color: '#b9a080', size: 0.12, up: 1.2, spread: 0.8, life: 900 }); } return; }
     if (k === 'treasure') { for (let j = 0; j < 3; j++) { const gem = new THREE.Mesh(new THREE.OctahedronGeometry(0.26), new THREE.MeshStandardMaterial({ color: '#9ee0e4', emissive: '#2f8a96', emissiveIntensity: 0.8, metalness: 0.3, roughness: 0.2 })); const rm = this.tmp(gem); const a = j * 2.1; this.addFx(1400, (q, dt, t) => { gem.position.copy(home).add(new THREE.Vector3(Math.cos(a + q * 4) * 0.5 * q, 0.6 + Math.sin(q * Math.PI) * 1.4, Math.sin(a + q * 4) * 0.5 * q)); gem.rotation.y = t / 120; gem.scale.setScalar(q > 0.8 ? (1 - q) / 0.2 : 1); }, rm); } this.particles(home.clone().add(new THREE.Vector3(0, 0.5, 0)), { n: 30, color: '#bff4ff', size: 0.1, up: 2, life: 1100 }); return; }
   }
   fxEvent(k, data = {}) {
@@ -463,6 +472,38 @@ export class Board3D {
     if (o && o.userData.lid) { const lid = o.userData.lid; this.addFx(900, q => { lid.rotation.x = -ease(Math.min(1, q * 2)) * 1.6; }); }
     else if (o) { const y0 = o.position.y; this.addFx(700, q => { o.position.y = y0 + Math.sin(q * Math.PI) * 0.4; o.rotation.y = -0.5 + q * 6.28; }); }
     this.particles(at, { n: 40, color: '#ffe066', size: 0.12, up: 2.2, spread: 0.8, life: 1100 });
+  }
+  // ---- 合戦：兵がとなりの自分の土地から行進して、ぶつかり、取ったら旗を立てる ----
+  marchSoldier(color) {
+    const g = new THREE.Group(), src = this.models.soldier;
+    const body = src ? src.clone() : procSoldier();
+    body.traverse(c => { if (c.isMesh) { c.castShadow = true; if (!src || /shield/i.test(c.name + ' ' + [].concat(c.material).map(m => m.name).join(' '))) { c.material = [].concat(c.material).map(m => { const n = m.clone(); n.color.set(color); n.map = null; return n; }); if (c.material.length === 1) c.material = c.material[0]; } } });
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.26, 0.05, 18), new THREE.MeshStandardMaterial({ color })); base.position.y = 0.025; g.add(base); body.position.y = 0.04; g.add(body);
+    return g;
+  }
+  clearFlags() { for (const f of this.capFlags || []) this.world.remove(f); this.capFlags = []; this.dirty = true; this.shadowDirty = true; }
+  plantFlag(i, color) {
+    const g = new THREE.Group(), pole = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.8, 6), new THREE.MeshStandardMaterial({ color: '#5b4636' })); pole.position.y = 0.4; g.add(pole);
+    const cg = new THREE.PlaneGeometry(0.42, 0.28); cg.translate(0.21, 0, 0); const cloth = new THREE.Mesh(cg, new THREE.MeshStandardMaterial({ color, side: THREE.DoubleSide, emissive: color, emissiveIntensity: 0.15 })); cloth.position.y = 0.66; cloth.rotation.x = -0.4; g.add(cloth);
+    g.traverse(c => { if (c.isMesh) c.castShadow = true; });
+    const at = this.pos(i); g.position.copy(at); g.position.x -= 0.3; this.world.add(g); (this.capFlags ||= []).push(g);
+    this.addFx(450, q => { g.position.y = at.y + (1 - ease(q)) * 2.5; g.scale.setScalar(0.6 + 0.4 * q); }, () => { this.particles(at.clone().add(new THREE.Vector3(-0.3, 0.05, 0)), { n: 14, color: '#e8d8b0', size: 0.1, up: 1, spread: 0.7, life: 600 }); }, true);
+  }
+  // fights：[{ i, w（攻め手）, r（結果）, from（行進を始めるマス）}]。ms：行進の長さ
+  fxBattle(fights, ms = 900) {
+    this.clearFlags();
+    for (const f of fights) {
+      const color = this.st.players[f.w].color, s = this.marchSoldier(color), rm = this.tmp(s);
+      const from = this.pos(f.from), to = this.pos(f.i), dir = Math.atan2(to.x - from.x, to.z - from.z);
+      s.rotation.y = dir; let clashed = false;
+      this.addFx(ms + 700, (q, dt, t) => {
+        const tt = q * (ms + 700), f1 = Math.min(1, tt / ms), p = from.clone().lerp(to, ease(f1) * 0.82);
+        s.position.copy(p); s.position.y = lerp(from.y, to.y, f1) + Math.abs(Math.sin(tt / 70)) * 0.08 * (f1 < 1 ? 1 : 0);
+        if (f1 >= 1 && !clashed) { clashed = true; this.particles(to.clone().add(new THREE.Vector3(0, 0.4, 0)), { n: 26, color: '#fff3c0', size: 0.12, up: 1.6, spread: 1.6, life: 500, gravity: -3 }); this.particles(to.clone().add(new THREE.Vector3(0, 0.05, 0)), { n: 14, color: '#c9b48e', size: 0.12, up: 0.6, spread: 1.2, life: 700 }); }
+        if (f1 >= 1 && f.r !== 'take') { const k = Math.min(1, (tt - ms) / 400); s.rotation.x = -k * 1.4; } // 負けた兵は倒れる
+        if (f1 >= 1 && f.r === 'take') s.position.y += Math.abs(Math.sin((tt - ms) / 90)) * 0.12; // 勝った兵はとびはねる
+      }, () => { rm(); }, true);
+    }
   }
   fxFocus(i) { // とりあいのマスに光の輪
     const ring = new THREE.Mesh(new THREE.TorusGeometry(1.05, 0.05, 6, 6), new THREE.MeshBasicMaterial({ color: '#ffd84a', transparent: true, opacity: 0.9, depthWrite: false })); ring.rotation.x = Math.PI / 2; ring.rotation.z = Math.PI / 6; ring.position.copy(this.pos(i, 0.05)); const rm = this.tmp(ring);

@@ -166,7 +166,7 @@ export class Room {
     Object.assign(ns, { gid: st.gid, hostId: this.id, seq: st.seq, step: ns.phase === 'end' ? 'end' : 'reveal' });
     this.state = ns; delete this.plans[st.round];
     // 結果を見せる時間：起きたことが多いほど少し長く（4〜12秒）
-    const L = ns.last; this.deadline = this.now() + Math.min(24000, Math.max(REVEAL_MS, 5500 + L.log.length * 650 + L.log.filter(l => l.card === 'dragon').length * 1500 + (L.event && L.event.k === 'raid' ? 1500 : 0) + L.changed.length * 60 + duelBudget(L) + Math.min(4, L.opened.length) * 800 + (L.event ? 1400 : 0)));
+    const L = ns.last; this.deadline = this.now() + Math.min(24000, Math.max(REVEAL_MS, 5500 + L.log.length * 650 + L.log.filter(l => l.card === 'dragon' || l.card === 'wrath').length * 1500 + ((L.fights || []).some(f => f.w >= 0) ? 1700 : 0) + (L.event && L.event.k === 'raid' ? 1500 : 0) + L.changed.length * 60 + duelBudget(L) + Math.min(4, L.opened.length) * 800 + (L.event ? 1400 : 0)));
     this.got = [];
     this.broadcast();
   }

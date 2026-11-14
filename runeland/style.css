@@ -252,3 +252,5 @@ button.mini { min-height: 32px; padding: 2px 12px; border-radius: 99px; font-siz
 .b3labels.tiny .cnt { min-width: 18px; height: 18px; line-height: 15px; font-size: 11px; border-width: 1.5px; }
 .b3labels.tiny .cnt.small { min-width: 14px; height: 14px; line-height: 11px; font-size: 9px; }
 .b3labels.tiny .pill { font-size: 8px; padding: 0 4px; }
+.hand { position: relative; }
+.hand .sealed { position: absolute; inset: 0; z-index: 2; display: flex; align-items: center; justify-content: center; gap: 6px; background: #f4eeffe6; border: 2px solid #7a4fd6; border-radius: 12px; font-size: .8rem; font-weight: 800; color: #4a2f8a; }

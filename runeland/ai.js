@@ -51,8 +51,10 @@ export function aiPlan(st, pi, level = 'normal', r = Math.random) {
     if (portal) return true;
     if (st.owner[i] === pi) return true;
     if (!hasLand) return st.owner[i] === -1;
-    return m.nb[i].some(j => st.owner[j] === pi);
+    if (m.nb[i].some(j => st.owner[j] === pi)) return true;
+    return !!knightsOn && m.nb[i].some(j => m.nb[j].some(k => st.owner[k] === pi));
   };
+  let knightsOn = false;
   // カードを選ぶ
   let card = null;
   const hand = p.hand.map((k, i) => ({ k, i }));
@@ -76,12 +78,25 @@ export function aiPlan(st, pi, level = 'normal', r = Math.random) {
       for (const i of myTiles) { const val = (st.terrain[i] === G.T.RUNE ? 4 : 0) + (G.isCastle(st, i) ? 3 : 0); const t = threat(i) * (val ? 1 : 0); if (t > bt) { bt = t; best = i; } }
       if (best >= 0) card = { ...find('shield'), target: best };
     }
+    // 新しいカード
+    const myRank = G.ranking(st).findIndex(x => x.pi === pi), n = st.players.length;
+    const leaderTile = (filter = () => true) => { let best = -1, bv = -1; st.owner.forEach((o, i) => { if (o !== sv.leader || o === pi || !filter(i)) return; const v = tileValue(st, i, pi, sv, level) + (m.nb[i].some(j => st.owner[j] === pi) ? 2 : 0); if (v > bv) { bv = v; best = i; } }); return best; };
+    if (!card && find('legend')) card = { ...find('legend'), target: null };
+    if (!card && find('wrath') && sv.leader !== pi) card = { ...find('wrath'), target: null };
+    if (!card && find('quake') && myRank >= 1 && n > 1) card = { ...find('quake'), target: null };
+    if (!card && find('swap') && sv.leader !== pi) { const t = leaderTile(i => !G.isCastle(st, i)); if (t >= 0) card = { ...find('swap'), target: t }; }
+    if (!card && find('thief') && sv.leader !== pi) { const t = leaderTile(); if (t >= 0) card = { ...find('thief'), target: t }; }
+    if (!card && find('thunder')) { let best = -1, bv = 0; st.owner.forEach((o, i) => { if (o === pi || st.terrain[i] === G.T.LAKE || !placeable(i, false)) return; const v = tileValue(st, i, pi, sv, level) * (G.defenseOf(st, i) + (o >= 0 ? 1 : 0)); if (v > bv) { bv = v; best = i; } }); if (best >= 0) card = { ...find('thunder'), target: best }; }
+    if (!card && find('catapult')) { let best = -1, bv = 0; st.owner.forEach((o, i) => { if (o === pi || st.terrain[i] === G.T.LAKE) return; const v = tileValue(st, i, pi, sv, level) / Math.max(1, need(st, i, pi, sv, level) - 3); if (v > bv) { bv = v; best = i; } }); if (best >= 0) card = { ...find('catapult'), target: best }; }
+    if (!card && find('knights')) card = { ...find('knights'), target: null };
+    if (!card && find('seal') && sv.leader !== pi) { const t = leaderTile(); if (t >= 0) card = { ...find('seal'), target: t }; }
     if (!card && find('hero')) card = { ...find('hero'), target: null };
     if (!card && find('dice')) card = { ...find('dice'), target: null };
     if (!card && find('portal')) card = { ...find('portal'), target: null }; // 兵 +2 として使う
     if (!card && find('storm') && st.players.length >= 3) card = { ...find('storm'), target: null };
   }
   const portal = card && card.k === 'portal' && (!hasLand || card.far);
+  knightsOn = !!(card && card.k === 'knights');
   let left = sv.troops[pi] + G.cardTroops(st, pi, card && card.k);
   const place = new Map();
   const put = (i, n) => { n = Math.min(n, left); if (n <= 0) return; place.set(i, (place.get(i) || 0) + n); left -= n; };
@@ -97,6 +112,8 @@ export function aiPlan(st, pi, level = 'normal', r = Math.random) {
   for (let i = 0; i < st.owner.length; i++) {
     if (st.owner[i] === pi || !placeable(i, portal)) continue;
     if (card && card.k === 'dragon' && card.target === i) { cand.push({ i, v: tileValue(st, i, pi, sv, level), n: G.defenseOf(st, i) + 1 }); continue; }
+    if (card && card.k === 'thunder' && card.target === i) { cand.push({ i, v: tileValue(st, i, pi, sv, level) + 1, n: Math.max(1, need(st, i, pi, sv, level) - G.defenseOf(st, i) - (st.owner[i] >= 0 ? 1 : 0)) }); continue; }
+    if (card && card.k === 'catapult' && card.target === i) { cand.push({ i, v: tileValue(st, i, pi, sv, level) + 1, n: Math.max(1, need(st, i, pi, sv, level) - 3) }); continue; }
     const n = need(st, i, pi, sv, level);
     cand.push({ i, v: tileValue(st, i, pi, sv, level), n });
   }

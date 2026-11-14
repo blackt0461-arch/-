@@ -4,17 +4,29 @@
 export const T = { PLAIN: 0, FOREST: 1, MOUNTAIN: 2, LAKE: 3, RUNE: 4 };
 export const DEF = [0, 1, 2, 0, 2]; // 土地の守り
 export const CASTLE_DEF = 3, CASTLE_PT = 2, RUNE_PT = 3, BONUS_PT = 2;
-export const HAND_MAX = 3, START_CARDS = 2;
+export const HAND_MAX = 5, HAND_DEAL = 3, START_CARDS = 3; // 手札は毎ラウンド3枚配りなおし（宝箱などで足されることがある）
 export const COLORS = ['#e8483b', '#3a7be0', '#f2b631', '#3fae5a', '#a05ad6', '#f07fb4', '#22b5c4', '#f08a2c',
   '#7a5230', '#9bc53d', '#5b6ee1', '#d94f8c', '#2e8b74', '#c9a227', '#8c8c8c', '#4b3f9e'];
 export const CARDS = {
-  dragon: { name: '炎の竜', icon: 'dragon', w: 3, target: 'any', text: '選んだマスと、となりの同じ人のマス2つまでを、空き地にもどす（お城はのぞく）' },
-  shield: { name: '守りの結界', icon: 'shield', w: 3, target: 'own', text: '選んだ自分のマスと、そのとなりの自分のマスは、このラウンド取られない' },
+  dragon: { name: '炎の竜', icon: 'dragon', w: 3, target: 'any', ask: '燃やしたい相手のマス', text: '選んだマスと、となりの同じ人のマス2つまでを、空き地にもどす（お城はのぞく）' },
+  shield: { name: '守りの結界', icon: 'shield', w: 3, target: 'own', ask: '守りたい自分のマス', text: '選んだ自分のマスと、そのとなりの自分のマスは、このラウンド取られない' },
   portal: { name: '転移の門', icon: 'portal', w: 3, target: null, text: 'このラウンドは、どこにでも兵を置ける。兵 ＋2' },
   hero: { name: '勇者の加勢', icon: 'hero', w: 3, target: null, text: 'このラウンドの兵 ＋4' },
   dice: { name: '運命のサイコロ', icon: 'dice', w: 4, target: null, text: 'このラウンドの兵 ＋1〜6' },
   storm: { name: '大嵐', icon: 'storm', w: 2, target: null, text: 'ほかの全員の、いちばん多く兵を置いたマスで、兵が2減る' },
   treasure: { name: '竜の宝', icon: 'treasure', w: 2, target: null, text: 'すぐに2点もらえる' },
+  // 攻め
+  thunder: { name: '雷の槍', icon: 'thunder', w: 3, target: 'any', ask: '守りを0にしたいマス', text: '選んだマスの守り（持ち主+1・土地の守り）が、このラウンドだけ0になる' },
+  knights: { name: '騎士団', icon: 'knights', w: 3, target: null, text: 'このラウンドは、自分の土地から2マス先まで兵を置ける。兵 ＋3' },
+  catapult: { name: '投石機', icon: 'catapult', w: 3, target: 'any', ask: '石を飛ばすマス', text: '選んだマスに、兵3人ぶんの攻撃がとどく（どこでも）' },
+  // じゃま
+  seal: { name: '封印', icon: 'seal', w: 2, target: 'enemy', ask: '封印したい人のマス', text: '選んだマスの持ち主は、次のラウンドにカードを使えず、兵も2少ない' },
+  thief: { name: '盗賊', icon: 'thief', w: 2, target: 'enemy', ask: 'ぬすみたい人のマス', text: '選んだマスの持ち主から2点うばう' },
+  swap: { name: '寝返り', icon: 'swap', w: 2, target: 'enemy', ask: 'ほしい相手のマス（お城以外）', text: '選んだ相手のマス（お城以外）の兵が寝返って、自分のものになる' },
+  // 大逆転
+  wrath: { name: '龍王の怒り', icon: 'wrath', w: 1, target: null, text: 'いまの1位（自分以外）の土地が3マス、空き地にもどる（お城はのぞく）' },
+  legend: { name: '英雄の誕生', icon: 'legend', w: 1, target: null, text: 'このラウンドの兵 ＋6' },
+  quake: { name: '大地震', icon: 'quake', w: 1, target: null, text: '自分より順位が上の人みんなの土地が、2マスずつ空き地にもどる（お城はのぞく）' },
 };
 const CARD_KEYS = Object.keys(CARDS);
 // イベント（予告なしで、ときどき結果の時に起きる）
@@ -29,7 +41,7 @@ export const CHEST_PT = 2;
 // バランスの数字（tests/balance.mjs で何千回も戦わせて決める）
 export const BAL = {
   catchUp: 0.8,        // 順位が下の人ほど強いカードが出やすくなる強さ（0＝みんな同じ）
-  strong: ['dragon', 'hero', 'portal'],
+  strong: ['dragon', 'hero', 'portal', 'thunder', 'catapult', 'wrath', 'legend'],
   lateRounds: 2,       // 途中から入った人の兵が少ないラウンド数
   lateMinus: 1,        // そのあいだ減らす兵
   diceMax: 2,          // とりあいのマスで足されるサイコロ（0〜この数）
@@ -49,6 +61,7 @@ export function cardWeights(t = 0.5) {
   return CARD_KEYS.map(k => { const w = CARDS[k].w; return BAL.strong.includes(k) ? w * (1 + BAL.catchUp * (t - 0.5) * 2) : w * (1 - BAL.catchUp * (t - 0.5) * 0.6); }).map(w => Math.max(0.05, w));
 }
 function drawCard(r, t) { const ws = cardWeights(t), sum = ws.reduce((a, b) => a + b, 0); let x = r() * sum; for (let i = 0; i < ws.length; i++) { x -= ws[i]; if (x < 0) return CARD_KEYS[i]; } return 'dice'; }
+export function dealHand(r, t, n = HAND_DEAL) { const out = []; for (let k = 0; k < 40 && out.length < n; k++) { const c = drawCard(r, t); if (!out.includes(c) || k > 30) out.push(c); } return out; } // 同じ種類が重ならないように
 export function diceRoll(seed, round, pi) { return 1 + Math.floor(rng(mix(seed, round, pi, 77))() * 6); }
 
 export function radiusFor(n) { return n <= 2 ? 4 : n <= 4 ? 5 : n <= 6 ? 6 : n <= 9 ? 7 : n <= 12 ? 8 : 9; }
@@ -108,7 +121,7 @@ export function newGame({ seed, players, rounds = 18, planMs = 35000 }) {
     terrain[c] = T.PLAIN; owner[c] = i;
     for (const j of m.nb[c]) if (terrain[j] === T.LAKE) terrain[j] = T.PLAIN;
     const cr = rng(mix(seed, 3, i));
-    return { id: p.id, name: p.name, color: p.color ?? COLORS[i % COLORS.length], castle: c, hand: Array.from({ length: START_CARDS }, () => drawCard(cr)), bonus: 0, joined: 1, ...(p.bot ? { bot: p.bot } : {}) };
+    return { id: p.id, name: p.name, color: p.color ?? COLORS[i % COLORS.length], castle: c, hand: dealHand(cr, 0.5), bonus: 0, joined: 1, ...(p.bot ? { bot: p.bot } : {}) };
   });
   // ルーンの石：お城から離れたところに、人数＋2こ
   const runes = pickSpread(m, n + 2, castles, r).filter(i => !castles.includes(i));
@@ -125,12 +138,12 @@ export const isCastle = (st, i) => st.players.some(p => p.castle === i);
 export function landOf(st, pi) { let n = 0; for (const o of st.owner) if (o === pi) n++; return n; }
 export function runesOf(st, pi) { let n = 0; st.owner.forEach((o, i) => { if (o === pi && st.terrain[i] === T.RUNE) n++; }); return n; }
 export function baseTroops(st, pi) {
-  const p = st.players[pi], late = p && p.joined > 1 && st.round - p.joined < BAL.lateRounds ? BAL.lateMinus : 0;
+  const p = st.players[pi], late = (p && p.joined > 1 && st.round - p.joined < BAL.lateRounds ? BAL.lateMinus : 0) + (p && p.sealed === st.round ? 2 : 0);
   let ud = 0;
   if (BAL.underdog && st.players.length > 1) { const sc = score(st, pi); const below = st.players.filter((_, j) => score(st, j) > sc).length; if (below >= st.players.length / 2) ud = BAL.underdog; }
   return Math.max(1, 3 + Math.floor(landOf(st, pi) / BAL.landDiv) + runesOf(st, pi) - late + ud);
 }
-export function cardTroops(st, pi, card) { return card === 'hero' ? 4 : card === 'portal' ? 2 : card === 'dice' ? diceRoll(st.seed, st.round, pi) : 0; }
+export function cardTroops(st, pi, card) { return card === 'hero' ? 4 : card === 'portal' ? 2 : card === 'knights' ? 3 : card === 'legend' ? 6 : card === 'dice' ? diceRoll(st.seed, st.round, pi) : 0; }
 export function score(st, pi) {
   let s = st.players[pi].bonus;
   st.owner.forEach((o, i) => { if (o !== pi) return; s += 1; if (st.terrain[i] === T.RUNE) s += RUNE_PT; if (isCastle(st, i)) s += CASTLE_PT; });
@@ -139,13 +152,14 @@ export function score(st, pi) {
 export function defenseOf(st, i) { return isCastle(st, i) ? CASTLE_DEF : DEF[st.terrain[i]]; }
 
 // そのマスに兵を置けるか
-export function canPlace(st, pi, i, portal) {
+export function canPlace(st, pi, i, portal, knights) {
   if (i < 0 || i >= st.owner.length || st.terrain[i] === T.LAKE) return false;
   if (portal) return true;
   if (st.owner[i] === pi) return true;
   const m = mapOf(st);
   if (landOf(st, pi) === 0) return st.owner[i] === -1; // ふっかつ：だれのものでもない好きなマス
-  return m.nb[i].some(j => st.owner[j] === pi);
+  if (m.nb[i].some(j => st.owner[j] === pi)) return true;
+  return !!knights && m.nb[i].some(j => m.nb[j].some(k => st.owner[k] === pi)); // 騎士団：2マス先まで
 }
 
 // 作戦を正しい形に直す（多すぎる兵・置けないマスは捨てる）
@@ -157,13 +171,16 @@ export function cleanPlan(st, pi, plan) {
     target = plan.card.target ?? null;
     if (def.target === 'any' && !(target >= 0 && target < st.owner.length && st.terrain[target] !== T.LAKE)) card = null;
     if (def.target === 'own' && !(target >= 0 && st.owner[target] === pi)) card = null;
+    if (def.target === 'enemy' && !(target >= 0 && st.owner[target] >= 0 && st.owner[target] !== pi)) card = null;
+    if (card === 'swap' && isCastle(st, target)) card = null;
+    if (p.sealed === st.round) card = null; // 封印されている
   }
-  const portal = card === 'portal';
+  const portal = card === 'portal', knights = card === 'knights';
   let left = baseTroops(st, pi) + cardTroops(st, pi, card);
   const place = new Map();
   for (const [i, n0] of plan.place || []) {
     const n = Math.min(Math.floor(n0) || 0, left);
-    if (n <= 0 || !canPlace(st, pi, i, portal)) continue;
+    if (n <= 0 || !canPlace(st, pi, i, portal, knights)) continue;
     place.set(i, (place.get(i) || 0) + n); left -= n;
   }
   return { card, cardIdx: card ? plan.card.i : -1, target, place };
@@ -174,7 +191,7 @@ export function resolve(st0, plans) {
   const st = JSON.parse(JSON.stringify(st0));
   const n = st.players.length, log = [];
   const clean = []; for (let pi = 0; pi < n; pi++) clean[pi] = cleanPlan(st0, pi, plans[pi]);
-  const shields = new Set(), stormers = [];
+  const shields = new Set(), stormers = [], thief = [], sealed = [], thunder = [], catapult = [], swapped = [];
   // カードを手札から出す
   clean.forEach((c, pi) => {
     if (!c || !c.card) return;
@@ -183,10 +200,31 @@ export function resolve(st0, plans) {
     if (c.card === 'shield') { shields.add(c.target); for (const j of mapOf(st).nb[c.target]) if (st0.owner[j] === pi) shields.add(j); }
     if (c.card === 'storm') stormers.push(pi);
     if (c.card === 'treasure') st.players[pi].bonus += BONUS_PT;
+    if (c.card === 'thief') { const o = st0.owner[c.target]; st.players[o].bonus -= 2; st.players[pi].bonus += 2; thief.push([pi, o]); }
+    if (c.card === 'seal') { const o = st0.owner[c.target]; st.players[o].sealed = st.round + 1; sealed.push([pi, o]); }
+    if (c.card === 'thunder') thunder.push(c.target);
+    if (c.card === 'catapult') catapult.push([pi, c.target]);
     log.push({ pi, card: c.card, target: c.target, text: `${nm}：${def.name}` + (c.card === 'dice' ? `（${diceRoll(st.seed, st.round, pi)}）` : '') });
+  });
+  // 寝返り：選んだ相手のマス（お城以外）が自分のものに
+  clean.forEach((c, pi) => {
+    if (!c || c.card !== 'swap') return;
+    const i = c.target, o = st.owner[i]; if (o < 0 || o === pi || shields.has(i) || isCastle(st, i)) return;
+    const m = mapOf(st), val = j => (st.terrain[j] === T.RUNE ? 10 : 0) + DEF[st.terrain[j]] - (m.nb[j].some(k => st.owner[k] === o) ? 3 : 0) + m.nb[j].filter(k => st.owner[k] === pi).length * 0.2;
+    const mine = []; st.owner.forEach((x, j) => { if (x === pi && j !== i && !isCastle(st, j) && !shields.has(j)) mine.push(j); });
+    st.owner[i] = pi; let j = -1;
+    // 寝返り：相手のマスが自分のものになるだけ（かわりに渡すマスはない）
+    swapped.push([pi, i, o, j]);
   });
   // 炎の竜（結界とお城には効かない）
   const burned = [];
+  const burnRandom = (owner, nb, salt) => { const pool = []; st.owner.forEach((x, j) => { if (x === owner && !isCastle(st, j) && !shields.has(j)) pool.push(j); }); const r = rng(mix(st.seed, st.round, salt)); for (let k = 0; k < nb && pool.length; k++) { const j = pool.splice(Math.floor(r() * pool.length), 1)[0]; st.owner[j] = -1; burned.push(j); } };
+  // 龍王の怒り：いまの1位（自分以外）の土地が3マス / 大地震：みんな2マスずつ
+  clean.forEach((c, pi) => {
+    if (!c) return;
+    if (c.card === 'wrath') { const top = ranking(st0).find(x => x.pi !== pi); if (top) burnRandom(top.pi, 3, 70 + pi); }
+    if (c.card === 'quake') { const rk0 = ranking(st0), me = rk0.findIndex(x => x.pi === pi); rk0.slice(0, me).forEach(x => burnRandom(x.pi, 2, 90 + pi * 31 + x.pi)); }
+  });
   clean.forEach((c, pi) => {
     if (!c || c.card !== 'dragon') return;
     const i = c.target, o = st.owner[i];
@@ -208,6 +246,8 @@ export function resolve(st0, plans) {
       force.get(i).set(pi, v);
     }
   });
+  // 投石機：選んだマスに、兵3人ぶんの攻撃
+  for (const [pi, i] of catapult) { if (st.terrain[i] === T.LAKE) continue; if (!force.has(i)) force.set(i, new Map()); const f = force.get(i); f.set(pi, (f.get(pi) || 0) + 3); }
   // サイコロ：何人かが同じマスに兵を置いた時だけ、それぞれに 0〜2 が足される
   const dice = [];
   for (const [i, f] of force) {
@@ -221,7 +261,8 @@ export function resolve(st0, plans) {
   //   o：持ち主 g：持ち主が置いた兵（サイコロこみ） b：持ち主の +1 d：土地の守り hold：守りの合計
   //   w：いちばん強い攻め手 v：その強さ tie：攻め手どうしの引き分け r：結果（take=取った keep=守った tie=引き分け shield=結界）
   for (const [i, f] of force) {
-    const o = st.owner[i], d = defenseOf(st, i), g = o >= 0 ? (f.get(o) || 0) : 0, b = o >= 0 ? 1 : 0;
+    const zap = thunder.includes(i); // 雷の槍：守りが0
+    const o = st.owner[i], d = zap ? 0 : defenseOf(st, i), g = o >= 0 ? (f.get(o) || 0) : 0, b = o >= 0 && !zap ? 1 : 0;
     const hold = g + b + d;
     let best = -1, bv = 0, tie = false;
     for (const [pi, v] of f) { if (pi === o) continue; if (v > bv) { bv = v; best = pi; tie = false; } else if (v === bv) tie = true; }
@@ -233,13 +274,13 @@ export function resolve(st0, plans) {
   }
   // 宝箱：取った人が開ける（カード1枚か2点）
   const rkPos = new Map(ranking(st).map((x, k, a) => [x.pi, a.length > 1 ? k / (a.length - 1) : 0.5]));
-  const opened = [];
+  const opened = [], extra = {}; // extra：宝箱や妖精でもらったカード（配りなおしのあとで足す）
   st.chests ||= [];
   for (const c of changed) {
     const k = st.chests.indexOf(c.i); if (k < 0) continue;
     st.chests.splice(k, 1);
     const r = rng(mix(st.seed, st.round, c.i, 41)), p = st.players[c.to];
-    if (r() < 0.5) { const card = drawCard(r, rkPos.get(c.to)); p.hand.push(card); while (p.hand.length > HAND_MAX) p.hand.shift(); opened.push({ i: c.i, pi: c.to, card }); }
+    if (r() < 0.5) { const card = drawCard(r, rkPos.get(c.to)); (extra[c.to] ||= []).push(card); opened.push({ i: c.i, pi: c.to, card }); }
     else { p.bonus += CHEST_PT; opened.push({ i: c.i, pi: c.to, pt: CHEST_PT }); }
   }
   // イベント（予告なし）
@@ -254,7 +295,7 @@ export function resolve(st0, plans) {
     }
     if (k === 'gold') st.players.forEach(p => { p.bonus += 1; });
     if (k === 'glow') st.players.forEach((p, pi) => { p.bonus += runesOf(st, pi); });
-    if (k === 'fairy') st.players.forEach((p, pi) => { p.hand.push(drawCard(rng(mix(st.seed, st.round, pi, 77)), rkPos.get(pi))); while (p.hand.length > HAND_MAX) p.hand.shift(); });
+    if (k === 'fairy') st.players.forEach((p, pi) => { (extra[pi] ||= []).push(drawCard(rng(mix(st.seed, st.round, pi, 77)), rkPos.get(pi))); });
     event = { k, tiles };
     st.lastEvent = st.round;
   }
@@ -264,11 +305,11 @@ export function resolve(st0, plans) {
     const free = []; st.owner.forEach((o, i) => { if (o === -1 && st.terrain[i] !== T.LAKE && st.terrain[i] !== T.RUNE && !st.chests.includes(i)) free.push(i); });
     if (free.length) st.chests.push(free[Math.floor(cr() * free.length)]);
   }
-  // カードを配る（順位が下の人ほど強いカードが出やすい）
+  // カードを配りなおす：毎ラウンド手札を全部入れかえて3枚（なるべく別の種類。順位が下の人ほど強いカードが出やすい）
   const rk = ranking(st), np = Math.max(1, rk.length - 1);
   rk.forEach((x, pos) => {
     const p = st.players[x.pi], r = rng(mix(st.seed, st.round, x.pi, 5));
-    p.hand.push(drawCard(r, rk.length > 1 ? pos / np : 0.5)); while (p.hand.length > HAND_MAX) p.hand.shift();
+    p.hand = dealHand(r, rk.length > 1 ? pos / np : 0.5).concat(extra[x.pi] || []).slice(0, HAND_MAX);
   });
   // 表彰のための記録
   st.stats ||= {};
@@ -280,7 +321,7 @@ export function resolve(st0, plans) {
   for (const l of log) st.stats[l.pi].cards++;
   for (const k in gainNow) st.stats[k].best = Math.max(st.stats[k].best, gainNow[k]);
   const forceOut = [...force].map(([i, f]) => [i, [...f]]);
-  st.last = { round: st.round, changed, burned, shields: [...shields], log, force: forceOut, dice, opened, event, fights };
+  st.last = { round: st.round, changed, burned, shields: [...shields], log, force: forceOut, dice, opened, event, fights, thunder, catapult, thief, sealed, swapped };
   ranking(st).forEach((x, pos) => { st.stats[x.pi].worst = Math.max(st.stats[x.pi].worst, pos); });
   st.round++;
   if (st.round > st.rounds) st.phase = 'end';
@@ -300,7 +341,7 @@ export function addLatePlayer(st, p) {
   if (best < 0) return false;
   st.owner[best] = pi; st.terrain[best] = T.PLAIN;
   const cr = rng(mix(st.seed, 3, pi, st.round));
-  st.players.push({ id: p.id, name: p.name, color: COLORS[pi % COLORS.length], castle: best, hand: Array.from({ length: START_CARDS }, () => drawCard(cr)), bonus: 0, joined: st.round, ...(p.bot ? { bot: p.bot } : {}) });
+  st.players.push({ id: p.id, name: p.name, color: COLORS[pi % COLORS.length], castle: best, hand: dealHand(cr, 0.5), bonus: 0, joined: st.round, ...(p.bot ? { bot: p.bot } : {}) });
   return true;
 }
 
