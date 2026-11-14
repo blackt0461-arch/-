@@ -57,6 +57,7 @@ GitHub のアカウント（blackt0461-arch）が止められている。clone�
 - みんなの記録は Supabase。2026-11-07 に新しいプロジェクト **roomin（zmteazudhtnzvfvmndqn・東京・メールで作った新しいアカウント）** に引っ越した（前の ytvocegvtlgrnxupmbnf は GitHub ログインで入れないため。前の方は古いバックアップ44個ごと、念のため残してある）。
   - 新しい方への設定は、環境に保存した鍵（api.supabase.com の管理用トークン）で Management API（`POST /v1/projects/zmteazudhtnzvfvmndqn/database/query`）から入れる。Supabase の MCP 道具は前のプロジェクトにしかつながっていないので、新しい方には使えない。
   - 設定の記録は study-room-beta/supabase/ の setup.sql と 002〜022（022 は前の方に直接入れていた直しの写し）。新しい設定は 023 から。
+- 入口ページ（index.html）に新しいアプリのカードを足したら、Supabase の kw_app_kind の「みんなのアプリ」一覧にも、その data-id を足す（足さないと、開いてもマイアプリに入らない）。この追加は毎回本人に聞かずに入れてよい（本人の決定 2026-11-14「今後全部入れていいよ」）。SQL は study-room-beta/supabase/ と study-room/supabase/ に次の番号で残す。
 - 予備の写しは、本人の Google ドライブ「ROOMIN バックアップ」フォルダに zip で置く。
 - 目覚まし管理（alarm）は、データを GitHub（alarm-data）に読み書きするので、いまは動かない。
 - GitHub が戻ったら：手元にたまっている変更を送り、Cloudflare Pages を GitHub につなぐ（つなぎかえで作り直しても、ドメインのおかげで URL は変わらない）。
