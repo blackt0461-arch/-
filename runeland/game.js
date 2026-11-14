@@ -8,22 +8,22 @@ export const HAND_MAX = 3, START_CARDS = 2;
 export const COLORS = ['#e8483b', '#3a7be0', '#f2b631', '#3fae5a', '#a05ad6', '#f07fb4', '#22b5c4', '#f08a2c',
   '#7a5230', '#9bc53d', '#5b6ee1', '#d94f8c', '#2e8b74', '#c9a227', '#8c8c8c', '#4b3f9e'];
 export const CARDS = {
-  dragon: { name: '炎の竜', icon: '🐉', w: 3, target: 'any', text: '選んだマスと、となりの同じ人のマス2つまでを、空き地にもどす（お城はのぞく）' },
-  shield: { name: '守りの結界', icon: '🛡️', w: 3, target: 'own', text: '選んだ自分のマスと、そのとなりの自分のマスは、このラウンド取られない' },
-  portal: { name: '転移の門', icon: '🌀', w: 3, target: null, text: 'このラウンドは、どこにでも兵を置ける。兵 ＋2' },
-  hero: { name: '勇者の加勢', icon: '⚔️', w: 3, target: null, text: 'このラウンドの兵 ＋4' },
-  dice: { name: '運命のサイコロ', icon: '🎲', w: 4, target: null, text: 'このラウンドの兵 ＋1〜6' },
-  storm: { name: '大嵐', icon: '🌪️', w: 2, target: null, text: 'ほかの全員の、いちばん多く兵を置いたマスで、兵が2減る' },
-  treasure: { name: '竜の宝', icon: '💎', w: 2, target: null, text: 'すぐに2点もらえる' },
+  dragon: { name: '炎の竜', icon: 'dragon', w: 3, target: 'any', text: '選んだマスと、となりの同じ人のマス2つまでを、空き地にもどす（お城はのぞく）' },
+  shield: { name: '守りの結界', icon: 'shield', w: 3, target: 'own', text: '選んだ自分のマスと、そのとなりの自分のマスは、このラウンド取られない' },
+  portal: { name: '転移の門', icon: 'portal', w: 3, target: null, text: 'このラウンドは、どこにでも兵を置ける。兵 ＋2' },
+  hero: { name: '勇者の加勢', icon: 'hero', w: 3, target: null, text: 'このラウンドの兵 ＋4' },
+  dice: { name: '運命のサイコロ', icon: 'dice', w: 4, target: null, text: 'このラウンドの兵 ＋1〜6' },
+  storm: { name: '大嵐', icon: 'storm', w: 2, target: null, text: 'ほかの全員の、いちばん多く兵を置いたマスで、兵が2減る' },
+  treasure: { name: '竜の宝', icon: 'treasure', w: 2, target: null, text: 'すぐに2点もらえる' },
 };
 const CARD_KEYS = Object.keys(CARDS);
 // イベント（予告なしで、ときどき結果の時に起きる）
 export const EVENTS = {
-  raid: { name: 'ドラゴンがあらわれた！', icon: '🐲', text: 'だれかの土地が3マス、空き地にもどった' },
-  wave: { name: '大波がきた！', icon: '🌊', text: '海ぞいの土地が4マス、空き地にもどった' },
-  gold: { name: '金貨の雨', icon: '🪙', text: 'みんな1点もらえた' },
-  glow: { name: 'ルーンが光った', icon: '✨', text: 'ルーンの石を持っている人は、1つにつき1点' },
-  fairy: { name: '妖精のおくりもの', icon: '🧚', text: 'みんなカードを1枚もらえた' },
+  raid: { name: 'ドラゴンがあらわれた！', icon: 'raid', text: 'だれかの土地が3マス、空き地にもどった' },
+  wave: { name: '大波がきた！', icon: 'wave', text: '海ぞいの土地が4マス、空き地にもどった' },
+  gold: { name: '金貨の雨', icon: 'gold', text: 'みんな1点もらえた' },
+  glow: { name: 'ルーンが光った', icon: 'glow', text: 'ルーンの石を持っている人は、1つにつき1点' },
+  fairy: { name: '妖精のおくりもの', icon: 'fairy', text: 'みんなカードを1枚もらえた' },
 };
 export const CHEST_PT = 2;
 // バランスの数字（tests/balance.mjs で何千回も戦わせて決める）
@@ -183,7 +183,7 @@ export function resolve(st0, plans) {
     if (c.card === 'shield') { shields.add(c.target); for (const j of mapOf(st).nb[c.target]) if (st0.owner[j] === pi) shields.add(j); }
     if (c.card === 'storm') stormers.push(pi);
     if (c.card === 'treasure') st.players[pi].bonus += BONUS_PT;
-    log.push({ pi, card: c.card, text: `${nm}：${def.icon}${def.name}` + (c.card === 'dice' ? `（${diceRoll(st.seed, st.round, pi)}）` : '') });
+    log.push({ pi, card: c.card, text: `${nm}：${def.name}` + (c.card === 'dice' ? `（${diceRoll(st.seed, st.round, pi)}）` : '') });
   });
   // 炎の竜（結界とお城には効かない）
   const burned = [];

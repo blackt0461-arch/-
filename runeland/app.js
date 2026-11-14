@@ -4,12 +4,14 @@ import { Room, MAX_PLAYERS } from './net.js';
 import { LEVELS } from './ai.js';
 import { sfx, bgm, opt, setOpt, unlock } from './audio.js';
 import { RELAY_URL, RELAY_KEY } from './relay-config.js';
+import { ic, icAt } from './icons.js';
 
 const $ = s => document.querySelector(s);
 const LIB = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js';
 const store = { get(k, d) { try { return localStorage.getItem('runeland:' + k) ?? d; } catch { return d; } }, set(k, v) { try { localStorage.setItem('runeland:' + k, v); } catch {} } };
 let myId = store.get('id'); if (!myId) { myId = Math.random().toString(36).slice(2, 10); store.set('id', myId); }
 let room = null;
+const nameHtml = p => (p.bot ? ic('bot', 'bot') : '') + esc(p.name);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 // ---------- つなぐ ----------
@@ -182,7 +184,7 @@ function drawOverlay() {
     const own = G.CARDS[plan.card.k].target === 'own';
     for (let i = 0; i < B.tiles.length; i++) if (st.terrain[i] !== G.T.LAKE && (own ? st.owner[i] === pi : st.owner[i] >= 0 && st.owner[i] !== pi)) out += `<polygon class="can" points="${B.tiles[i].getAttribute('points')}"/>`;
   }
-  if (acting && plan.card && plan.card.target != null) out += `<polygon class="tgt" points="${B.tiles[plan.card.target].getAttribute('points')}"/><text x="${B.cx[plan.card.target][0]}" y="${B.cx[plan.card.target][1] - 9}" font-size="8">${G.CARDS[plan.card.k].icon}</text>`;
+  if (acting && plan.card && plan.card.target != null) out += `<polygon class="tgt" points="${B.tiles[plan.card.target].getAttribute('points')}"/>${icAt(G.CARDS[plan.card.k].icon, B.cx[plan.card.target][0], B.cx[plan.card.target][1] - 9, 9)}`;
   if (acting) for (const [i, n] of plan.place) { const [x, y] = B.cx[i]; out += `<circle cx="${x}" cy="${y}" r="5.4" fill="${st.players[pi].color}" stroke="#fff" stroke-width="1.3"/><text class="cnt" x="${x}" y="${y + 0.3}" font-size="7.2">${n}</text>`; }
   if (!acting && st.last && st.step === 'reveal' && !B.anim) for (const [i, f] of st.last.force) { // 結果：いちばん多く置いた人
     const top = [...f].sort((a, b) => b[1] - a[1])[0]; const [x, y] = B.cx[i];
@@ -276,7 +278,7 @@ let revealDone = '', prevOwners = null, prevGidRound = '', prevRanks = null, ani
 function later(ms, f) { animTimers.push(setTimeout(f, ms)); }
 function skipAnim() { animTimers.forEach(clearTimeout); animTimers = []; B.anim = false; if (room?.state?.last) celebrate(room.state); render(); }
 function flashTile(i, cls) { const p = el('polygon', { class: cls, points: B.tiles[i].getAttribute('points') }, $('#lOver')); $('#lOver').__h = null; setTimeout(() => p.remove(), 1600); }
-function banner(text, sub = '') { const b = $('#banner'); b.innerHTML = `<div>${esc(text)}${sub ? `<small>${esc(sub)}</small>` : ''}</div>`; }
+function banner(text, sub = '', icon = '', subHtml = false) { const b = $('#banner'); b.innerHTML = `<div>${icon ? ic(icon) + ' ' : ''}${esc(text)}${sub ? `<small>${subHtml ? sub : esc(sub)}</small>` : ''}</div>`; }
 let celebrated = '';
 function playReveal(st) {
   const L = st.last, pi = room.meIndex();
@@ -290,7 +292,7 @@ function playReveal(st) {
   // 1) カードを1枚ずつ
   for (const l of L.log) {
     later(t, () => {
-      banner(`${G.CARDS[l.card].icon} ${G.CARDS[l.card].name}`, st.players[l.pi].name + (l.card === 'dice' ? `（${G.diceRoll(st.seed, L.round, l.pi)}）` : ''));
+      banner(G.CARDS[l.card].name, nameHtml(st.players[l.pi]) + (l.card === 'dice' ? `（${G.diceRoll(st.seed, L.round, l.pi)}）` : ''), G.CARDS[l.card].icon, true);
       ({ dragon: sfx.dragon, shield: sfx.shield, storm: sfx.storm, treasure: sfx.coin }[l.card] || sfx.card)();
       if (l.card === 'dragon') for (const i of L.burned) { disp[i] = -1; flashTile(i, 'burn'); }
       if (l.card === 'shield') for (const i of L.shields) flashTile(i, 'shine');
@@ -301,7 +303,7 @@ function playReveal(st) {
   // 1.5) サイコロ：とりあいのマスに出た目を見せる
   if (L.dice && L.dice.length) {
     later(t, () => {
-      banner('🎲 とりあい！', `${L.dice.length}か所でサイコロ`); sfx.dice();
+      banner('とりあい！', `${L.dice.length}か所でサイコロ`, 'dice'); sfx.dice();
       let h = ''; for (const [i, ds] of L.dice) { const [x, y] = B.cx[i]; ds.slice(0, 3).forEach(([p, d], n) => { h += `<g class="pop"><circle cx="${x - 6 + n * 6}" cy="${y + 5.5}" r="3" fill="${st.players[p].color}" stroke="#5b4636" stroke-width=".5"/><text class="fc" x="${x - 6 + n * 6}" y="${y + 5.7}" font-size="3.8">+${d}</text></g>`; }); }
       const g = el('g', {}, $('#lOver')); g.innerHTML = h; $('#lOver').__h = null; setTimeout(() => g.remove(), 1600);
     });
@@ -319,13 +321,13 @@ function playReveal(st) {
   t += ch.length * stepMs + 300;
   // 3) 宝箱を開ける
   for (const o of (L.opened || []).slice(0, 4)) {
-    later(t, () => { banner('🎁 宝箱！', `${st.players[o.pi].name}：${o.card ? G.CARDS[o.card].icon + G.CARDS[o.card].name : '+' + o.pt + '点'}`); sfx.chest(); flashTile(o.i, 'shine'); });
+    later(t, () => { banner('宝箱！', `${nameHtml(st.players[o.pi])}：${o.card ? ic(G.CARDS[o.card].icon) + esc(G.CARDS[o.card].name) : '+' + o.pt + '点'}`, 'chest', true); sfx.chest(); flashTile(o.i, 'shine'); });
     t += 800;
   }
   // 4) イベント（予告なし）
   if (L.event) {
     later(t, () => {
-      const e = G.EVENTS[L.event.k]; banner(`${e.icon} ${e.name}`, e.text);
+      const e = G.EVENTS[L.event.k]; banner(e.name, e.text, e.icon);
       ({ raid: sfx.dragon, wave: sfx.storm, gold: sfx.coin, glow: sfx.shield, fairy: sfx.card }[L.event.k] || sfx.card)();
       for (const [i] of L.event.tiles) { disp[i] = -1; flashTile(i, 'burn'); }
       paintTiles(st, disp);
@@ -342,18 +344,18 @@ function celebrate(st) {
   for (const c of L.changed) { won[c.to] = (won[c.to] || 0) + 1; if (c.from >= 0) lost[c.from] = (lost[c.from] || 0) + 1; }
   for (const i of L.burned) { const o = prevOwners ? prevOwners[i] : -1; if (o >= 0) lost[o] = (lost[o] || 0) + 1; }
   if (L.event) for (const [, o] of L.event.tiles) lost[o] = (lost[o] || 0) + 1;
-  if (pi >= 0) for (const o of L.opened || []) if (o.pi === pi) toast(`🎁 宝箱から ${o.card ? G.CARDS[o.card].name : o.pt + '点'}！`, 3500);
+  if (pi >= 0) for (const o of L.opened || []) if (o.pi === pi) toast(`宝箱から ${o.card ? G.CARDS[o.card].name : o.pt + '点'}！`, 3500, 'chest');
   const rk = G.ranking(st), newRanks = new Map(rk.map((x, i) => [x.pi, i]));
   if (pi >= 0) {
-    if (won[pi]) toast(`🎉 ${won[pi]}マス取りました！`, 3500);
-    if (lost[pi]) toast(`😱 ${lost[pi]}マス取られました…`, 3500);
+    if (won[pi]) toast(`${won[pi]}マス取りました！`, 3500, 'yay');
+    if (lost[pi]) toast(`${lost[pi]}マス取られました…`, 3500, 'oops');
     if (prevRanks && prevRanks.has(pi) && newRanks.get(pi) < prevRanks.get(pi)) sfx.rankUp(); else if (lost[pi] && !won[pi]) sfx.lose();
   }
   const oldTop = prevRanks ? [...prevRanks].find(([, r]) => r === 0)?.[0] : undefined;
   const leaderChanged = oldTop !== undefined && rk[0] && oldTop !== rk[0].pi;
   const best = Object.entries(won).sort((a, b) => b[1] - a[1])[0];
   if (st.round === st.rounds) later(200, () => { banner('最終ラウンド！', 'ここで決まる！'); bgm.setMood('tense'); });
-  else if (leaderChanged) later(200, () => banner(`👑 ${rk[0].name} が1位に！`));
+  else if (leaderChanged) later(200, () => banner(`${rk[0].name} が1位に！`, '', 'crown'));
   else if (best && best[1] >= 4) later(200, () => banner(`いっきに${best[1]}マス！`, st.players[best[0]].name));
   if (st.round >= st.rounds - 2) bgm.setMood('tense');
   chipDelta = prevRanks ? new Map(rk.map((x, i) => [x.pi, (prevRanks.get(x.pi) ?? i) - i])) : null;
@@ -382,7 +384,7 @@ function updateCoach() {
 
 // ---------- 画面 ----------
 function show(id) { for (const s of document.querySelectorAll('.screen')) s.hidden = s.id !== id; }
-function toast(t, ms = 2600) { const d = document.createElement('div'); d.textContent = t; $('#toast').append(d); while ($('#toast').children.length > 3) $('#toast').firstChild.remove(); setTimeout(() => d.remove(), ms); }
+function toast(t, ms = 2600, icon = '') { const d = document.createElement('div'); d.innerHTML = (icon ? ic(icon) + ' ' : '') + esc(t); $('#toast').append(d); while ($('#toast').children.length > 3) $('#toast').firstChild.remove(); setTimeout(() => d.remove(), ms); }
 let seenEnd = '', chipDelta = null, lastRoundSeen = '', handSeen = '';
 function render() {
   if (!room) { show('home'); return; }
@@ -423,7 +425,7 @@ function renderChips(animate) {
   const html = rk.map((r, pos) => {
     const p = st.players[r.pi], off = !room.online(p.id), stt = st.step === 'plan' ? (room.got.includes(p.id) ? '<span class="st done">✓</span>' : '<span class="st think"></span>') : '';
     const d = chipDelta && chipDelta.get(r.pi), arrow = d > 0 ? `<span class="up">▲${d}</span>` : d < 0 ? `<span class="down">▼</span>` : '';
-    return `<span class="chip ${p.id === myId ? 'me' : ''} ${off ? 'off' : ''} ${pos === 0 && r.score > 0 ? 'crown' : ''}" data-id="${p.id}"><i class="dot" style="background:${p.color}"></i>${esc(p.name)} <span class="sc">${r.score}</span>${arrow}${stt}</span>`;
+    return `<span class="chip ${p.id === myId ? 'me' : ''} ${off ? 'off' : ''}" data-id="${p.id}">${pos === 0 && r.score > 0 ? ic('crown') : ''}<i class="dot" style="background:${p.color}"></i>${nameHtml(p)} <span class="sc">${r.score}</span>${arrow}${stt}</span>`;
   }).join('');
   if (box.__h === html) return; box.__h = html; box.innerHTML = html;
   if (animate) for (const c of box.children) { // 順位が入れかわった動き（FLIP）
@@ -444,7 +446,7 @@ function renderPanel() {
   const hk = p.hand.join(',') + ':' + (plan.card ? plan.card.i : '') + ':' + acting;
   if (hand.__k !== hk) {
     const fresh = handSeen !== st.gid + ':' + st.round + ':' + p.hand.length;
-    hand.innerHTML = p.hand.length ? p.hand.map((k, i) => { const c = G.CARDS[k]; return `<button data-h="${i}" class="${plan.card && plan.card.i === i ? 'sel' : ''} ${fresh && i === p.hand.length - 1 && st.round > 1 && acting ? 'new' : ''}" ${acting ? '' : 'disabled'}><span class="ic">${c.icon}</span>${c.name}</button>`; }).join('') : '<div class="empty">カードはありません</div>';
+    hand.innerHTML = p.hand.length ? p.hand.map((k, i) => { const c = G.CARDS[k]; return `<button data-h="${i}" class="${plan.card && plan.card.i === i ? 'sel' : ''} ${fresh && i === p.hand.length - 1 && st.round > 1 && acting ? 'new' : ''}" ${acting ? '' : 'disabled'}><span class="ic">${ic(c.icon)}</span>${c.name}</button>`; }).join('') : '<div class="empty">カードはありません</div>';
     hand.__k = hk; handSeen = st.gid + ':' + st.round + ':' + p.hand.length;
   }
   $('#btnUndo').disabled = !acting || (!plan.order.length && !plan.card);
@@ -461,8 +463,8 @@ function renderPanel() {
   else if (left > 0) btn.textContent = `決定（兵あと${left}）`;
   else { btn.textContent = '決定！'; btn.classList.add('ready'); }
   const c = plan.card && G.CARDS[plan.card.k];
-  if (plan.targeting) hint.textContent = `${c.icon} ${c.name}：${c.target === 'own' ? '守りたい自分のマス' : '燃やしたい相手のマス'}をタップ`;
-  else if (c) hint.textContent = `${c.icon} ${c.text}` + (plan.card.k === 'dice' ? `（出た目：${G.diceRoll(st.seed, st.round, pi)}）` : '') + `　兵 のこり${left}`;
+  if (plan.targeting) hint.innerHTML = `${ic(c.icon)} ${c.name}：${c.target === 'own' ? '守りたい自分のマス' : '燃やしたい相手のマス'}をタップ`;
+  else if (c) hint.innerHTML = `${ic(c.icon)} ${c.text}` + (plan.card.k === 'dice' ? `（出た目：${G.diceRoll(st.seed, st.round, pi)}）` : '') + `　兵 のこり${left}`;
   else if (G.landOf(st, pi) === 0) hint.textContent = `ふっかつ！ だれのものでもない好きなマスに兵を置けます（のこり ${left}）`;
   else if (left > 0) hint.textContent = `兵 ${totalTroops(st, pi)}人。光っているマスをタップして置こう（のこり ${left}）`;
   else hint.textContent = plan.sent ? 'ほかの人を待っています…（変えたら、もう一度決定）' : '兵を置ききりました。「決定！」を押そう';
@@ -473,8 +475,8 @@ function renderLobby() {
   const host = room.isHost(), ms = room.members, bots = room.lobby.bots || [];
   const total = Math.min(ms.length, MAX_PLAYERS) + bots.length;
   $('#lobbyCount').textContent = `${total}人` + (ms.length > MAX_PLAYERS ? `（${MAX_PLAYERS}人まで。ほかの人は見学）` : '');
-  $('#lobbyList').innerHTML = ms.map((m, i) => `<li class="${m.id === myId ? 'me' : ''}"><i class="dot" style="background:${G.COLORS[i % G.COLORS.length]}"></i><span class="nm">${m.id === room.hostId() ? '👑' : ''}${esc(m.name)}</span></li>`).join('')
-    + bots.map((b, j) => `<li><i class="dot" style="background:${G.COLORS[(ms.length + j) % G.COLORS.length]}"></i><span class="nm">${esc(b.name)}<small> ${LEVELS[b.bot]}</small></span>${host ? `<button data-rm="${b.id}" aria-label="外す">✕</button>` : ''}</li>`).join('');
+  $('#lobbyList').innerHTML = ms.map((m, i) => `<li class="${m.id === myId ? 'me' : ''}"><i class="dot" style="background:${G.COLORS[i % G.COLORS.length]}"></i><span class="nm">${m.id === room.hostId() ? ic('crown') : ''}${esc(m.name)}</span></li>`).join('')
+    + bots.map((b, j) => `<li><i class="dot" style="background:${G.COLORS[(ms.length + j) % G.COLORS.length]}"></i><span class="nm">${nameHtml(b)}<small> ${LEVELS[b.bot]}</small></span>${host ? `<button data-rm="${b.id}" aria-label="外す">✕</button>` : ''}</li>`).join('');
   $('#hostBox').hidden = !host; $('#botBox').hidden = !host; $('#lobbyWait').hidden = host; $('#btnStart').hidden = !host;
   for (const b of $('#roundsSeg').children) b.classList.toggle('on', +b.dataset.r === room.lobby.rounds);
   for (const b of $('#botSeg').children) b.disabled = total >= MAX_PLAYERS;
@@ -486,18 +488,18 @@ function renderEnd() {
   $('#btnAgain').hidden = !room.isHost(); $('#endWait').hidden = room.isHost();
   if (seenEnd === st.gid) return;
   seenEnd = st.gid; bgm.setMood('end'); prevRanks = null;
-  const aw = G.awards(st), medals = ['🏰', '⚔️', '🪄', '💠', '🚀', '🛡️'];
+  const aw = G.awards(st), medals = ['castle', 'hero', 'wand', 'rune', 'rise', 'shield'];
   $('#awards').innerHTML = ''; $('#podium').innerHTML = ''; $('#rank').innerHTML = '';
   aw.forEach((a, i) => setTimeout(() => {
     const p = st.players[a.pi];
-    $('#awards').insertAdjacentHTML('beforeend', `<div class="award"><span class="medal">${medals[i % medals.length]}</span><div><b>${esc(a.title)}：${esc(p.name)}</b><small>${esc(a.desc)}</small></div></div>`);
+    $('#awards').insertAdjacentHTML('beforeend', `<div class="award"><span class="medal">${ic(medals[i % medals.length])}</span><div><b>${esc(a.title)}：${nameHtml(p)}</b><small>${esc(a.desc)}</small></div></div>`);
     sfx.pop();
   }, 500 + i * 1100));
   const t = 700 + aw.length * 1100;
   setTimeout(() => {
     const order = [rk[1], rk[0], rk[2]].filter(Boolean), h = { 0: 120, 1: 86, 2: 60 };
-    $('#podium').innerHTML = order.map(r => { const pos = rk.indexOf(r); return `<div class="pl" style="animation-delay:${(2 - pos) * 0.35}s"><span>${pos === 0 ? '👑' : ''}</span><span class="nm">${esc(r.name)}</span><span>${r.score}点</span><div class="blk" style="height:${h[pos]}px;background:${r.color}">${pos + 1}</div></div>`; }).join('');
-    $('#rank').innerHTML = rk.map((r, i) => `<li><span class="no">${i + 1}</span><i class="dot" style="background:${r.color}"></i><span class="nm">${esc(r.name)}${st.players[r.pi].id === myId ? '（自分）' : ''}</span><span class="sc">${r.score}点</span></li>`).join('');
+    $('#podium').innerHTML = order.map(r => { const pos = rk.indexOf(r); return `<div class="pl" style="animation-delay:${(2 - pos) * 0.35}s"><span>${pos === 0 ? ic('crown', 'big') : ''}</span><span class="nm">${nameHtml(st.players[r.pi])}</span><span>${r.score}点</span><div class="blk" style="height:${h[pos]}px;background:${r.color}">${pos + 1}</div></div>`; }).join('');
+    $('#rank').innerHTML = rk.map((r, i) => `<li><span class="no">${i + 1}</span><i class="dot" style="background:${r.color}"></i><span class="nm">${nameHtml(st.players[r.pi])}${st.players[r.pi].id === myId ? '（自分）' : ''}</span><span class="sc">${r.score}点</span></li>`).join('');
     $('#podium').scrollIntoView({ behavior: 'smooth', block: 'center' });
     setTimeout(() => { sfx.fanfare(); confetti(); }, 900);
   }, t);
@@ -538,7 +540,8 @@ $('#btnStart').onclick = () => { room.start(); sfx.lock(); };
 $('#btnAgain').onclick = () => room.backToLobby();
 $('#btnUndo').onclick = undo; $('#btnGo').onclick = go;
 $('#hand').onclick = e => { const b = e.target.closest('button'); if (b) tapCard(+b.dataset.h); };
-$('#helpCards').innerHTML = Object.values(G.CARDS).map(c => `<li>${c.icon} <b>${c.name}</b>：${c.text}</li>`).join('');
+$('#btnMenu').innerHTML = ic('menu'); $('#btnUndo').innerHTML = ic('undo') + ' 戻す';
+$('#helpCards').innerHTML = Object.values(G.CARDS).map(c => `<li>${ic(c.icon)} <b>${c.name}</b>：${c.text}</li>`).join('');
 $('#btnHelp').onclick = () => $('#help').showModal();
 $('#btnMHelp').onclick = () => { $('#menu').close(); $('#help').showModal(); };
 const optText = () => { $('#btnBgm').textContent = '音楽：' + (opt.bgm ? 'オン' : 'オフ'); $('#btnSound').textContent = '効果音：' + (opt.sfx ? 'オン' : 'オフ'); };

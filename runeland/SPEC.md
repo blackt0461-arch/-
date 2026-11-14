@@ -106,7 +106,7 @@
 ## ファイル
 - index.html / style.css / app.js（画面）
 - game.js（ルール。画面なし。試験からも使う。バランスの数字は BAL にまとめた）
-- ai.js（コンピューターの作戦）、audio.js（音）
+- ai.js（コンピューターの作戦）、audio.js（音）、icons.js（自作の絵。カード・イベント・王冠・コンピューター・称号などは絵文字を使わず、すべてここの SVG。本人の希望 2026-11-14）
 - net.js（部屋のつながり）、relay-config.js（公開用の鍵）
 - sw.js / manifest.webmanifest / icon.svg・icon-192.png・icon-512.png（ホーム画面に置ける）
 - tests/（にせプレイヤーで試す道具。公開物には入らない）。package.json は試験を node で動かすためのもの

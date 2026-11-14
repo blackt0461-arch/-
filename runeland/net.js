@@ -106,8 +106,8 @@ export class Room {
     const bots = this.lobby.bots || [];
     if (this.members.length + bots.length >= MAX_PLAYERS) return;
     const used = new Set(bots.map(b => b.name));
-    const nm = BOT_NAMES.find(n => !used.has('🤖' + n)) || 'CPU';
-    this.lobby = { ...this.lobby, bots: [...bots, { id: 'cpu-' + Math.random().toString(36).slice(2, 8), name: '🤖' + nm, bot: level }] };
+    const nm = BOT_NAMES.find(n => !used.has(n)) || 'CPU';
+    this.lobby = { ...this.lobby, bots: [...bots, { id: 'cpu-' + Math.random().toString(36).slice(2, 8), name: nm, bot: level }] };
     this.send('lobby', this.lobby); this.onChange(this);
   }
   removeBot(id) { if (!this.isHost()) return; this.lobby = { ...this.lobby, bots: (this.lobby.bots || []).filter(b => b.id !== id) }; this.send('lobby', this.lobby); this.onChange(this); }

@@ -1,0 +1,35 @@
+// ルーンランド：自作の絵（SVG）。絵文字のかわりに使う。どれも 32×32 の中にかく
+const INK = '#5b4636';
+const s = (body) => `<svg class="gi" viewBox="0 0 32 32" aria-hidden="true" fill="none" stroke="${INK}" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round">${body}</svg>`;
+
+const P = {
+  // ---- 魔法カード ----
+  dragon: `<path d="M5 22c2-7 7-11 13-11 4 0 7 2 8 5l-3 1 2 3-4-1c-1 3-4 5-8 5H7z" fill="#e86b3a"/><path d="M14 11l-2-5 4 3 1-4 2 5" fill="#f2a24a"/><circle cx="20" cy="15" r="1.2" fill="${INK}" stroke="none"/><path d="M26 19c2 0 3 1 4 3M26 21c1 1 2 2 2 4" stroke="#e3a93b" stroke-width="2"/>`,
+  shield: `<path d="M16 4l10 4v7c0 7-5 11-10 13C11 26 6 22 6 15V8z" fill="#8fc3e0"/><path d="M16 8l6 2.5v4.5c0 4.5-3 7-6 8.5-3-1.5-6-4-6-8.5v-4.5z" fill="#d7ecf7"/><path d="M16 11v9M12.5 15h7" stroke="#3f7fb0"/>`,
+  portal: `<ellipse cx="16" cy="16" rx="11" ry="12" fill="#c9b6f2"/><path d="M16 9c4 0 6 3 6 6s-3 5-5.5 5-4-2-4-4 1.5-3 3.5-3 2.5 1 2.5 2" stroke="#6a3fd0" stroke-width="2"/><path d="M5 28h22" stroke-width="2"/>`,
+  hero: `<path d="M7 25L22 6l3 1-1 3L9 27z" fill="#e8e3d6"/><path d="M25 25L10 6l-3 1 1 3 15 17z" fill="#e8e3d6"/><path d="M6 21l5 5M26 21l-5 5" stroke="#b9773a" stroke-width="2.6"/>`,
+  dice: `<rect x="6" y="6" width="20" height="20" rx="5" fill="#fffaf0"/><circle cx="11.5" cy="11.5" r="1.8" fill="#d9573f" stroke="none"/><circle cx="16" cy="16" r="1.8" fill="${INK}" stroke="none"/><circle cx="20.5" cy="20.5" r="1.8" fill="${INK}" stroke="none"/><circle cx="20.5" cy="11.5" r="1.8" fill="${INK}" stroke="none"/><circle cx="11.5" cy="20.5" r="1.8" fill="${INK}" stroke="none"/>`,
+  storm: `<path d="M5 8h20M8 13h17M10 18h12M13 23h7M15 27h3" stroke="#6b8fa8" stroke-width="2.4"/><path d="M24 4c3 2 3 6 0 8" stroke="#6b8fa8"/>`,
+  treasure: `<path d="M9 6h14l5 7-12 14L4 13z" fill="#9ee0e4"/><path d="M4 13h24M12 6l-3 7 7 14 7-14-3-7" stroke="#2f8a96"/>`,
+  // ---- イベント ----
+  raid: `<path d="M4 20c3-6 8-9 14-9l5-5 1 5c3 1 5 3 5 6l-4 1 1 3-5-1-2 4H8z" fill="#7aa35a"/><circle cx="21" cy="15" r="1.3" fill="${INK}" stroke="none"/><path d="M8 25l-2 3M13 25l-1 3" /><path d="M18 11l-1-5 3 2" fill="#e3a93b"/>`,
+  wave: `<path d="M3 22c3-1 4-8 10-9 5-1 8 3 6 6-1 2-4 2-5 0 3 0 3-4 0-4-4 0-5 7-11 9" fill="#8fc3e0"/><path d="M3 27c3 0 4-2 7-2s4 2 7 2 4-2 7-2 4 2 6 2" stroke="#3f7fb0" stroke-width="2"/>`,
+  gold: `<circle cx="13" cy="18" r="8" fill="#f2c25a"/><circle cx="13" cy="18" r="5" stroke="#c4862a"/><circle cx="22" cy="10" r="5.5" fill="#f2c25a"/><path d="M22 7.5v5" stroke="#c4862a"/>`,
+  glow: `<path d="M16 3l2.5 8.5L27 14l-8.5 2.5L16 25l-2.5-8.5L5 14l8.5-2.5z" fill="#f4eeff" stroke="#7a4fd6"/><path d="M26 22l1 3 3 1-3 1-1 3-1-3-3-1 3-1z" fill="#f2c25a" stroke="#c4862a" stroke-width="1"/>`,
+  fairy: `<circle cx="16" cy="11" r="3.5" fill="#fbe3c8"/><path d="M13 16h6l2 9h-10z" fill="#f7c6e3"/><path d="M13 16c-6-6-10-1-8 3s6 1 8-1M19 16c6-6 10-1 8 3s-6 1-8-1" fill="#e4f6f9" stroke="#7fb4c8"/><path d="M24 5l1 2 2 1-2 1-1 2-1-2-2-1 2-1z" fill="#f2c25a" stroke="none"/>`,
+  // ---- その他 ----
+  chest: `<rect x="5" y="14" width="22" height="12" rx="2" fill="#b9773a"/><path d="M5 15c0-6 4-8 11-8s11 2 11 8z" fill="#d18f45"/><path d="M5 15h22" /><rect x="14" y="13" width="4" height="6" rx="1" fill="#f2c25a"/>`,
+  yay: `<path d="M8 28V5" stroke-width="2"/><path d="M8 6c5-2 8 2 13 0l3 8c-5 2-8-2-13 0z" fill="#e3a93b"/><path d="M22 20l1.5 3 3 .5-2.2 2 .6 3-2.9-1.5-2.9 1.5.6-3-2.2-2 3-.5z" fill="#f2c25a" stroke="#c4862a" stroke-width="1"/>`,
+  oops: `<path d="M16 4l10 4v7c0 7-5 11-10 13C11 26 6 22 6 15V8z" fill="#e8d8c4"/><path d="M15 6l3 7-4 4 3 5-2 5" stroke="#d9573f" stroke-width="1.8"/>`,
+  crown: `<path d="M5 24l-1-14 6 5 6-9 6 9 6-5-1 14z" fill="#f2c25a"/><path d="M5 24h22" stroke-width="2"/><circle cx="16" cy="18" r="1.6" fill="#d9573f" stroke="none"/>`,
+  bot: `<rect x="7" y="9" width="18" height="15" rx="5" fill="#cfe0d8"/><path d="M16 9V5" /><circle cx="16" cy="4" r="1.6" fill="#e3a93b"/><circle cx="12.5" cy="16" r="2" fill="${INK}" stroke="none"/><circle cx="19.5" cy="16" r="2" fill="${INK}" stroke="none"/><path d="M13 20.5h6"/>`,
+  castle: `<path d="M6 27V13h3v3h3v-3h3v3h2v-3h3v3h3v-3h3v14z" fill="#fffaf0"/><path d="M14 27v-5a2 2 0 0 1 4 0v5" fill="#c4a77a"/><path d="M16 13V5l5 2-5 2" fill="#e3a93b"/>`,
+  wand: `<path d="M6 27L20 13" stroke-width="3" stroke="#8a5a3b"/><path d="M22 4l1.5 4.5L28 10l-4.5 1.5L22 16l-1.5-4.5L16 10l4.5-1.5z" fill="#f2c25a" stroke="#c4862a"/>`,
+  rune: `<path d="M16 3l8 13-8 13-8-13z" fill="#f4eeff" stroke="#7a4fd6" stroke-width="1.8"/><path d="M16 9v14M12.5 13l7 5" stroke="#7a4fd6"/>`,
+  rise: `<path d="M5 25l7-7 5 4 9-11" stroke="#5aa36a" stroke-width="2.6"/><path d="M19 11h7v7" stroke="#5aa36a" stroke-width="2.6"/>`,
+  menu: `<path d="M7 10h18M7 16h18M7 22h18" stroke-width="2.4"/>`,
+  undo: `<path d="M11 9L6 14l5 5" stroke-width="2.2"/><path d="M6 14h12a7 7 0 0 1 0 14h-4" stroke-width="2.2"/>`,
+};
+export function ic(name, cls = '') { const b = P[name]; return b ? s(b).replace('class="gi"', `class="gi ${cls}"`) : ''; }
+// 盤面（SVG）の中に置く時
+export function icAt(name, x, y, size) { const b = P[name]; return b ? `<svg x="${x - size / 2}" y="${y - size / 2}" width="${size}" height="${size}" viewBox="0 0 32 32" fill="none" stroke="${INK}" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round">${b}</svg>` : ''; }
