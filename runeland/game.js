@@ -3,8 +3,8 @@
 
 export const T = { PLAIN: 0, FOREST: 1, MOUNTAIN: 2, LAKE: 3, RUNE: 4, VILLAGE: 5, SHRINE: 6, MINE: 7, TOWER: 8 };
 export const DEF = [0, 1, 2, 0, 2, 1, 1, 0, 2]; // 土地の守り
-// マスの効果：村＝兵+1・守り+1／神殿＝配られるカード+1／金鉱＝毎ラウンド1点／見張りの塔＝守り+2・となりの自分のマスも守り+1
-export const TILE_INFO = ['草原', '森（守り+1）', '山（守り+2）', '湖（取れない）', 'ルーンの石（3点・兵+1）', '村（兵+1・守り+1）', '神殿（カード+1枚）', '金鉱（毎ラウンド1点）', '見張りの塔（守り+2・となりも+1）'];
+// マスの効果：村＝兵+1・守り+1／神殿＝配られるカード+1／金鉱＝2ラウンド続けて守ると、そのあと毎ラウンド1点／見張りの塔＝守り+2・となりの自分のマスも守り+1
+export const TILE_INFO = ['草原', '森（守り+1）', '山（守り+2）', '湖（取れない）', 'ルーンの石（3点・兵+1）', '村（兵+1・守り+1）', '神殿（カード+1枚）', '金鉱（2ラウンド守ると毎ラウンド1点）', '見張りの塔（守り+2・となりも+1）'];
 export const CASTLE_DEF = 3, CASTLE_PT = 2, RUNE_PT = 3, BONUS_PT = 2;
 export const HAND_MAX = 8, HAND_DEAL = 3, START_CARDS = 3; // 手札は毎ラウンド3枚配りなおし（宝箱などで足されることがある）
 export const COLORS = ['#e8483b', '#3a7be0', '#f2b631', '#3fae5a', '#a05ad6', '#f07fb4', '#22b5c4', '#f08a2c',
@@ -352,8 +352,12 @@ export function resolve(st0, plans) {
     event = { k, tiles: applyEvent(k, null, 99) };
     st.lastEvent = st.round;
   }
-  // 金鉱：持っている人は毎ラウンド1点
-  st.players.forEach((p, pi) => { if (!p.out) p.bonus += countOf(st, pi, T.MINE); });
+  // 金鉱：同じ人が2ラウンド続けて守ったら1点。そのあとも持ち続ければ、毎ラウンド1点
+  st.mines ||= {}; const mineGot = [];
+  st.terrain.forEach((t, i) => { if (t !== T.MINE) return; const o = st.owner[i];
+    if (o < 0) { delete st.mines[i]; return; }
+    const kept = st0.owner[i] === o; st.mines[i] = kept ? (st.mines[i] || 0) + 1 : 0;
+    if (st.mines[i] >= 2 && !st.players[o].out) { st.players[o].bonus += 1; mineGot.push([i, o]); } });
   // 最終ラウンド：取ったマスは2点（1点おまけ）
   if (st.round === st.rounds) for (const c of changed) if (st.owner[c.i] === c.to) st.players[c.to].bonus += 1;
   // 宝箱が足りなければ、ときどき新しく出す
@@ -379,7 +383,7 @@ export function resolve(st0, plans) {
   for (const l of log) st.stats[l.pi].cards++;
   for (const k in gainNow) st.stats[k].best = Math.max(st.stats[k].best, gainNow[k]);
   const forceOut = [...force].map(([i, f]) => [i, [...f]]);
-  st.last = { round: st.round, changed, burned, shields: [...shields], log, force: forceOut, dice, opened, event, fights, thunder, catapult, thief, sealed, swapped, fallen };
+  st.last = { round: st.round, changed, burned, shields: [...shields], log, force: forceOut, dice, opened, event, fights, thunder, catapult, thief, sealed, swapped, fallen, mineGot };
   ranking(st).forEach((x, pos) => { st.stats[x.pi].worst = Math.max(st.stats[x.pi].worst, pos); });
   st.round++;
   if (st.round > st.rounds) st.phase = 'end';

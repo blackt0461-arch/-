@@ -527,6 +527,7 @@ function celebrate(st) {
   for (const c of L.changed) { won[c.to] = (won[c.to] || 0) + 1; if (c.from >= 0) lost[c.from] = (lost[c.from] || 0) + 1; }
   for (const i of L.burned) { const o = prevOwners ? prevOwners[i] : -1; if (o >= 0) lost[o] = (lost[o] || 0) + 1; }
   if (L.event) for (const [, o] of L.event.tiles) lost[o] = (lost[o] || 0) + 1;
+  if (pi >= 0) { const mg = (L.mineGot || []).filter(([, o]) => o === pi).length; if (mg) toast(`金鉱から +${mg}点`, 3000, 'mine'); }
   if (pi >= 0) for (const o of L.opened || []) if (o.pi === pi) toast(`宝箱から ${o.card ? G.CARDS[o.card].name : o.pt + '点'}！`, 3500, 'chest');
   const rk = G.ranking(st), newRanks = new Map(rk.map((x, i) => [x.pi, i]));
   if (pi >= 0) {
@@ -568,12 +569,14 @@ function updateCoach() {
 // ---------- 画面 ----------
 function show(id) { for (const s of document.querySelectorAll('.screen')) s.hidden = s.id !== id; }
 function toast(t, ms = 2600, icon = '') { const d = document.createElement('div'); d.innerHTML = (icon ? ic(icon) + ' ' : '') + esc(t); $('#toast').append(d); while ($('#toast').children.length > 3) $('#toast').firstChild.remove(); setTimeout(() => d.remove(), ms); }
-let stepSeen = '', seenEnd = '', chipDelta = null, lastRoundSeen = '', handSeen = '';
+let endReady = '', endT = 0, stepSeen = '', seenEnd = '', chipDelta = null, lastRoundSeen = '', handSeen = '';
 function render() {
   if (!room) { show('home'); return; }
   const st = room.state;
   if (!st) return renderLobby();
-  if (st.phase === 'end') return renderEnd();
+  // 最後のラウンドも、結果の動きを見せてから終わりの画面へ
+  const lastKey = st.last ? st.gid + ':' + st.last.round : '';
+  if (st.phase === 'end' && (revealDone === lastKey && !B.anim && endReady === lastKey || !st.last || !prevOwners)) return renderEnd();
   show('game');
   const pi = room.meIndex();
   if (pi >= 0) planFor(st);
@@ -591,6 +594,8 @@ function render() {
     if (st.round === 1) { bgm.setMood('calm'); chipDelta = null; }
   }
   if (st.step === 'plan' && st.cardMs && stepSeen !== st.gid + ':' + st.round) { stepSeen = st.gid + ':' + st.round; banner('② 兵を置こう！', `${Math.round(st.planMs / 1000)}秒`, 'castle'); sfx.pop(); }
+  if (st.phase === 'end' && st.last && revealDone !== lastKey) { revealDone = lastKey; playReveal(st); }
+  if (st.phase === 'end' && revealDone === lastKey && !B.anim && endReady !== lastKey && !endT) endT = setTimeout(() => { endT = 0; endReady = lastKey; render(); }, 3500);
   if (st.step === 'reveal' && st.last && revealDone !== st.gid + ':' + st.last.round) { revealDone = st.gid + ':' + st.last.round; playReveal(st); }
   renderTop(); renderChips(); renderScore(); renderPanel(); updateCoach();
 }
@@ -798,7 +803,7 @@ const INTRO = [
   { t: '兵の数', b: '兵は<b>毎ラウンド新しく配られます</b>（前のラウンドの兵は残りません）。<br>盤面の<b>左上</b>に「兵 のこり」が出ます。押すと内わけが見られます。', a: `<div class="tb"><small>兵 のこり</small><b>4</b><small>/ 6人</small></div>`, l: `<ul class="plain sm"><li>基本 <b>3人</b></li><li>土地6マスごとに <b>+1</b></li><li>ルーンの石・村 1つにつき <b>+1</b></li><li>終盤は <b>+1〜+3</b>、点数が下半分なら <b>+2</b></li></ul>` },
   { t: '兵を置く', b: '置けるのは<b>自分のマス</b>か、その<b>となり</b>（点線で光っているマス）。<br>タップするたびに1人。<b>長押し</b>か「戻す」で1人戻せます。<br>自分のマスに置くと、そのマスの<b>守り</b>になります。', a: `<svg viewBox="0 0 80 68">${hexes([[0, 0, '#e9a3a0', '自'], [1, 0, '#fff6c8', '2', 1], [-1, 0, '#fff6c8', '', 1], [0, -1, '#fff6c8', '', 1], [1, -1, '#fff6c8', '', 1], [0, 1, '#fff6c8', '1', 1], [-1, 1, '#fff6c8', '', 1]])}</svg>` },
   { t: '取れるかどうか', b: '置いた兵が、そのマスの<b>守りより多ければ</b>取れます。同じ数なら守る側の勝ち。<br>光るマスの<b>小さい数字</b>が、取るのに要る兵です。', a: `<div class="vs"><div><b>3</b><small>あなたの兵</small></div><span>＞</span><div><b>2</b><small>守り（持ち主+1・森+1）</small></div></div>`, l: `<ul class="plain sm"><li>守り＝持ち主<b>+1</b>＋土地の守り＋持ち主が置いた兵</li><li>何人もが同じマスに置いたら、いちばん多い人。攻める人どうしが同じ数なら、だれも取れない</li><li>2人以上が同じマスに置くと<b>サイコロ</b>：みんなに 0〜2 が足される</li><li>結果の時にマスを押すと、<b>なぜ取れた／取れなかったか</b>が見られます</li></ul>` },
-  { t: 'マスの種類', b: '', a: '', l: `<ul class="rows">${row('castle', 'お城', '守り+3・2点。包囲された時だけ攻められる')}${row('rune', 'ルーンの石', '3点・兵+1・守り+2')}${row('village', '村', '兵+1・守り+1')}${row('shrine', '神殿', '配られるカード+1枚・守り+1')}${row('mine', '金鉱', '持っている間、毎ラウンド1点')}${row('tower', '見張りの塔', '守り+2。となりの自分の土地も守り+1')}<li><span class="sw" style="background:#a5c98a"></span><span><b>森</b>守り+1　<b>山</b>守り+2　<b>湖</b>取れない　<b>草原</b>守りなし</span></li></ul>` },
+  { t: 'マスの種類', b: '', a: '', l: `<ul class="rows">${row('castle', 'お城', '守り+3・2点。包囲された時だけ攻められる')}${row('rune', 'ルーンの石', '3点・兵+1・守り+2')}${row('village', '村', '兵+1・守り+1')}${row('shrine', '神殿', '配られるカード+1枚・守り+1')}${row('mine', '金鉱', '2ラウンド続けて守ると1点。そのあとも持っている間、毎ラウンド1点')}${row('tower', '見張りの塔', '守り+2。となりの自分の土地も守り+1')}<li><span class="sw" style="background:#a5c98a"></span><span><b>森</b>守り+1　<b>山</b>守り+2　<b>湖</b>取れない　<b>草原</b>守りなし</span></li></ul>` },
   { t: 'お城を取られたら負け！', b: 'お城は、持ち主のまわりの土地が<b>ぜんぶ取られて包囲</b>された時だけ攻められます。<br>お城を取られると<b>落城</b>。その人は負けで、あとは見学。土地は全部、お城を取った人のものに！<br>自分のお城の<b>まわりのマス</b>を守ろう。', a: `<svg viewBox="0 0 80 68">${hexes([[0, 0, '#e9a3a0', '城'], [1, 0, '#9fb9ea'], [-1, 0, '#9fb9ea'], [0, -1, '#9fb9ea'], [1, -1, '#9fb9ea'], [0, 1, '#9fb9ea'], [-1, 1, '#9fb9ea']])}</svg><small class="cap">まわりを全部取られると、お城が攻められる</small>` },
   { t: '魔法カード', b: '毎ラウンド<b>3枚</b>配りなおし。ラウンドの始めの<b>カードを選ぶ時間</b>に、<b>1枚</b>使えます。順位が下の人ほど、強いカードが来ます。<br>相手のマスをえらぶカードは、カードを押してからマスをタップ。', a: '', l: `<ul class="rows cards">${Object.values(G.CARDS).map(c => row(c.icon, c.name, c.text)).join('')}</ul>` },
   { t: '宝箱と天災', b: '宝箱のマスを取ると、<b>カード1枚</b>か<b>2点</b>。宝箱はときどき新しく出ます。<br>ときどき予告なしで<b>天災・イベント</b>が起きます。', a: `<div class="icons">${ic('chest')}${ic('meteor')}${ic('gold')}</div>`, l: `<ul class="rows">${Object.values(G.EVENTS).map(e => row(e.icon, e.name.replace(/[！!]$/, ''), e.text)).join('')}</ul>` },
