@@ -7,6 +7,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import * as G from './game.js';
 
 const SQ = Math.sqrt(3);
+const TILT = 70; // カメラの角度（90＝真上）
 const H = [0.30, 0.36, 0.44, 0.10, 0.38]; // マスの高さ（草原・森・山・湖・ルーン）
 const TOP = ['#b9d585', '#8fbf6e', '#c9b48e', '#6fb2c8', '#cdbff0'];
 const TILE_TINT = ['#ffffff', '#b8d898', '#e8cfa0', '#cfe6f0', '#ece4ff']; // 草の地面モデルに掛ける色（地形ごと）
@@ -15,7 +16,7 @@ const ease = t => 1 - Math.pow(1 - t, 3);
 const lerp = (a, b, t) => a + (b - a) * t;
 
 // ---- Meshy のモデル（あれば使う。なければ自作の形） ----
-const MODEL_H = { tile: 0, castle: 0.9, soldier: 0.5, dragon: 1.1, tree: 0.7, chest: 0.3, runestone: 0.75, fairy: 0.3 };
+const MODEL_H = { tile: 0, castle: 0.9, soldier: 0.5, dragon: 1.1, tree: 0.8, chest: 0.36, runestone: 0.8, fairy: 0.3, mountain: 0.65 };
 // 盤面の上で見えやすく：明るさ（色の倍率）と、横の太さ
 const MODEL_TUNE = { tree: { light: 1.6, wide: 1.7 }, chest: { light: 1.9, wide: 1 }, runestone: { light: 1.5, wide: 1.3 }, castle: { light: 1.15, wide: 1 }, soldier: { light: 1.1, wide: 1 } };
 async function loadModels(quality) {
@@ -142,7 +143,7 @@ export class Board3D {
     const sun = this.sun = new THREE.DirectionalLight('#fff1d6', 2.2); sun.position.set(-7, 16, 5); sun.castShadow = hi;
     sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -0.0008; sun.shadow.normalBias = 0.02;
     this.scene.add(sun, sun.target);
-    this.cam = { tx: 0, tz: 0, dist: 20, fit: 20, yaw: 0 };
+    this.cam = { tx: 0, tz: 0, dist: 20, fit: 20, yaw: 0, shift: 0 };
     this.fx = []; this.lbl = new Map(); this.key = ''; this.models = {}; this.dirty = true; this.lastT = 0;
     this.ray = new THREE.Raycaster(); this.v2 = new THREE.Vector2();
     this.ready = loadModels(quality).then(m => { this.models = m; this.key = ''; this.dirty = true; if (this.st) this.build(this.st); });
@@ -219,7 +220,9 @@ export class Board3D {
     // 地形の物：山・木・ルーン・お城
     const mtn = [], trees = [], runes = [];
     for (let i = 0; i < N; i++) { const t = st.terrain[i]; if (this.isCastle(i)) continue; if (t === G.T.MOUNTAIN) mtn.push(i); if (t === G.T.FOREST) trees.push(i); if (t === G.T.RUNE) runes.push(i); }
-    if (mtn.length) {
+    if (mtn.length && this.models.mountain) { // 山のモデル（あれば）
+      const mi = toInstanced(this.models.mountain, mtn.length); mtn.forEach((i, k) => { const [x, z] = this.hp(i); mt.makeRotationY(i * 1.7).setPosition(x, this.topY(i), z); mi.setMatrixAt(k, mt); }); W.add(mi);
+    } else if (mtn.length) {
       const mg = new THREE.ConeGeometry(0.62, 0.8, 6); mg.translate(0, 0.4, 0);
       const mm = new THREE.InstancedMesh(mg, new THREE.MeshStandardMaterial({ color: '#a8957a', roughness: 1, flatShading: true }), mtn.length);
       const sg = new THREE.ConeGeometry(0.24, 0.3, 6); sg.translate(0, 0.66, 0);
@@ -228,9 +231,9 @@ export class Board3D {
       mm.castShadow = sm.castShadow = true; W.add(mm, sm);
     }
     if (trees.length) {
-      const per = this.models.tree ? 1 : (this.quality === 'high' ? 3 : 2), inst = this.models.tree ? toInstanced(this.models.tree, trees.length * per) : toInstanced(procTree(), trees.length * per);
+      const per = this.models.tree ? 2 : (this.quality === 'high' ? 3 : 2), inst = this.models.tree ? toInstanced(this.models.tree, trees.length * per) : toInstanced(procTree(), trees.length * per);
       const r = G.rng(st.seed ^ 7);
-      trees.forEach((i, k) => { const [x, z] = this.hp(i); for (let j = 0; j < per; j++) { const a = j * 2.1 + r(), d = per === 1 ? 0.15 : 0.42 + r() * 0.12, sc = 0.85 + r() * 0.3; mt.makeRotationY(r() * 6).scale(new THREE.Vector3(sc, sc, sc)).setPosition(x + Math.cos(a) * d, this.topY(i), z + Math.sin(a) * d); inst.setMatrixAt(k * per + j, mt); } });
+      trees.forEach((i, k) => { const [x, z] = this.hp(i); for (let j = 0; j < per; j++) { const a = j * 2.1 + r(), d = per === 1 ? 0.15 : per === 2 ? 0.32 + r() * 0.08 : 0.42 + r() * 0.12, sc = 0.85 + r() * 0.3; mt.makeRotationY(r() * 6).scale(new THREE.Vector3(sc, sc, sc)).setPosition(x + Math.cos(a) * d, this.topY(i), z + Math.sin(a) * d); inst.setMatrixAt(k * per + j, mt); } });
       W.add(inst);
     }
     this.runeObjs = runes.map(i => { const o = (this.models.runestone ? this.models.runestone.clone() : procRune()); const [x, z] = this.hp(i); o.position.set(x, this.topY(i), z); o.traverse(c => { if (c.isMesh) c.castShadow = true; }); W.add(o); return { i, o }; });
@@ -238,8 +241,11 @@ export class Board3D {
     for (const [i, pi] of this.castles) {
       const o = new THREE.Group(), body = this.models.castle ? this.models.castle.clone() : procCastle();
       body.traverse(c => { if (c.isMesh) c.castShadow = true; }); o.add(body);
-      const ch = new THREE.Box3().setFromObject(body).max.y; const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.45, 5), new THREE.MeshStandardMaterial({ color: '#5b4636' })); pole.position.set(0, ch + 0.2, 0); o.add(pole);
-      const flag = new THREE.Mesh(new THREE.PlaneGeometry(0.28, 0.17), new THREE.MeshStandardMaterial({ color: st.players[pi].color, side: THREE.DoubleSide, roughness: 0.7 })); flag.position.set(0.14, ch + 0.33, 0); o.add(flag); o.userData.flag = flag;
+      const ch = new THREE.Box3().setFromObject(body).max.y; const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.6, 6), new THREE.MeshStandardMaterial({ color: '#5b4636' })); pole.position.set(0, ch + 0.25, 0); o.add(pole);
+      // 上から見て分かる大きな旗（プレイヤーの色）。モデルに flag / roof という部品があれば、それもプレイヤーの色にする
+      const flag = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.32), new THREE.MeshStandardMaterial({ color: st.players[pi].color, side: THREE.DoubleSide, roughness: 0.7, emissive: st.players[pi].color, emissiveIntensity: 0.25 })); flag.position.set(0.25, ch + 0.38, 0); flag.rotation.x = -0.5; o.add(flag); o.userData.flag = flag;
+      o.userData.parts = [];
+      body.traverse(c => { if (c.isMesh && /flag|roof|banner/i.test(c.name + ' ' + [].concat(c.material).map(m => m.name).join(' '))) { c.material = [].concat(c.material).map(m => { const n = m.clone(); n.color.set(st.players[pi].color); n.map = null; return n; }); if (c.material.length === 1) c.material = c.material[0]; o.userData.parts.push(c); } });
       const [x, z] = this.hp(i); o.position.set(x, this.topY(i), z); o.rotation.y = this.models.castle ? Math.PI / 6 : -0.4; W.add(o); this.castleObjs.set(i, o); // Meshy のお城は城壁の角が x 向きなので、マスの六角形に合わせて30度回す
     }
     // 宝箱・兵のコマ（あとで並べかえる）
@@ -256,7 +262,7 @@ export class Board3D {
     this.fitDist();
     this.dirty = true; this.shadowDirty = true;
   }
-  fitDist() { if (!this.R) return; const fov = THREE.MathUtils.degToRad(this.camera.fov), a = this.camera.aspect, need = (this.R + 0.7) / Math.tan(fov / 2) / Math.min(1, a); /* 島が画面いっぱいに入る大きさ（お盆のふちは少し切れてよい） */ this.cam.fit = this.cam.dist = need; this.cam.min = need; this.updateCamera(); this.camera.far = need + 20; this.camera.updateProjectionMatrix(); }
+  fitDist() { if (!this.R) return; const fov = THREE.MathUtils.degToRad(this.camera.fov), a = this.camera.aspect, need = (this.R + 0.7) / Math.tan(fov / 2) / Math.min(1, a); /* 島が画面いっぱいに入る大きさ（お盆のふちは少し切れてよい） */ this.cam.fit = this.cam.dist = need * 1.06; this.cam.min = need; this.cam.shift = 0.25; this.updateCamera(); this.camera.far = need + 20; this.camera.updateProjectionMatrix(); }
 
   // ---- 色をぬる（持ち主） ----
   paint(st, owners) {
@@ -278,7 +284,7 @@ export class Board3D {
     }
     this.caps.instanceColor.needsUpdate = true; if (this.tint) { this.tint.instanceMatrix.needsUpdate = true; this.tint.instanceColor.needsUpdate = true; } this.rings.instanceMatrix.needsUpdate = true; if (this.rings.instanceColor) this.rings.instanceColor.needsUpdate = true;
     // お城の旗の色（取られたら取った人の色に）
-    for (const [i, obj] of this.castleObjs || []) { const o = owners[i]; obj.userData.flag.material.color.set(o >= 0 ? st.players[o].color : '#ffffff'); }
+    for (const [i, obj] of this.castleObjs || []) { const o = owners[i], col = o >= 0 ? st.players[o].color : '#ffffff'; obj.userData.flag.material.color.set(col); obj.userData.flag.material.emissive.set(col); for (const c of obj.userData.parts || []) for (const m of [].concat(c.material)) m.color.set(col); }
     this.owners = owners.slice(); this.dirty = true;
   }
 
@@ -334,9 +340,9 @@ export class Board3D {
 
   // ---- カメラ：真上から固定。盤面（お盆ごと）を画面にぴったり収める ----
   updateCamera() {
-    const d = this.cam.dist;
-    this.camera.up.set(0, 0, -1);
-    this.camera.position.set(0, d, 0.0001); this.camera.lookAt(0, 0, 0);
+    const d = this.cam.dist, tilt = THREE.MathUtils.degToRad(TILT); // ほぼ真上（少しだけ斜め）から固定
+    this.camera.up.set(0, 1, 0);
+    this.camera.position.set(0, Math.sin(tilt) * d, Math.cos(tilt) * d + this.cam.shift); this.camera.lookAt(0, 0, this.cam.shift);
   }
   // 固定カメラなので、ずらす・広げる・カメラを動かす操作は何もしない
   panPixels() {} zoomBy() {} zoomToward() {} fit() {} flyTo() {} saveView() {} restoreView() {}
