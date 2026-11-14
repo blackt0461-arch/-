@@ -1,9 +1,10 @@
 // ルーンランド：部屋のつながり（Supabase Realtime の Broadcast と Presence。DB には何も保存しない）
 // 部屋でいちばん早く入った人が「親」。親が結果を計算して全員に配る。親がぬけたら次の人が引きつぐ。
 import * as G from './game.js';
+import { aiPlan, BOT_NAMES, LEVELS } from './ai.js';
 
 export const MAX_PLAYERS = 16;
-export const REVEAL_MS = 5000;
+export const REVEAL_MS = 4000;
 const chan = code => 'runeland-' + String(code).replace(/[^0-9]/g, '').slice(0, 6);
 
 export class Room {
@@ -13,7 +14,7 @@ export class Room {
     this.onChange = opts.onChange || (() => {}); this.onStatus = opts.onStatus || (() => {});
     this.now = opts.now || (() => Date.now());
     this.state = null;          // ゲームの状態（だれも持っていなければ null＝待合室）
-    this.lobby = { rounds: 18 };
+    this.lobby = { rounds: 18, bots: [] };
     this.deadline = 0;          // 自分の時計での、いまの区切りの終わり
     this.plans = {};            // 親だけ：ラウンド → { id: plan }
     this.got = [];              // このラウンドに作戦を出した人
@@ -67,7 +68,7 @@ export class Room {
     return ids[0] || this.id;
   }
   isHost() { return this.hostId() === this.id; }
-  online(id) { return this.members.some(m => m.id === id); }
+  online(id) { return id.startsWith('cpu-') || this.members.some(m => m.id === id); }
   meIndex() { return this.state ? this.state.players.findIndex(p => p.id === this.id) : -1; }
   remain() { return Math.max(0, this.deadline - this.now()); }
 
@@ -100,10 +101,21 @@ export class Room {
   resendPlan() {
     if (this.myPlan && this.state && this.myPlan.round === this.state.round && this.state.step === 'plan') this.send('plan', { id: this.id, round: this.state.round, plan: this.myPlan.plan });
   }
+  addBot(level) {
+    if (!this.isHost()) return;
+    const bots = this.lobby.bots || [];
+    if (this.members.length + bots.length >= MAX_PLAYERS) return;
+    const used = new Set(bots.map(b => b.name));
+    const nm = BOT_NAMES.find(n => !used.has('🤖' + n)) || 'CPU';
+    this.lobby = { ...this.lobby, bots: [...bots, { id: 'cpu-' + Math.random().toString(36).slice(2, 8), name: '🤖' + nm, bot: level }] };
+    this.send('lobby', this.lobby); this.onChange(this);
+  }
+  removeBot(id) { if (!this.isHost()) return; this.lobby = { ...this.lobby, bots: (this.lobby.bots || []).filter(b => b.id !== id) }; this.send('lobby', this.lobby); this.onChange(this); }
   setRounds(n) { if (this.isHost()) { this.lobby = { ...this.lobby, rounds: n }; this.send('lobby', this.lobby); this.onChange(this); } }
   start() {
     if (!this.isHost()) return;
-    const ps = this.members.slice(0, MAX_PLAYERS).map(m => ({ id: m.id, name: m.name }));
+    const humans = this.members.slice(0, MAX_PLAYERS).map(m => ({ id: m.id, name: m.name }));
+    const ps = [...humans, ...(this.lobby.bots || []).slice(0, MAX_PLAYERS - humans.length)];
     if (ps.length < 1) return;
     const seed = (Math.random() * 2 ** 31) >>> 0;
     this.state = G.newGame({ seed, players: ps, rounds: this.lobby.rounds });
@@ -128,8 +140,17 @@ export class Room {
     if (!this.isHost() || !this.state || this.state.phase === 'end') return;
     const st = this.state;
     if (st.step === 'plan') {
+      // コンピューターは、ラウンドが始まって少したってから作戦を出す（人っぽく）
+      const t = this.now();
+      st.players.forEach((p, pi) => {
+        if (!p.bot || this.got.includes(p.id)) return;
+        const key = st.round + ':' + p.id;
+        this.botAt ||= {};
+        if (!this.botAt[key]) this.botAt[key] = t + 2500 + Math.random() * 6000;
+        if (t >= this.botAt[key]) this.gotPlan({ id: p.id, round: st.round, plan: aiPlan(st, pi, p.bot) });
+      });
       const active = st.players.filter(p => this.online(p.id));
-      const all = active.length > 0 && active.every(p => this.got.includes(p.id));
+      const all = active.some(p => !p.bot) && active.every(p => this.got.includes(p.id));
       if (this.now() >= this.deadline || all) this.resolveRound();
     } else if (st.step === 'reveal' && this.now() >= this.deadline) this.nextRound();
   }
@@ -139,7 +160,8 @@ export class Room {
     const ns = G.resolve(st, plans);
     Object.assign(ns, { gid: st.gid, hostId: this.id, seq: st.seq, step: ns.phase === 'end' ? 'end' : 'reveal' });
     this.state = ns; delete this.plans[st.round];
-    this.deadline = this.now() + REVEAL_MS;
+    // 結果を見せる時間：起きたことが多いほど少し長く（4〜9秒）
+    const L = ns.last; this.deadline = this.now() + Math.min(9000, Math.max(REVEAL_MS, 3000 + L.log.length * 600 + L.changed.length * 60));
     this.got = [];
     this.broadcast();
   }

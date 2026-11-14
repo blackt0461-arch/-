@@ -5,10 +5,13 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>ルーンランド</title>
 <meta name="description" content="みんなのスマホで同じ部屋に入って遊ぶ、ファンタジーの陣取りゲーム">
-<meta name="theme-color" content="#16261c">
+<meta name="theme-color" content="#efe2c4">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;800&display=swap">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -16,73 +19,95 @@
   <!-- はじめの画面 -->
   <section id="home" class="screen">
     <div class="logo"><img src="icon.svg" alt=""><h1>ルーンランド</h1><p>みんなで遊ぶ ファンタジー陣取り</p></div>
-    <label class="field">ニックネーム<input id="nick" maxlength="12" placeholder="例：こてつ" autocomplete="off"></label>
-    <button id="btnCreate" class="big">部屋を作る</button>
-    <div class="or">または</div>
-    <div class="joinrow"><input id="code" inputmode="numeric" maxlength="4" placeholder="4けたの番号" autocomplete="off"><button id="btnJoin">入る</button></div>
-    <button id="btnHelp" class="link">遊び方</button>
-    <p id="homeMsg" class="msg"></p>
+    <div class="paper">
+      <label class="field">ニックネーム<input id="nick" maxlength="12" placeholder="例：こてつ" autocomplete="off"></label>
+      <button id="btnCreate" class="big">部屋を作る</button>
+      <div class="or"><span>または 番号で入る</span></div>
+      <div class="joinrow"><input id="code" inputmode="numeric" maxlength="4" placeholder="0000" autocomplete="off"><button id="btnJoin" class="sub">入る</button></div>
+      <p id="homeMsg" class="msg"></p>
+    </div>
+    <button id="btnHelp" class="ghost">遊び方を見る</button>
     <p class="foot">KOTETSU WORKS ・ 名前はニックネームだけ。何も保存しません</p>
   </section>
 
   <!-- 待合室 -->
   <section id="lobby" class="screen" hidden>
-    <div class="roomcode">部屋の番号<b id="lobbyCode">----</b></div>
-    <button id="btnShare">友だちを招待する</button>
-    <h2>入っている人 <span id="lobbyCount"></span></h2>
-    <ul id="lobbyList" class="plist"></ul>
-    <div id="hostBox">
+    <div class="paper center">
+      <div class="roomcode">部屋の番号<b id="lobbyCode">----</b></div>
+      <button id="btnShare" class="sub wide">友だちを招待する</button>
+    </div>
+    <div class="paper">
+      <h2>入っている人 <span id="lobbyCount"></span></h2>
+      <ul id="lobbyList" class="plist"></ul>
+      <div id="botBox">
+        <h3>コンピューターを足す</h3>
+        <div class="seg" id="botSeg"><button data-l="easy">やさしい</button><button data-l="normal">ふつう</button><button data-l="hard">つよい</button></div>
+      </div>
+    </div>
+    <div id="hostBox" class="paper">
       <h2>長さ</h2>
       <div class="seg" id="roundsSeg">
         <button data-r="12">短め<small>約9分</small></button><button data-r="18">ふつう<small>約13分</small></button><button data-r="24">長め<small>約18分</small></button>
       </div>
-      <button id="btnStart" class="big">はじめる</button>
     </div>
-    <p id="lobbyWait" class="msg">部屋を作った人がはじめるのを待っています…</p>
-    <button id="btnLeave" class="link">部屋を出る</button>
+    <div class="bottom">
+      <p id="lobbyWait" class="msg">部屋を作った人がはじめるのを待っています…</p>
+      <button id="btnStart" class="big">はじめる</button>
+      <button id="btnLeave" class="ghost">部屋を出る</button>
+    </div>
   </section>
 
   <!-- ゲーム -->
   <section id="game" class="screen" hidden>
     <header class="bar">
-      <div><small>ラウンド</small><b id="gRound">1/18</b></div>
-      <div class="timer"><small id="gStep">作戦</small><b id="gTime">35</b></div>
-      <div><small>兵</small><b id="gTroops">0</b></div>
-      <div><small>点</small><b id="gScore">0</b></div>
+      <div class="stat"><small>ラウンド</small><b id="gRound">1/18</b></div>
+      <div class="ring" id="ring"><svg viewBox="0 0 44 44"><circle cx="22" cy="22" r="19" class="track"/><circle cx="22" cy="22" r="19" class="prog" id="ringProg"/></svg><b id="gTime">35</b></div>
+      <div class="stat"><small>自分の点</small><b id="gScore">0</b></div>
+      <div class="stat"><small>決定</small><b id="gReady">0/0</b></div>
       <button id="btnMenu" class="icon" aria-label="メニュー">☰</button>
     </header>
     <div id="players" class="chips"></div>
-    <div id="boardWrap"><svg id="board" xmlns="http://www.w3.org/2000/svg"></svg></div>
+    <div id="boardWrap">
+      <svg id="board" xmlns="http://www.w3.org/2000/svg"><g id="view"><g id="lCoast"></g><g id="lTiles"></g><g id="lIcons"></g><g id="lOver"></g></g></svg>
+      <button id="btnFit" class="fit" hidden>全体</button>
+      <div id="banner"></div>
+    </div>
     <div id="toast"></div>
     <footer class="panel">
       <p id="hint" class="hint"></p>
       <div id="hand" class="hand"></div>
       <div class="actions">
-        <button id="btnUndo">1つ戻す</button>
-        <button id="btnZoom">拡大</button>
+        <button id="btnUndo" class="sub">↶ 戻す</button>
         <button id="btnGo" class="big go">決定</button>
       </div>
     </footer>
+    <div id="coach" hidden><div class="ring2"></div><div class="bubble"></div></div>
   </section>
 
   <!-- おわり -->
   <section id="end" class="screen" hidden>
     <h1 class="title">おしまい！</h1>
+    <div id="awards" class="awards"></div>
+    <div id="podium" class="podium"></div>
     <ol id="rank" class="rank"></ol>
-    <button id="btnAgain" class="big">もう一回（待合室へ）</button>
-    <p id="endWait" class="msg">部屋を作った人が次をはじめるのを待っています…</p>
-    <button id="btnEndLeave" class="link">部屋を出る</button>
+    <div class="bottom">
+      <p id="endWait" class="msg">部屋を作った人が次をはじめるのを待っています…</p>
+      <button id="btnAgain" class="big">もう一回（待合室へ）</button>
+      <button id="btnEndLeave" class="ghost">部屋を出る</button>
+    </div>
+    <div id="confetti"></div>
   </section>
 </div>
 
 <dialog id="help">
   <h2>遊び方</h2>
   <ol>
-    <li>みんな同時に、配られた<b>兵</b>を置きます。置けるのは<b>自分のマス</b>か、その<b>となり</b>。マスをタップするたびに1つ置けます。</li>
+    <li>みんな同時に、配られた<b>兵</b>を置きます。置けるのは<b>自分のマス</b>か、その<b>となり</b>（光っているマス）。タップするたびに1つ置けます。長押しで1つ戻せます。</li>
     <li>置けたら「決定」。全員が決定するか、時間が来たら結果が出ます。</li>
     <li>マスごとに兵の数をくらべて、<b>いちばん多い人</b>のものに。持ち主は <b>＋1</b> と土地の守り（森＋1・山＋2・お城＋3）が足されます。引き分けは持ち主のまま。</li>
-    <li><b>魔法カード</b>は毎ラウンド1枚もらえて、1ラウンドに1枚使えます。</li>
+    <li><b>魔法カード</b>は毎ラウンド1枚もらえて、1ラウンドに1枚使えます。順位が下の人ほど、強いカードが出やすくなります。</li>
     <li>最後に点数がいちばん多い人の勝ち。マス1点・<b>ルーンの石</b>3点・お城2点。ルーンの石を持つと兵も増えます。</li>
+    <li>盤面は2本指で広げたり、指でずらしたりできます。</li>
   </ol>
   <h3>魔法カード</h3>
   <ul id="helpCards"></ul>
@@ -92,10 +117,11 @@
 <dialog id="menu">
   <h2>メニュー</h2>
   <p>部屋の番号 <b id="menuCode"></b></p>
-  <button id="btnMHelp">遊び方</button>
-  <button id="btnSound">音：オン</button>
-  <button id="btnMShare">友だちを招待する</button>
-  <button id="btnMLeave">部屋を出る</button>
+  <button id="btnMHelp" class="sub">遊び方</button>
+  <button id="btnBgm" class="sub">音楽：オン</button>
+  <button id="btnSound" class="sub">効果音：オン</button>
+  <button id="btnMShare" class="sub">友だちを招待する</button>
+  <button id="btnMLeave" class="sub">部屋を出る</button>
   <form method="dialog"><button class="big">とじる</button></form>
 </dialog>
 

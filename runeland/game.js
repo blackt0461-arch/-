@@ -3,28 +3,40 @@
 
 export const T = { PLAIN: 0, FOREST: 1, MOUNTAIN: 2, LAKE: 3, RUNE: 4 };
 export const DEF = [0, 1, 2, 0, 2]; // 土地の守り
-export const CASTLE_DEF = 3, CASTLE_PT = 2, RUNE_PT = 3, BONUS_PT = 3;
+export const CASTLE_DEF = 3, CASTLE_PT = 2, RUNE_PT = 3, BONUS_PT = 2;
 export const HAND_MAX = 3, START_CARDS = 2;
 export const COLORS = ['#e8483b', '#3a7be0', '#f2b631', '#3fae5a', '#a05ad6', '#f07fb4', '#22b5c4', '#f08a2c',
   '#7a5230', '#9bc53d', '#5b6ee1', '#d94f8c', '#2e8b74', '#c9a227', '#8c8c8c', '#4b3f9e'];
 export const CARDS = {
-  dragon: { name: '炎の竜', icon: '🐉', w: 3, target: 'any', text: '選んだマスを、だれのものでもない土地にもどす（お城はのぞく）' },
-  shield: { name: '守りの結界', icon: '🛡️', w: 3, target: 'own', text: '選んだ自分のマスは、このラウンド取られない' },
-  portal: { name: '転移の門', icon: '🌀', w: 3, target: null, text: 'このラウンドは、どこにでも兵を置ける' },
+  dragon: { name: '炎の竜', icon: '🐉', w: 3, target: 'any', text: '選んだマスと、となりの同じ人のマス2つまでを、空き地にもどす（お城はのぞく）' },
+  shield: { name: '守りの結界', icon: '🛡️', w: 3, target: 'own', text: '選んだ自分のマスと、そのとなりの自分のマスは、このラウンド取られない' },
+  portal: { name: '転移の門', icon: '🌀', w: 3, target: null, text: 'このラウンドは、どこにでも兵を置ける。兵 ＋2' },
   hero: { name: '勇者の加勢', icon: '⚔️', w: 3, target: null, text: 'このラウンドの兵 ＋4' },
   dice: { name: '運命のサイコロ', icon: '🎲', w: 4, target: null, text: 'このラウンドの兵 ＋1〜6' },
-  storm: { name: '大嵐', icon: '🌪️', w: 2, target: null, text: 'ほかの全員が置いた兵が、どのマスでも1ずつ減る' },
-  treasure: { name: '竜の宝', icon: '💎', w: 2, target: null, text: 'すぐに3点もらえる' },
+  storm: { name: '大嵐', icon: '🌪️', w: 2, target: null, text: 'ほかの全員の、いちばん多く兵を置いたマスで、兵が2減る' },
+  treasure: { name: '竜の宝', icon: '💎', w: 2, target: null, text: 'すぐに2点もらえる' },
 };
 const CARD_KEYS = Object.keys(CARDS);
-const CARD_W = CARD_KEYS.reduce((s, k) => s + CARDS[k].w, 0);
+// バランスの数字（tests/balance.mjs で何千回も戦わせて決める）
+export const BAL = {
+  catchUp: 0.8,        // 順位が下の人ほど強いカードが出やすくなる強さ（0＝みんな同じ）
+  strong: ['dragon', 'hero', 'portal'],
+  lateRounds: 2,       // 途中から入った人の兵が少ないラウンド数
+  lateMinus: 1,        // そのあいだ減らす兵
+  landDiv: 6,          // 持っているマスいくつごとに兵が1増えるか
+  underdog: 2,         // 点数が下半分の人に足す兵
+};
 
 export function rng(seed) { // mulberry32
   let a = seed >>> 0;
   return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
 }
 const mix = (...n) => n.reduce((h, x) => Math.imul(h ^ (x >>> 0), 2654435761) >>> 0, 0x9e3779b9);
-function drawCard(r) { let x = r() * CARD_W; for (const k of CARD_KEYS) { x -= CARDS[k].w; if (x < 0) return k; } return 'dice'; }
+// t：順位（0＝1位 … 1＝ビリ）。ビリに近いほど強いカードが出やすい
+export function cardWeights(t = 0.5) {
+  return CARD_KEYS.map(k => { const w = CARDS[k].w; return BAL.strong.includes(k) ? w * (1 + BAL.catchUp * (t - 0.5) * 2) : w * (1 - BAL.catchUp * (t - 0.5) * 0.6); }).map(w => Math.max(0.05, w));
+}
+function drawCard(r, t) { const ws = cardWeights(t), sum = ws.reduce((a, b) => a + b, 0); let x = r() * sum; for (let i = 0; i < ws.length; i++) { x -= ws[i]; if (x < 0) return CARD_KEYS[i]; } return 'dice'; }
 export function diceRoll(seed, round, pi) { return 1 + Math.floor(rng(mix(seed, round, pi, 77))() * 6); }
 
 export function radiusFor(n) { return n <= 2 ? 4 : n <= 4 ? 5 : n <= 6 ? 6 : n <= 9 ? 7 : n <= 12 ? 8 : 9; }
@@ -84,7 +96,7 @@ export function newGame({ seed, players, rounds = 18, planMs = 35000 }) {
     terrain[c] = T.PLAIN; owner[c] = i;
     for (const j of m.nb[c]) if (terrain[j] === T.LAKE) terrain[j] = T.PLAIN;
     const cr = rng(mix(seed, 3, i));
-    return { id: p.id, name: p.name, color: p.color ?? COLORS[i % COLORS.length], castle: c, hand: Array.from({ length: START_CARDS }, () => drawCard(cr)), bonus: 0 };
+    return { id: p.id, name: p.name, color: p.color ?? COLORS[i % COLORS.length], castle: c, hand: Array.from({ length: START_CARDS }, () => drawCard(cr)), bonus: 0, joined: 1, ...(p.bot ? { bot: p.bot } : {}) };
   });
   // ルーンの石：お城から離れたところに、人数＋2こ
   const runes = pickSpread(m, n + 2, castles, r).filter(i => !castles.includes(i));
@@ -96,8 +108,13 @@ export const mapOf = st => makeMap(st.seed, st.R);
 export const isCastle = (st, i) => st.players.some(p => p.castle === i);
 export function landOf(st, pi) { let n = 0; for (const o of st.owner) if (o === pi) n++; return n; }
 export function runesOf(st, pi) { let n = 0; st.owner.forEach((o, i) => { if (o === pi && st.terrain[i] === T.RUNE) n++; }); return n; }
-export function baseTroops(st, pi) { return 3 + Math.floor(landOf(st, pi) / 4) + runesOf(st, pi); }
-export function cardTroops(st, pi, card) { return card === 'hero' ? 4 : card === 'dice' ? diceRoll(st.seed, st.round, pi) : 0; }
+export function baseTroops(st, pi) {
+  const p = st.players[pi], late = p && p.joined > 1 && st.round - p.joined < BAL.lateRounds ? BAL.lateMinus : 0;
+  let ud = 0;
+  if (BAL.underdog && st.players.length > 1) { const sc = score(st, pi); const below = st.players.filter((_, j) => score(st, j) > sc).length; if (below >= st.players.length / 2) ud = BAL.underdog; }
+  return Math.max(1, 3 + Math.floor(landOf(st, pi) / BAL.landDiv) + runesOf(st, pi) - late + ud);
+}
+export function cardTroops(st, pi, card) { return card === 'hero' ? 4 : card === 'portal' ? 2 : card === 'dice' ? diceRoll(st.seed, st.round, pi) : 0; }
 export function score(st, pi) {
   let s = st.players[pi].bonus;
   st.owner.forEach((o, i) => { if (o !== pi) return; s += 1; if (st.terrain[i] === T.RUNE) s += RUNE_PT; if (isCastle(st, i)) s += CASTLE_PT; });
@@ -147,7 +164,7 @@ export function resolve(st0, plans) {
     if (!c || !c.card) return;
     st.players[pi].hand.splice(c.cardIdx, 1);
     const nm = st.players[pi].name, def = CARDS[c.card];
-    if (c.card === 'shield') shields.add(c.target);
+    if (c.card === 'shield') { shields.add(c.target); for (const j of mapOf(st).nb[c.target]) if (st0.owner[j] === pi) shields.add(j); }
     if (c.card === 'storm') stormers.push(pi);
     if (c.card === 'treasure') st.players[pi].bonus += BONUS_PT;
     log.push({ pi, card: c.card, text: `${nm}：${def.icon}${def.name}` + (c.card === 'dice' ? `（${diceRoll(st.seed, st.round, pi)}）` : '') });
@@ -156,17 +173,21 @@ export function resolve(st0, plans) {
   const burned = [];
   clean.forEach((c, pi) => {
     if (!c || c.card !== 'dragon') return;
-    const i = c.target;
-    if (shields.has(i) || isCastle(st, i) || st.owner[i] === -1) return;
+    const i = c.target, o = st.owner[i];
+    if (shields.has(i) || isCastle(st, i) || o === -1) return;
     st.owner[i] = -1; burned.push(i);
+    let more = 2;
+    for (const j of mapOf(st).nb[i]) { if (more <= 0) break; if (st.owner[j] === o && j !== i && !shields.has(j) && !isCastle(st, j)) { st.owner[j] = -1; burned.push(j); more--; } }
   });
   // マスごとに強さをくらべる
   const force = new Map(); // tile -> Map(pi -> n)
   clean.forEach((c, pi) => {
     if (!c) return;
-    const minus = stormers.filter(s => s !== pi).length;
+    // 大嵐：ほかの人が使ったぶんだけ、いちばん多く置いたマスで2ずつ減る
+    const minus = stormers.filter(s => s !== pi).length * 2;
+    let big = -1, bk = 0; for (const [i, k] of c.place) if (k > bk) { bk = k; big = i; }
     for (const [i, k] of c.place) {
-      const v = k - minus; if (v <= 0) continue;
+      const v = i === big ? k - minus : k; if (v <= 0) continue;
       if (!force.has(i)) force.set(i, new Map());
       force.get(i).set(pi, v);
     }
@@ -180,13 +201,23 @@ export function resolve(st0, plans) {
     for (const [pi, v] of f) { if (pi === o) continue; if (v > bv) { bv = v; best = pi; tie = false; } else if (v === bv) tie = true; }
     if (best >= 0 && !tie && bv > hold) { changed.push({ i, from: o, to: best }); st.owner[i] = best; }
   }
-  // カードを配る
-  st.players.forEach((p, pi) => {
-    const r = rng(mix(st.seed, st.round, pi, 5));
-    p.hand.push(drawCard(r)); while (p.hand.length > HAND_MAX) p.hand.shift();
+  // カードを配る（順位が下の人ほど強いカードが出やすい）
+  const rk = ranking(st), np = Math.max(1, rk.length - 1);
+  rk.forEach((x, pos) => {
+    const p = st.players[x.pi], r = rng(mix(st.seed, st.round, x.pi, 5));
+    p.hand.push(drawCard(r, rk.length > 1 ? pos / np : 0.5)); while (p.hand.length > HAND_MAX) p.hand.shift();
   });
+  // 表彰のための記録
+  st.stats ||= {};
+  st.players.forEach((p, pi) => { st.stats[pi] ||= { gain: 0, lost: 0, cards: 0, best: 0, worst: 0 }; });
+  const gainNow = {};
+  for (const c of changed) { gainNow[c.to] = (gainNow[c.to] || 0) + 1; st.stats[c.to].gain++; if (c.from >= 0) st.stats[c.from].lost++; }
+  for (const i of burned) { /* 燃やされた分も、取られた数に入れる */ const o = st0.owner[i]; if (o >= 0) st.stats[o].lost++; }
+  for (const l of log) st.stats[l.pi].cards++;
+  for (const k in gainNow) st.stats[k].best = Math.max(st.stats[k].best, gainNow[k]);
   const forceOut = [...force].map(([i, f]) => [i, [...f]]);
   st.last = { round: st.round, changed, burned, shields: [...shields], log, force: forceOut };
+  ranking(st).forEach((x, pos) => { st.stats[x.pi].worst = Math.max(st.stats[x.pi].worst, pos); });
   st.round++;
   if (st.round > st.rounds) st.phase = 'end';
   return st;
@@ -205,8 +236,31 @@ export function addLatePlayer(st, p) {
   if (best < 0) return false;
   st.owner[best] = pi; st.terrain[best] = T.PLAIN;
   const cr = rng(mix(st.seed, 3, pi, st.round));
-  st.players.push({ id: p.id, name: p.name, color: COLORS[pi % COLORS.length], castle: best, hand: Array.from({ length: START_CARDS }, () => drawCard(cr)), bonus: 0 });
+  st.players.push({ id: p.id, name: p.name, color: COLORS[pi % COLORS.length], castle: best, hand: Array.from({ length: START_CARDS }, () => drawCard(cr)), bonus: 0, joined: st.round, ...(p.bot ? { bot: p.bot } : {}) });
   return true;
+}
+
+// 最後の表彰：記録から、なるべくいろいろな人に称号を配る
+export function awards(st) {
+  const rk = ranking(st), S = st.stats || {}, n = st.players.length, out = [], got = new Set();
+  // まだ称号のない人を少しひいきする（いちばんの7割以上なら、その人に）
+  const pick = (title, desc, val, minV = 1) => {
+    const vs = st.players.map((_, pi) => val(pi)), top = Math.max(...vs);
+    if (!(top >= minV)) return;
+    let best = vs.indexOf(top);
+    const alt = vs.map((v, pi) => [v, pi]).filter(([v, pi]) => !got.has(pi) && v >= minV && v >= top * 0.7).sort((x, y) => y[0] - x[0])[0];
+    if (got.has(best) && alt) best = alt[1];
+    out.push({ pi: best, title, desc: desc(vs[best]) }); got.add(best);
+  };
+  const s = pi => S[pi] || { gain: 0, lost: 0, cards: 0, best: 0, worst: 0 };
+  pick('ひろい国の王', v => `${v}マスを持っていた`, pi => landOf(st, pi));
+  pick('いっきの大攻め', v => `1ラウンドで${v}マス取った`, pi => s(pi).best, 2);
+  pick('魔法つかい', v => `カードを${v}回使った`, pi => s(pi).cards, 2);
+  pick('ルーンの守り手', v => `ルーンの石を${v}つ持っていた`, pi => runesOf(st, pi));
+  const final = new Map(rk.map((x, i) => [x.pi, i]));
+  if (n >= 3) pick('大逆転', v => `${v}位ぶん追い上げた`, pi => s(pi).worst - final.get(pi), 2);
+  pick('かたい守り', v => `取られたのは${100 - v}マスだけ`, pi => (landOf(st, pi) > 0 ? 100 - s(pi).lost : -1), 0);
+  return out.slice(0, Math.min(5, Math.max(2, n)));
 }
 
 export function ranking(st) {

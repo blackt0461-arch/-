@@ -1,11 +1,11 @@
 // オンライン試験：にせプレイヤー12人が本物の Supabase Realtime で同じ部屋に入って遊ぶ。
-// 使い方：node tests/online12.test.mjs <supabase-js を入れたフォルダ> [人数] [ラウンド数]
+// 使い方：node tests/online12.test.mjs <supabase-js を入れたフォルダ> [人数] [ラウンド数] [コンピューターの数]
 // 途中で親をぬけさせて、引きつぎも試す。全員の盤面が毎ラウンド同じかを確かめる。
 import { createRequire } from 'module';
 import * as G from '../game.js';
 import { Room } from '../net.js';
 import { RELAY_URL, RELAY_KEY } from '../relay-config.js';
-const dir = process.argv[2], N = +(process.argv[3] || 12), ROUNDS = +(process.argv[4] || 5);
+const dir = process.argv[2], N = +(process.argv[3] || 12), ROUNDS = +(process.argv[4] || 5), BOTS = +(process.argv[5] || 0);
 const { createClient } = createRequire(dir + '/')('@supabase/supabase-js');
 const code = String(900000 + Math.floor(Math.random() * 99999));
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -27,7 +27,8 @@ for (let i = 0; i < N; i++) {
 await sleep(2500);
 const host = rooms.find(r => r.isHost());
 console.log(`部屋 ${code}：${N}人 入室。親=${host.id}。全員が同じ親を見ている：${rooms.every(r => r.hostId() === host.id)}`);
-host.lobby.rounds = ROUNDS; host.start();
+host.lobby.rounds = ROUNDS; for (let i = 0; i < BOTS; i++) host.addBot(['easy', 'normal', 'hard'][i % 3]); host.start();
+console.log('コンピューター ' + BOTS + '人も参加');
 let left = null;
 const t0 = Date.now();
 while (Date.now() - t0 < 240000) {
