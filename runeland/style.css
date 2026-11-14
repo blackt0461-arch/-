@@ -254,3 +254,25 @@ button.mini { min-height: 32px; padding: 2px 12px; border-radius: 99px; font-siz
 .b3labels.tiny .pill { font-size: 8px; padding: 0 4px; }
 .hand { position: relative; }
 .hand .sealed { position: absolute; inset: 0; z-index: 2; display: flex; align-items: center; justify-content: center; gap: 6px; background: #f4eeffe6; border: 2px solid #7a4fd6; border-radius: 12px; font-size: .8rem; font-weight: 800; color: #4a2f8a; }
+
+/* 点数表（盤面の右下。小さく半透明。タップで全員） */
+.sboard { position: absolute; right: 6px; bottom: 6px; z-index: 3; min-height: 0; padding: 4px 6px; border-radius: 10px; background: #fffaf0cc; border: 1.5px solid #5b463655; box-shadow: none; font-size: .72rem; line-height: 1.25; text-align: left; color: var(--ink); max-width: 46%; backdrop-filter: blur(2px); }
+.sboard ol { list-style: none; margin: 0; padding: 0; }
+.sboard li { display: flex; align-items: center; gap: 4px; white-space: nowrap; }
+.sboard li.me { font-weight: 800; }
+.sboard li.out { opacity: .5; }
+.sboard .dot { width: 9px; height: 9px; border-width: 1px; flex: none; }
+.sboard .rk { width: 1.1em; text-align: right; opacity: .7; }
+.sboard .nm { overflow: hidden; text-overflow: ellipsis; max-width: 5.5em; }
+.sboard .pt { margin-left: auto; padding-left: 6px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.sboard .gi { width: 12px; height: 12px; }
+.sboard .more { opacity: .6; text-align: center; font-size: .66rem; }
+.sboard.open { max-height: 70%; overflow-y: auto; background: #fffaf0f0; }
+.sboard.open .nm { max-width: 8em; }
+.sboard .sub { opacity: .65; font-size: .62rem; font-weight: 400; }
+#hand button.gh { background: #eef2fb; }
+/* カードが多い時（終盤・神殿・亡霊の天災）：横にすべらせて選ぶ */
+.hand { overflow-x: auto; overflow-y: visible; scrollbar-width: none; padding-top: 5px; }
+.hand::-webkit-scrollbar { display: none; }
+.hand button { min-width: 62px; }
+#board .can.still { animation: none; stroke-dasharray: none; stroke-width: 1.2; }

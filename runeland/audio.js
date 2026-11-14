@@ -53,6 +53,7 @@ export const sfx = {
   dice() { if (!opt.sfx) return; for (let i = 0; i < 5; i++) noise({ d: 0.05, f: 2500 + i * 300, v: 0.12, when: i * 0.06, q: 3 }); tone({ f: 880, d: 0.1, type: 'square', v: 0.05, when: 0.32 }); vib([10, 30, 10, 30, 10]); },
   chest() { if (!opt.sfx) return; tone({ f: 330, d: 0.12, type: 'square', v: 0.05 }); [784, 988, 1175, 1568].forEach((f, i) => tone({ f, d: 0.25, type: 'sine', v: 0.09, when: 0.12 + i * 0.07 })); vib([20, 30, 40]); },
   march() { if (!opt.sfx) return; for (let i = 0; i < 6; i++) { noise({ d: 0.08, f: 180, v: 0.25, when: i * 0.15, q: 0.8 }); tone({ f: 90, d: 0.1, type: 'sine', v: 0.18, when: i * 0.15 }); } [0.95, 1.02, 1.1].forEach((w, k) => noise({ d: 0.06, f: 5000 + k * 800, v: 0.1, when: w, q: 6 })); },
+  boom() { if (!opt.sfx) return; noise({ d: 1.0, f: 120, sweep: 0.4, v: 0.35, q: 0.6 }); tone({ f: 70, d: 0.8, type: 'sine', v: 0.3, slide: 0.5 }); vib([80, 40, 120]); },
   pop() { if (!opt.sfx) return; tone({ f: 700, d: 0.06, type: 'sine', v: 0.12, slide: 1.6 }); },
 };
 

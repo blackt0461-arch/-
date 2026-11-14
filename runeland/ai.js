@@ -20,7 +20,9 @@ function tileValue(st, i, me, sv, level) {
   let v = 1;
   const o = st.owner[i];
   if (st.terrain[i] === G.T.RUNE) v += G.RUNE_PT + 2.5; // 点＋毎ラウンドの兵
-  if (G.isCastle(st, i)) v += G.CASTLE_PT;
+  if (G.isCastle(st, i)) v += G.CASTLE_PT + (o >= 0 && o !== me && G.besieged(st, i) ? 8 : 0); // 包囲したお城は大チャンス
+  if (st.terrain[i] === G.T.VILLAGE) v += 1.5; if (st.terrain[i] === G.T.SHRINE) v += 1; if (st.terrain[i] === G.T.MINE) v += 2; if (st.terrain[i] === G.T.TOWER) v += 1;
+  if (o >= 0 && o !== me && level !== 'easy') { const c = st.players[o].castle; if (sv.m.nb[c].includes(i)) v += 1.2; } // お城のまわりをくずす
   if (st.chests && st.chests.includes(i)) v += level === 'easy' ? 1 : 2.2; // 宝箱
   if (o >= 0) v += 0.6;                                  // 相手が1マス減る分
   if (level === 'hard' && o >= 0 && o === sv.leader && o !== me) v += 1.2;
@@ -45,9 +47,11 @@ function need(st, i, me, sv, level) {
 export function aiPlan(st, pi, level = 'normal', r = Math.random) {
   const p = st.players[pi]; if (!p) return null;
   const sv = survey(st), m = sv.m;
+  if (p.out) return { place: [], card: null }; // 落城した人は見学
   const hasLand = sv.land[pi] > 0;
   const placeable = (i, portal) => {
     if (st.terrain[i] === G.T.LAKE) return false;
+    if (G.isCastle(st, i) && st.owner[i] >= 0 && st.owner[i] !== pi && !G.besieged(st, i)) return false;
     if (portal) return true;
     if (st.owner[i] === pi) return true;
     if (!hasLand) return st.owner[i] === -1;
@@ -102,10 +106,12 @@ export function aiPlan(st, pi, level = 'normal', r = Math.random) {
   const put = (i, n) => { n = Math.min(n, left); if (n <= 0) return; place.set(i, (place.get(i) || 0) + n); left -= n; };
   // 守り：ねらわれそうな大事なマス（ルーンの石・お城）
   const shielded = card && card.k === 'shield' ? card.target : -1;
-  const keep = myTiles.filter(i => i !== shielded && (st.terrain[i] === G.T.RUNE || G.isCastle(st, i)) && threat(i) > 0)
-    .sort((a, b) => threat(b) - threat(a));
+  const ring = m.nb[p.castle].filter(j => st.owner[j] === pi), thin = ring.length <= 2 && level !== 'easy'; // お城のまわりが少ない：包囲されそう
+  const keep = myTiles.filter(i => i !== shielded && (st.terrain[i] === G.T.RUNE || G.isCastle(st, i) || (thin && ring.includes(i))) && threat(i) > 0)
+    .sort((a, b) => (ring.includes(b) && thin) - (ring.includes(a) && thin) || threat(b) - threat(a));
+  if (thin) { for (const j of m.nb[p.castle]) if (st.owner[j] !== pi && placeable(j, portal) && left > 0) put(j, Math.min(left, need(st, j, pi, sv, level))); } // まわりを取りかえす
   const defShare = level === 'hard' ? 0.35 : level === 'easy' ? 0 : 0.2;
-  let defBudget = Math.floor(left * defShare);
+  let defBudget = Math.floor(left * (thin ? Math.max(defShare, 0.4) : defShare));
   for (const i of keep) { if (defBudget <= 0) break; const n = Math.min(defBudget, level === 'hard' ? Math.ceil(threat(i) / 2) : 1); put(i, n); defBudget -= n; }
   // 攻め：値打ち÷要る兵 が大きいところから
   const cand = [];

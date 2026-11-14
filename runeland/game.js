@@ -1,10 +1,12 @@
 // ルーンランド：ルール（画面なし。スマホでも試験でも同じものを使う）
 // 盤面の地形は「種」と人数から全員のスマホで同じものを作る。送るのは持ち主の並びなど小さいものだけ。
 
-export const T = { PLAIN: 0, FOREST: 1, MOUNTAIN: 2, LAKE: 3, RUNE: 4 };
-export const DEF = [0, 1, 2, 0, 2]; // 土地の守り
+export const T = { PLAIN: 0, FOREST: 1, MOUNTAIN: 2, LAKE: 3, RUNE: 4, VILLAGE: 5, SHRINE: 6, MINE: 7, TOWER: 8 };
+export const DEF = [0, 1, 2, 0, 2, 1, 1, 0, 2]; // 土地の守り
+// マスの効果：村＝兵+1・守り+1／神殿＝配られるカード+1／金鉱＝毎ラウンド1点／見張りの塔＝守り+2・となりの自分のマスも守り+1
+export const TILE_INFO = ['草原', '森（守り+1）', '山（守り+2）', '湖（取れない）', 'ルーンの石（3点・兵+1）', '村（兵+1・守り+1）', '神殿（カード+1枚）', '金鉱（毎ラウンド1点）', '見張りの塔（守り+2・となりも+1）'];
 export const CASTLE_DEF = 3, CASTLE_PT = 2, RUNE_PT = 3, BONUS_PT = 2;
-export const HAND_MAX = 5, HAND_DEAL = 3, START_CARDS = 3; // 手札は毎ラウンド3枚配りなおし（宝箱などで足されることがある）
+export const HAND_MAX = 8, HAND_DEAL = 3, START_CARDS = 3; // 手札は毎ラウンド3枚配りなおし（宝箱などで足されることがある）
 export const COLORS = ['#e8483b', '#3a7be0', '#f2b631', '#3fae5a', '#a05ad6', '#f07fb4', '#22b5c4', '#f08a2c',
   '#7a5230', '#9bc53d', '#5b6ee1', '#d94f8c', '#2e8b74', '#c9a227', '#8c8c8c', '#4b3f9e'];
 export const CARDS = {
@@ -33,6 +35,11 @@ const CARD_KEYS = Object.keys(CARDS);
 export const EVENTS = {
   raid: { name: 'ドラゴンがあらわれた！', icon: 'raid', text: 'だれかの土地が3マス、空き地にもどった' },
   wave: { name: '大波がきた！', icon: 'wave', text: '海ぞいの土地が4マス、空き地にもどった' },
+  meteor: { name: '隕石が落ちた！', icon: 'meteor', text: '落ちたマスと、そのまわりが空き地にもどった（お城はのぞく）' },
+  volcano: { name: '火山の噴火！', icon: 'volcano', text: '山のまわりの土地が、空き地にもどった' },
+  tornado: { name: '竜巻！', icon: 'tornado', text: '竜巻が通ったマスが、空き地にもどった' },
+  blizzard: { name: '吹雪', icon: 'blizzard', text: '次のラウンドは、みんな兵が1少ない' },
+  eclipse: { name: '日食', icon: 'eclipse', text: '次のラウンドは、だれもカードを使えない' },
   gold: { name: '金貨の雨', icon: 'gold', text: 'みんな1点もらえた' },
   glow: { name: 'ルーンが光った', icon: 'glow', text: 'ルーンの石を持っている人は、1つにつき1点' },
   fairy: { name: '妖精のおくりもの', icon: 'fairy', text: 'みんなカードを1枚もらえた' },
@@ -64,7 +71,7 @@ function drawCard(r, t) { const ws = cardWeights(t), sum = ws.reduce((a, b) => a
 export function dealHand(r, t, n = HAND_DEAL) { const out = []; for (let k = 0; k < 40 && out.length < n; k++) { const c = drawCard(r, t); if (!out.includes(c) || k > 30) out.push(c); } return out; } // 同じ種類が重ならないように
 export function diceRoll(seed, round, pi) { return 1 + Math.floor(rng(mix(seed, round, pi, 77))() * 6); }
 
-export function radiusFor(n) { return n <= 2 ? 4 : n <= 4 ? 5 : n <= 6 ? 6 : n <= 9 ? 7 : n <= 12 ? 8 : 9; }
+export function radiusFor(n) { return n <= 3 ? 3 : n <= 5 ? 4 : n <= 8 ? 5 : n <= 12 ? 6 : 7; } // マスを大きく見せるため、盤面は小さめ
 const DIRS = [[1, 0], [1, -1], [0, -1], [-1, 0], [-1, 1], [0, 1]];
 const dist = (a, b) => (Math.abs(a.q - b.q) + Math.abs(a.r - b.r) + Math.abs(a.q + a.r - b.q - b.r)) / 2;
 
@@ -126,8 +133,12 @@ export function newGame({ seed, players, rounds = 18, planMs = 35000 }) {
   // ルーンの石：お城から離れたところに、人数＋2こ
   const runes = pickSpread(m, n + 2, castles, r).filter(i => !castles.includes(i));
   for (const i of runes) terrain[i] = T.RUNE;
+  // 特別なマス：村・神殿・金鉱・見張りの塔
+  const taken = [...castles, ...runes];
+  const special = [[T.VILLAGE, Math.max(2, Math.round(m.N / 20))], [T.SHRINE, Math.max(1, Math.ceil(n / 3))], [T.MINE, Math.max(1, Math.ceil(n / 2))], [T.TOWER, Math.max(1, Math.round(m.N / 40))]];
+  for (const [t, cnt] of special) for (const i of pickSpread(m, cnt, taken, r)) { if (castles.includes(i) || terrain[i] === T.RUNE) continue; terrain[i] = t; taken.push(i); }
   // 宝箱：お城とルーンの石から離れたところに
-  const chests = pickSpread(m, chestTarget(n), [...castles, ...runes], r).filter(i => terrain[i] !== T.RUNE && owner[i] === -1);
+  const chests = pickSpread(m, chestTarget(n), taken, r).filter(i => terrain[i] !== T.RUNE && owner[i] === -1);
   return { v: 1, seed, R, round: 1, rounds, planMs, phase: 'plan', players: ps, terrain, owner, chests, last: null, pending: [] };
 }
 
@@ -137,11 +148,19 @@ export const diceFor = (seed, round, i, pi) => Math.floor(rng(mix(seed, round, i
 export const isCastle = (st, i) => st.players.some(p => p.castle === i);
 export function landOf(st, pi) { let n = 0; for (const o of st.owner) if (o === pi) n++; return n; }
 export function runesOf(st, pi) { let n = 0; st.owner.forEach((o, i) => { if (o === pi && st.terrain[i] === T.RUNE) n++; }); return n; }
+export const isOut = (st, pi) => !!(st.players[pi] && st.players[pi].out);
+export const countOf = (st, pi, t) => { let n = 0; st.owner.forEach((o, i) => { if (o === pi && st.terrain[i] === t) n++; }); return n; };
+// 終盤の盛り上がり：0＝ふつう／1＝終盤戦（のこり3分の1）／2＝最後の3ラウンド／3＝最終ラウンド
+export function heat(st) { const left = st.rounds - st.round; return left <= 0 ? 3 : left < 3 ? 2 : st.round > st.rounds * 2 / 3 ? 1 : 0; }
+// お城が包囲されているか（持ち主が、まわりのマスを1つも持っていない）。包囲されたお城だけ攻められる
+export function besieged(st, i) { const o = st.owner[i]; return o < 0 || !mapOf(st).nb[i].some(j => st.owner[j] === o); }
 export function baseTroops(st, pi) {
+  if (isOut(st, pi)) return 0;
   const p = st.players[pi], late = (p && p.joined > 1 && st.round - p.joined < BAL.lateRounds ? BAL.lateMinus : 0) + (p && p.sealed === st.round ? 2 : 0);
   let ud = 0;
   if (BAL.underdog && st.players.length > 1) { const sc = score(st, pi); const below = st.players.filter((_, j) => score(st, j) > sc).length; if (below >= st.players.length / 2) ud = BAL.underdog; }
-  return Math.max(1, 3 + Math.floor(landOf(st, pi) / BAL.landDiv) + runesOf(st, pi) - late + ud);
+  const vil = countOf(st, pi, T.VILLAGE), cold = st.blizzard === st.round ? 1 : 0;
+  return Math.max(1, 3 + Math.floor(landOf(st, pi) / BAL.landDiv) + runesOf(st, pi) + vil + heat(st) - late - cold + ud);
 }
 export function cardTroops(st, pi, card) { return card === 'hero' ? 4 : card === 'portal' ? 2 : card === 'knights' ? 3 : card === 'legend' ? 6 : card === 'dice' ? diceRoll(st.seed, st.round, pi) : 0; }
 export function score(st, pi) {
@@ -149,11 +168,12 @@ export function score(st, pi) {
   st.owner.forEach((o, i) => { if (o !== pi) return; s += 1; if (st.terrain[i] === T.RUNE) s += RUNE_PT; if (isCastle(st, i)) s += CASTLE_PT; });
   return s;
 }
-export function defenseOf(st, i) { return isCastle(st, i) ? CASTLE_DEF : DEF[st.terrain[i]]; }
+export function defenseOf(st, i) { if (isCastle(st, i)) return CASTLE_DEF; const o = st.owner[i]; const tower = o >= 0 && st.terrain[i] !== T.TOWER && mapOf(st).nb[i].some(j => st.owner[j] === o && st.terrain[j] === T.TOWER) ? 1 : 0; return DEF[st.terrain[i]] + tower; }
 
 // そのマスに兵を置けるか
 export function canPlace(st, pi, i, portal, knights) {
-  if (i < 0 || i >= st.owner.length || st.terrain[i] === T.LAKE) return false;
+  if (i < 0 || i >= st.owner.length || st.terrain[i] === T.LAKE || isOut(st, pi)) return false;
+  if (isCastle(st, i) && st.owner[i] >= 0 && st.owner[i] !== pi && !besieged(st, i)) return false; // 包囲されていないお城は攻められない
   if (portal) return true;
   if (st.owner[i] === pi) return true;
   const m = mapOf(st);
@@ -173,7 +193,7 @@ export function cleanPlan(st, pi, plan) {
     if (def.target === 'own' && !(target >= 0 && st.owner[target] === pi)) card = null;
     if (def.target === 'enemy' && !(target >= 0 && st.owner[target] >= 0 && st.owner[target] !== pi)) card = null;
     if (card === 'swap' && isCastle(st, target)) card = null;
-    if (p.sealed === st.round) card = null; // 封印されている
+    if (p.sealed === st.round || st.eclipse === st.round || p.out) card = null; // 封印・日食・落城
   }
   const portal = card === 'portal', knights = card === 'knights';
   let left = baseTroops(st, pi) + cardTroops(st, pi, card);
@@ -267,10 +287,20 @@ export function resolve(st0, plans) {
     let best = -1, bv = 0, tie = false;
     for (const [pi, v] of f) { if (pi === o) continue; if (v > bv) { bv = v; best = pi; tie = false; } else if (v === bv) tie = true; }
     let r = 'keep';
+    const guarded = isCastle(st, i) && o >= 0 && !besieged(st, i); // 包囲されていないお城
     if (shields.has(i)) r = 'shield';
+    else if (guarded) r = 'guard';
     else if (best >= 0 && tie && bv > hold) r = 'tie';
     else if (best >= 0 && !tie && bv > hold) { r = 'take'; changed.push({ i, from: o, to: best }); st.owner[i] = best; }
     fights.push({ i, o, g, b, d, hold, w: best, v: bv, tie, r });
+  }
+  // 落城：お城を取られた人は、そのまま負け（あとは見学）。その人の土地は、お城を取った人のものに
+  const fallen = [];
+  for (const c of changed) {
+    const o = c.from; if (o < 0 || st.players[o].castle !== c.i || st.players[o].out) continue;
+    st.players[o].out = st.round; st.players[o].hand = [];
+    st.owner.forEach((x, j) => { if (x === o) st.owner[j] = c.to; });
+    fallen.push({ o, by: c.to });
   }
   // 宝箱：取った人が開ける（カード1枚か2点）
   const rkPos = new Map(ranking(st).map((x, k, a) => [x.pi, a.length > 1 ? k / (a.length - 1) : 0.5]));
@@ -283,22 +313,35 @@ export function resolve(st0, plans) {
     if (r() < 0.5) { const card = drawCard(r, rkPos.get(c.to)); (extra[c.to] ||= []).push(card); opened.push({ i: c.i, pi: c.to, card }); }
     else { p.bonus += CHEST_PT; opened.push({ i: c.i, pi: c.to, pt: CHEST_PT }); }
   }
-  // イベント（予告なし）
-  let event = null;
-  const er = rng(mix(st.seed, st.round, 99));
-  if (st.round >= 3 && st.lastEvent !== st.round - 1 && er() < BAL.eventRate) {
-    const keys = Object.keys(EVENTS), k = keys[Math.floor(er() * keys.length)], m = mapOf(st), tiles = [];
-    const burnable = edgeOnly => { const out = []; st.owner.forEach((o, i) => { if (o >= 0 && !isCastle(st, i) && !shields.has(i) && (!edgeOnly || m.nb[i].length < 6)) out.push(i); }); return out; };
-    if (k === 'raid' || k === 'wave') {
-      const pool = burnable(k === 'wave');
-      for (let n = k === 'raid' ? 3 : 4; n > 0 && pool.length; n--) { const i = pool.splice(Math.floor(er() * pool.length), 1)[0]; tiles.push([i, st.owner[i]]); st.owner[i] = -1; }
-    }
-    if (k === 'gold') st.players.forEach(p => { p.bonus += 1; });
+  // 天災・イベント（予告なしで起きる）
+  const m2 = mapOf(st);
+  const burn = (i, tiles) => { if (i < 0 || st.owner[i] < 0 || isCastle(st, i) || shields.has(i)) return; tiles.push([i, st.owner[i]]); st.owner[i] = -1; };
+  const applyEvent = (k, target, salt) => {
+    const er = rng(mix(st.seed, st.round, salt)), tiles = [];
+    const pool = edgeOnly => { const out = []; st.owner.forEach((o, i) => { if (o >= 0 && !isCastle(st, i) && !shields.has(i) && (!edgeOnly || m2.nb[i].length < 6)) out.push(i); }); return out; };
+    if (k === 'raid') { const who = target != null && st.owner[target] >= 0 ? st.owner[target] : -1; const pl = pool(false).filter(i => who < 0 || st.owner[i] === who); for (let n = 3; n > 0 && pl.length; n--) burn(pl.splice(Math.floor(er() * pl.length), 1)[0], tiles); }
+    if (k === 'wave') { const pl = pool(true); for (let n = 4; n > 0 && pl.length; n--) burn(pl.splice(Math.floor(er() * pl.length), 1)[0], tiles); }
+    if (k === 'meteor') { const c = target ?? Math.floor(er() * st.owner.length); burn(c, tiles); for (const j of m2.nb[c]) burn(j, tiles); }
+    if (k === 'volcano') { const mt = []; st.terrain.forEach((t, i) => { if (t === T.MOUNTAIN) mt.push(i); }); if (mt.length) { const v = mt[Math.floor(er() * mt.length)]; burn(v, tiles); for (const j of m2.nb[v]) burn(j, tiles); } }
+    if (k === 'tornado') { let c = target ?? Math.floor(er() * st.owner.length); const dir = Math.floor(er() * 6); for (let n = 0; n < 5 && c != null; n++) { burn(c, tiles); const h = m2.tiles[c], nx = m2.at.get((h.q + [[1, 0], [1, -1], [0, -1], [-1, 0], [-1, 1], [0, 1]][dir][0]) + ',' + (h.r + [[1, 0], [1, -1], [0, -1], [-1, 0], [-1, 1], [0, 1]][dir][1])); c = nx; } }
+    if (k === 'blizzard') st.blizzard = st.round + 1;
+    if (k === 'eclipse') st.eclipse = st.round + 1;
+    if (k === 'gold') st.players.forEach(p => { if (!p.out) p.bonus += 1; });
     if (k === 'glow') st.players.forEach((p, pi) => { p.bonus += runesOf(st, pi); });
-    if (k === 'fairy') st.players.forEach((p, pi) => { (extra[pi] ||= []).push(drawCard(rng(mix(st.seed, st.round, pi, 77)), rkPos.get(pi))); });
-    event = { k, tiles };
+    if (k === 'fairy') st.players.forEach((p, pi) => { if (!p.out) (extra[pi] ||= []).push(drawCard(rng(mix(st.seed, st.round, pi, 77)), rkPos.get(pi))); });
+    return tiles;
+  };
+  let event = null;
+  const er0 = rng(mix(st.seed, st.round, 99));
+  if (st.round >= 3 && st.lastEvent !== st.round - 1 && er0() < BAL.eventRate) {
+    const keys = Object.keys(EVENTS), k = keys[Math.floor(er0() * keys.length)];
+    event = { k, tiles: applyEvent(k, null, 99) };
     st.lastEvent = st.round;
   }
+  // 金鉱：持っている人は毎ラウンド1点
+  st.players.forEach((p, pi) => { if (!p.out) p.bonus += countOf(st, pi, T.MINE); });
+  // 最終ラウンド：取ったマスは2点（1点おまけ）
+  if (st.round === st.rounds) for (const c of changed) if (st.owner[c.i] === c.to) st.players[c.to].bonus += 1;
   // 宝箱が足りなければ、ときどき新しく出す
   const cr = rng(mix(st.seed, st.round, 55));
   if (st.chests.length < chestTarget(st.players.length) && cr() < BAL.chestRespawn) {
@@ -309,7 +352,8 @@ export function resolve(st0, plans) {
   const rk = ranking(st), np = Math.max(1, rk.length - 1);
   rk.forEach((x, pos) => {
     const p = st.players[x.pi], r = rng(mix(st.seed, st.round, x.pi, 5));
-    p.hand = dealHand(r, rk.length > 1 ? pos / np : 0.5).concat(extra[x.pi] || []).slice(0, HAND_MAX);
+    const h = heat({ ...st, round: st.round + 1 }), size = HAND_DEAL + (h >= 1 ? 1 : 0) + (h >= 2 ? 1 : 0) + Math.min(2, countOf(st, x.pi, T.SHRINE)); // 終盤と神殿でカードが増える
+    p.hand = p.out ? [] : dealHand(r, rk.length > 1 ? pos / np : 0.5, size).concat(extra[x.pi] || []).slice(0, HAND_MAX);
   });
   // 表彰のための記録
   st.stats ||= {};
@@ -321,10 +365,11 @@ export function resolve(st0, plans) {
   for (const l of log) st.stats[l.pi].cards++;
   for (const k in gainNow) st.stats[k].best = Math.max(st.stats[k].best, gainNow[k]);
   const forceOut = [...force].map(([i, f]) => [i, [...f]]);
-  st.last = { round: st.round, changed, burned, shields: [...shields], log, force: forceOut, dice, opened, event, fights, thunder, catapult, thief, sealed, swapped };
+  st.last = { round: st.round, changed, burned, shields: [...shields], log, force: forceOut, dice, opened, event, fights, thunder, catapult, thief, sealed, swapped, fallen };
   ranking(st).forEach((x, pos) => { st.stats[x.pi].worst = Math.max(st.stats[x.pi].worst, pos); });
   st.round++;
   if (st.round > st.rounds) st.phase = 'end';
+  if (st.players.length > 1 && st.players.filter(p => !p.out).length <= 1) st.phase = 'end'; // 生き残りが1人になったら終わり
   return st;
 }
 
@@ -369,8 +414,8 @@ export function awards(st) {
 }
 
 export function ranking(st) {
-  return st.players.map((p, pi) => ({ pi, name: p.name, color: p.color, score: score(st, pi), land: landOf(st, pi) }))
-    .sort((a, b) => b.score - a.score || b.land - a.land);
+  return st.players.map((p, pi) => ({ pi, name: p.name, color: p.color, score: score(st, pi), land: landOf(st, pi), out: p.out || 0 }))
+    .sort((a, b) => ((a.out ? 1 : 0) - (b.out ? 1 : 0)) || (b.out - a.out) || b.score - a.score || b.land - a.land); // 生き残りが上。落城した人は、あとまで残った人が上
 }
 
 // 送る時は小さくする（持ち主の並びを文字に）

@@ -8,9 +8,9 @@ import * as G from './game.js';
 
 const SQ = Math.sqrt(3);
 const TILT = 70; // カメラの角度（90＝真上）
-const H = [0.30, 0.36, 0.44, 0.10, 0.38]; // マスの高さ（草原・森・山・湖・ルーン）
-const TOP = ['#b9d585', '#8fbf6e', '#c9b48e', '#6fb2c8', '#cdbff0'];
-const TILE_TINT = ['#ffffff', '#b8d898', '#e8cfa0', '#cfe6f0', '#ece4ff']; // 草の地面モデルに掛ける色（地形ごと）
+const H = [0.30, 0.36, 0.44, 0.10, 0.38, 0.32, 0.36, 0.40, 0.36]; // マスの高さ（草原・森・山・湖・ルーン・村・神殿・金鉱・塔）
+const TOP = ['#b9d585', '#8fbf6e', '#c9b48e', '#6fb2c8', '#cdbff0', '#d8c890', '#e8dcf0', '#d8c070', '#c8beb0'];
+const TILE_TINT = ['#ffffff', '#b8d898', '#e8cfa0', '#cfe6f0', '#ece4ff', '#f4e6b8', '#f4ecff', '#f0dc98', '#e4ddd2']; // 草の地面モデルに掛ける色（地形ごと）
 const C = c => new THREE.Color(c);
 const ease = t => 1 - Math.pow(1 - t, 3);
 const lerp = (a, b, t) => a + (b - a) * t;
@@ -112,6 +112,44 @@ function procChest() {
   const lid = new THREE.Group(); lid.position.set(0, 0.16, -0.11); g.add(lid); g.userData.lid = lid;
   const lm = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.11, 0.34, 10, 1, false, 0, Math.PI), wood); lm.rotation.z = Math.PI / 2; lm.position.z = 0.11; lid.add(lm);
   const lock = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.07, 0.02), gold); lock.position.set(0, 0.14, 0.115); g.add(lock);
+  return g;
+}
+// 村・神殿・金鉱・見張りの塔（自作の形。上から見ても分かるように屋根や色をはっきり）
+const M = (c, o = {}) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.85, flatShading: true, ...o });
+function procVillage() {
+  const g = new THREE.Group(), wall = M('#f6eedc'), roof = M('#c8553d'), wood = M('#8a5a3b');
+  [[-0.3, 0.12, 0.2, 0.9], [0.28, -0.05, 0.24, 1.1], [-0.02, -0.38, 0.18, 0.8]].forEach(([x, z, s, h], k) => {
+    const b = new THREE.Mesh(new THREE.BoxGeometry(s * 1.5, s * h * 1.3, s * 1.3), wall); b.position.set(x, s * h * 0.65, z); b.rotation.y = k * 0.7; g.add(b);
+    const r = new THREE.Mesh(new THREE.ConeGeometry(s * 1.15, s * 0.9, 4), roof); r.position.set(x, s * h * 1.3 + s * 0.45, z); r.rotation.y = k * 0.7 + Math.PI / 4; g.add(r);
+  });
+  const well = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.1, 8), wood); well.position.set(0.05, 0.05, 0.3); g.add(well);
+  return g;
+}
+function procShrine() {
+  const g = new THREE.Group(), stone = M('#f4f0ea'), roof = M('#9b7ad8'), gemM = M('#e8d8ff', { emissive: '#a07af0', emissiveIntensity: 1.3, roughness: 0.3 });
+  const base = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.56, 0.08, 6), stone); base.position.y = 0.04; g.add(base);
+  for (let k = 0; k < 6; k++) { const a = k * Math.PI / 3 + Math.PI / 6, c = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.045, 0.42, 6), stone); c.position.set(Math.cos(a) * 0.36, 0.29, Math.sin(a) * 0.36); g.add(c); }
+  const r = new THREE.Mesh(new THREE.ConeGeometry(0.52, 0.3, 6), roof); r.position.y = 0.65; g.add(r);
+  const gem = new THREE.Mesh(new THREE.OctahedronGeometry(0.1), gemM); gem.position.y = 0.26; g.add(gem);
+  return g;
+}
+function procMine() {
+  const g = new THREE.Group(), rock = M('#9a8468'), dark = M('#2e241c'), wood = M('#8a5a3b'), gold = M('#f2c25a', { emissive: '#8a6010', emissiveIntensity: 0.5, roughness: 0.4 });
+  const hill = new THREE.Mesh(new THREE.SphereGeometry(0.55, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2), rock); hill.scale.y = 0.75; g.add(hill);
+  const hole = new THREE.Mesh(new THREE.CircleGeometry(0.18, 12, 0, Math.PI), dark); hole.position.set(0, 0.0, 0.53); g.add(hole);
+  for (const x of [-0.2, 0.2]) { const p = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.26, 0.05), wood); p.position.set(x, 0.13, 0.5); g.add(p); }
+  const beam = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.05, 0.06), wood); beam.position.set(0, 0.27, 0.5); g.add(beam);
+  [[0.32, 0.3, 0.1], [0.42, 0.2, -0.05], [0.25, 0.42, -0.15], [-0.35, 0.28, 0.15]].forEach(([x, y, z]) => { const n = new THREE.Mesh(new THREE.DodecahedronGeometry(0.08), gold); n.position.set(x, y, z); g.add(n); });
+  return g;
+}
+function procTower() {
+  const g = new THREE.Group(), stone = M('#e2d8c6'), roof = M('#6b5a4a'), flag = M('#e3a93b');
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.24, 0.85, 8), stone); body.position.y = 0.425; g.add(body);
+  const top = new THREE.Mesh(new THREE.CylinderGeometry(0.27, 0.22, 0.12, 8), stone); top.position.y = 0.9; g.add(top);
+  for (let k = 0; k < 8; k++) { const a = k * Math.PI / 4, c = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.1, 0.08), stone); c.position.set(Math.cos(a) * 0.23, 1.0, Math.sin(a) * 0.23); g.add(c); }
+  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.4, 5), roof); pole.position.y = 1.15; g.add(pole);
+  const f = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.12, 0.01), flag); f.position.set(0.11, 1.28, 0); g.add(f);
+  const door = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.16, 0.02), roof); door.position.set(0, 0.08, 0.23); g.add(door);
   return g;
 }
 function procRune() {
@@ -241,8 +279,8 @@ export class Board3D {
     W.add(this.rings, this.glow);
     this.rings.frustumCulled = this.glow.frustumCulled = this.caps.frustumCulled = this.sides.frustumCulled = false;
     // 地形の物：山・木・ルーン・お城
-    const mtn = [], trees = [], runes = [];
-    for (let i = 0; i < N; i++) { const t = st.terrain[i]; if (this.isCastle(i)) continue; if (t === G.T.MOUNTAIN) mtn.push(i); if (t === G.T.FOREST) trees.push(i); if (t === G.T.RUNE) runes.push(i); }
+    const mtn = [], trees = [], runes = [], spec = { 5: [], 6: [], 7: [], 8: [] };
+    for (let i = 0; i < N; i++) { const t = st.terrain[i]; if (this.isCastle(i)) continue; if (spec[t]) spec[t].push(i); if (t === G.T.MOUNTAIN) mtn.push(i); if (t === G.T.FOREST) trees.push(i); if (t === G.T.RUNE) runes.push(i); }
     if (mtn.length && this.models.mountain) { // 山のモデル（あれば）
       const mi = toInstanced(this.models.mountain, mtn.length); mtn.forEach((i, k) => { const [x, z] = this.hp(i); mt.makeRotationY(0).setPosition(x, this.topY(i), z); mi.setMatrixAt(k, mt); }); W.add(mi);
     } else if (mtn.length) {
@@ -259,6 +297,9 @@ export class Board3D {
       trees.forEach((i, k) => { const [x, z] = this.hp(i); for (let j = 0; j < per; j++) { const a = j * 2.1 + r(), d = per === 1 ? 0.15 : per === 2 ? 0.32 + r() * 0.08 : 0.42 + r() * 0.12, sc = 0.85 + r() * 0.3; mt.makeRotationY(r() * 6).scale(new THREE.Vector3(sc, sc, sc)).setPosition(x + Math.cos(a) * d, this.topY(i), z + Math.sin(a) * d); inst.setMatrixAt(k * per + j, mt); } });
       W.add(inst);
     }
+    // 村・神殿・金鉱・見張りの塔
+    const SPEC = { 5: ['village', procVillage], 6: ['shrine', procShrine], 7: ['mine', procMine], 8: ['tower', procTower] };
+    for (const t in spec) { const list = spec[t]; if (!list.length) continue; const [nm, mk] = SPEC[t]; const inst = toInstanced(this.models[nm] || mk(), list.length); list.forEach((i, k) => { const [x, z] = this.hp(i); inst.setMatrixAt(k, new THREE.Matrix4().makeRotationY(-0.5 + (i % 3) * 0.2).setPosition(x, this.topY(i), z)); }); inst.castShadow = true; inst.frustumCulled = false; W.add(inst); }
     // ルーンの石もまとめて描く
     this.runeObjs = runes.map(i => ({ i }));
     if (runes.length) { const ri = toInstanced(this.models.runestone || procRune(), runes.length); runes.forEach((i, k) => { const [x, z] = this.hp(i); ri.setMatrixAt(k, new THREE.Matrix4().makeRotationY(i * 2.3).setPosition(x, this.topY(i), z)); }); ri.frustumCulled = false; W.add(ri); }
@@ -426,6 +467,7 @@ export class Board3D {
     this.addFx(500, q => { const b = Math.sin(q * Math.PI) * 0.25; mt.makeScale(1, h + b, 1).setPosition(x, h + b, z); this.sides.setMatrixAt(i, mt); this.sides.instanceMatrix.needsUpdate = true; mt.makeTranslation(x, h + b + 0.001, z); this.caps.setMatrixAt(i, mt); this.caps.instanceMatrix.needsUpdate = true; const r = new THREE.Matrix4(); this.rings.getMatrixAt(i, r); if (r.elements[0]) { r.makeTranslation(x, h + b + 0.006, z); this.rings.setMatrixAt(i, r); this.rings.instanceMatrix.needsUpdate = true; } });
     this.particles(this.pos(i, 0.05), { n: 14, color: '#e8d8b0', size: 0.1, spread: 0.9, up: 0.8, life: 600, gravity: -1.5 });
   }
+  shake(ms = 800, amp = 0.1) { const W = this.world, y0 = W.position.clone(); this.addFx(ms, (q, dt, t) => { const a = (1 - q) * amp; W.position.set(y0.x + Math.sin(t / 25) * a, y0.y, y0.z + Math.cos(t / 31) * a); }, () => W.position.copy(y0)); }
   castleOf(pi) { return this.st.players[pi] ? this.st.players[pi].castle : 0; }
   dragonFly(tiles, done) { // ドラゴンが飛んできて、火をふく
     const d = this.models.dragon ? this.models.dragon.clone() : procDragon(); d.traverse(c => { if (c.isMesh) c.castShadow = true; }); if (!this.models.dragon) d.scale.setScalar(1.4);
@@ -462,6 +504,39 @@ export class Board3D {
   }
   fxEvent(k, data = {}) {
     if (k === 'raid') return this.dragonFly(data.tiles || []);
+    const tiles = data.tiles || [];
+    if (k === 'meteor') { // 空から岩が落ちてくる
+      const at = this.pos(data.target ?? tiles[0] ?? 0), from = at.clone().add(new THREE.Vector3(5, 9, -4));
+      const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(0.45), new THREE.MeshStandardMaterial({ color: '#7a6450', emissive: '#ff5a1f', emissiveIntensity: 0.8, flatShading: true })); rock.castShadow = true; const rm = this.tmp(rock);
+      let hit = false;
+      this.addFx(1200, (q, dt) => { const e = q * q; rock.position.lerpVectors(from, at, e); rock.rotation.x += dt * 6; rock.rotation.z += dt * 4; if (Math.random() < 0.6) this.particles(rock.position.clone(), { n: 3, color: '#ffb347', size: 0.2, spread: 0.3, up: 0.3, life: 400, gravity: 0 });
+        if (q >= 1 && !hit) { hit = true; this.particles(at.clone(), { n: 70, color: '#ff7a2a', size: 0.2, spread: 2.2, up: 2.5, life: 1000 }); this.particles(at.clone(), { n: 40, color: '#8a735c', size: 0.16, spread: 1.6, up: 2, life: 1100 }); for (const i of tiles) this.flash(i, '#ff5a1f', 900); this.shake(600, 0.15); } }, rm, true);
+      return;
+    }
+    if (k === 'volcano') { // 山が火をふく
+      const at = this.pos(tiles[0] ?? 0, 0.4);
+      this.addFx(1600, () => { if (Math.random() < 0.7) this.particles(at.clone(), { n: 6, color: Math.random() < 0.5 ? '#ff5a1f' : '#ffb347', size: 0.22, spread: 1.4, up: 3.5, life: 900, gravity: -4 }); }, null);
+      this.shake(1400, 0.08); setTimeout(() => { for (const i of tiles) this.flash(i, '#ff5a1f', 900); }, 900);
+      const smoke = () => this.particles(at.clone().add(new THREE.Vector3(0, 0.5, 0)), { n: 30, color: '#9a9288', size: 0.4, spread: 0.5, up: 1.2, life: 1800, gravity: 0.3 }); smoke(); setTimeout(smoke, 500);
+      return;
+    }
+    if (k === 'tornado') { // 竜巻がマスを通っていく
+      const path = tiles.length ? tiles.map(i => this.pos(i)) : [this.pos(data.target ?? 0)];
+      const g = new THREE.ConeGeometry(0.7, 2.4, 16, 6, true); g.rotateX(Math.PI); g.translate(0, 1.2, 0);
+      const tw = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color: '#b8c0c8', transparent: true, opacity: 0.6, side: THREE.DoubleSide, depthWrite: false })); const rm = this.tmp(tw);
+      let last = -1;
+      this.addFx(1800, (q, dt) => { const f = Math.min(path.length - 1, q * path.length), k0 = Math.floor(f), a = path[k0], b = path[Math.min(path.length - 1, k0 + 1)]; tw.position.lerpVectors(a, b, f - k0); tw.rotation.y += dt * 14; tw.scale.setScalar(Math.sin(Math.min(1, q * 4) * Math.PI / 2) * (q > 0.9 ? (1 - q) * 10 : 1));
+        if (k0 !== last && tiles[k0] != null) { last = k0; this.flash(tiles[k0], '#d0d8e0', 700); this.particles(path[k0].clone(), { n: 20, color: '#8a735c', size: 0.12, spread: 1.4, up: 2.5, life: 800 }); } }, rm, true);
+      return;
+    }
+    if (k === 'blizzard') { // 雪が降る
+      for (let j = 0; j < 6; j++) setTimeout(() => { const at = new THREE.Vector3((Math.random() - 0.5) * this.R * 1.6, 6, (Math.random() - 0.5) * this.R * 1.6); this.particles(at, { n: 60, color: '#ffffff', size: 0.14, spread: this.R * 0.6, up: -1, life: 1600, gravity: -0.5 }); }, j * 180);
+      return;
+    }
+    if (k === 'eclipse') { // あたりが暗くなる
+      const s0 = this.sun.intensity; this.addFx(2200, q => { const d = Math.sin(q * Math.PI); this.sun.intensity = s0 * (1 - 0.8 * d); this.renderer.toneMappingExposure = 1.05 * (1 - 0.5 * d); }, () => { this.sun.intensity = s0; this.renderer.toneMappingExposure = 1.05; });
+      return;
+    }
     if (k === 'wave') { const wall = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 0.9, 64, 1, true), new THREE.MeshStandardMaterial({ color: '#8fd0e0', transparent: true, opacity: 0.7, side: THREE.DoubleSide, emissive: '#3f9fc0', emissiveIntensity: 0.2 })); const rm = this.tmp(wall); const r0 = this.R + 3, r1 = this.R - 1.2; this.addFx(1600, q => { const r = lerp(r0, r1, ease(q)); wall.scale.set(r, 1, r); wall.position.y = 0.4 + Math.sin(q * Math.PI) * 0.3; wall.material.opacity = 0.7 * (q < 0.8 ? 1 : (1 - q) / 0.2); }, rm); setTimeout(() => { for (const i of data.tiles || []) { this.flash(i, '#bfeaff', 900); this.particles(this.pos(i, 0.1), { n: 20, color: '#dff6ff', size: 0.1, up: 1.5, life: 800 }); } }, 1000); return; }
     if (k === 'gold') { const coinG = new THREE.CylinderGeometry(0.2, 0.2, 0.05, 14), coinM = new THREE.MeshStandardMaterial({ color: '#f2c25a', metalness: 0.7, roughness: 0.3, emissive: '#7a5a10', emissiveIntensity: 0.3 }); const n = 40, inst = new THREE.InstancedMesh(coinG, coinM, n); const sd = []; for (let j = 0; j < n; j++) sd.push([(Math.random() - .5) * this.R * 1.8, (Math.random() - .5) * this.R * 1.8, Math.random() * 0.5, Math.random() * 6]); const rm = this.tmp(inst), mt = new THREE.Matrix4(), e = new THREE.Euler(); this.addFx(2000, (q, dt, t) => { sd.forEach(([x, z, d, r], j) => { const f = Math.max(0, Math.min(1, (q - d * 0.6) / 0.5)); const y = 3.6 - ease(f) * 3.2 + (f >= 1 ? Math.abs(Math.sin((q - d * 0.6 - 0.5) * 12)) * 0.2 : 0); e.set(t / 100 + r, r, 0); mt.makeRotationFromEuler(e).setPosition(x, y, z); inst.setMatrixAt(j, mt); }); inst.instanceMatrix.needsUpdate = true; coinM.transparent = q > 0.85; coinM.opacity = q > 0.85 ? (1 - q) / 0.15 : 1; }, rm, true); return; }
     if (k === 'glow') { for (const r of this.runeObjs || []) { const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.35, 5, 12, 1, true), new THREE.MeshBasicMaterial({ color: '#b48cff', transparent: true, opacity: 0.5, depthWrite: false, side: THREE.DoubleSide })); beam.position.copy(this.pos(r.i, 2.5)); const rm = this.tmp(beam); this.addFx(1700, q => { beam.material.opacity = 0.55 * Math.sin(q * Math.PI); beam.scale.x = beam.scale.z = 0.6 + q * 0.6; }, rm); this.particles(this.pos(r.i, 0.6), { n: 20, color: '#e0ccff', size: 0.1, up: 2.5, life: 1400, gravity: 0 }); } return; }

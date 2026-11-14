@@ -10,6 +10,9 @@ function duelBudget(L) {
   const sizes = (L.dice || []).map(([i, ds]) => { const f = (L.fights || []).find(x => x.i === i); return ds.length + (f && ((f.o >= 0 && !ds.some(([p]) => p === f.o)) || (f.o < 0 && f.d > 0)) ? 1 : 0); });
   return sizes.sort((a, b) => b - a).slice(0, 3).reduce((t, n) => t + 500 + n * 700 + 1300, 0);
 }
+// 落城と天災（亡霊のしわざ・予告なし）を見せる時間
+const BIG = ['raid', 'wave', 'meteor', 'volcano', 'tornado'];
+function evBudget(L) { return (L.fallen || []).length * 2200 + (L.ghosts || []).reduce((t, g) => t + 1400 + (BIG.includes(g.k) ? 1500 : 0), 0) + (L.event && BIG.includes(L.event.k) && L.event.k !== 'raid' ? 1500 : 0); }
 const chan = code => 'runeland-' + String(code).replace(/[^0-9]/g, '').slice(0, 6);
 
 export class Room {
@@ -166,7 +169,7 @@ export class Room {
     Object.assign(ns, { gid: st.gid, hostId: this.id, seq: st.seq, step: ns.phase === 'end' ? 'end' : 'reveal' });
     this.state = ns; delete this.plans[st.round];
     // 結果を見せる時間：起きたことが多いほど少し長く（4〜12秒）
-    const L = ns.last; this.deadline = this.now() + Math.min(24000, Math.max(REVEAL_MS, 5500 + L.log.length * 650 + L.log.filter(l => l.card === 'dragon' || l.card === 'wrath').length * 1500 + ((L.fights || []).some(f => f.w >= 0) ? 1700 : 0) + (L.event && L.event.k === 'raid' ? 1500 : 0) + L.changed.length * 60 + duelBudget(L) + Math.min(4, L.opened.length) * 800 + (L.event ? 1400 : 0)));
+    const L = ns.last; this.deadline = this.now() + Math.min(30000, Math.max(REVEAL_MS, 5500 + L.log.length * 650 + L.log.filter(l => l.card === 'dragon' || l.card === 'wrath').length * 1500 + ((L.fights || []).some(f => f.w >= 0) ? 1700 : 0) + (L.event && L.event.k === 'raid' ? 1500 : 0) + L.changed.length * 60 + duelBudget(L) + Math.min(4, L.opened.length) * 800 + (L.event ? 1400 : 0) + evBudget(L)));
     this.got = [];
     this.broadcast();
   }
