@@ -16,9 +16,9 @@ const ease = t => 1 - Math.pow(1 - t, 3);
 const lerp = (a, b, t) => a + (b - a) * t;
 
 // ---- Meshy のモデル（あれば使う。なければ自作の形） ----
-const MODEL_H = { tile: 0, castle: 0.9, soldier: 0.5, dragon: 1.1, tree: 0.8, chest: 0.36, runestone: 0.8, fairy: 0.3, mountain: 0.65 };
+const MODEL_H = { tile: 0, castle: 0.9, soldier: 0.75, dragon: 1.1, tree: 0.8, chest: 0.45, runestone: 1.0, fairy: 0.3, mountain: 0.65 };
 // 盤面の上で見えやすく：明るさ（色の倍率）と、横の太さ
-const MODEL_TUNE = { tree: { light: 1.6, wide: 1.7 }, chest: { light: 1.9, wide: 1 }, runestone: { light: 1.5, wide: 1.3 }, castle: { light: 1.15, wide: 1 }, soldier: { light: 1.1, wide: 1 } };
+const MODEL_TUNE = { tree: { light: 1, wide: 1 }, chest: { light: 1, wide: 1 }, runestone: { light: 1, wide: 1 }, castle: { light: 1, wide: 1 }, soldier: { light: 1.1, wide: 1 } };
 // 模様の画像を、画面に出る大きさに合わせて小さくする（盤面の物は画面で数十〜数百ピクセルなので、1024 あれば見た目は変わらない。スマホの画像用メモリが大きく減る）
 const MAXTEX = 1024;
 function fitTextures(obj) {
@@ -38,9 +38,9 @@ async function loadModels(quality, names) {
   await Promise.all(names.filter(n => !skip.includes(n)).map(async name => {
     try {
       const g = await loader.loadAsync(`models/${name}.glb`);
-      const obj = g.scene; fitTextures(obj); obj.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; for (const m of [].concat(o.material)) { m.metalness = 0; m.metalnessMap = null; m.roughness = 0.85; if (MODEL_TUNE[name]) m.color.multiplyScalar(MODEL_TUNE[name].light); m.needsUpdate = true; } } }); // 金属あつかいだと暗く見えるので、木や石らしく
+      const obj = g.scene; fitTextures(obj); obj.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; for (const m of [].concat(o.material)) { m.metalness = 0; m.metalnessMap = null; m.roughness = 0.85; if (/crystal/i.test(m.name + ' ' + o.name)) { m.emissive = new THREE.Color('#8a4fff'); m.emissiveIntensity = 1.4; m.roughness = 0.3; } if (/snow/i.test(m.name + ' ' + o.name)) m.roughness = 0.6; if (MODEL_TUNE[name]) m.color.multiplyScalar(MODEL_TUNE[name].light); m.needsUpdate = true; } } }); // 金属あつかいだと暗く見えるので、木や石らしく
       const box = new THREE.Box3().setFromObject(obj), size = box.getSize(new THREE.Vector3());
-      const k = name === 'tile' ? 1 : name === 'castle' ? 1.6 / Math.max(0.001, size.x, size.z) : MODEL_H[name] / Math.max(0.001, name === 'dragon' ? Math.max(size.x, size.z) / 2.6 : size.y); // お城は城壁がマスに収まる幅で
+      const k = name === 'tile' ? 1 : name === 'castle' ? 1.35 / Math.max(0.001, size.x, size.z) : name === 'mountain' ? 1.8 / Math.max(0.001, size.z) : MODEL_H[name] / Math.max(0.001, name === 'dragon' ? Math.max(size.x, size.z) / 2.6 : size.y); // お城は城壁がマスに収まる幅で
       obj.scale.setScalar(k); if (MODEL_TUNE[name]) { obj.scale.x *= MODEL_TUNE[name].wide; obj.scale.z *= MODEL_TUNE[name].wide; }
       const box2 = new THREE.Box3().setFromObject(obj), c = box2.getCenter(new THREE.Vector3());
       obj.position.set(-c.x, -box2.min.y, -c.z);
@@ -244,13 +244,13 @@ export class Board3D {
     const mtn = [], trees = [], runes = [];
     for (let i = 0; i < N; i++) { const t = st.terrain[i]; if (this.isCastle(i)) continue; if (t === G.T.MOUNTAIN) mtn.push(i); if (t === G.T.FOREST) trees.push(i); if (t === G.T.RUNE) runes.push(i); }
     if (mtn.length && this.models.mountain) { // 山のモデル（あれば）
-      const mi = toInstanced(this.models.mountain, mtn.length); mtn.forEach((i, k) => { const [x, z] = this.hp(i); mt.makeRotationY(i * 1.7).setPosition(x, this.topY(i), z); mi.setMatrixAt(k, mt); }); W.add(mi);
+      const mi = toInstanced(this.models.mountain, mtn.length); mtn.forEach((i, k) => { const [x, z] = this.hp(i); mt.makeRotationY(0).setPosition(x, this.topY(i), z); mi.setMatrixAt(k, mt); }); W.add(mi);
     } else if (mtn.length) {
       const mg = new THREE.ConeGeometry(0.62, 0.8, 6); mg.translate(0, 0.4, 0);
       const mm = new THREE.InstancedMesh(mg, new THREE.MeshStandardMaterial({ color: '#a8957a', roughness: 1, flatShading: true }), mtn.length);
       const sg = new THREE.ConeGeometry(0.24, 0.3, 6); sg.translate(0, 0.66, 0);
       const sm = new THREE.InstancedMesh(sg, new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.8, flatShading: true }), mtn.length);
-      mtn.forEach((i, k) => { const [x, z] = this.hp(i); mt.makeRotationY(i * 1.7).setPosition(x, this.topY(i), z); mm.setMatrixAt(k, mt); sm.setMatrixAt(k, mt); });
+      mtn.forEach((i, k) => { const [x, z] = this.hp(i); mt.makeRotationY(0).setPosition(x, this.topY(i), z); mm.setMatrixAt(k, mt); sm.setMatrixAt(k, mt); });
       mm.castShadow = sm.castShadow = true; W.add(mm, sm);
     }
     if (trees.length) {
@@ -272,7 +272,7 @@ export class Board3D {
     const fg = new THREE.PlaneGeometry(0.5, 0.32); fg.translate(0.25, 0, 0);
     this.flags = new THREE.InstancedMesh(fg, new THREE.MeshStandardMaterial({ color: '#ffffff', side: THREE.DoubleSide, roughness: 0.7, emissive: '#ffffff', emissiveIntensity: 0.12 }), nC);
     this.castleTint = parts.tint;
-    const rot = this.models.castle ? Math.PI / 6 : -0.4; // Meshy のお城は城壁の角が x 向きなので、マスの六角形に合わせて30度回す
+    const rot = this.models.castle ? 0.35 : -0.4; // Meshy のお城は城壁の角が x 向きなので、マスの六角形に合わせて30度回す
     cs.forEach(([i, pi], k) => {
       const [x, z] = this.hp(i), y = this.topY(i), base = new THREE.Matrix4().makeRotationY(rot).setPosition(x, y, z);
       if (parts.plain) parts.plain.setMatrixAt(k, base);
@@ -281,13 +281,17 @@ export class Board3D {
       this.flags.setMatrixAt(k, new THREE.Matrix4().makeRotationX(-0.5).setPosition(x, y + ch + 0.38, z)); this.flags.setColorAt(k, C(st.players[pi].color));
       this.castleObjs.set(i, k);
     });
-    for (const m of [parts.plain, parts.tint, poleM, this.flags]) if (m) { m.castShadow = true; m.frustumCulled = false; W.add(m); }
+    // モデルに旗・屋根の部品がある時は、こちらで足す旗は出さない
+    const extra = parts.tint ? [] : [poleM, this.flags];
+    if (parts.tint) this.flags = null;
+    for (const m of [parts.plain, parts.tint, ...extra]) if (m) { m.castShadow = true; m.frustumCulled = false; W.add(m); }
     // 宝箱・兵のコマ（あとで並べかえる）
     this.chestObjs = new Map();
-    this.soldiers = this.models.soldier ? toInstanced(this.models.soldier, 240) : toInstanced(procSoldier(), 240);
+    const sp = this.models.soldier ? toInstancedSplit(this.models.soldier, 240) : { plain: toInstanced(procSoldier(), 240), tint: null };
+    this.soldiers = sp.plain; this.shields = sp.tint; if (this.shields) { this.shields.count = 0; this.shields.frustumCulled = false; this.shields.castShadow = true; W.add(this.shields); } // 盾はプレイヤーの色
     this.soldiers.count = 0; W.add(this.soldiers);
     // 兵の足もとの色の台（だれの兵か分かるように）
-    const bg = new THREE.CylinderGeometry(0.17, 0.19, 0.05, 16); bg.translate(0, 0.02, 0);
+    const bg = new THREE.CylinderGeometry(0.24, 0.26, 0.05, 18); bg.translate(0, 0.02, 0);
     this.bases = new THREE.InstancedMesh(bg, new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.5 }), 240); this.bases.count = 0; this.bases.castShadow = true; W.add(this.bases);
     this.soldiers.frustumCulled = this.bases.frustumCulled = false; // 数が変わるので、見えない判定をしない
     // 影の範囲
@@ -318,8 +322,8 @@ export class Board3D {
     }
     this.caps.instanceColor.needsUpdate = true; if (this.tint) { this.tint.instanceMatrix.needsUpdate = true; this.tint.instanceColor.needsUpdate = true; } this.rings.instanceMatrix.needsUpdate = true; if (this.rings.instanceColor) this.rings.instanceColor.needsUpdate = true;
     // お城の旗の色（取られたら取った人の色に）
-    for (const [i, k] of this.castleObjs || []) { const o = owners[i], col = C(o >= 0 ? st.players[o].color : '#ffffff'); this.flags.setColorAt(k, col); if (this.castleTint) this.castleTint.setColorAt(k, col); }
-    if (this.flags) { this.flags.instanceColor.needsUpdate = true; if (this.castleTint && this.castleTint.instanceColor) this.castleTint.instanceColor.needsUpdate = true; }
+    for (const [i, k] of this.castleObjs || []) { const o = owners[i], col = C(o >= 0 ? st.players[o].color : '#ffffff'); if (this.flags) this.flags.setColorAt(k, col); if (this.castleTint) this.castleTint.setColorAt(k, col); }
+    if (this.flags) this.flags.instanceColor.needsUpdate = true; if (this.castleTint && this.castleTint.instanceColor) this.castleTint.instanceColor.needsUpdate = true;
     this.owners = owners.slice(); this.dirty = true;
   }
 
@@ -333,10 +337,10 @@ export class Board3D {
     this.glow.material.color.set(d.targeting ? '#ff8ad8' : '#fff3a0');
     // 兵のコマ（1マス最大5こ並べ、数は札で）
     let k = 0; const col = new THREE.Color();
-    const put = (i, n, color) => { const [x, z] = this.hp(i), y = this.topY(i), shown = Math.min(n, this.models.soldier ? 1 : 3); for (let j = 0; j < shown && k < (this.models.soldier ? 60 : 240); j++) { const a = j / shown * Math.PI * 2 + 0.5, r = shown === 1 ? 0 : 0.3; mt.makeRotationY(-a).setPosition(x + Math.cos(a) * r, y, z + Math.sin(a) * r); this.bases.setMatrixAt(k, mt); this.bases.setColorAt(k, col.set(color)); mt.makeRotationY(-a + Math.PI / 2).setPosition(x + Math.cos(a) * r, y + 0.04, z + Math.sin(a) * r); this.soldiers.setMatrixAt(k, mt); this.soldiers.setColorAt(k, this.models.soldier ? col.set('#ffffff') : col.set(color)); k++; } };
+    const put = (i, n, color) => { const [x, z] = this.hp(i), y = this.topY(i), shown = Math.min(n, this.models.soldier ? 1 : 3); for (let j = 0; j < shown && k < (this.models.soldier ? 60 : 240); j++) { const a = j / shown * Math.PI * 2 + 0.5, r = shown === 1 ? 0 : 0.3; mt.makeRotationY(-a).setPosition(x + Math.cos(a) * r, y, z + Math.sin(a) * r); this.bases.setMatrixAt(k, mt); this.bases.setColorAt(k, col.set(color)); mt.makeRotationY(-a + Math.PI / 2).setPosition(x + Math.cos(a) * r, y + 0.04, z + Math.sin(a) * r); this.soldiers.setMatrixAt(k, mt); this.soldiers.setColorAt(k, this.models.soldier ? col.set('#ffffff') : col.set(color)); if (this.shields) { this.shields.setMatrixAt(k, mt); this.shields.setColorAt(k, col.set(color)); } k++; } };
     for (const p of d.placed) put(p.i, p.n, p.color);
     for (const f of d.force) put(f.i, f.n, f.color);
-    this.soldiers.count = this.bases.count = k; this.bases.instanceMatrix.needsUpdate = true; if (this.bases.instanceColor) this.bases.instanceColor.needsUpdate = true; this.soldiers.instanceMatrix.needsUpdate = true; if (this.soldiers.instanceColor) this.soldiers.instanceColor.needsUpdate = true;
+    this.soldiers.count = this.bases.count = k; if (this.shields) { this.shields.count = k; this.shields.instanceMatrix.needsUpdate = true; if (this.shields.instanceColor) this.shields.instanceColor.needsUpdate = true; } this.bases.instanceMatrix.needsUpdate = true; if (this.bases.instanceColor) this.bases.instanceColor.needsUpdate = true; this.soldiers.instanceMatrix.needsUpdate = true; if (this.soldiers.instanceColor) this.soldiers.instanceColor.needsUpdate = true;
     // 宝箱
     const want = new Set(d.chests);
     for (const [i, o] of this.chestObjs) if (!want.has(i)) { this.world.remove(o); this.chestObjs.delete(i); }
