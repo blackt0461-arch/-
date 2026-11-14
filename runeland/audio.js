@@ -50,6 +50,8 @@ export const sfx = {
   lose() { if (!opt.sfx) return; tone({ f: 300, d: 0.3, type: 'sawtooth', v: 0.06, slide: 0.6 }); },
   rankUp() { if (!opt.sfx) return; [523, 659, 784, 1046].forEach((f, i) => tone({ f, d: 0.16, v: 0.1, when: i * 0.08 })); vib([40, 60, 80]); },
   fanfare() { if (!opt.sfx) return; [[523, 0], [659, .15], [784, .3], [1046, .45], [784, .75], [1046, .9]].forEach(([f, w]) => tone({ f, d: 0.3, v: 0.12, when: w })); },
+  dice() { if (!opt.sfx) return; for (let i = 0; i < 5; i++) noise({ d: 0.05, f: 2500 + i * 300, v: 0.12, when: i * 0.06, q: 3 }); tone({ f: 880, d: 0.1, type: 'square', v: 0.05, when: 0.32 }); vib([10, 30, 10, 30, 10]); },
+  chest() { if (!opt.sfx) return; tone({ f: 330, d: 0.12, type: 'square', v: 0.05 }); [784, 988, 1175, 1568].forEach((f, i) => tone({ f, d: 0.25, type: 'sine', v: 0.09, when: 0.12 + i * 0.07 })); vib([20, 30, 40]); },
   pop() { if (!opt.sfx) return; tone({ f: 700, d: 0.06, type: 'sine', v: 0.12, slide: 1.6 }); },
 };
 

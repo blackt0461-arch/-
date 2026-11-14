@@ -21,6 +21,7 @@ function tileValue(st, i, me, sv, level) {
   const o = st.owner[i];
   if (st.terrain[i] === G.T.RUNE) v += G.RUNE_PT + 2.5; // 点＋毎ラウンドの兵
   if (G.isCastle(st, i)) v += G.CASTLE_PT;
+  if (st.chests && st.chests.includes(i)) v += level === 'easy' ? 1 : 2.2; // 宝箱
   if (o >= 0) v += 0.6;                                  // 相手が1マス減る分
   if (level === 'hard' && o >= 0 && o === sv.leader && o !== me) v += 1.2;
   if (level !== 'easy') { // つながりやすいマスは少し高く（あとで広げやすい）

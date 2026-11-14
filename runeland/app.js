@@ -132,6 +132,8 @@ function icon(t, castle, x, y) {
   if (t === G.T.LAKE) return `<path d="M${x - 4} ${y - 1}q2-2 4 0t4 0M${x - 3} ${y + 2.5}q1.5-1.5 3 0t3 0" fill="none" stroke="#fff" stroke-width="1" stroke-linecap="round" opacity=".8"/>`;
   return '';
 }
+const chestIcon = (x, y) => `<g transform="translate(${x - 4.5} ${y - 3.5})"><rect x="0" y="2.5" width="9" height="5.5" rx="1" fill="#b9773a" stroke="#5b4636" stroke-width=".7"/><path d="M0 3.2q0-3 4.5-3t4.5 3z" fill="#d18f45" stroke="#5b4636" stroke-width=".7"/><rect x="3.6" y="2.2" width="1.8" height="2.4" fill="#f2c25a" stroke="#5b4636" stroke-width=".4"/></g>`;
+let prevChests = null;
 const B = { key: '', tiles: [], cx: [], vb: null, view: { k: 1, x: 0, y: 0 }, anim: false };
 function buildBoard(st) {
   const m = G.mapOf(st), key = st.gid + ':' + st.R + ':' + st.players.map(p => p.castle).join(',');
@@ -172,6 +174,7 @@ function drawOverlay() {
   const st = room.state, pi = room.meIndex(), over = $('#lOver');
   const acting = canAct(), portal = acting && plan.card && plan.card.k === 'portal';
   let out = '';
+  for (const i of (B.anim && prevChests ? prevChests : st.chests) || []) { const [x, y] = B.cx[i]; out += chestIcon(x, y); }
   if (acting && !plan.targeting) {
     for (let i = 0; i < B.tiles.length; i++) if (st.terrain[i] !== G.T.LAKE && st.owner[i] !== pi && G.canPlace(st, pi, i, portal)) out += `<polygon class="can" points="${B.tiles[i].getAttribute('points')}"/>`;
   }
@@ -295,6 +298,15 @@ function playReveal(st) {
     });
     t += 650;
   }
+  // 1.5) サイコロ：とりあいのマスに出た目を見せる
+  if (L.dice && L.dice.length) {
+    later(t, () => {
+      banner('🎲 とりあい！', `${L.dice.length}か所でサイコロ`); sfx.dice();
+      let h = ''; for (const [i, ds] of L.dice) { const [x, y] = B.cx[i]; ds.slice(0, 3).forEach(([p, d], n) => { h += `<g class="pop"><circle cx="${x - 6 + n * 6}" cy="${y + 5.5}" r="3" fill="${st.players[p].color}" stroke="#5b4636" stroke-width=".5"/><text class="fc" x="${x - 6 + n * 6}" y="${y + 5.7}" font-size="3.8">+${d}</text></g>`; }); }
+      const g = el('g', {}, $('#lOver')); g.innerHTML = h; $('#lOver').__h = null; setTimeout(() => g.remove(), 1600);
+    });
+    t += 1000;
+  }
   // 2) 取られたマスを、真ん中から順に
   const ch = [...L.changed].sort((a, b) => Math.hypot(...B.cx[a.i]) - Math.hypot(...B.cx[b.i]));
   const stepMs = ch.length ? Math.min(70, 1800 / ch.length) : 0;
@@ -305,6 +317,21 @@ function playReveal(st) {
     if (c.to === pi || c.from === pi || ch.length < 10 || n % 3 === 0) sfx.capture(k++);
   }));
   t += ch.length * stepMs + 300;
+  // 3) 宝箱を開ける
+  for (const o of (L.opened || []).slice(0, 4)) {
+    later(t, () => { banner('🎁 宝箱！', `${st.players[o.pi].name}：${o.card ? G.CARDS[o.card].icon + G.CARDS[o.card].name : '+' + o.pt + '点'}`); sfx.chest(); flashTile(o.i, 'shine'); });
+    t += 800;
+  }
+  // 4) イベント（予告なし）
+  if (L.event) {
+    later(t, () => {
+      const e = G.EVENTS[L.event.k]; banner(`${e.icon} ${e.name}`, e.text);
+      ({ raid: sfx.dragon, wave: sfx.storm, gold: sfx.coin, glow: sfx.shield, fairy: sfx.card }[L.event.k] || sfx.card)();
+      for (const [i] of L.event.tiles) { disp[i] = -1; flashTile(i, 'burn'); }
+      paintTiles(st, disp);
+    });
+    t += 1400;
+  }
   later(t, () => { B.anim = false; paintTiles(st, st.owner); celebrate(st); render(); });
 }
 // 3) 点数と順位の変化
@@ -314,6 +341,8 @@ function celebrate(st) {
   const won = {}, lost = {};
   for (const c of L.changed) { won[c.to] = (won[c.to] || 0) + 1; if (c.from >= 0) lost[c.from] = (lost[c.from] || 0) + 1; }
   for (const i of L.burned) { const o = prevOwners ? prevOwners[i] : -1; if (o >= 0) lost[o] = (lost[o] || 0) + 1; }
+  if (L.event) for (const [, o] of L.event.tiles) lost[o] = (lost[o] || 0) + 1;
+  if (pi >= 0) for (const o of L.opened || []) if (o.pi === pi) toast(`🎁 宝箱から ${o.card ? G.CARDS[o.card].name : o.pt + '点'}！`, 3500);
   const rk = G.ranking(st), newRanks = new Map(rk.map((x, i) => [x.pi, i]));
   if (pi >= 0) {
     if (won[pi]) toast(`🎉 ${won[pi]}マス取りました！`, 3500);
@@ -367,7 +396,7 @@ function render() {
   // 作戦の始まり：いまの盤面をおぼえておく（結果の動きに使う）
   if (st.step === 'plan' && lastRoundSeen !== st.gid + ':' + st.round) {
     lastRoundSeen = st.gid + ':' + st.round;
-    prevOwners = st.owner.slice(); prevGidRound = st.gid + ':' + st.round;
+    prevOwners = st.owner.slice(); prevChests = (st.chests || []).slice(); prevGidRound = st.gid + ':' + st.round;
     if (!prevRanks || st.round === 1) prevRanks = new Map(G.ranking(st).map((x, i) => [x.pi, i]));
     banner(`ラウンド ${st.round}`, st.round === st.rounds ? '最終ラウンド！' : `のこり ${st.rounds - st.round + 1}`);
     if (st.round === 1) { bgm.setMood('calm'); chipDelta = null; }

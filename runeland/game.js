@@ -17,12 +17,24 @@ export const CARDS = {
   treasure: { name: '竜の宝', icon: '💎', w: 2, target: null, text: 'すぐに2点もらえる' },
 };
 const CARD_KEYS = Object.keys(CARDS);
+// イベント（予告なしで、ときどき結果の時に起きる）
+export const EVENTS = {
+  raid: { name: 'ドラゴンがあらわれた！', icon: '🐲', text: 'だれかの土地が3マス、空き地にもどった' },
+  wave: { name: '大波がきた！', icon: '🌊', text: '海ぞいの土地が4マス、空き地にもどった' },
+  gold: { name: '金貨の雨', icon: '🪙', text: 'みんな1点もらえた' },
+  glow: { name: 'ルーンが光った', icon: '✨', text: 'ルーンの石を持っている人は、1つにつき1点' },
+  fairy: { name: '妖精のおくりもの', icon: '🧚', text: 'みんなカードを1枚もらえた' },
+};
+export const CHEST_PT = 2;
 // バランスの数字（tests/balance.mjs で何千回も戦わせて決める）
 export const BAL = {
   catchUp: 0.8,        // 順位が下の人ほど強いカードが出やすくなる強さ（0＝みんな同じ）
   strong: ['dragon', 'hero', 'portal'],
   lateRounds: 2,       // 途中から入った人の兵が少ないラウンド数
   lateMinus: 1,        // そのあいだ減らす兵
+  diceMax: 2,          // とりあいのマスで足されるサイコロ（0〜この数）
+  eventRate: 0.2,      // 1ラウンドでイベントが起きる確率（3ラウンド目から。2回続けては起きない）
+  chestRespawn: 0.35,  // 宝箱が足りない時、新しく出る確率
   landDiv: 6,          // 持っているマスいくつごとに兵が1増えるか
   underdog: 2,         // 点数が下半分の人に足す兵
 };
@@ -101,10 +113,14 @@ export function newGame({ seed, players, rounds = 18, planMs = 35000 }) {
   // ルーンの石：お城から離れたところに、人数＋2こ
   const runes = pickSpread(m, n + 2, castles, r).filter(i => !castles.includes(i));
   for (const i of runes) terrain[i] = T.RUNE;
-  return { v: 1, seed, R, round: 1, rounds, planMs, phase: 'plan', players: ps, terrain, owner, last: null, pending: [] };
+  // 宝箱：お城とルーンの石から離れたところに
+  const chests = pickSpread(m, chestTarget(n), [...castles, ...runes], r).filter(i => terrain[i] !== T.RUNE && owner[i] === -1);
+  return { v: 1, seed, R, round: 1, rounds, planMs, phase: 'plan', players: ps, terrain, owner, chests, last: null, pending: [] };
 }
 
 export const mapOf = st => makeMap(st.seed, st.R);
+export const chestTarget = n => Math.max(2, Math.ceil(n / 2) + 1);
+export const diceFor = (seed, round, i, pi) => Math.floor(rng(mix(seed, round, i, pi, 31))() * (BAL.diceMax + 1));
 export const isCastle = (st, i) => st.players.some(p => p.castle === i);
 export function landOf(st, pi) { let n = 0; for (const o of st.owner) if (o === pi) n++; return n; }
 export function runesOf(st, pi) { let n = 0; st.owner.forEach((o, i) => { if (o === pi && st.terrain[i] === T.RUNE) n++; }); return n; }
@@ -192,6 +208,14 @@ export function resolve(st0, plans) {
       force.get(i).set(pi, v);
     }
   });
+  // サイコロ：何人かが同じマスに兵を置いた時だけ、それぞれに 0〜2 が足される
+  const dice = [];
+  for (const [i, f] of force) {
+    if (f.size < 2) continue;
+    const ds = [];
+    for (const [pi, v] of f) { const d = diceFor(st.seed, st.round, i, pi); f.set(pi, v + d); ds.push([pi, d]); }
+    dice.push([i, ds]);
+  }
   const changed = [];
   for (const [i, f] of force) {
     if (shields.has(i)) continue;
@@ -200,6 +224,39 @@ export function resolve(st0, plans) {
     let best = -1, bv = 0, tie = false;
     for (const [pi, v] of f) { if (pi === o) continue; if (v > bv) { bv = v; best = pi; tie = false; } else if (v === bv) tie = true; }
     if (best >= 0 && !tie && bv > hold) { changed.push({ i, from: o, to: best }); st.owner[i] = best; }
+  }
+  // 宝箱：取った人が開ける（カード1枚か2点）
+  const rkPos = new Map(ranking(st).map((x, k, a) => [x.pi, a.length > 1 ? k / (a.length - 1) : 0.5]));
+  const opened = [];
+  st.chests ||= [];
+  for (const c of changed) {
+    const k = st.chests.indexOf(c.i); if (k < 0) continue;
+    st.chests.splice(k, 1);
+    const r = rng(mix(st.seed, st.round, c.i, 41)), p = st.players[c.to];
+    if (r() < 0.5) { const card = drawCard(r, rkPos.get(c.to)); p.hand.push(card); while (p.hand.length > HAND_MAX) p.hand.shift(); opened.push({ i: c.i, pi: c.to, card }); }
+    else { p.bonus += CHEST_PT; opened.push({ i: c.i, pi: c.to, pt: CHEST_PT }); }
+  }
+  // イベント（予告なし）
+  let event = null;
+  const er = rng(mix(st.seed, st.round, 99));
+  if (st.round >= 3 && st.lastEvent !== st.round - 1 && er() < BAL.eventRate) {
+    const keys = Object.keys(EVENTS), k = keys[Math.floor(er() * keys.length)], m = mapOf(st), tiles = [];
+    const burnable = edgeOnly => { const out = []; st.owner.forEach((o, i) => { if (o >= 0 && !isCastle(st, i) && !shields.has(i) && (!edgeOnly || m.nb[i].length < 6)) out.push(i); }); return out; };
+    if (k === 'raid' || k === 'wave') {
+      const pool = burnable(k === 'wave');
+      for (let n = k === 'raid' ? 3 : 4; n > 0 && pool.length; n--) { const i = pool.splice(Math.floor(er() * pool.length), 1)[0]; tiles.push([i, st.owner[i]]); st.owner[i] = -1; }
+    }
+    if (k === 'gold') st.players.forEach(p => { p.bonus += 1; });
+    if (k === 'glow') st.players.forEach((p, pi) => { p.bonus += runesOf(st, pi); });
+    if (k === 'fairy') st.players.forEach((p, pi) => { p.hand.push(drawCard(rng(mix(st.seed, st.round, pi, 77)), rkPos.get(pi))); while (p.hand.length > HAND_MAX) p.hand.shift(); });
+    event = { k, tiles };
+    st.lastEvent = st.round;
+  }
+  // 宝箱が足りなければ、ときどき新しく出す
+  const cr = rng(mix(st.seed, st.round, 55));
+  if (st.chests.length < chestTarget(st.players.length) && cr() < BAL.chestRespawn) {
+    const free = []; st.owner.forEach((o, i) => { if (o === -1 && st.terrain[i] !== T.LAKE && st.terrain[i] !== T.RUNE && !st.chests.includes(i)) free.push(i); });
+    if (free.length) st.chests.push(free[Math.floor(cr() * free.length)]);
   }
   // カードを配る（順位が下の人ほど強いカードが出やすい）
   const rk = ranking(st), np = Math.max(1, rk.length - 1);
@@ -213,10 +270,11 @@ export function resolve(st0, plans) {
   const gainNow = {};
   for (const c of changed) { gainNow[c.to] = (gainNow[c.to] || 0) + 1; st.stats[c.to].gain++; if (c.from >= 0) st.stats[c.from].lost++; }
   for (const i of burned) { /* 燃やされた分も、取られた数に入れる */ const o = st0.owner[i]; if (o >= 0) st.stats[o].lost++; }
+  if (event) for (const [, o] of event.tiles) st.stats[o].lost++;
   for (const l of log) st.stats[l.pi].cards++;
   for (const k in gainNow) st.stats[k].best = Math.max(st.stats[k].best, gainNow[k]);
   const forceOut = [...force].map(([i, f]) => [i, [...f]]);
-  st.last = { round: st.round, changed, burned, shields: [...shields], log, force: forceOut };
+  st.last = { round: st.round, changed, burned, shields: [...shields], log, force: forceOut, dice, opened, event };
   ranking(st).forEach((x, pos) => { st.stats[x.pi].worst = Math.max(st.stats[x.pi].worst, pos); });
   st.round++;
   if (st.round > st.rounds) st.phase = 'end';
@@ -229,7 +287,7 @@ export function addLatePlayer(st, p) {
   let best = -1, bd = -1;
   const owned = []; st.owner.forEach((o, i) => { if (o >= 0) owned.push(i); });
   for (let i = 0; i < m.N; i++) {
-    if (st.owner[i] !== -1 || st.terrain[i] === T.LAKE || st.terrain[i] === T.RUNE) continue;
+    if (st.owner[i] !== -1 || st.terrain[i] === T.LAKE || st.terrain[i] === T.RUNE || (st.chests || []).includes(i)) continue;
     const d = owned.length ? Math.min(...owned.map(j => dist(m.tiles[i], m.tiles[j]))) : 0;
     if (d > bd) { bd = d; best = i; }
   }

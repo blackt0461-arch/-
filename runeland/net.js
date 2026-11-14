@@ -160,8 +160,8 @@ export class Room {
     const ns = G.resolve(st, plans);
     Object.assign(ns, { gid: st.gid, hostId: this.id, seq: st.seq, step: ns.phase === 'end' ? 'end' : 'reveal' });
     this.state = ns; delete this.plans[st.round];
-    // 結果を見せる時間：起きたことが多いほど少し長く（4〜9秒）
-    const L = ns.last; this.deadline = this.now() + Math.min(9000, Math.max(REVEAL_MS, 3000 + L.log.length * 600 + L.changed.length * 60));
+    // 結果を見せる時間：起きたことが多いほど少し長く（4〜12秒）
+    const L = ns.last; this.deadline = this.now() + Math.min(12000, Math.max(REVEAL_MS, 3000 + L.log.length * 650 + L.changed.length * 60 + (L.dice.length ? 1000 : 0) + Math.min(4, L.opened.length) * 800 + (L.event ? 1400 : 0)));
     this.got = [];
     this.broadcast();
   }
