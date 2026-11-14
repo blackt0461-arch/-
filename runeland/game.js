@@ -10,25 +10,25 @@ export const HAND_MAX = 8, HAND_DEAL = 3, START_CARDS = 3; // 手札は毎ラウ
 export const COLORS = ['#e8483b', '#3a7be0', '#f2b631', '#3fae5a', '#a05ad6', '#f07fb4', '#22b5c4', '#f08a2c',
   '#7a5230', '#9bc53d', '#5b6ee1', '#d94f8c', '#2e8b74', '#c9a227', '#8c8c8c', '#4b3f9e'];
 export const CARDS = {
-  dragon: { name: '炎の竜', icon: 'dragon', w: 3, target: 'any', ask: '燃やしたい相手のマス', text: '選んだマスと、となりの同じ人のマス2つまでを、空き地にもどす（お城はのぞく）' },
-  shield: { name: '守りの結界', icon: 'shield', w: 3, target: 'own', ask: '守りたい自分のマス', text: '選んだ自分のマスと、そのとなりの自分のマスは、このラウンド取られない' },
-  portal: { name: '転移の門', icon: 'portal', w: 3, target: null, text: 'このラウンドは、どこにでも兵を置ける。兵 ＋2' },
-  hero: { name: '勇者の加勢', icon: 'hero', w: 3, target: null, text: 'このラウンドの兵 ＋4' },
-  dice: { name: '運命のサイコロ', icon: 'dice', w: 4, target: null, text: 'このラウンドの兵 ＋1〜6' },
-  storm: { name: '大嵐', icon: 'storm', w: 2, target: null, text: 'ほかの全員の、いちばん多く兵を置いたマスで、兵が2減る' },
-  treasure: { name: '竜の宝', icon: 'treasure', w: 2, target: null, text: 'すぐに2点もらえる' },
+  dragon: { short: 'マスを燃やす', name: '炎の竜', icon: 'dragon', w: 3, target: 'any', ask: '燃やしたい相手のマス', text: '選んだマスと、となりの同じ人のマス2つまでを、空き地にもどす（お城はのぞく）' },
+  shield: { short: 'マスを守る', name: '守りの結界', icon: 'shield', w: 3, target: 'own', ask: '守りたい自分のマス', text: '選んだ自分のマスと、そのとなりの自分のマスは、このラウンド取られない' },
+  portal: { short: 'どこでも置ける', name: '転移の門', icon: 'portal', w: 3, target: null, text: 'このラウンドは、どこにでも兵を置ける。兵 ＋2' },
+  hero: { short: '兵+4', name: '勇者の加勢', icon: 'hero', w: 3, target: null, text: 'このラウンドの兵 ＋4' },
+  dice: { short: '兵+1〜6', name: '運命のサイコロ', icon: 'dice', w: 4, target: null, text: 'このラウンドの兵 ＋1〜6' },
+  storm: { short: 'みんなの兵-2', name: '大嵐', icon: 'storm', w: 2, target: null, text: 'ほかの全員の、いちばん多く兵を置いたマスで、兵が2減る' },
+  treasure: { short: 'すぐ2点', name: '竜の宝', icon: 'treasure', w: 2, target: null, text: 'すぐに2点もらえる' },
   // 攻め
-  thunder: { name: '雷の槍', icon: 'thunder', w: 3, target: 'any', ask: '守りを0にしたいマス', text: '選んだマスの守り（持ち主+1・土地の守り）が、このラウンドだけ0になる' },
-  knights: { name: '騎士団', icon: 'knights', w: 3, target: null, text: 'このラウンドは、自分の土地から2マス先まで兵を置ける。兵 ＋3' },
-  catapult: { name: '投石機', icon: 'catapult', w: 3, target: 'any', ask: '石を飛ばすマス', text: '選んだマスに、兵3人ぶんの攻撃がとどく（どこでも）' },
+  thunder: { short: '守りを0に', name: '雷の槍', icon: 'thunder', w: 3, target: 'any', ask: '守りを0にしたいマス', text: '選んだマスの守り（持ち主+1・土地の守り）が、このラウンドだけ0になる' },
+  knights: { short: '2マス先まで・兵+3', name: '騎士団', icon: 'knights', w: 3, target: null, text: 'このラウンドは、自分の土地から2マス先まで兵を置ける。兵 ＋3' },
+  catapult: { short: '遠くを攻撃', name: '投石機', icon: 'catapult', w: 3, target: 'any', ask: '石を飛ばすマス', text: '選んだマスに、兵3人ぶんの攻撃がとどく（どこでも）' },
   // じゃま
-  seal: { name: '封印', icon: 'seal', w: 2, target: 'enemy', ask: '封印したい人のマス', text: '選んだマスの持ち主は、次のラウンドにカードを使えず、兵も2少ない' },
-  thief: { name: '盗賊', icon: 'thief', w: 2, target: 'enemy', ask: 'ぬすみたい人のマス', text: '選んだマスの持ち主から2点うばう' },
-  swap: { name: '寝返り', icon: 'swap', w: 2, target: 'enemy', ask: 'ほしい相手のマス（お城以外）', text: '選んだ相手のマス（お城以外）の兵が寝返って、自分のものになる' },
+  seal: { short: '相手を封印', name: '封印', icon: 'seal', w: 2, target: 'enemy', ask: '封印したい人のマス', text: '選んだマスの持ち主は、次のラウンドにカードを使えず、兵も2少ない' },
+  thief: { short: '2点うばう', name: '盗賊', icon: 'thief', w: 2, target: 'enemy', ask: 'ぬすみたい人のマス', text: '選んだマスの持ち主から2点うばう' },
+  swap: { short: 'マスを寝返らせる', name: '寝返り', icon: 'swap', w: 2, target: 'enemy', ask: 'ほしい相手のマス（お城以外）', text: '選んだ相手のマス（お城以外）の兵が寝返って、自分のものになる' },
   // 大逆転
-  wrath: { name: '龍王の怒り', icon: 'wrath', w: 1, target: null, text: 'いまの1位（自分以外）の土地が3マス、空き地にもどる（お城はのぞく）' },
-  legend: { name: '英雄の誕生', icon: 'legend', w: 1, target: null, text: 'このラウンドの兵 ＋6' },
-  quake: { name: '大地震', icon: 'quake', w: 1, target: null, text: '自分より順位が上の人みんなの土地が、2マスずつ空き地にもどる（お城はのぞく）' },
+  wrath: { short: '1位の3マスを燃やす', name: '龍王の怒り', icon: 'wrath', w: 1, target: null, text: 'いまの1位（自分以外）の土地が3マス、空き地にもどる（お城はのぞく）' },
+  legend: { short: '兵+6', name: '英雄の誕生', icon: 'legend', w: 1, target: null, text: 'このラウンドの兵 ＋6' },
+  quake: { short: '上の人の土地を減らす', name: '大地震', icon: 'quake', w: 1, target: null, text: '自分より順位が上の人みんなの土地が、2マスずつ空き地にもどる（お城はのぞく）' },
 };
 const CARD_KEYS = Object.keys(CARDS);
 // イベント（予告なしで、ときどき結果の時に起きる）
@@ -161,6 +161,20 @@ export function baseTroops(st, pi) {
   if (BAL.underdog && st.players.length > 1) { const sc = score(st, pi); const below = st.players.filter((_, j) => score(st, j) > sc).length; if (below >= st.players.length / 2) ud = BAL.underdog; }
   const vil = countOf(st, pi, T.VILLAGE), cold = st.blizzard === st.round ? 1 : 0;
   return Math.max(1, 3 + Math.floor(landOf(st, pi) / BAL.landDiv) + runesOf(st, pi) + vil + heat(st) - late - cold + ud);
+}
+// 兵の数の内わけ（画面で説明する用）
+export function troopParts(st, pi) {
+  if (isOut(st, pi)) return [];
+  const p = st.players[pi], a = [['基本', 3]];
+  const ld = Math.floor(landOf(st, pi) / BAL.landDiv); if (ld) a.push([`土地${BAL.landDiv}マスごと`, ld]);
+  const ru = runesOf(st, pi); if (ru) a.push(['ルーンの石', ru]);
+  const vil = countOf(st, pi, T.VILLAGE); if (vil) a.push(['村', vil]);
+  const h = heat(st); if (h) a.push(['終盤', h]);
+  if (BAL.underdog && st.players.length > 1) { const sc = score(st, pi); if (st.players.filter((_, j) => score(st, j) > sc).length >= st.players.length / 2) a.push(['下位の助け', BAL.underdog]); }
+  if (p.joined > 1 && st.round - p.joined < BAL.lateRounds) a.push(['途中参加', -BAL.lateMinus]);
+  if (p.sealed === st.round) a.push(['封印', -2]);
+  if (st.blizzard === st.round) a.push(['吹雪', -1]);
+  return a;
 }
 export function cardTroops(st, pi, card) { return card === 'hero' ? 4 : card === 'portal' ? 2 : card === 'knights' ? 3 : card === 'legend' ? 6 : card === 'dice' ? diceRoll(st.seed, st.round, pi) : 0; }
 export function score(st, pi) {

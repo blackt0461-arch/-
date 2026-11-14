@@ -444,7 +444,7 @@ function playReveal(st) {
   // 1) カードを1枚ずつ
   for (const l of L.log) {
     later(t, () => {
-      banner(G.CARDS[l.card].name, nameHtml(st.players[l.pi]) + (l.card === 'dice' ? `（${G.diceRoll(st.seed, L.round, l.pi)}）` : ''), G.CARDS[l.card].icon, true);
+      banner(G.CARDS[l.card].name, nameHtml(st.players[l.pi]) + 'が使った：' + esc(G.CARDS[l.card].short) + (l.card === 'dice' ? `（${G.diceRoll(st.seed, L.round, l.pi)}）` : ''), G.CARDS[l.card].icon, true);
       ({ dragon: sfx.dragon, shield: sfx.shield, storm: sfx.storm, treasure: sfx.coin }[l.card] || sfx.card)();
       if (b3) b3.flyTo(l.card === 'dragon' ? (L.burned.length ? L.burned[0] : l.target) : l.card === 'shield' && L.shields.length ? L.shields[0] : l.card === 'storm' ? null : st.players[l.pi].castle, l.card === 'storm' ? 1 : 0.5);
       const owner = ((l.card === 'seal' ? L.sealed : l.card === 'thief' ? L.thief : []) || []).find(x => x[0] === l.pi);
@@ -553,7 +553,7 @@ function updateCoach() {
   box.hidden = false;
   Object.assign(box.querySelector('.ring2').style, { left: r.left - 4 + 'px', top: r.top - 4 + 'px', width: r.width + 8 + 'px', height: r.height + 8 + 'px' });
   const b = box.querySelector('.bubble'); b.innerHTML = `${c.text}<small>${c.sub}</small>`;
-  b.style.top = c.el === '#boardWrap' ? r.top + 12 + 'px' : Math.max(8, r.top - 96) + 'px';
+  b.style.top = c.el === '#boardWrap' ? r.top + 64 + 'px' : Math.max(8, r.top - 96) + 'px';
 }
 
 // ---------- 画面 ----------
@@ -625,8 +625,8 @@ function renderScore() {
 }
 function renderPanel() {
   const st = room.state, pi = room.meIndex();
-  const hint = $('#hint'), hand = $('#hand'), btn = $('#btnGo');
-  btn.classList.remove('done', 'ready');
+  const hint = $('#hint'), hand = $('#hand'), btn = $('#btnGo'), tb = $('#troops');
+  btn.classList.remove('done', 'ready'); tb.hidden = true;
   if (pi < 0) {
     hint.textContent = st.players.length >= MAX_PLAYERS + 4 ? '満員なので見学しています' : '次のラウンドから参加します。お城がもらえます！';
     hand.innerHTML = ''; hand.__k = ''; btn.disabled = true; btn.textContent = '待っています'; $('#btnUndo').disabled = true; return;
@@ -636,7 +636,7 @@ function renderPanel() {
   const hk = p.hand.join(',') + ':' + (plan.card ? plan.card.i : '') + ':' + acting + ':' + sealed;
   if (hand.__k !== hk) {
     const fresh = handSeen !== st.gid + ':' + st.round + ':' + p.hand.length;
-    hand.innerHTML = p.hand.length ? p.hand.map((k, i) => { const c = G.CARDS[k]; return `<button data-h="${i}" class="${plan.card && plan.card.i === i ? 'sel' : ''} ${fresh && st.round > 1 && acting ? 'new' : ''}" ${acting && !sealed ? '' : 'disabled'}><span class="ic">${ic(c.icon)}</span>${c.name}</button>`; }).join('') : '<div class="empty">カードはありません</div>';
+    hand.innerHTML = p.hand.length ? p.hand.map((k, i) => { const c = G.CARDS[k]; return `<button data-h="${i}" class="${plan.card && plan.card.i === i ? 'sel' : ''} ${fresh && st.round > 1 && acting ? 'new' : ''}" ${acting && !sealed ? '' : 'disabled'}><span class="ic">${ic(c.icon)}</span>${c.name}<small class="cs">${c.short}</small></button>`; }).join('') : '<div class="empty">カードはありません</div>';
     if (sealed && acting) hand.insertAdjacentHTML('afterbegin', `<div class="sealed">${ic(st.eclipse === st.round ? 'eclipse' : 'seal')} ${st.eclipse === st.round ? '日食で、このラウンドはだれもカードを使えません' : '封印されていて、このラウンドはカードを使えません'}</div>`);
     hand.__k = hk; handSeen = st.gid + ':' + st.round + ':' + p.hand.length;
   }
@@ -652,13 +652,14 @@ function renderPanel() {
   }
   btn.disabled = false;
   const left = totalTroops(st, pi) - used();
+  tb.hidden = false; tb.classList.toggle('zero', left === 0); tb.innerHTML = `<small>兵 のこり</small><b>${left}</b><small>/ ${totalTroops(st, pi)}人</small>`;
   if (plan.sent && !plan.dirty) { btn.classList.add('done'); btn.textContent = '決定ずみ ✓'; }
   else if (plan.sent) btn.textContent = '決定しなおす';
   else if (left > 0) btn.textContent = `決定（兵あと${left}）`;
   else { btn.textContent = '決定！'; btn.classList.add('ready'); }
   const c = plan.card && G.CARDS[plan.card.k];
-  if (plan.targeting) hint.innerHTML = `${ic(c.icon)} ${c.name}：${c.ask || 'マス'}をタップ`;
-  else if (c) hint.innerHTML = `${ic(c.icon)} ${c.text}` + (plan.card.k === 'dice' ? `（出た目：${G.diceRoll(st.seed, st.round, pi)}）` : '') + `　兵 のこり${left}`;
+  if (plan.targeting) hint.innerHTML = `${ic(c.icon)} <b>${c.name}</b>：${c.text}<br><b class="ask">→ ${c.ask || 'マス'}をタップ</b>（もう一度カードを押すとやめる）`;
+  else if (c) hint.innerHTML = `${ic(c.icon)} <b>${c.name}</b>：${c.text}` + (plan.card.k === 'dice' ? `（出た目：${G.diceRoll(st.seed, st.round, pi)}）` : '') + `　兵 のこり${left}`;
   else if (G.landOf(st, pi) === 0) hint.textContent = `ふっかつ！ だれのものでもない好きなマスに兵を置けます（のこり ${left}）`;
   else if (plan.last != null && plan.place.has(plan.last) && st.owner[plan.last] !== pi) {
     const i = plan.last, g = guardOf(st, i), n = plan.place.get(i), need = g.total + 1;
@@ -745,6 +746,12 @@ $('#lobbyList').onclick = e => { const b = e.target.closest('button[data-rm]'); 
 $('#btnStart').onclick = () => { room.start(); sfx.lock(); };
 $('#btnAgain').onclick = () => room.backToLobby();
 $('#btnUndo').onclick = undo; $('#btnGo').onclick = go;
+$('#troops').onclick = e => {
+  e.stopPropagation(); const st = room.state, pi = room.meIndex(); if (pi < 0) return;
+  const parts = G.troopParts(st, pi), ck = plan.card && G.cardTroops(st, pi, plan.card.k);
+  if (ck) parts.push([G.CARDS[plan.card.k].name, ck]);
+  openWhy(`このラウンドの兵：${totalTroops(st, pi)}人`, `<ul class="plain">${parts.map(([n, v]) => `<li>${n}：<b>${v > 0 ? '+' : ''}${v}</b></li>`).join('')}</ul><p>置いた兵：${used()}人　のこり：<b>${totalTroops(st, pi) - used()}人</b></p><p class="note">兵は毎ラウンド新しく配られます（前のラウンドの兵は残りません）。自分のマスに置くと、そのマスの守りになります。</p>`);
+};
 $('#sboard').onclick = e => { e.stopPropagation(); sbOpen = !sbOpen; renderScore(); };
 $('#hand').onclick = e => { const b = e.target.closest('button'); if (!b) return; if (b.dataset.h != null) tapCard(+b.dataset.h); };
 $('#btnMenu').innerHTML = ic('menu'); $('#btnUndo').innerHTML = ic('undo') + ' 戻す';
@@ -755,20 +762,27 @@ $('#btnHelp').onclick = () => openIntro(0);
 $('#btnMHelp').onclick = () => { $('#menu').close(); openIntro(0); };
 // ---- はじめての紹介（どんなゲームか） ----
 const hexes = (cells) => cells.map(([q, r, fill, label, glow]) => { const x = 40 + 17.3 * (q + r / 2), y = 34 + 15 * r; const c = Array.from({ length: 6 }, (_, k) => { const a = Math.PI / 180 * (60 * k - 30); return (x + 10 * Math.cos(a)).toFixed(1) + ',' + (y + 10 * Math.sin(a)).toFixed(1); }).join(' '); return `<polygon points="${c}" fill="${fill}" stroke="#5b4636" stroke-width="1.2" ${glow ? 'stroke-dasharray="3 2"' : ''}/>${label ? `<text x="${x}" y="${y + .5}" font-size="9" font-weight="800" text-anchor="middle" dominant-baseline="central" fill="#5b4636">${label}</text>` : ''}`; }).join('');
+// 最初の説明：ひと通り全部（あとからメニューの「遊び方」でも見られる）
+const row = (icon, name, text) => `<li>${ic(icon)}<span><b>${name}</b>${text}</span></li>`;
 const INTRO = [
-  { t: 'ルーンランドへようこそ！', b: '島の土地を、みんなで取り合うゲームです。<br>最後に<b>点数がいちばん多い人</b>の勝ち！', a: `<svg viewBox="0 0 80 68">${hexes([[-1, -1, '#e9a3a0'], [0, -1, '#e9a3a0'], [1, -1, '#d3e2a2'], [-1, 0, '#e9a3a0'], [0, 0, '#d3e2a2'], [1, 0, '#9fb9ea'], [-1, 1, '#d3e2a2'], [0, 1, '#9fb9ea'], [1, 1, '#9fb9ea']])}</svg>` },
-  { t: 'みんな同時に、兵を置く', b: '置けるのは<b>自分のマス</b>か、その<b>となり</b>（光っているマス）。<br>タップするたびに兵が1人。35秒のうちに「決定」！', a: `<svg viewBox="0 0 80 68">${hexes([[0, 0, '#e9a3a0', '自'], [1, 0, '#fff6c8', '2', 1], [-1, 0, '#fff6c8', '', 1], [0, -1, '#fff6c8', '', 1], [1, -1, '#fff6c8', '', 1], [0, 1, '#fff6c8', '1', 1], [-1, 1, '#fff6c8', '', 1]])}</svg>` },
-  { t: '多い方が勝ち。でも守る側は強い', b: '守りより<b>多く</b>置けば取れます。<br>守り＝持ち主<b>+1</b>・森<b>+1</b>・山<b>+2</b>・お城<b>+3</b>。<br>光るマスの<b>小さい数字</b>が、取るのに要る兵です。', a: `<div class="vs"><div><b>3</b><small>あなたの兵</small></div><span>＞</span><div><b>2</b><small>守り（持ち主+1・森+1）</small></div></div><p class="res2">→ 取れる！ 同じ数だと守る側の勝ち</p>` },
-  { t: 'お城を取られたら負け！', b: 'お城は、まわりの自分の土地を全部取られて<b>包囲</b>された時だけ攻められます。<br>落城したら<b>負け</b>。土地は全部、お城を取った人のものに！', a: `<div class="icons">${ic('castle')}${ic('raid')}${ic('crown')}</div>` },
-  { t: '特別なマス', b: '<b>村</b> 兵+1・<b>神殿</b> カード+1枚・<b>金鉱</b> 毎ラウンド1点・<b>見張りの塔</b> まわりも守る。<br>終盤はどんどん<b>ヒートアップ</b>。最終ラウンドは取ったマスが2点！', a: `<div class="icons">${ic('village')}${ic('shrine')}${ic('mine')}${ic('tower')}</div>` },
-  { t: '運で大逆転も！', b: '<b>魔法カード</b>（1ラウンド1枚）・<b>サイコロ</b>（とりあいの時）・<b>宝箱</b>・ときどき<b>イベント</b>。<br>順位が下の人ほど、強いカードが来ます。', a: `<div class="icons">${ic('dragon')}${ic('dice')}${ic('chest')}${ic('raid')}</div>` },
-  { t: '点数のかぞえ方', b: 'マス <b>1点</b>・ルーンの石 <b>3点</b>（兵も増える）・お城 <b>2点</b>。<br>決まったラウンド数（ふつう18）で終わり。', a: `<div class="icons">${ic('rune')}${ic('castle')}${ic('crown')}</div>` },
+  { t: 'ルーンランドへようこそ！', b: '島の土地を、みんなで取り合うゲームです。<br>決まったラウンド数（ふつう18）が終わった時に、<b>点数がいちばん多い人</b>の勝ち！<br>みんな<b>同時に</b>作戦を立てて、いっせいに結果が出ます。', a: `<svg viewBox="0 0 80 68">${hexes([[-1, -1, '#e9a3a0'], [0, -1, '#e9a3a0'], [1, -1, '#d3e2a2'], [-1, 0, '#e9a3a0'], [0, 0, '#d3e2a2'], [1, 0, '#9fb9ea'], [-1, 1, '#d3e2a2'], [0, 1, '#9fb9ea'], [1, 1, '#9fb9ea']])}</svg>` },
+  { t: '1ラウンドの流れ', b: '', a: `<div class="icons">${ic('castle')}${ic('wand')}${ic('dice')}${ic('crown')}</div>`, l: `<ol class="steps"><li><b>兵を置く</b>：取りたいマス・守りたいマスをタップ（35秒）</li><li><b>魔法カード</b>を1枚えらぶ（使わなくてもいい）</li><li><b>「決定」</b>を押す。全員が決定するか、時間が来たら…</li><li><b>結果発表</b>：カード → とりあい → 取れたマス → 宝箱 → 天災 の順に見せます</li></ol>` },
+  { t: '兵の数', b: '兵は<b>毎ラウンド新しく配られます</b>（前のラウンドの兵は残りません）。<br>盤面の<b>左上</b>に「兵 のこり」が出ます。押すと内わけが見られます。', a: `<div class="tb"><small>兵 のこり</small><b>4</b><small>/ 6人</small></div>`, l: `<ul class="plain sm"><li>基本 <b>3人</b></li><li>土地6マスごとに <b>+1</b></li><li>ルーンの石・村 1つにつき <b>+1</b></li><li>終盤は <b>+1〜+3</b>、点数が下半分なら <b>+2</b></li></ul>` },
+  { t: '兵を置く', b: '置けるのは<b>自分のマス</b>か、その<b>となり</b>（点線で光っているマス）。<br>タップするたびに1人。<b>長押し</b>か「戻す」で1人戻せます。<br>自分のマスに置くと、そのマスの<b>守り</b>になります。', a: `<svg viewBox="0 0 80 68">${hexes([[0, 0, '#e9a3a0', '自'], [1, 0, '#fff6c8', '2', 1], [-1, 0, '#fff6c8', '', 1], [0, -1, '#fff6c8', '', 1], [1, -1, '#fff6c8', '', 1], [0, 1, '#fff6c8', '1', 1], [-1, 1, '#fff6c8', '', 1]])}</svg>` },
+  { t: '取れるかどうか', b: '置いた兵が、そのマスの<b>守りより多ければ</b>取れます。同じ数なら守る側の勝ち。<br>光るマスの<b>小さい数字</b>が、取るのに要る兵です。', a: `<div class="vs"><div><b>3</b><small>あなたの兵</small></div><span>＞</span><div><b>2</b><small>守り（持ち主+1・森+1）</small></div></div>`, l: `<ul class="plain sm"><li>守り＝持ち主<b>+1</b>＋土地の守り＋持ち主が置いた兵</li><li>何人もが同じマスに置いたら、いちばん多い人。攻める人どうしが同じ数なら、だれも取れない</li><li>2人以上が同じマスに置くと<b>サイコロ</b>：みんなに 0〜2 が足される</li><li>結果の時にマスを押すと、<b>なぜ取れた／取れなかったか</b>が見られます</li></ul>` },
+  { t: 'マスの種類', b: '', a: '', l: `<ul class="rows">${row('castle', 'お城', '守り+3・2点。包囲された時だけ攻められる')}${row('rune', 'ルーンの石', '3点・兵+1・守り+2')}${row('village', '村', '兵+1・守り+1')}${row('shrine', '神殿', '配られるカード+1枚・守り+1')}${row('mine', '金鉱', '持っている間、毎ラウンド1点')}${row('tower', '見張りの塔', '守り+2。となりの自分の土地も守り+1')}<li><span class="sw" style="background:#a5c98a"></span><span><b>森</b>守り+1　<b>山</b>守り+2　<b>湖</b>取れない　<b>草原</b>守りなし</span></li></ul>` },
+  { t: 'お城を取られたら負け！', b: 'お城は、持ち主のまわりの土地が<b>ぜんぶ取られて包囲</b>された時だけ攻められます。<br>お城を取られると<b>落城</b>。その人は負けで、あとは見学。土地は全部、お城を取った人のものに！<br>自分のお城の<b>まわりのマス</b>を守ろう。', a: `<svg viewBox="0 0 80 68">${hexes([[0, 0, '#e9a3a0', '城'], [1, 0, '#9fb9ea'], [-1, 0, '#9fb9ea'], [0, -1, '#9fb9ea'], [1, -1, '#9fb9ea'], [0, 1, '#9fb9ea'], [-1, 1, '#9fb9ea']])}</svg><small class="cap">まわりを全部取られると、お城が攻められる</small>` },
+  { t: '魔法カード', b: '毎ラウンド<b>3枚</b>配りなおし。1ラウンドに<b>1枚</b>使えます。順位が下の人ほど、強いカードが来ます。<br>相手のマスをえらぶカードは、カードを押してからマスをタップ。', a: '', l: `<ul class="rows cards">${Object.values(G.CARDS).map(c => row(c.icon, c.name, c.text)).join('')}</ul>` },
+  { t: '宝箱と天災', b: '宝箱のマスを取ると、<b>カード1枚</b>か<b>2点</b>。宝箱はときどき新しく出ます。<br>ときどき予告なしで<b>天災・イベント</b>が起きます。', a: `<div class="icons">${ic('chest')}${ic('meteor')}${ic('gold')}</div>`, l: `<ul class="rows">${Object.values(G.EVENTS).map(e => row(e.icon, e.name.replace(/[！!]$/, ''), e.text)).join('')}</ul>` },
+  { t: '終盤はヒートアップ', b: '', a: `<div class="icons">${ic('rise')}${ic('hero')}${ic('crown')}</div>`, l: `<ul class="plain sm"><li>のこり3分の1から：兵<b>+1</b>・カード<b>4枚</b></li><li>のこり2ラウンド：兵<b>+2</b>・カード<b>5枚</b></li><li><b>最終ラウンド</b>：兵<b>+3</b>。取ったマスは<b>2点</b>！</li></ul>` },
+  { t: '点数のかぞえ方', b: 'マス<b>1点</b>・ルーンの石<b>3点</b>・お城<b>2点</b>。<br>ほかに宝箱・金鉱・カードでもらえる点があります。<br>生き残りが1人になったら、そこで終わり。', a: `<div class="icons">${ic('rune')}${ic('castle')}${ic('mine')}${ic('crown')}</div>` },
+  { t: '画面の見方', b: '', a: '', l: `<ul class="plain sm"><li><b>上</b>：ラウンド・のこり時間・自分の点・決定した人数</li><li><b>名札の列</b>：みんなの順位と点（✓は決定ずみ）</li><li><b>盤面の左上</b>：兵のこり（押すと内わけ）</li><li><b>盤面の右下</b>：点数表（押すと全員）</li><li><b>下</b>：説明・手札（カード）・戻す・決定</li><li>右上の<b>メニュー</b>から、遊び方・画質・音の切りかえ</li></ul>` },
 ];
 let introPage = 0;
 function openIntro(k) { introPage = k; drawIntro(); const d = $('#intro'); if (!d.open) d.showModal(); }
 function drawIntro() {
   const p = INTRO[introPage];
-  $('#introBody').innerHTML = `<div class="art">${p.a}</div><h2>${p.t}</h2><p>${p.b}</p>`;
+  $('#introBody').innerHTML = (p.a ? `<div class="art">${p.a}</div>` : '') + `<h2>${p.t}</h2>` + (p.b ? `<p>${p.b}</p>` : '') + (p.l || '') + '<div class="moreHint">▼ 下にすべらせると、つづきがあります</div>'; const ib = $('#introBody'); ib.scrollTop = 0; requestAnimationFrame(() => ib.classList.toggle('more', ib.scrollHeight > ib.clientHeight + 8)); ib.onscroll = () => { if (ib.scrollTop + ib.clientHeight >= ib.scrollHeight - 8) ib.classList.remove('more'); };
   $('#introDots').innerHTML = INTRO.map((_, k) => `<i class="${k === introPage ? 'on' : ''}"></i>`).join('');
   $('#introPrev').style.visibility = introPage ? 'visible' : 'hidden';
   $('#introNext').textContent = introPage === INTRO.length - 1 ? 'はじめる！' : 'つぎへ';

@@ -276,3 +276,26 @@ button.mini { min-height: 32px; padding: 2px 12px; border-radius: 99px; font-siz
 .hand::-webkit-scrollbar { display: none; }
 .hand button { min-width: 62px; }
 #board .can.still { animation: none; stroke-dasharray: none; stroke-width: 1.2; }
+
+/* 兵の残り（盤面の左上。大きく） */
+.troops { position: absolute; left: 6px; top: 6px; z-index: 3; min-height: 0; padding: 4px 10px; border-radius: 14px; background: #fffaf0e8; border: 2px solid var(--gold2, #c4862a); box-shadow: 0 2px 0 #9a651455; display: flex; align-items: baseline; gap: 4px; color: var(--ink); }
+.troops b { font-size: 1.7rem; line-height: 1; font-variant-numeric: tabular-nums; color: #b25a14; }
+.troops small { font-size: .72rem; }
+.troops.zero { border-color: var(--green, #5aa36a); } .troops.zero b { color: var(--green, #5aa36a); }
+.hand button .cs { font-size: .6rem; color: var(--ink2); line-height: 1.1; }
+.hint .ask { color: #b23c86; }
+
+/* 最初の説明 */
+#introBody { max-height: 62vh; overflow-y: auto; }
+.intro .art .cap { font-size: .72rem; color: var(--ink2); }
+.intro .steps, .intro .plain.sm { text-align: left; font-size: .88rem; line-height: 1.55; margin: 6px 0; padding-left: 1.4em; }
+.intro .plain.sm { list-style: disc; }
+.intro .rows { list-style: none; padding: 0; margin: 6px 0; text-align: left; font-size: .84rem; line-height: 1.4; }
+.intro .rows li { display: flex; gap: 8px; align-items: flex-start; padding: 5px 0; border-bottom: 1px dashed #c4a77a66; }
+.intro .rows .gi { width: 28px; height: 28px; flex: none; }
+.intro .rows b { display: block; }
+.intro .rows .sw { width: 28px; height: 28px; border-radius: 6px; flex: none; }
+.intro .tb { display: inline-flex; align-items: baseline; gap: 4px; padding: 6px 14px; border-radius: 14px; background: #fffaf0; border: 2px solid #c4862a; }
+.intro .tb b { font-size: 2.4rem; color: #b25a14; }
+#introBody .moreHint { display: none; }
+#introBody.more .moreHint { display: block; position: sticky; bottom: 0; padding: 6px; font-size: .78rem; font-weight: 800; color: #b25a14; background: linear-gradient(transparent, var(--paper, #fffaf0) 45%); }
