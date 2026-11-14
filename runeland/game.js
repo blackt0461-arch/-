@@ -216,14 +216,20 @@ export function resolve(st0, plans) {
     for (const [pi, v] of f) { const d = diceFor(st.seed, st.round, i, pi); f.set(pi, v + d); ds.push([pi, d]); }
     dice.push([i, ds]);
   }
-  const changed = [];
+  const changed = [], fights = [];
+  // 1マスごとの勝負。くわしい内訳を fights に残す（「なぜ取れなかったか」を画面で見せるため）
+  //   o：持ち主 g：持ち主が置いた兵（サイコロこみ） b：持ち主の +1 d：土地の守り hold：守りの合計
+  //   w：いちばん強い攻め手 v：その強さ tie：攻め手どうしの引き分け r：結果（take=取った keep=守った tie=引き分け shield=結界）
   for (const [i, f] of force) {
-    if (shields.has(i)) continue;
-    const o = st.owner[i];
-    const hold = o >= 0 ? (f.get(o) || 0) + 1 + defenseOf(st, i) : defenseOf(st, i);
+    const o = st.owner[i], d = defenseOf(st, i), g = o >= 0 ? (f.get(o) || 0) : 0, b = o >= 0 ? 1 : 0;
+    const hold = g + b + d;
     let best = -1, bv = 0, tie = false;
     for (const [pi, v] of f) { if (pi === o) continue; if (v > bv) { bv = v; best = pi; tie = false; } else if (v === bv) tie = true; }
-    if (best >= 0 && !tie && bv > hold) { changed.push({ i, from: o, to: best }); st.owner[i] = best; }
+    let r = 'keep';
+    if (shields.has(i)) r = 'shield';
+    else if (best >= 0 && tie && bv > hold) r = 'tie';
+    else if (best >= 0 && !tie && bv > hold) { r = 'take'; changed.push({ i, from: o, to: best }); st.owner[i] = best; }
+    fights.push({ i, o, g, b, d, hold, w: best, v: bv, tie, r });
   }
   // 宝箱：取った人が開ける（カード1枚か2点）
   const rkPos = new Map(ranking(st).map((x, k, a) => [x.pi, a.length > 1 ? k / (a.length - 1) : 0.5]));
@@ -274,7 +280,7 @@ export function resolve(st0, plans) {
   for (const l of log) st.stats[l.pi].cards++;
   for (const k in gainNow) st.stats[k].best = Math.max(st.stats[k].best, gainNow[k]);
   const forceOut = [...force].map(([i, f]) => [i, [...f]]);
-  st.last = { round: st.round, changed, burned, shields: [...shields], log, force: forceOut, dice, opened, event };
+  st.last = { round: st.round, changed, burned, shields: [...shields], log, force: forceOut, dice, opened, event, fights };
   ranking(st).forEach((x, pos) => { st.stats[x.pi].worst = Math.max(st.stats[x.pi].worst, pos); });
   st.round++;
   if (st.round > st.rounds) st.phase = 'end';

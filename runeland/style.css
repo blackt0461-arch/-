@@ -181,3 +181,53 @@ dialog form button { width: 100%; }
 .gi.big { width: 34px; height: 34px; }
 button.icon .gi { width: 26px; height: 26px; vertical-align: middle; }
 #btnUndo .gi { width: 20px; height: 20px; }
+
+/* 取るのに要る兵・足りているか */
+#board .need { fill: #5b4636; font-weight: 800; opacity: .75; }
+#board .pill { fill: #fff; font-weight: 800; }
+.hint small { color: var(--ink2); }
+button.mini { min-height: 32px; padding: 2px 12px; border-radius: 99px; font-size: .82rem; background: #fbe3a8; border-color: var(--gold2); box-shadow: 0 2px 0 var(--gold2); vertical-align: middle; }
+
+/* サイコロのとりあい */
+#duel { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(92%, 420px); background: var(--paper3); border: 3px solid var(--ink); border-radius: 18px; padding: 10px 12px; box-shadow: 0 8px 0 #5b463655; z-index: 4; animation: tin .25s; }
+#duel .dhead { font-weight: 800; font-size: 1.2rem; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+#duel .dhead small { font-size: .8rem; color: var(--ink2); font-weight: 500; }
+#duel ul { list-style: none; padding: 0; margin: 8px 0 4px; display: flex; flex-direction: column; gap: 6px; }
+#duel li { display: flex; align-items: center; gap: 6px; background: #fff; border: 2px solid var(--paper2); border-radius: 12px; padding: 4px 8px; min-height: 48px; transition: transform .2s, border-color .2s; }
+#duel li.turn { border-color: var(--gold2); transform: scale(1.03); }
+#duel li.win { border-color: var(--green); background: #e5f4e3; transform: scale(1.04); }
+#duel li .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 800; }
+#duel li .nm small { margin-left: 4px; font-size: .7rem; color: #fff; background: var(--ink2); border-radius: 6px; padding: 0 5px; font-weight: 500; }
+#duel li .bs { font-size: .8rem; color: var(--ink2); white-space: nowrap; }
+#duel .die { width: 38px; height: 38px; display: block; }
+#duel .die-sp { width: 38px; }
+#duel .dw.shake { transform: rotate(14deg) translateY(-2px); }
+#duel .dw.land { animation: pop .4s cubic-bezier(.3, 1.6, .5, 1); }
+#duel .tot { min-width: 2.6em; text-align: right; font-size: 1.15rem; }
+#duel .res { margin: 4px 0 0; text-align: center; font-weight: 800; font-size: 1.05rem; min-height: 1.4em; }
+
+/* 結果の内訳 */
+#why .why, #why .plain { list-style: none; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+#why li, #why p.ok, #why p.ng { border-radius: 10px; padding: 6px 10px; line-height: 1.45; font-size: .9rem; }
+#why .ok { background: #e5f4e3; } #why .ng { background: #fbe4dc; }
+#why .plain li { background: #fff; display: flex; align-items: center; gap: 6px; }
+#why .note { font-size: .8rem; color: var(--ink2); }
+
+/* はじめての紹介 */
+.intro { text-align: center; }
+.intro .art { height: 150px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.intro .art svg { height: 140px; width: auto; }
+.intro h2 { font-size: 1.3rem; margin: 8px 0 4px; }
+.intro p { line-height: 1.6; font-size: .95rem; margin: 0 0 6px; }
+.intro .icons { display: flex; gap: 14px; justify-content: center; }
+.intro .icons .gi { width: 56px; height: 56px; }
+.intro .vs { display: flex; align-items: center; gap: 12px; }
+.intro .vs div { background: #fff; border: 2px solid var(--ink2); border-radius: 14px; padding: 6px 12px; min-width: 96px; }
+.intro .vs b { display: block; font-size: 2.2rem; } .intro .vs small { font-size: .72rem; color: var(--ink2); }
+.intro .vs span { font-size: 2rem; font-weight: 800; color: var(--green); }
+.intro .res2 { font-weight: 800; color: var(--green); margin-top: 6px; }
+.dots { display: flex; justify-content: center; gap: 6px; margin: 6px 0; }
+.dots i { width: 9px; height: 9px; border-radius: 50%; background: var(--paper2); }
+.dots i.on { background: var(--gold2); }
+.introNav { display: flex; gap: 8px; } .introNav .sub { flex: 1; } .introNav .big { flex: 2; }
+#duel li.land { background: #f1e9d6; } #duel li.land .gi { width: 22px; height: 22px; }

@@ -12,6 +12,18 @@ const store = { get(k, d) { try { return localStorage.getItem('runeland:' + k) ?
 let myId = store.get('id'); if (!myId) { myId = Math.random().toString(36).slice(2, 10); store.set('id', myId); }
 let room = null;
 const nameHtml = p => (p.bot ? ic('bot', 'bot') : '') + esc(p.name);
+// マスの守り（取るのに何人いるか）
+const TNAME = ['草原', '森', '山', '湖', 'ルーンの石'];
+const tileName = (st, i) => G.isCastle(st, i) ? 'お城' : TNAME[st.terrain[i]];
+function guardOf(st, i, owners = st.owner) { const o = owners[i], d = G.defenseOf(st, i), b = o >= 0 ? 1 : 0; return { o, d, b, total: b + d }; }
+function guardParts(st, i, g, oTroops = 0, oDice = 0) {
+  const a = [];
+  if (oTroops) a.push(`持ち主の兵${oTroops}`);
+  if (g.b) a.push('持ち主+1');
+  if (g.d) a.push(`${tileName(st, i)}+${g.d}`);
+  if (oDice) a.push(`サイコロ+${oDice}`);
+  return a.length ? a.join('＋') : '守りなし';
+}
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 // ---------- つなぐ ----------
@@ -90,7 +102,7 @@ function tapTile(i) {
   const portal = plan.card && plan.card.k === 'portal';
   if (!G.canPlace(st, pi, i, portal)) { toast(G.landOf(st, pi) === 0 ? 'だれのものでもないマスに置けます' : '光っているマス（自分のマスか、そのとなり）に置けます'); return; }
   if (used() >= totalTroops(st, pi)) { toast('兵を使いきりました。長押しか「戻す」で戻せます'); return; }
-  plan.order.push(i); rebuild(); sfx.place(plan.place.get(i)); touched(); coachDone('place'); render();
+  plan.order.push(i); rebuild(); plan.last = i; sfx.place(plan.place.get(i)); touched(); coachDone('place'); render();
 }
 function removeAt(i) {
   if (!canAct() || !plan.place.has(i)) return;
@@ -178,14 +190,23 @@ function drawOverlay() {
   let out = '';
   for (const i of (B.anim && prevChests ? prevChests : st.chests) || []) { const [x, y] = B.cx[i]; out += chestIcon(x, y); }
   if (acting && !plan.targeting) {
-    for (let i = 0; i < B.tiles.length; i++) if (st.terrain[i] !== G.T.LAKE && st.owner[i] !== pi && G.canPlace(st, pi, i, portal)) out += `<polygon class="can" points="${B.tiles[i].getAttribute('points')}"/>`;
+    for (let i = 0; i < B.tiles.length; i++) if (st.terrain[i] !== G.T.LAKE && st.owner[i] !== pi && G.canPlace(st, pi, i, portal)) {
+      out += `<polygon class="can" points="${B.tiles[i].getAttribute('points')}"/>`;
+      if (!plan.place.has(i)) { const [x, y] = B.cx[i]; out += `<text class="need" x="${x + 5.2}" y="${y + 4.6}" font-size="4.4">${guardOf(st, i).total + 1}</text>`; } // 取るのに要る兵
+    }
   }
   if (acting && plan.targeting) { // カードの相手を選ぶ時：選べるマスを光らせる
     const own = G.CARDS[plan.card.k].target === 'own';
     for (let i = 0; i < B.tiles.length; i++) if (st.terrain[i] !== G.T.LAKE && (own ? st.owner[i] === pi : st.owner[i] >= 0 && st.owner[i] !== pi)) out += `<polygon class="can" points="${B.tiles[i].getAttribute('points')}"/>`;
   }
   if (acting && plan.card && plan.card.target != null) out += `<polygon class="tgt" points="${B.tiles[plan.card.target].getAttribute('points')}"/>${icAt(G.CARDS[plan.card.k].icon, B.cx[plan.card.target][0], B.cx[plan.card.target][1] - 9, 9)}`;
-  if (acting) for (const [i, n] of plan.place) { const [x, y] = B.cx[i]; out += `<circle cx="${x}" cy="${y}" r="5.4" fill="${st.players[pi].color}" stroke="#fff" stroke-width="1.3"/><text class="cnt" x="${x}" y="${y + 0.3}" font-size="7.2">${n}</text>`; }
+  if (acting) for (const [i, n] of plan.place) {
+    const [x, y] = B.cx[i]; out += `<circle cx="${x}" cy="${y}" r="5.4" fill="${st.players[pi].color}" stroke="#fff" stroke-width="1.3"/><text class="cnt" x="${x}" y="${y + 0.3}" font-size="7.2">${n}</text>`;
+    if (st.owner[i] !== pi) { // 足りているか：あと何人
+      const need = guardOf(st, i).total + 1, ok = n >= need;
+      out += `<rect x="${x - 6}" y="${y + 4.6}" width="12" height="4.6" rx="2.3" fill="${ok ? '#5aa36a' : '#e3832f'}" stroke="#fff" stroke-width=".6"/><text class="pill" x="${x}" y="${y + 7}" font-size="3.4">${ok ? '取れる' : 'あと' + (need - n)}</text>`;
+    }
+  }
   if (!acting && st.last && st.step === 'reveal' && !B.anim) for (const [i, f] of st.last.force) { // 結果：いちばん多く置いた人
     const top = [...f].sort((a, b) => b[1] - a[1])[0]; const [x, y] = B.cx[i];
     out += `<circle cx="${x + 5}" cy="${y - 5}" r="3.4" fill="${st.players[top[0]].color}" stroke="#5b4636" stroke-width=".6"/><text class="fc" x="${x + 5}" y="${y - 4.8}" font-size="4.6">${top[1]}</text>`;
@@ -264,6 +285,7 @@ const endPtr = e => {
   if (g.moved || g.done || Date.now() - pinchEnd < 150 || e.type === 'pointercancel') return;
   if (B.anim) { skipAnim(); return; } // 結果の動きをとばす
   const i = g.tile; if (i < 0) return;
+  if (!canAct() && room?.state?.step === 'reveal') { explain(i); return; } // 結果の時：そのマスの勝負の内訳
   // 小さすぎて押しにくい時は、まず広げる
   if (canAct() && hexPx() < 26) { zoomAt(e.clientX, e.clientY, Math.min(4, B.view.k * 40 / hexPx()), true); toast('広げました。もう一度タップして置こう'); return; }
   tapTile(i);
@@ -276,10 +298,100 @@ $('#btnFit').onclick = () => { B.view = { k: 1, x: 0, y: 0 }; applyView(); };
 // ---------- 結果の見せ方（順番に） ----------
 let revealDone = '', prevOwners = null, prevGidRound = '', prevRanks = null, animTimers = [];
 function later(ms, f) { animTimers.push(setTimeout(f, ms)); }
-function skipAnim() { animTimers.forEach(clearTimeout); animTimers = []; B.anim = false; if (room?.state?.last) celebrate(room.state); render(); }
+function skipAnim() { animTimers.forEach(clearTimeout); animTimers = []; duelTimers.forEach(clearInterval); duelTimers = []; $('#duel').hidden = true; B.anim = false; if (room?.state?.last) celebrate(room.state); render(); }
 function flashTile(i, cls) { const p = el('polygon', { class: cls, points: B.tiles[i].getAttribute('points') }, $('#lOver')); $('#lOver').__h = null; setTimeout(() => p.remove(), 1600); }
 function banner(text, sub = '', icon = '', subHtml = false) { const b = $('#banner'); b.innerHTML = `<div>${icon ? ic(icon) + ' ' : ''}${esc(text)}${sub ? `<small>${subHtml ? sub : esc(sub)}</small>` : ''}</div>`; }
 let celebrated = '';
+// ---- サイコロのとりあい（1人ずつ） ----
+let duelTimers = [];
+function duelRows(st, d) {
+  const L = st.last, [i, ds] = d, f = (L.fights || []).find(x => x.i === i), force = new Map((L.force.find(x => x[0] === i) || [i, []])[1]);
+  const rows = ds.map(([p, dv]) => ({ p, dice: dv, base: (force.get(p) || dv) - dv, own: f && f.o === p }));
+  if (f && f.o >= 0 && !rows.some(r => r.own)) rows.push({ p: f.o, dice: null, base: 0, own: true });
+  for (const r of rows) if (r.own && f) r.guard = f.b + f.d;
+  if (f && f.o < 0 && f.d > 0) rows.push({ p: -1, land: true, dice: null, base: 0, guard: f.d }); // 空き地でも、森・山・ルーンは守りがある
+  rows.sort((a, b) => (b.own || b.land ? 1 : 0) - (a.own || a.land ? 1 : 0));
+  return { i, f, rows };
+}
+const duelMs = d => 500 + d.rows.length * 700 + 1300;
+function pickDuels(st, pi) {
+  const L = st.last; if (!L.dice || !L.dice.length) return [];
+  const all = L.dice.map(d => duelRows(st, d));
+  const mine = x => x.rows.some(r => r.p === pi);
+  return all.sort((a, b) => (mine(b) ? 1 : 0) - (mine(a) ? 1 : 0) || b.rows.length - a.rows.length).slice(0, 3);
+}
+const dieSvg = v => `<svg class="die" viewBox="0 0 32 32"><rect x="3" y="3" width="26" height="26" rx="7" fill="#fffaf0" stroke="#5b4636" stroke-width="2"/><text x="16" y="17.5" font-size="15" font-weight="800" text-anchor="middle" dominant-baseline="central" fill="${v ? '#d9573f' : '#8a735c'}">+${v}</text></svg>`;
+function playDuel(st, d) {
+  const box = $('#duel'), L = st.last, { i, f, rows } = d;
+  const total = r => r.base + (r.dice || 0) + (r.guard || 0);
+  box.innerHTML = `<div class="dhead">${ic('dice')} とりあい！<small>${tileName(st, i)}${f && f.o >= 0 ? `（${nameHtml(st.players[f.o])}の土地）` : '（空き地）'}</small></div>
+    <ul>${rows.map((r, k) => r.land ? `<li data-k="${k}" class="land">${ic(st.terrain[i] === G.T.RUNE ? 'rune' : 'shield')}<span class="nm">土地の守り（${tileName(st, i)}）</span><span class="bs">これより多く必要</span><span class="die-sp"></span><b class="tot">= ${r.guard}</b></li>` : `<li data-k="${k}"><i class="dot" style="background:${st.players[r.p].color}"></i><span class="nm">${nameHtml(st.players[r.p])}${r.own ? '<small>守る</small>' : ''}</span>
+      <span class="bs">${r.own ? `兵${r.base}＋守り${r.guard}` : `兵${r.base}`}</span>${r.dice == null ? '<span class="die-sp"></span>' : `<span class="dw">${dieSvg(0)}</span>`}<b class="tot">${r.dice == null ? '= ' + total(r) : ''}</b></li>`).join('')}</ul>
+    <p class="res"></p>`;
+  box.hidden = false; flashTile(i, 'shine');
+  let tt = 500;
+  rows.forEach((r, k) => {
+    if (r.dice == null) return;
+    later(tt, () => {
+      const li = box.querySelector(`li[data-k="${k}"]`); if (!li) return; li.classList.add('turn');
+      const dw = li.querySelector('.dw'); let n = 0;
+      const iv = setInterval(() => { dw.innerHTML = dieSvg(Math.floor(Math.random() * 3)); dw.classList.toggle('shake'); if (n++ % 2 === 0) sfx.tick(10); }, 70);
+      duelTimers.push(iv);
+      setTimeout(() => { clearInterval(iv); dw.innerHTML = dieSvg(r.dice); dw.classList.remove('shake'); dw.classList.add('land'); li.querySelector('.tot').textContent = '= ' + total(r); li.classList.remove('turn'); sfx.place(r.dice * 3 + 1); }, 520);
+    });
+    tt += 700;
+  });
+  later(tt, () => {
+    const res = box.querySelector('.res');
+    let winner = -1, text = '';
+    if (!f) text = '';
+    else if (f.r === 'take') { winner = f.w; text = `${nameHtml(st.players[f.w])} が取った！`; }
+    else if (f.r === 'tie') text = '引き分け！ だれも取れず';
+    else if (f.r === 'shield') text = '結界で守られた！';
+    else if (f.o >= 0) { winner = f.o; text = `${nameHtml(st.players[f.o])} が守った！`; }
+    else text = '土地の守りより多くなくて、だれも取れず';
+    rows.forEach((r, k) => { if (r.p === winner) box.querySelector(`li[data-k="${k}"]`).classList.add('win'); });
+    res.innerHTML = text; sfx.rankUp();
+  });
+  later(duelMs(d) - 150, () => { box.hidden = true; });
+}
+// ---- 勝負の内訳（なぜ取れた／取れなかった） ----
+function fightText(st, f, pi) {
+  const L = st.last, dmap = new Map((L.dice || []).map(([i, ds]) => [i, new Map(ds)]));
+  const force = new Map((L.force.find(x => x[0] === f.i) || [f.i, []])[1]);
+  const dz = (p) => (dmap.get(f.i) && dmap.get(f.i).get(p)) || 0;
+  const g = { b: f.b, d: f.d }, od = f.o >= 0 ? dz(f.o) : 0;
+  const guardStr = `守り ${f.hold}（${guardParts(st, f.i, g, f.g - od, od)}）`;
+  const where = `${tileName(st, f.i)}${f.o >= 0 && f.o !== pi ? `・${esc(st.players[f.o].name)}の土地` : f.o === pi ? '・自分の土地' : '・空き地'}`;
+  const nm = p => p === pi ? 'あなた' : esc(st.players[p].name);
+  const val = p => { const v = force.get(p) || 0, d = dz(p); return d ? `${v - d}＋サイコロ${d}＝${v}` : `${v}`; };
+  if (f.o === pi) { // 守った側
+    if (f.r === 'take') return { ok: false, t: `取られた（${where}）：${nm(f.w)} ${val(f.w)} が ${guardStr} より多かった` };
+    if (f.w < 0) return null;
+    return { ok: true, t: `守れた（${where}）：${guardStr} ≧ ${nm(f.w)} ${val(f.w)}` };
+  }
+  if (!force.has(pi)) return null;
+  const mine = force.get(pi);
+  if (f.r === 'take' && f.w === pi) return { ok: true, t: `取れた！（${where}）：あなた ${val(pi)} ＞ ${guardStr}` };
+  if (f.r === 'shield') return { ok: false, t: `取れず（${where}）：守りの結界で守られていた` };
+  if (mine <= f.hold) return { ok: false, t: `取れず（${where}）：あなた ${val(pi)} ${mine === f.hold ? '＝' : '＜'} ${guardStr}${mine === f.hold ? '。同じ数だと守る側の勝ち' : ''}` };
+  if (f.tie && f.v === mine) { const other = [...force].find(([p, v]) => p !== pi && p !== f.o && v === mine); return { ok: false, t: `取れず（${where}）：${other ? nm(other[0]) : 'ほかの人'} と同じ ${mine} で引き分け。だれも取れない` }; }
+  return { ok: false, t: `取れず（${where}）：${nm(f.w)} ${val(f.w)} の方が多かった（あなた ${val(pi)}）` };
+}
+function myFights(st, pi) { return (st.last && st.last.fights || []).map(f => ({ f, x: fightText(st, f, pi) })).filter(o => o.x); }
+function explain(i) {
+  const st = room.state, pi = room.meIndex(), f = (st.last && st.last.fights || []).find(x => x.i === i);
+  if (!f) { toast(`${tileName(st, i)}：このラウンドはだれも兵を置かなかった`); return; }
+  const x = pi >= 0 ? fightText(st, f, pi) : null;
+  const force = (st.last.force.find(z => z[0] === i) || [i, []])[1];
+  const lines = force.map(([p, v]) => `<li><i class="dot" style="background:${st.players[p].color}"></i>${nameHtml(st.players[p])}：${v}${p === f.o ? `＋守り${f.b + f.d}` : ''}</li>`).join('');
+  openWhy(`${tileName(st, i)}の勝負`, (x ? `<p class="${x.ok ? 'ok' : 'ng'}">${x.ok ? '◯' : '✕'} ${x.t}</p>` : '') + `<ul class="plain">${lines}</ul><p class="note">守る側は「持ち主+1」と土地の守り（森+1・山+2・ルーン+2・お城+3）が足されます。攻める側は、守りより多くないと取れません。</p>`);
+}
+function openWhy(title, html) { $('#whyTitle').textContent = title; $('#whyBody').innerHTML = html; $('#why').showModal(); }
+function showWhyAll() {
+  const st = room.state, pi = room.meIndex(), list = myFights(st, pi);
+  openWhy(`ラウンド${st.last.round}の結果`, list.length ? `<ul class="why">${list.map(o => `<li class="${o.x.ok ? 'ok' : 'ng'}">${o.x.ok ? '◯' : '✕'} ${o.x.t}</li>`).join('')}</ul><p class="note">盤面のマスをタップすると、そのマスの勝負も見られます。</p>` : '<p>このラウンドは、兵を置いたマスで勝負がありませんでした。</p>');
+}
 function playReveal(st) {
   const L = st.last, pi = room.meIndex();
   animTimers.forEach(clearTimeout); animTimers = [];
@@ -300,15 +412,9 @@ function playReveal(st) {
     });
     t += 650;
   }
-  // 1.5) サイコロ：とりあいのマスに出た目を見せる
-  if (L.dice && L.dice.length) {
-    later(t, () => {
-      banner('とりあい！', `${L.dice.length}か所でサイコロ`, 'dice'); sfx.dice();
-      let h = ''; for (const [i, ds] of L.dice) { const [x, y] = B.cx[i]; ds.slice(0, 3).forEach(([p, d], n) => { h += `<g class="pop"><circle cx="${x - 6 + n * 6}" cy="${y + 5.5}" r="3" fill="${st.players[p].color}" stroke="#5b4636" stroke-width=".5"/><text class="fc" x="${x - 6 + n * 6}" y="${y + 5.7}" font-size="3.8">+${d}</text></g>`; }); }
-      const g = el('g', {}, $('#lOver')); g.innerHTML = h; $('#lOver').__h = null; setTimeout(() => g.remove(), 1600);
-    });
-    t += 1000;
-  }
+  // 1.5) サイコロ：とりあいのマスを、1人ずつ転がして見せる（自分のマスを先に。3か所まで）
+  for (const d of pickDuels(st, pi)) { const dur = duelMs(d); later(t, () => playDuel(st, d)); t += dur; }
+  if (L.dice && L.dice.length > 3) later(t - 200, () => toast(`ほかに${L.dice.length - 3}か所でもサイコロ`, 2000, 'dice'));
   // 2) 取られたマスを、真ん中から順に
   const ch = [...L.changed].sort((a, b) => Math.hypot(...B.cx[a.i]) - Math.hypot(...B.cx[b.i]));
   const stepMs = ch.length ? Math.min(70, 1800 / ch.length) : 0;
@@ -453,7 +559,10 @@ function renderPanel() {
   if (!acting) {
     btn.disabled = true; btn.textContent = '結果発表中…';
     const top = G.ranking(st)[0];
-    hint.textContent = B.anim ? 'タップで結果をとばせます' : `光ったマスが変わったところ。いま1位：${top.name}（${top.score}点）`;
+    if (B.anim) { hint.textContent = 'タップで結果をとばせます'; return; }
+    const list = st.last ? myFights(st, pi) : [], att = list.filter(o => o.f.o !== pi), ok = att.filter(o => o.x.ok).length;
+    if (list.length) hint.innerHTML = `${att.length ? `攻めた${att.length}マス：<b>取れた${ok}</b>・取れず${att.length - ok}` : '守りの結果'}　<button id="btnWhy" class="mini">なぜ？</button>`;
+    else hint.textContent = `いま1位：${top.name}（${top.score}点）。マスをタップすると勝負の内訳が見られます`;
     return;
   }
   btn.disabled = false;
@@ -466,7 +575,11 @@ function renderPanel() {
   if (plan.targeting) hint.innerHTML = `${ic(c.icon)} ${c.name}：${c.target === 'own' ? '守りたい自分のマス' : '燃やしたい相手のマス'}をタップ`;
   else if (c) hint.innerHTML = `${ic(c.icon)} ${c.text}` + (plan.card.k === 'dice' ? `（出た目：${G.diceRoll(st.seed, st.round, pi)}）` : '') + `　兵 のこり${left}`;
   else if (G.landOf(st, pi) === 0) hint.textContent = `ふっかつ！ だれのものでもない好きなマスに兵を置けます（のこり ${left}）`;
-  else if (left > 0) hint.textContent = `兵 ${totalTroops(st, pi)}人。光っているマスをタップして置こう（のこり ${left}）`;
+  else if (plan.last != null && plan.place.has(plan.last) && st.owner[plan.last] !== pi) {
+    const i = plan.last, g = guardOf(st, i), n = plan.place.get(i), need = g.total + 1;
+    hint.innerHTML = `${tileName(st, i)}${g.o >= 0 ? `（${nameHtml(st.players[g.o])}の土地）` : ''}：守り${g.total}（${guardParts(st, i, g)}）→ <b>${need}人で取れる</b>。いま${n}人${n < need ? `（あと${need - n}）` : ' ✓'}<small>　相手が兵を足すともっと要る・兵のこり${left}</small>`;
+  }
+  else if (left > 0) hint.textContent = `兵 ${totalTroops(st, pi)}人。光っているマスをタップ（小さい数字＝取るのに要る兵）。のこり ${left}`;
   else hint.textContent = plan.sent ? 'ほかの人を待っています…（変えたら、もう一度決定）' : '兵を置ききりました。「決定！」を押そう';
 }
 function renderLobby() {
@@ -542,8 +655,32 @@ $('#btnUndo').onclick = undo; $('#btnGo').onclick = go;
 $('#hand').onclick = e => { const b = e.target.closest('button'); if (b) tapCard(+b.dataset.h); };
 $('#btnMenu').innerHTML = ic('menu'); $('#btnUndo').innerHTML = ic('undo') + ' 戻す';
 $('#helpCards').innerHTML = Object.values(G.CARDS).map(c => `<li>${ic(c.icon)} <b>${c.name}</b>：${c.text}</li>`).join('');
-$('#btnHelp').onclick = () => $('#help').showModal();
-$('#btnMHelp').onclick = () => { $('#menu').close(); $('#help').showModal(); };
+$('#hint').addEventListener('click', e => { if (e.target.closest('#btnWhy')) showWhyAll(); });
+$('#btnMWhy').onclick = () => { $('#menu').close(); if (room?.state?.last) showWhyAll(); else toast('まだ結果がありません'); };
+$('#btnHelp').onclick = () => openIntro(0);
+$('#btnMHelp').onclick = () => { $('#menu').close(); openIntro(0); };
+// ---- はじめての紹介（どんなゲームか） ----
+const hexes = (cells) => cells.map(([q, r, fill, label, glow]) => { const x = 40 + 17.3 * (q + r / 2), y = 34 + 15 * r; const c = Array.from({ length: 6 }, (_, k) => { const a = Math.PI / 180 * (60 * k - 30); return (x + 10 * Math.cos(a)).toFixed(1) + ',' + (y + 10 * Math.sin(a)).toFixed(1); }).join(' '); return `<polygon points="${c}" fill="${fill}" stroke="#5b4636" stroke-width="1.2" ${glow ? 'stroke-dasharray="3 2"' : ''}/>${label ? `<text x="${x}" y="${y + .5}" font-size="9" font-weight="800" text-anchor="middle" dominant-baseline="central" fill="#5b4636">${label}</text>` : ''}`; }).join('');
+const INTRO = [
+  { t: 'ルーンランドへようこそ！', b: '島の土地を、みんなで取り合うゲームです。<br>最後に<b>点数がいちばん多い人</b>の勝ち！', a: `<svg viewBox="0 0 80 68">${hexes([[-1, -1, '#e9a3a0'], [0, -1, '#e9a3a0'], [1, -1, '#d3e2a2'], [-1, 0, '#e9a3a0'], [0, 0, '#d3e2a2'], [1, 0, '#9fb9ea'], [-1, 1, '#d3e2a2'], [0, 1, '#9fb9ea'], [1, 1, '#9fb9ea']])}</svg>` },
+  { t: 'みんな同時に、兵を置く', b: '置けるのは<b>自分のマス</b>か、その<b>となり</b>（光っているマス）。<br>タップするたびに兵が1人。35秒のうちに「決定」！', a: `<svg viewBox="0 0 80 68">${hexes([[0, 0, '#e9a3a0', '自'], [1, 0, '#fff6c8', '2', 1], [-1, 0, '#fff6c8', '', 1], [0, -1, '#fff6c8', '', 1], [1, -1, '#fff6c8', '', 1], [0, 1, '#fff6c8', '1', 1], [-1, 1, '#fff6c8', '', 1]])}</svg>` },
+  { t: '多い方が勝ち。でも守る側は強い', b: '守りより<b>多く</b>置けば取れます。<br>守り＝持ち主<b>+1</b>・森<b>+1</b>・山<b>+2</b>・お城<b>+3</b>。<br>光るマスの<b>小さい数字</b>が、取るのに要る兵です。', a: `<div class="vs"><div><b>3</b><small>あなたの兵</small></div><span>＞</span><div><b>2</b><small>守り（持ち主+1・森+1）</small></div></div><p class="res2">→ 取れる！ 同じ数だと守る側の勝ち</p>` },
+  { t: '運で大逆転も！', b: '<b>魔法カード</b>（1ラウンド1枚）・<b>サイコロ</b>（とりあいの時）・<b>宝箱</b>・ときどき<b>イベント</b>。<br>順位が下の人ほど、強いカードが来ます。', a: `<div class="icons">${ic('dragon')}${ic('dice')}${ic('chest')}${ic('raid')}</div>` },
+  { t: '点数のかぞえ方', b: 'マス <b>1点</b>・ルーンの石 <b>3点</b>（兵も増える）・お城 <b>2点</b>。<br>決まったラウンド数（ふつう18）で終わり。', a: `<div class="icons">${ic('rune')}${ic('castle')}${ic('crown')}</div>` },
+];
+let introPage = 0;
+function openIntro(k) { introPage = k; drawIntro(); const d = $('#intro'); if (!d.open) d.showModal(); }
+function drawIntro() {
+  const p = INTRO[introPage];
+  $('#introBody').innerHTML = `<div class="art">${p.a}</div><h2>${p.t}</h2><p>${p.b}</p>`;
+  $('#introDots').innerHTML = INTRO.map((_, k) => `<i class="${k === introPage ? 'on' : ''}"></i>`).join('');
+  $('#introPrev').style.visibility = introPage ? 'visible' : 'hidden';
+  $('#introNext').textContent = introPage === INTRO.length - 1 ? 'はじめる！' : 'つぎへ';
+}
+$('#introPrev').onclick = () => { if (introPage > 0) { introPage--; drawIntro(); } };
+$('#introNext').onclick = () => { if (introPage < INTRO.length - 1) { introPage++; drawIntro(); } else { $('#intro').close(); store.set('intro', '1'); } };
+$('#introRules').onclick = () => { $('#intro').close(); store.set('intro', '1'); $('#help').showModal(); };
+if (!store.get('intro', '')) setTimeout(() => openIntro(0), 300);
 const optText = () => { $('#btnBgm').textContent = '音楽：' + (opt.bgm ? 'オン' : 'オフ'); $('#btnSound').textContent = '効果音：' + (opt.sfx ? 'オン' : 'オフ'); };
 $('#btnMenu').onclick = () => { $('#menuCode').textContent = room?.code || ''; optText(); $('#menu').showModal(); };
 $('#btnSound').onclick = () => { setOpt('sfx', !opt.sfx); optText(); };

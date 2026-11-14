@@ -71,6 +71,7 @@
       <svg id="board" xmlns="http://www.w3.org/2000/svg"><g id="view"><g id="lCoast"></g><g id="lTiles"></g><g id="lIcons"></g><g id="lOver"></g></g></svg>
       <button id="btnFit" class="fit" hidden>全体</button>
       <div id="banner"></div>
+      <div id="duel" hidden></div>
     </div>
     <div id="toast"></div>
     <footer class="panel">
@@ -117,9 +118,23 @@
   <form method="dialog"><button class="big">わかった</button></form>
 </dialog>
 
+<dialog id="intro" class="intro">
+  <div id="introBody"></div>
+  <div id="introDots" class="dots"></div>
+  <div class="introNav"><button id="introPrev" class="sub">もどる</button><button id="introNext" class="big">つぎへ</button></div>
+  <button id="introRules" class="ghost">くわしいルールを見る</button>
+</dialog>
+
+<dialog id="why">
+  <h2 id="whyTitle">結果</h2>
+  <div id="whyBody"></div>
+  <form method="dialog"><button class="big">とじる</button></form>
+</dialog>
+
 <dialog id="menu">
   <h2>メニュー</h2>
   <p>部屋の番号 <b id="menuCode"></b></p>
+  <button id="btnMWhy" class="sub">前のラウンドの結果（なぜ取れた？）</button>
   <button id="btnMHelp" class="sub">遊び方</button>
   <button id="btnBgm" class="sub">音楽：オン</button>
   <button id="btnSound" class="sub">効果音：オン</button>
