@@ -50,6 +50,11 @@
       <div class="seg" id="roundsSeg">
         <button data-r="12">短め<small>約9分</small></button><button data-r="18">ふつう<small>約13分</small></button><button data-r="24">長め<small>約18分</small></button>
       </div>
+      <h2>時間</h2>
+      <h3>① カードを選ぶ時間</h3>
+      <div class="seg" id="cardSeg"><button data-s="0">なし<small>兵と同時</small></button><button data-s="5">5秒</button><button data-s="10">10秒</button><button data-s="15">15秒</button><button data-s="20">20秒</button></div>
+      <h3>② 兵を置く時間</h3>
+      <div class="seg" id="planSeg"><button data-s="20">20秒</button><button data-s="35">35秒</button><button data-s="50">50秒</button><button data-s="70">70秒</button></div>
     </div>
     <div class="bottom">
       <p id="lobbyWait" class="msg">部屋を作った人がはじめるのを待っています…</p>
@@ -106,6 +111,7 @@
 <dialog id="help">
   <h2>遊び方</h2>
   <ol>
+    <li>ラウンドの始めは<b>カードを選ぶ時間</b>（ふつう10秒）。そのあと<b>兵を置く時間</b>（ふつう35秒）。時間は部屋を作った人が選べます。</li>
     <li>みんな同時に、配られた<b>兵</b>を置きます。置けるのは<b>自分のマス</b>か、その<b>となり</b>（光っているマス）。タップするたびに1つ置けます。長押しで1つ戻せます。</li>
     <li>置けたら「決定」。全員が決定するか、時間が来たら結果が出ます。</li>
     <li>マスごとに兵の数をくらべて、<b>いちばん多い人</b>のものに。持ち主は <b>＋1</b> と土地の守りが足されます。引き分けは持ち主のまま。</li>

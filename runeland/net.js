@@ -22,7 +22,7 @@ export class Room {
     this.onChange = opts.onChange || (() => {}); this.onStatus = opts.onStatus || (() => {});
     this.now = opts.now || (() => Date.now());
     this.state = null;          // ゲームの状態（だれも持っていなければ null＝待合室）
-    this.lobby = { rounds: 18, bots: [] };
+    this.lobby = { rounds: 18, bots: [], cardSec: 10, planSec: 35 };
     this.deadline = 0;          // 自分の時計での、いまの区切りの終わり
     this.plans = {};            // 親だけ：ラウンド → { id: plan }
     this.got = [];              // このラウンドに作戦を出した人
@@ -37,6 +37,7 @@ export class Room {
     ch.on('broadcast', { event: 'state' }, ({ payload }) => this.gotState(payload));
     ch.on('broadcast', { event: 'hello' }, () => { if (this.isHost()) this.broadcast(); });
     ch.on('broadcast', { event: 'plan' }, ({ payload }) => this.gotPlan(payload));
+    ch.on('broadcast', { event: 'pick' }, ({ payload }) => this.gotPick(payload));
     ch.on('broadcast', { event: 'got' }, ({ payload }) => { if (this.state && payload.round === this.state.round) { this.got = payload.ids; this.onChange(this); } });
     ch.on('broadcast', { event: 'lobby' }, ({ payload }) => { if (!this.state || this.state.phase === 'end') { this.lobby = payload; this.onChange(this); } });
     await new Promise(res => ch.subscribe(async st => {
@@ -106,6 +107,20 @@ export class Room {
     if (!this.got.includes(this.id)) this.got = [...this.got, this.id];
     this.onChange(this);
   }
+  // カードを選ぶ時間：決めたことだけ知らせる（カードの中身は、兵を置いたあとの作戦といっしょに送る）
+  submitCard() {
+    if (!this.state || this.state.phase !== 'plan' || this.state.step !== 'card') return;
+    const msg = { id: this.id, round: this.state.round };
+    if (this.isHost()) this.gotPick(msg); else this.send('pick', msg);
+    if (!this.got.includes(this.id)) this.got = [...this.got, this.id];
+    this.onChange(this);
+  }
+  gotPick(p) {
+    if (!this.isHost() || !this.state || this.state.step !== 'card' || p.round !== this.state.round) return;
+    if (!this.got.includes(p.id)) this.got = [...this.got, p.id];
+    if (!this.countT) this.countT = setTimeout(() => { this.countT = 0; if (this.state) this.send('got', { round: this.state.round, ids: this.got }); }, 300);
+    this.onChange(this);
+  }
   resendPlan() {
     if (this.myPlan && this.state && this.myPlan.round === this.state.round && this.state.step === 'plan') this.send('plan', { id: this.id, round: this.state.round, plan: this.myPlan.plan });
   }
@@ -119,6 +134,7 @@ export class Room {
     this.send('lobby', this.lobby); this.onChange(this);
   }
   removeBot(id) { if (!this.isHost()) return; this.lobby = { ...this.lobby, bots: (this.lobby.bots || []).filter(b => b.id !== id) }; this.send('lobby', this.lobby); this.onChange(this); }
+  setTimes(cardSec, planSec) { if (this.isHost()) { this.lobby = { ...this.lobby, cardSec, planSec }; this.send('lobby', this.lobby); this.onChange(this); } }
   setRounds(n) { if (this.isHost()) { this.lobby = { ...this.lobby, rounds: n }; this.send('lobby', this.lobby); this.onChange(this); } }
   start() {
     if (!this.isHost()) return;
@@ -126,10 +142,11 @@ export class Room {
     const ps = [...humans, ...(this.lobby.bots || []).slice(0, MAX_PLAYERS - humans.length)];
     if (ps.length < 1) return;
     const seed = (Math.random() * 2 ** 31) >>> 0;
-    this.state = G.newGame({ seed, players: ps, rounds: this.lobby.rounds });
-    Object.assign(this.state, { gid: seed.toString(36), hostId: this.id, step: 'plan', seq: 0 });
+    this.state = G.newGame({ seed, players: ps, rounds: this.lobby.rounds, planMs: (this.lobby.planSec || 35) * 1000 });
+    const cardMs = (this.lobby.cardSec ?? 10) * 1000;
+    Object.assign(this.state, { gid: seed.toString(36), hostId: this.id, step: cardMs ? 'card' : 'plan', cardMs, seq: 0 });
     this.plans = {}; this.got = []; this.myPlan = null;
-    this.deadline = this.now() + this.state.planMs;
+    this.deadline = this.now() + (cardMs || this.state.planMs);
     this.broadcast();
   }
   backToLobby() { if (this.isHost()) { this.state = null; this.myPlan = null; this.broadcastLobbyReset(); } }
@@ -147,6 +164,11 @@ export class Room {
   tick() {
     if (!this.isHost() || !this.state || this.state.phase === 'end') return;
     const st = this.state;
+    if (st.step === 'card') { // カードを選ぶ時間：全員が決めたか、時間が来たら、兵を置く時間へ
+      const humans = st.players.filter(p => !p.bot && !p.out && this.online(p.id));
+      if (this.now() >= this.deadline || (humans.length && humans.every(p => this.got.includes(p.id)))) { st.step = 'plan'; this.got = []; this.deadline = this.now() + st.planMs; this.broadcast(); }
+      return;
+    }
     if (st.step === 'plan') {
       // コンピューターは、ラウンドが始まって少したってから作戦を出す（人っぽく）
       const t = this.now();
@@ -177,8 +199,8 @@ export class Room {
     const st = this.state;
     // 途中から入った人を足す
     for (const m of this.members) if (!st.players.some(p => p.id === m.id) && st.players.length < MAX_PLAYERS + 4) G.addLatePlayer(st, m);
-    st.step = 'plan'; this.got = [];
-    this.deadline = this.now() + st.planMs;
+    st.step = st.cardMs ? 'card' : 'plan'; this.got = [];
+    this.deadline = this.now() + (st.cardMs || st.planMs);
     this.broadcast();
   }
 }
