@@ -9,7 +9,7 @@ export const REVEAL_MS = 4000;
 // サイコロのとりあいを見せる時間（大きい3か所ぶん。画面の duelMs と同じ計算）
 function duelBudget(L) {
   const sizes = (L.dice || []).map(([i, ds]) => { const f = (L.fights || []).find(x => x.i === i); return ds.length + (f && ((f.o >= 0 && !ds.some(([p]) => p === f.o)) || (f.o < 0 && f.d > 0)) ? 1 : 0); });
-  return sizes.sort((a, b) => b - a).slice(0, 3).reduce((t, n) => t + 500 + n * 700 + 1300, 0);
+  return sizes.sort((a, b) => b - a).slice(0, 3).reduce((t, n) => t + 1100 + 500 + n * 700 + 1300, 0);
 }
 // 落城と天災（亡霊のしわざ・予告なし）を見せる時間
 const BIG = ['raid', 'wave', 'meteor', 'volcano', 'tornado'];

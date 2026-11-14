@@ -386,7 +386,8 @@ function duelRows(st, d) {
   rows.sort((a, b) => (b.own || b.land ? 1 : 0) - (a.own || a.land ? 1 : 0));
   return { i, f, rows };
 }
-const duelMs = d => 500 + d.rows.length * 700 + 1300;
+const PIN_MS = 1100; // 先に「ここで勝負！」でマスを見せる時間
+const duelMs = d => PIN_MS + 500 + d.rows.length * 700 + 1300;
 function pickDuels(st, pi) {
   const L = st.last; if (!L.dice || !L.dice.length) return [];
   const all = L.dice.map(d => duelRows(st, d));
@@ -408,7 +409,7 @@ function playDuel(st, d) {
   box.innerHTML = `<div class="vsWin">${mini}<div><b>${ic('dice')} とりあい！</b><small>${tileName(st, i)}${owner ? `（${esc(owner.name)}の土地）` : '（空き地）'}</small></div></div>
     <div class="vsRow"><div class="side def"><small class="lab">守る</small>${def.map(([r, k]) => card(r, k)).join('')}</div><div class="vsMark">VS</div><div class="side att"><small class="lab">攻める</small>${att.map(([r, k]) => card(r, k)).join('')}</div></div>
     <p class="res"></p>`;
-  box.hidden = false; flashTile(i, 'shine'); if (b3) { b3.flyTo(i, 0.45); b3.fxFocus(i, duelMs(d)); }
+  box.hidden = true; flashTile(i, 'shine'); if (b3) { b3.flyTo(i, 0.45); b3.fxFocus(i, duelMs(d)); }
   // どのマスで戦っているか：マスの上に目印。サイコロの枠は、そのマスと反対側に出す
   const wr = $('#boardWrap').getBoundingClientRect();
   let sp; if (b3) sp = b3.screenPos(i); else { const r = B.tiles[i].getBoundingClientRect(); sp = { x: r.left + r.width / 2, y: r.top + r.height / 2, size: r.width }; }
@@ -416,8 +417,8 @@ function playDuel(st, d) {
   const pin = $('#duelPin'); pin.hidden = false; pin.style.left = px + 'px'; pin.style.top = py + 'px'; pin.style.setProperty('--sz', sz + 'px');
   const below = py < wr.height / 2; box.classList.toggle('atTop', !below); box.classList.toggle('atBottom', below);
   box.querySelector('.vsWin small').insertAdjacentHTML('beforeend', `<span class="where">${below ? '▲ 上の光っているマス' : '▼ 下の光っているマス'}</span>`);
-  $('#duelDim').hidden = false;
-  let tt = 500;
+  later(PIN_MS, () => { box.hidden = false; $('#duelDim').hidden = false; sfx.pop(); });
+  let tt = PIN_MS + 500;
   rows.forEach((r, k) => {
     if (r.dice == null) return;
     later(tt, () => {
