@@ -19,14 +19,26 @@ const lerp = (a, b, t) => a + (b - a) * t;
 const MODEL_H = { tile: 0, castle: 0.9, soldier: 0.5, dragon: 1.1, tree: 0.8, chest: 0.36, runestone: 0.8, fairy: 0.3, mountain: 0.65 };
 // 盤面の上で見えやすく：明るさ（色の倍率）と、横の太さ
 const MODEL_TUNE = { tree: { light: 1.6, wide: 1.7 }, chest: { light: 1.9, wide: 1 }, runestone: { light: 1.5, wide: 1.3 }, castle: { light: 1.15, wide: 1 }, soldier: { light: 1.1, wide: 1 } };
-async function loadModels(quality) {
+// 模様の画像を、画面に出る大きさに合わせて小さくする（盤面の物は画面で数十〜数百ピクセルなので、1024 あれば見た目は変わらない。スマホの画像用メモリが大きく減る）
+const MAXTEX = 1024;
+function fitTextures(obj) {
+  const done = new Set();
+  obj.traverse(o => { if (!o.isMesh) return; for (const m of [].concat(o.material)) for (const k of ['map', 'normalMap', 'roughnessMap', 'aoMap', 'emissiveMap']) {
+    const t = m[k]; if (!t || done.has(t) || !t.image) continue; done.add(t);
+    const im = t.image, w = im.width, h = im.height; if (!w || Math.max(w, h) <= MAXTEX) continue;
+    const sc = MAXTEX / Math.max(w, h), c = document.createElement('canvas'); c.width = Math.round(w * sc); c.height = Math.round(h * sc);
+    c.getContext('2d').drawImage(im, 0, 0, c.width, c.height); t.image = c; t.needsUpdate = true;
+  } });
+}
+const BOARD_MODELS = ['tile', 'castle', 'soldier', 'tree', 'chest', 'runestone', 'mountain'], FX_MODELS = ['dragon', 'fairy'];
+async function loadModels(quality, names) {
   const loader = new GLTFLoader(), out = {};
   // かるい画質：たくさん並ぶ物（お城・兵・木）は自作の軽い形にする
   const skip = quality === 'light' ? ['castle', 'soldier', 'tree'] : [];
-  await Promise.all(Object.keys(MODEL_H).filter(n => !skip.includes(n)).map(async name => {
+  await Promise.all(names.filter(n => !skip.includes(n)).map(async name => {
     try {
       const g = await loader.loadAsync(`models/${name}.glb`);
-      const obj = g.scene; obj.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; for (const m of [].concat(o.material)) { m.metalness = 0; m.metalnessMap = null; m.roughness = 0.85; if (MODEL_TUNE[name]) m.color.multiplyScalar(MODEL_TUNE[name].light); m.needsUpdate = true; } } }); // 金属あつかいだと暗く見えるので、木や石らしく
+      const obj = g.scene; fitTextures(obj); obj.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; for (const m of [].concat(o.material)) { m.metalness = 0; m.metalnessMap = null; m.roughness = 0.85; if (MODEL_TUNE[name]) m.color.multiplyScalar(MODEL_TUNE[name].light); m.needsUpdate = true; } } }); // 金属あつかいだと暗く見えるので、木や石らしく
       const box = new THREE.Box3().setFromObject(obj), size = box.getSize(new THREE.Vector3());
       const k = name === 'tile' ? 1 : name === 'castle' ? 1.6 / Math.max(0.001, size.x, size.z) : MODEL_H[name] / Math.max(0.001, name === 'dragon' ? Math.max(size.x, size.z) / 2.6 : size.y); // お城は城壁がマスに収まる幅で
       obj.scale.setScalar(k); if (MODEL_TUNE[name]) { obj.scale.x *= MODEL_TUNE[name].wide; obj.scale.z *= MODEL_TUNE[name].wide; }
@@ -37,6 +49,16 @@ async function loadModels(quality) {
     } catch { /* ない時は自作の形 */ }
   }));
   return out;
+}
+// 色を付ける部品（flag / roof / banner / shield）と、それ以外に分けて、同じ物をたくさん並べる形にする
+const TINT_RE = /flag|roof|banner|shield/i;
+function toInstancedSplit(obj, count) {
+  const tintObj = new THREE.Group(), plainObj = new THREE.Group();
+  obj.updateMatrixWorld(true);
+  obj.traverse(o => { if (!o.isMesh) return; const nm = o.name + ' ' + [].concat(o.material).map(m => m.name).join(' '); const c = o.clone(); c.matrixAutoUpdate = false; c.matrix.copy(o.matrixWorld); c.matrixWorld.copy(o.matrixWorld); (TINT_RE.test(nm) ? tintObj : plainObj).add(c); });
+  const mk = g => { if (!g.children.length) return null; g.updateMatrixWorld = () => {}; return toInstanced(g, count); };
+  const tint = mk(tintObj); if (tint) for (const m of [].concat(tint.material)) { m.map = null; m.color.set('#ffffff'); }
+  return { plain: mk(plainObj), tint };
 }
 // 同じ物をたくさん並べるため、1つの形にまとめる（兵・木）
 function toInstanced(obj, count) {
@@ -146,7 +168,8 @@ export class Board3D {
     this.cam = { tx: 0, tz: 0, dist: 20, fit: 20, yaw: 0, shift: 0 };
     this.fx = []; this.lbl = new Map(); this.key = ''; this.models = {}; this.dirty = true; this.lastT = 0;
     this.ray = new THREE.Raycaster(); this.v2 = new THREE.Vector2();
-    this.ready = loadModels(quality).then(m => { this.models = m; this.key = ''; this.dirty = true; if (this.st) this.build(this.st); });
+    // 盤面に並ぶ物を先に読み、演出だけで使う物（ドラゴン・妖精）はあとから読む
+    this.ready = loadModels(quality, BOARD_MODELS).then(m => { Object.assign(this.models, m); this.key = ''; this.dirty = true; if (this.st) this.build(this.st); return loadModels(quality, FX_MODELS); }).then(m => Object.assign(this.models, m));
     // 画面の大きさが変わったら（はじめて見えた時も）、正しい大きさで描きなおす
     this.resize(); this.ro = new ResizeObserver(() => this.resize()); this.ro.observe(host);
     const loop = t => { this.raf = requestAnimationFrame(loop); this.frame(t); };
@@ -161,7 +184,7 @@ export class Board3D {
   // ---- 盤面を作る（ゲームが変わった時・お城がふえた時だけ） ----
   build(st) {
     this.st = st;
-    const key = st.gid + ':' + st.R + ':' + st.players.map(p => p.castle).join(',') + ':' + Object.keys(this.models).join(',');
+    const key = st.gid + ':' + st.R + ':' + st.players.map(p => p.castle).join(',') + ':' + BOARD_MODELS.filter(n => this.models[n]).join(',');
     if (this.key === key) return;
     const fresh = !this.key.startsWith(st.gid + ':');
     this.key = key;
@@ -236,18 +259,29 @@ export class Board3D {
       trees.forEach((i, k) => { const [x, z] = this.hp(i); for (let j = 0; j < per; j++) { const a = j * 2.1 + r(), d = per === 1 ? 0.15 : per === 2 ? 0.32 + r() * 0.08 : 0.42 + r() * 0.12, sc = 0.85 + r() * 0.3; mt.makeRotationY(r() * 6).scale(new THREE.Vector3(sc, sc, sc)).setPosition(x + Math.cos(a) * d, this.topY(i), z + Math.sin(a) * d); inst.setMatrixAt(k * per + j, mt); } });
       W.add(inst);
     }
-    this.runeObjs = runes.map(i => { const o = (this.models.runestone ? this.models.runestone.clone() : procRune()); const [x, z] = this.hp(i); o.position.set(x, this.topY(i), z); o.traverse(c => { if (c.isMesh) c.castShadow = true; }); W.add(o); return { i, o }; });
+    // ルーンの石もまとめて描く
+    this.runeObjs = runes.map(i => ({ i }));
+    if (runes.length) { const ri = toInstanced(this.models.runestone || procRune(), runes.length); runes.forEach((i, k) => { const [x, z] = this.hp(i); ri.setMatrixAt(k, new THREE.Matrix4().makeRotationY(i * 2.3).setPosition(x, this.topY(i), z)); }); ri.frustumCulled = false; W.add(ri); }
+    // お城：同じ形をまとめて描く（1回で全部描くので軽い）。旗と、色を付ける部品はプレイヤーの色
     this.castleObjs = new Map();
-    for (const [i, pi] of this.castles) {
-      const o = new THREE.Group(), body = this.models.castle ? this.models.castle.clone() : procCastle();
-      body.traverse(c => { if (c.isMesh) c.castShadow = true; }); o.add(body);
-      const ch = new THREE.Box3().setFromObject(body).max.y; const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.6, 6), new THREE.MeshStandardMaterial({ color: '#5b4636' })); pole.position.set(0, ch + 0.25, 0); o.add(pole);
-      // 上から見て分かる大きな旗（プレイヤーの色）。モデルに flag / roof という部品があれば、それもプレイヤーの色にする
-      const flag = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.32), new THREE.MeshStandardMaterial({ color: st.players[pi].color, side: THREE.DoubleSide, roughness: 0.7, emissive: st.players[pi].color, emissiveIntensity: 0.25 })); flag.position.set(0.25, ch + 0.38, 0); flag.rotation.x = -0.5; o.add(flag); o.userData.flag = flag;
-      o.userData.parts = [];
-      body.traverse(c => { if (c.isMesh && /flag|roof|banner/i.test(c.name + ' ' + [].concat(c.material).map(m => m.name).join(' '))) { c.material = [].concat(c.material).map(m => { const n = m.clone(); n.color.set(st.players[pi].color); n.map = null; return n; }); if (c.material.length === 1) c.material = c.material[0]; o.userData.parts.push(c); } });
-      const [x, z] = this.hp(i); o.position.set(x, this.topY(i), z); o.rotation.y = this.models.castle ? Math.PI / 6 : -0.4; W.add(o); this.castleObjs.set(i, o); // Meshy のお城は城壁の角が x 向きなので、マスの六角形に合わせて30度回す
-    }
+    const cs = [...this.castles], nC = cs.length;
+    const src = this.models.castle || procCastle();
+    const ch = new THREE.Box3().setFromObject(src).max.y;
+    const parts = toInstancedSplit(src, nC);
+    const poleM = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.018, 0.018, 0.6, 6), new THREE.MeshStandardMaterial({ color: '#5b4636' }), nC);
+    const fg = new THREE.PlaneGeometry(0.5, 0.32); fg.translate(0.25, 0, 0);
+    this.flags = new THREE.InstancedMesh(fg, new THREE.MeshStandardMaterial({ color: '#ffffff', side: THREE.DoubleSide, roughness: 0.7, emissive: '#ffffff', emissiveIntensity: 0.12 }), nC);
+    this.castleTint = parts.tint;
+    const rot = this.models.castle ? Math.PI / 6 : -0.4; // Meshy のお城は城壁の角が x 向きなので、マスの六角形に合わせて30度回す
+    cs.forEach(([i, pi], k) => {
+      const [x, z] = this.hp(i), y = this.topY(i), base = new THREE.Matrix4().makeRotationY(rot).setPosition(x, y, z);
+      if (parts.plain) parts.plain.setMatrixAt(k, base);
+      if (parts.tint) { parts.tint.setMatrixAt(k, base); parts.tint.setColorAt(k, C(st.players[pi].color)); }
+      poleM.setMatrixAt(k, new THREE.Matrix4().makeTranslation(x, y + ch + 0.25, z));
+      this.flags.setMatrixAt(k, new THREE.Matrix4().makeRotationX(-0.5).setPosition(x, y + ch + 0.38, z)); this.flags.setColorAt(k, C(st.players[pi].color));
+      this.castleObjs.set(i, k);
+    });
+    for (const m of [parts.plain, parts.tint, poleM, this.flags]) if (m) { m.castShadow = true; m.frustumCulled = false; W.add(m); }
     // 宝箱・兵のコマ（あとで並べかえる）
     this.chestObjs = new Map();
     this.soldiers = this.models.soldier ? toInstanced(this.models.soldier, 240) : toInstanced(procSoldier(), 240);
@@ -284,7 +318,8 @@ export class Board3D {
     }
     this.caps.instanceColor.needsUpdate = true; if (this.tint) { this.tint.instanceMatrix.needsUpdate = true; this.tint.instanceColor.needsUpdate = true; } this.rings.instanceMatrix.needsUpdate = true; if (this.rings.instanceColor) this.rings.instanceColor.needsUpdate = true;
     // お城の旗の色（取られたら取った人の色に）
-    for (const [i, obj] of this.castleObjs || []) { const o = owners[i], col = o >= 0 ? st.players[o].color : '#ffffff'; obj.userData.flag.material.color.set(col); obj.userData.flag.material.emissive.set(col); for (const c of obj.userData.parts || []) for (const m of [].concat(c.material)) m.color.set(col); }
+    for (const [i, k] of this.castleObjs || []) { const o = owners[i], col = C(o >= 0 ? st.players[o].color : '#ffffff'); this.flags.setColorAt(k, col); if (this.castleTint) this.castleTint.setColorAt(k, col); }
+    if (this.flags) { this.flags.instanceColor.needsUpdate = true; if (this.castleTint && this.castleTint.instanceColor) this.castleTint.instanceColor.needsUpdate = true; }
     this.owners = owners.slice(); this.dirty = true;
   }
 
@@ -357,12 +392,13 @@ export class Board3D {
     // 何も変わっていない時は描かない（カメラは固定なので、変わった時と演出中だけ描く）
     if (!this.fx.length && !this.dirty) return;
     this.fx = this.fx.filter(f => { const p = Math.min(1, (t - (f.t0 ??= t)) / f.dur); f.step(p, dt, t); if (p >= 1) { f.end && f.end(); return false; } return true; });
-    if (this.fx.length || this.shadowDirty) { this.renderer.shadowMap.needsUpdate = true; this.shadowDirty = !!this.fx.length; } // 影は動いた時だけ計算し直す
+    const moving = this.fx.some(f => f.shadow); // 影のある物が動いている時だけ、影を計算し直す
+    if (moving || this.shadowDirty) { this.renderer.shadowMap.needsUpdate = true; this.shadowDirty = moving; }
     this.renderer.render(this.scene, this.camera);
     if (this.dirty) this.placeLabels();
     this.dirty = this.fx.length > 0;
   }
-  addFx(dur, step, end) { this.fx.push({ dur, step, end }); }
+  addFx(dur, step, end, shadow = false) { this.fx.push({ dur, step, end, shadow }); }
   tmp(obj) { this.world.add(obj); return () => { this.world.remove(obj); obj.traverse(o => { if (o.geometry) o.geometry.dispose(); }); }; }
   pos(i, dy = 0) { const [x, z] = this.hp(i); return new THREE.Vector3(x, this.topY(i) + dy, z); }
 
@@ -399,22 +435,22 @@ export class Board3D {
       if (d.userData.wings) { const w = Math.sin(t / 90) * 0.6; d.userData.wings[0].rotation.z = w; d.userData.wings[1].rotation.z = -w; }
       if (mixer) mixer.update(dt);
       if (q > 0.45 && !fired) { fired = true; for (const i of tiles) { const to = this.pos(i).sub(b); this.particles(b.clone(), { n: 50, color: '#ff7a2a', size: 0.22, dir: to.multiplyScalar(1.6), spread: 0.6, life: 800, gravity: 0 }); setTimeout(() => { this.flash(i, '#ff5a1f', 900); this.particles(this.pos(i, 0.1), { n: 24, color: '#ffcf5a', size: 0.14, up: 1.6, life: 900 }); }, 380); } }
-    }, () => { rm(); done && done(); });
+    }, () => { rm(); done && done(); }, true);
   }
   fxCard(k, pi, data = {}) {
     const home = this.pos(this.castleOf(pi));
     if (k === 'dragon') return this.dragonFly(data.tiles || []);
     if (k === 'shield') { for (const i of data.tiles || []) { const dome = new THREE.Mesh(new THREE.SphereGeometry(0.95, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), new THREE.MeshStandardMaterial({ color: '#9fe0ff', emissive: '#4fb0e0', emissiveIntensity: 0.9, transparent: true, opacity: 0.6, depthWrite: false })); dome.position.copy(this.pos(i)); const rm = this.tmp(dome); this.addFx(1700, q => { dome.scale.setScalar(Math.min(1, q * 4)); dome.material.opacity = 0.6 * (q < 0.7 ? 1 : (1 - q) / 0.3); }, rm); } return; }
     if (k === 'portal') { const ring = new THREE.Mesh(new THREE.TorusGeometry(0.7, 0.07, 8, 32), new THREE.MeshStandardMaterial({ color: '#c9a8ff', emissive: '#8a5aff', emissiveIntensity: 1.5 })); ring.rotation.x = Math.PI / 2; ring.position.copy(home); const rm = this.tmp(ring); this.addFx(1600, (q, dt, t) => { ring.position.y = home.y + 0.1 + q * 1.4; ring.rotation.z = t / 150; ring.scale.setScalar(1 + Math.sin(q * Math.PI) * 0.5); ring.material.opacity = 1 - q; }, rm); this.particles(home.clone().add(new THREE.Vector3(0, 0.3, 0)), { n: 40, color: '#b98aff', size: 0.12, spread: 1.2, up: 2, life: 1400, gravity: -0.5 }); return; }
-    if (k === 'hero') { for (let j = 0; j < 3; j++) { const sw = new THREE.Group(); const bl = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.7, 0.02), new THREE.MeshStandardMaterial({ color: '#e8eef5', metalness: 0.8, roughness: 0.2, emissive: '#fff3b0', emissiveIntensity: 0.4 })); bl.position.y = 0.35; const gd = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.05, 0.05), new THREE.MeshStandardMaterial({ color: '#c4862a', metalness: 0.5 })); gd.position.y = 0.72; sw.add(bl, gd); sw.rotation.z = Math.PI; sw.scale.setScalar(1.8); const off = new THREE.Vector3(Math.cos(j * 2.1) * 0.45, 0, Math.sin(j * 2.1) * 0.45); const rm = this.tmp(sw); this.addFx(1300 + j * 120, q => { const f = Math.min(1, q / 0.5); sw.position.copy(home).add(off).add(new THREE.Vector3(0, 0.8 + (1 - ease(f)) * 4, 0)); if (q > 0.5 && !sw.userData.hit) { sw.userData.hit = 1; this.particles(home.clone().add(off), { n: 16, color: '#fff1a0', size: 0.12, up: 1.2, life: 600 }); } }, rm); } this.flash(this.castleOf(pi), '#fff3b0', 1300); return; }
-    if (k === 'dice') { const v = data.value || 1, faces = [1, 2, 3, 4, 5, 6].map(n => new THREE.MeshStandardMaterial({ map: dieTexture(n), roughness: 0.5 })); const cube = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.5), [faces[1], faces[5], faces[v - 1], faces[3], faces[2], faces[4]]); cube.castShadow = true; const rm = this.tmp(cube); this.addFx(1500, q => { const f = Math.min(1, q / 0.6); cube.position.copy(home).add(new THREE.Vector3(0.5, 0.25 + Math.abs(Math.sin(f * Math.PI * 2.5)) * (1 - f) * 2.5, 0.5)); cube.rotation.set((1 - f) * 9, (1 - f) * 5, (1 - f) * 7); cube.material.forEach(m => { m.transparent = q > 0.85; m.opacity = q > 0.85 ? (1 - q) / 0.15 : 1; }); }, rm); return; }
+    if (k === 'hero') { for (let j = 0; j < 3; j++) { const sw = new THREE.Group(); const bl = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.7, 0.02), new THREE.MeshStandardMaterial({ color: '#e8eef5', metalness: 0.8, roughness: 0.2, emissive: '#fff3b0', emissiveIntensity: 0.4 })); bl.position.y = 0.35; const gd = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.05, 0.05), new THREE.MeshStandardMaterial({ color: '#c4862a', metalness: 0.5 })); gd.position.y = 0.72; sw.add(bl, gd); sw.rotation.z = Math.PI; sw.scale.setScalar(1.8); const off = new THREE.Vector3(Math.cos(j * 2.1) * 0.45, 0, Math.sin(j * 2.1) * 0.45); const rm = this.tmp(sw); this.addFx(1300 + j * 120, q => { const f = Math.min(1, q / 0.5); sw.position.copy(home).add(off).add(new THREE.Vector3(0, 0.8 + (1 - ease(f)) * 4, 0)); if (q > 0.5 && !sw.userData.hit) { sw.userData.hit = 1; this.particles(home.clone().add(off), { n: 16, color: '#fff1a0', size: 0.12, up: 1.2, life: 600 }); } }, rm, true); } this.flash(this.castleOf(pi), '#fff3b0', 1300); return; }
+    if (k === 'dice') { const v = data.value || 1, faces = [1, 2, 3, 4, 5, 6].map(n => new THREE.MeshStandardMaterial({ map: dieTexture(n), roughness: 0.5 })); const cube = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.5), [faces[1], faces[5], faces[v - 1], faces[3], faces[2], faces[4]]); cube.castShadow = true; const rm = this.tmp(cube); this.addFx(1500, q => { const f = Math.min(1, q / 0.6); cube.position.copy(home).add(new THREE.Vector3(0.5, 0.25 + Math.abs(Math.sin(f * Math.PI * 2.5)) * (1 - f) * 2.5, 0.5)); cube.rotation.set((1 - f) * 9, (1 - f) * 5, (1 - f) * 7); cube.material.forEach(m => { m.transparent = q > 0.85; m.opacity = q > 0.85 ? (1 - q) / 0.15 : 1; }); }, rm, true); return; }
     if (k === 'storm') { const cloud = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 8), new THREE.MeshStandardMaterial({ color: '#6b7380', transparent: true, opacity: 0.75, roughness: 1 })); cloud.scale.set(this.R * 0.7, 0.5, this.R * 0.7); cloud.position.set(0, 4, 0); const rm = this.tmp(cloud); this.addFx(1800, (q, dt, t) => { cloud.rotation.y = t / 500; cloud.material.opacity = 0.75 * Math.sin(q * Math.PI); }, rm); for (let j = 0; j < 4; j++) setTimeout(() => this.particles(new THREE.Vector3((Math.random() - .5) * this.R, 3.5, (Math.random() - .5) * this.R), { n: 60, color: '#bcd7e8', size: 0.08, spread: 2.5, up: -3, life: 900, gravity: -4 }), j * 250); return; }
     if (k === 'treasure') { for (let j = 0; j < 3; j++) { const gem = new THREE.Mesh(new THREE.OctahedronGeometry(0.26), new THREE.MeshStandardMaterial({ color: '#9ee0e4', emissive: '#2f8a96', emissiveIntensity: 0.8, metalness: 0.3, roughness: 0.2 })); const rm = this.tmp(gem); const a = j * 2.1; this.addFx(1400, (q, dt, t) => { gem.position.copy(home).add(new THREE.Vector3(Math.cos(a + q * 4) * 0.5 * q, 0.6 + Math.sin(q * Math.PI) * 1.4, Math.sin(a + q * 4) * 0.5 * q)); gem.rotation.y = t / 120; gem.scale.setScalar(q > 0.8 ? (1 - q) / 0.2 : 1); }, rm); } this.particles(home.clone().add(new THREE.Vector3(0, 0.5, 0)), { n: 30, color: '#bff4ff', size: 0.1, up: 2, life: 1100 }); return; }
   }
   fxEvent(k, data = {}) {
     if (k === 'raid') return this.dragonFly(data.tiles || []);
     if (k === 'wave') { const wall = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 0.9, 64, 1, true), new THREE.MeshStandardMaterial({ color: '#8fd0e0', transparent: true, opacity: 0.7, side: THREE.DoubleSide, emissive: '#3f9fc0', emissiveIntensity: 0.2 })); const rm = this.tmp(wall); const r0 = this.R + 3, r1 = this.R - 1.2; this.addFx(1600, q => { const r = lerp(r0, r1, ease(q)); wall.scale.set(r, 1, r); wall.position.y = 0.4 + Math.sin(q * Math.PI) * 0.3; wall.material.opacity = 0.7 * (q < 0.8 ? 1 : (1 - q) / 0.2); }, rm); setTimeout(() => { for (const i of data.tiles || []) { this.flash(i, '#bfeaff', 900); this.particles(this.pos(i, 0.1), { n: 20, color: '#dff6ff', size: 0.1, up: 1.5, life: 800 }); } }, 1000); return; }
-    if (k === 'gold') { const coinG = new THREE.CylinderGeometry(0.2, 0.2, 0.05, 14), coinM = new THREE.MeshStandardMaterial({ color: '#f2c25a', metalness: 0.7, roughness: 0.3, emissive: '#7a5a10', emissiveIntensity: 0.3 }); const n = 40, inst = new THREE.InstancedMesh(coinG, coinM, n); const sd = []; for (let j = 0; j < n; j++) sd.push([(Math.random() - .5) * this.R * 1.8, (Math.random() - .5) * this.R * 1.8, Math.random() * 0.5, Math.random() * 6]); const rm = this.tmp(inst), mt = new THREE.Matrix4(), e = new THREE.Euler(); this.addFx(2000, (q, dt, t) => { sd.forEach(([x, z, d, r], j) => { const f = Math.max(0, Math.min(1, (q - d * 0.6) / 0.5)); const y = 3.6 - ease(f) * 3.2 + (f >= 1 ? Math.abs(Math.sin((q - d * 0.6 - 0.5) * 12)) * 0.2 : 0); e.set(t / 100 + r, r, 0); mt.makeRotationFromEuler(e).setPosition(x, y, z); inst.setMatrixAt(j, mt); }); inst.instanceMatrix.needsUpdate = true; coinM.transparent = q > 0.85; coinM.opacity = q > 0.85 ? (1 - q) / 0.15 : 1; }, rm); return; }
+    if (k === 'gold') { const coinG = new THREE.CylinderGeometry(0.2, 0.2, 0.05, 14), coinM = new THREE.MeshStandardMaterial({ color: '#f2c25a', metalness: 0.7, roughness: 0.3, emissive: '#7a5a10', emissiveIntensity: 0.3 }); const n = 40, inst = new THREE.InstancedMesh(coinG, coinM, n); const sd = []; for (let j = 0; j < n; j++) sd.push([(Math.random() - .5) * this.R * 1.8, (Math.random() - .5) * this.R * 1.8, Math.random() * 0.5, Math.random() * 6]); const rm = this.tmp(inst), mt = new THREE.Matrix4(), e = new THREE.Euler(); this.addFx(2000, (q, dt, t) => { sd.forEach(([x, z, d, r], j) => { const f = Math.max(0, Math.min(1, (q - d * 0.6) / 0.5)); const y = 3.6 - ease(f) * 3.2 + (f >= 1 ? Math.abs(Math.sin((q - d * 0.6 - 0.5) * 12)) * 0.2 : 0); e.set(t / 100 + r, r, 0); mt.makeRotationFromEuler(e).setPosition(x, y, z); inst.setMatrixAt(j, mt); }); inst.instanceMatrix.needsUpdate = true; coinM.transparent = q > 0.85; coinM.opacity = q > 0.85 ? (1 - q) / 0.15 : 1; }, rm, true); return; }
     if (k === 'glow') { for (const r of this.runeObjs || []) { const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.35, 5, 12, 1, true), new THREE.MeshBasicMaterial({ color: '#b48cff', transparent: true, opacity: 0.5, depthWrite: false, side: THREE.DoubleSide })); beam.position.copy(this.pos(r.i, 2.5)); const rm = this.tmp(beam); this.addFx(1700, q => { beam.material.opacity = 0.55 * Math.sin(q * Math.PI); beam.scale.x = beam.scale.z = 0.6 + q * 0.6; }, rm); this.particles(this.pos(r.i, 0.6), { n: 20, color: '#e0ccff', size: 0.1, up: 2.5, life: 1400, gravity: 0 }); } return; }
     if (k === 'fairy') { const f = this.models.fairy ? this.models.fairy.clone() : procFairy(); f.scale.setScalar(this.models.fairy ? 2 : 3); const rm = this.tmp(f); const stops = this.st.players.map((_, pi) => this.pos(this.castleOf(pi), 1.2)); if (!stops.length) return rm(); let last = 0; this.addFx(2400, (q, dt, t) => { const s = q * stops.length, k2 = Math.min(stops.length - 1, Math.floor(s)), a = stops[k2], b = stops[(k2 + 1) % stops.length]; f.position.copy(a).lerp(b, ease(s - k2)); f.position.y += Math.sin(t / 150) * 0.15; if (f.userData.wings) { const w = Math.sin(t / 40) * 0.8; f.userData.wings[0].rotation.y = 0.6 + w; f.userData.wings[1].rotation.y = -0.6 - w; } if (t - last > 70) { last = t; this.particles(f.position.clone(), { n: 4, color: '#ffe8a8', size: 0.09, spread: 0.3, up: -0.2, life: 700, gravity: -0.5 }); } }, rm); return; }
   }
