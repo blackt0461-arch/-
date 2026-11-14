@@ -371,7 +371,7 @@ $('#btnFit').onclick = () => { if (b3) { b3.fit(); return; } B.view = { k: 1, x:
 let revealDone = '', prevOwners = null, prevGidRound = '', prevRanks = null, animTimers = [];
 function later(ms, f) { animTimers.push(setTimeout(f, ms)); }
 function skipAnim() {
-  $('#duelPin').hidden = true; animTimers.forEach(clearTimeout); animTimers = []; if (b3) b3.restoreView(); duelTimers.forEach(clearInterval); duelTimers = []; $('#duel').hidden = true; B.anim = false; if (room?.state?.last) celebrate(room.state); render(); }
+  $('#duelPin').hidden = true; $('#duelDim').hidden = true; animTimers.forEach(clearTimeout); animTimers = []; if (b3) b3.restoreView(); duelTimers.forEach(clearInterval); duelTimers = []; $('#duel').hidden = true; B.anim = false; if (room?.state?.last) celebrate(room.state); render(); }
 function flashTile(i, cls) { const p = el('polygon', { class: cls, points: B.tiles[i].getAttribute('points') }, $('#lOver')); $('#lOver').__h = null; setTimeout(() => p.remove(), 1600); if (b3) b3.flash(i, { burn: '#ff5a1f', shine: '#9fe0ff', flash: '#ffffff' }[cls] || '#ffffff'); }
 function banner(text, sub = '', icon = '', subHtml = false) { const b = $('#banner'); b.innerHTML = `<div>${icon ? ic(icon) + ' ' : ''}${esc(text)}${sub ? `<small>${subHtml ? sub : esc(sub)}</small>` : ''}</div>`; }
 let celebrated = '';
@@ -397,9 +397,16 @@ const dieSvg = v => `<svg class="die" viewBox="0 0 32 32"><rect x="3" y="3" widt
 function playDuel(st, d) {
   const box = $('#duel'), L = st.last, { i, f, rows } = d;
   const total = r => r.base + (r.dice || 0) + (r.guard || 0);
-  box.innerHTML = `<div class="dhead">${ic('dice')} とりあい！<small>${tileName(st, i)}${f && f.o >= 0 ? `（${nameHtml(st.players[f.o])}の土地）` : '（空き地）'}</small></div>
-    <ul>${rows.map((r, k) => r.land ? `<li data-k="${k}" class="land">${ic(st.terrain[i] === G.T.RUNE ? 'rune' : 'shield')}<span class="nm">土地の守り</span><span class="bs">${tileName(st, i)}</span><span class="die-sp"></span><b class="tot">= ${r.guard}</b></li>` : `<li data-k="${k}">${avOf(st.players[r.p])}<span class="nm">${nameHtml(st.players[r.p])}${r.own ? '<small>守る</small>' : ''}</span>
-      <span class="bs">${r.own ? `兵${r.base}＋守り${r.guard}` : `兵${r.base}`}</span>${r.dice == null ? '<span class="die-sp"></span>' : `<span class="dw">${dieSvg(0)}</span>`}<b class="tot">${r.dice == null ? '= ' + total(r) : ''}</b></li>`).join('')}</ul>
+  // 対決（VS）の画面：左に守る側（土地の守り・持ち主）、右に攻める人たち。上の小窓にマス
+  const owner = f && f.o >= 0 ? st.players[f.o] : null, t = st.terrain[i];
+  const tileFill = owner ? mix(owner.color, BASE[t], 0.72) : BASE[t];
+  const mini = `<svg class="mt" viewBox="-12 -12 24 24"><polygon points="${pts(corners(0, 0, 10.5, false))}" fill="${tileFill}" stroke="${owner ? owner.color : '#5b4636'}" stroke-width="${owner ? 2 : 1}"/>${icon(t, G.isCastle(st, i), 0, 0)}</svg>`;
+  const card = (r, k) => r.land
+    ? `<div data-k="${k}" class="fc land">${ic(t === G.T.RUNE ? 'rune' : 'shield', 'fav')}<span class="nm">土地の守り</span><span class="bs">${tileName(st, i)}</span><b class="tot">${r.guard}</b></div>`
+    : `<div data-k="${k}" class="fc">${avOf(st.players[r.p], 'fav')}<span class="nm">${nameHtml(st.players[r.p])}</span><span class="bs">${r.own ? `兵${r.base}＋守り${r.guard}` : `兵${r.base}`}</span><span class="row">${r.dice == null ? '' : `<span class="dw">${dieSvg(0)}</span>`}<b class="tot">${r.dice == null ? total(r) : '?'}</b></span></div>`;
+  const def = rows.map((r, k) => [r, k]).filter(([r]) => r.land || r.own), att = rows.map((r, k) => [r, k]).filter(([r]) => !r.land && !r.own);
+  box.innerHTML = `<div class="vsWin">${mini}<div><b>${ic('dice')} とりあい！</b><small>${tileName(st, i)}${owner ? `（${esc(owner.name)}の土地）` : '（空き地）'}</small></div></div>
+    <div class="vsRow"><div class="side def"><small class="lab">守る</small>${def.map(([r, k]) => card(r, k)).join('')}</div><div class="vsMark">VS</div><div class="side att"><small class="lab">攻める</small>${att.map(([r, k]) => card(r, k)).join('')}</div></div>
     <p class="res"></p>`;
   box.hidden = false; flashTile(i, 'shine'); if (b3) { b3.flyTo(i, 0.45); b3.fxFocus(i, duelMs(d)); }
   // どのマスで戦っているか：マスの上に目印。サイコロの枠は、そのマスと反対側に出す
@@ -408,16 +415,17 @@ function playDuel(st, d) {
   const px = sp.x - wr.left, py = sp.y - wr.top, sz = Math.max(30, Math.min(90, sp.size * 1.15));
   const pin = $('#duelPin'); pin.hidden = false; pin.style.left = px + 'px'; pin.style.top = py + 'px'; pin.style.setProperty('--sz', sz + 'px');
   const below = py < wr.height / 2; box.classList.toggle('atTop', !below); box.classList.toggle('atBottom', below);
-  box.querySelector('.dhead small').insertAdjacentHTML('beforeend', `<span class="where">${below ? '▲ 上の光っているマス' : '▼ 下の光っているマス'}</span>`);
+  box.querySelector('.vsWin small').insertAdjacentHTML('beforeend', `<span class="where">${below ? '▲ 上の光っているマス' : '▼ 下の光っているマス'}</span>`);
+  $('#duelDim').hidden = false;
   let tt = 500;
   rows.forEach((r, k) => {
     if (r.dice == null) return;
     later(tt, () => {
-      const li = box.querySelector(`li[data-k="${k}"]`); if (!li) return; li.classList.add('turn');
+      const li = box.querySelector(`[data-k="${k}"]`); if (!li) return; li.classList.add('turn');
       const dw = li.querySelector('.dw'); let n = 0;
       const iv = setInterval(() => { dw.innerHTML = dieSvg(Math.floor(Math.random() * 3)); dw.classList.toggle('shake'); if (n++ % 2 === 0) sfx.tick(10); }, 70);
       duelTimers.push(iv);
-      setTimeout(() => { clearInterval(iv); dw.innerHTML = dieSvg(r.dice); dw.classList.remove('shake'); dw.classList.add('land'); li.querySelector('.tot').textContent = '= ' + total(r); li.classList.remove('turn'); sfx.place(r.dice * 3 + 1); }, 520);
+      setTimeout(() => { clearInterval(iv); dw.innerHTML = dieSvg(r.dice); dw.classList.remove('shake'); dw.classList.add('land'); li.querySelector('.tot').textContent = total(r); li.classList.remove('turn'); sfx.place(r.dice * 3 + 1); }, 520);
     });
     tt += 700;
   });
@@ -431,10 +439,11 @@ function playDuel(st, d) {
     else if (f.r === 'guard') text = 'お城は包囲されていないので守られた！';
     else if (f.o >= 0) { winner = f.o; text = `${nameHtml(st.players[f.o])} が守った！`; }
     else text = '土地の守りより多くなくて、だれも取れず';
-    rows.forEach((r, k) => { if (r.p === winner) box.querySelector(`li[data-k="${k}"]`).classList.add('win'); });
+    rows.forEach((r, k) => { if (r.p === winner) box.querySelector(`[data-k="${k}"]`).classList.add('win'); else if (!r.land) box.querySelector(`[data-k="${k}"]`).classList.add('lose'); });
+    if (f && f.r !== 'tie' && (winner < 0 || winner === f.o)) box.querySelector('.fc.land')?.classList.add('win');
     res.innerHTML = text; sfx.rankUp();
   });
-  later(duelMs(d) - 150, () => { box.hidden = true; $('#duelPin').hidden = true; });
+  later(duelMs(d) - 150, () => { box.hidden = true; $('#duelPin').hidden = true; $('#duelDim').hidden = true; });
 }
 // ---- 勝負の内訳（なぜ取れた／取れなかった） ----
 function fightText(st, f, pi) {

@@ -332,3 +332,39 @@ button.mini { min-height: 32px; padding: 2px 12px; border-radius: 99px; font-siz
 .avpick button .av { width: 100%; height: auto; aspect-ratio: 1; }
 .avpick button.on { transform: scale(1.12); }
 #lBorder path { fill: none; stroke-width: 2.8; stroke-linecap: round; pointer-events: none; }
+
+/* 対決（VS）の画面 */
+.duelDim { position: absolute; inset: 0; z-index: 3; background: #2a1f1866; pointer-events: none; }
+.duelPin { z-index: 4; }
+#duel { z-index: 5; max-height: 62%; width: min(94%, 400px); padding: 8px 10px; background: radial-gradient(ellipse at 50% 60%, #fff6dc, var(--paper3)); }
+#duel .vsWin { display: flex; align-items: center; gap: 8px; }
+#duel .vsWin .mt { width: 44px; height: 44px; flex: none; filter: drop-shadow(0 2px 0 #5b463655); }
+#duel .vsWin b { display: flex; align-items: center; gap: 4px; font-size: 1.05rem; }
+#duel .vsWin small { display: block; font-size: .78rem; color: var(--ink2); }
+#duel .vsRow { display: flex; align-items: center; gap: 6px; margin: 6px 0 2px; }
+#duel .side { flex: 1; display: flex; flex-wrap: wrap; gap: 5px; justify-content: center; align-content: center; position: relative; padding-top: 14px; }
+#duel .side .lab { position: absolute; top: 0; left: 0; right: 0; text-align: center; font-size: .68rem; font-weight: 800; color: var(--ink2); }
+#duel .def .lab { color: #3f7fb0; } #duel .att .lab { color: #c4462a; }
+#duel .vsMark { font-size: 1.6rem; font-weight: 900; font-style: italic; color: #d9573f; text-shadow: 2px 2px 0 #5b4636; animation: vsbeat .6s ease-in-out infinite alternate; flex: none; }
+@keyframes vsbeat { to { transform: scale(1.15) rotate(-6deg); } }
+#duel .fc { width: 74px; display: flex; flex-direction: column; align-items: center; gap: 1px; background: #fff; border: 2px solid var(--paper2); border-radius: 12px; padding: 4px 2px; transition: transform .2s, border-color .2s, opacity .3s; }
+#duel .fc.land { background: #eef4fb; border-color: #9fc3e0; }
+#duel .fc .fav { width: 40px; height: 40px; }
+#duel .fc .nm { font-size: .7rem; font-weight: 800; max-width: 70px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#duel .fc .nm .gi { width: 12px; height: 12px; }
+#duel .fc .bs { font-size: .62rem; color: var(--ink2); white-space: nowrap; }
+#duel .fc .dw .die { width: 26px; height: 26px; }
+#duel .fc .tot { font-size: 1.35rem; line-height: 1; }
+#duel .fc.turn { border-color: var(--gold2); transform: scale(1.08); }
+#duel .fc.win { border-color: var(--green); background: #e5f4e3; transform: scale(1.1); box-shadow: 0 0 0 3px #5aa36a55; }
+#duel .fc.lose { opacity: .55; }
+#duel .res { font-size: 1rem; }
+/* 対決の画面：カードを小さく、攻める側を広く */
+#duel { max-height: 72%; }
+#duel .side.def { flex: 0 0 auto; }
+#duel .side.att { flex: 1 1 auto; }
+#duel .fc { width: 66px; padding: 3px 2px; }
+#duel .fc .fav { width: 32px; height: 32px; }
+#duel .fc .row { display: flex; align-items: center; gap: 3px; }
+#duel .fc .dw .die { width: 22px; height: 22px; }
+#duel .fc .tot { font-size: 1.15rem; }
