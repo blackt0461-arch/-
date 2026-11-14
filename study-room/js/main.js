@@ -1678,18 +1678,40 @@ function showSwap(uid) {
     toast(`${next.name}に入れかえました`, 1800);
   });
 }
+// 家具の並べ方（1.20.0）：ふつう（いままで）・名前順（あいうえお）・新しい順（手に入れた日）。選んだ物は次も同じ
+const SORT_LIST = ['normal', 'name', 'new'];
+const SORT_NAME = { normal: 'ふつう', name: '名前順', new: '新しい順' };
+const JA = new Intl.Collator('ja', { numeric: true, sensitivity: 'base' });
+function sortMode(k) { try { const v = localStorage.getItem('studyroom.sort.' + k); if (SORT_LIST.includes(v)) return v; } catch (e) { /* なし */ } return 'normal'; }
+function sortItems(list, k) {
+  const m = sortMode(k);
+  // 図鑑では、まだ持っていない物（名前が「？？？」）を後ろに。持っている物だけを名前順に
+  const got = (it) => (k === 'zukan' && !S.collected(it.id) ? 1 : 0);
+  if (m === 'name') return [...list].sort((a, b) => got(a) - got(b) || (got(a) ? 0 : JA.compare(a.name, b.name)));
+  if (m === 'new') { const c = HS().collected || {}; return [...list].sort((a, b) => (c[b.id] || 0) - (c[a.id] || 0)); }
+  return list;
+}
+const sortBtn = (k) => `<button class="sort-btn" data-sort="${k}" aria-label="並べ方を切りかえる（いまは${SORT_NAME[sortMode(k)]}）">${icon('sort')}<span>${SORT_NAME[sortMode(k)]}</span></button>`;
+function bindSort(el, k, again) {
+  el.querySelectorAll(`.sort-btn[data-sort="${k}"]`).forEach(b => b.onclick = () => {
+    const next = SORT_LIST[(SORT_LIST.indexOf(sortMode(k)) + 1) % SORT_LIST.length];
+    try { localStorage.setItem('studyroom.sort.' + k, next); } catch (e) { /* なし */ }
+    again();
+  });
+}
 function showInventory() {
   const inv = HS().inventory;
   const ids = S.isUnlimited() ? [...new Set([...ITEMS, ...G.GACHA_ITEMS].map(i => i.id))] : Object.keys(inv);
-  const list = ids.map(itemById).filter(it => it && it.place !== 'surface' && it.place !== 'skin' && it.place !== 'avatar' && S.owned(it.id) > S.placedCount(it.id));
+  const list = sortItems(ids.map(itemById).filter(it => it && it.place !== 'surface' && it.place !== 'skin' && it.place !== 'avatar' && S.owned(it.id) > S.placedCount(it.id)), 'inv');
   const el = sheet(`
-    <div class="sh-head"><span class="sh-ic">${icon('box')}</span><div><h3>持ち物</h3><p>タップすると部屋に置きます（あと ${Math.max(0, remainCapacity())} 個置けます）</p></div></div>
+    <div class="sh-head"><span class="sh-ic">${icon('box')}</span><div><h3>持ち物</h3><p>タップすると部屋に置きます（あと ${Math.max(0, remainCapacity())} 個置けます）</p></div>${list.length > 1 ? sortBtn('inv') : ''}</div>
     ${list.length ? `<div class="invgrid">${list.map(it => `
       <button class="inv-item" data-id="${it.id}"><span class="thumb">${thumbHTML(it)}</span><b>${esc(it.name)}</b>
       ${S.isUnlimited() ? '<i class="cnt">∞</i>' : S.owned(it.id) - S.placedCount(it.id) > 1 ? `<i class="cnt">×${S.owned(it.id) - S.placedCount(it.id)}</i>` : ''}</button>`).join('')}</div>`
       : '<p class="empty">置いていない家具はありません。問題を解いてゲージをためると、家具を買えます。</p>'}
     <button class="link close">とじる</button>`, 'inv-sheet');
   el.querySelector('.close').onclick = () => el.remove();
+  bindSort(el, 'inv', () => { el.remove(); showInventory(); });
   el.querySelectorAll('.inv-item').forEach(b => b.onclick = async () => {
     const ok = await putIntoRoom(itemById(b.dataset.id), false);
     if (ok) { el.remove(); refreshEditCount(); room3d.select(curRoom().placed.at(-1).uid); }
@@ -1785,7 +1807,7 @@ function photoMode() {
 
 // =========================== 更新のお知らせ ===========================
 // このプログラムの版（version.json と同じにする。公開のたびに上げる）
-const APP_VERSION = '1.19.1';
+const APP_VERSION = '1.20.0';
 ERR.setVersion(APP_VERSION);
 // 新しい版が出たら、みんな同じタイミングでそろうように強制で再起動する。
 // 開いた時・画面に戻った時・1分ごとに version.json を見る
@@ -2888,7 +2910,7 @@ function showBag(tab = 'furniture', genre = '') {
   if (isAdmin()) adminTopUp();
   const hs = HS();
   const ids = S.isUnlimited() ? [...new Set([...ITEMS, ...G.GACHA_ITEMS].map(i => i.id))] : Object.keys(hs.inventory);
-  const owned = ids.map(itemById).filter(it => it && S.owned(it.id) > 0 && it.place !== 'surface' && it.place !== 'skin' && it.place !== 'avatar' && (!genre || it.genre === genre));
+  const owned = sortItems(ids.map(itemById).filter(it => it && S.owned(it.id) > 0 && it.place !== 'surface' && it.place !== 'skin' && it.place !== 'avatar' && (!genre || it.genre === genre)), 'inv');
   const surf = ids.map(itemById).filter(it => it && it.place === 'surface');
   const items = [
     ['ticket', hs.rareTickets || 0, ticketSVG('ticket', 'mini'), 'ガチャを1回引ける'],
@@ -2903,6 +2925,7 @@ function showBag(tab = 'furniture', genre = '') {
     <div class="seg bagtabs"><button data-t="furniture" class="${tab === 'furniture' ? 'on' : ''}">${icon('sofa')}家具</button><button data-t="items" class="${tab === 'items' ? 'on' : ''}">${icon('star')}アイテム</button></div>
     ${tab === 'furniture' ? `
       <div class="zk-tabs"><button data-g="" class="${!genre ? 'on' : ''}">すべて</button>${GENRES.map(g => `<button data-g="${g.id}" class="${genre === g.id ? 'on' : ''}">${icon(GENRE_ICON[g.id] || 'box')}${g.name}</button>`).join('')}</div>
+      ${owned.length > 1 ? `<div class="sort-row"><small>${owned.length}種類</small>${sortBtn('inv')}</div>` : ''}
       ${owned.length ? `<div class="zk-grid">${owned.map(it => {
         const n = S.owned(it.id), used = S.placedCount(it.id);
         return `<div class="zk-item have bag-item"><span class="thumb">${thumbHTML(it)}</span><b>${esc(it.name)}</b>
@@ -2916,6 +2939,7 @@ function showBag(tab = 'furniture', genre = '') {
   el.querySelector('.back').onclick = halfFurniture;
   el.querySelectorAll('.bagtabs button').forEach(b => b.onclick = () => showBag(b.dataset.t));
   el.querySelectorAll('.zk-tabs button').forEach(b => b.onclick = () => showBag('furniture', b.dataset.g));
+  bindSort(el, 'inv', () => showBag('furniture', genre));
 }
 
 // =========================== 週間ランキング ===========================
@@ -2986,16 +3010,18 @@ function showZukan(genre = null) {
       ${GENRES.map(g => `<button data-g="${g.id}" class="${genre === g.id ? 'on' : ''}">${icon(GENRE_ICON[g.id] || 'box')}${g.name}</button>`).join('')}
       <button data-g="special" class="${genre === 'special' ? 'on' : ''}">${icon('trophy')}特別</button>
     </div>
+    ${genre ? `<div class="sort-row"><small>${genre === 'gacha' ? 'レア度ごとに' : ''}</small>${sortBtn('zukan')}</div>` : ''}
     ${body}`);
   el.querySelector('.back').onclick = halfFurniture;
   el.querySelectorAll('.zk-tabs button, .zk-genre').forEach(b => b.onclick = () => showZukan(b.dataset.g || null));
+  bindSort(el, 'zukan', () => showZukan(genre));
   el.querySelectorAll('.zk-item.have').forEach(b => b.onclick = () => {
     const it = itemById(b.dataset.id);
     toast(`${it.name}${it.rarity ? '（' + '★'.repeat(it.rarity) + '）' : ''} 持っている数：${S.owned(it.id)}`);
   });
 }
 function zukanGrid(items) {
-  return `<div class="zk-grid">${items.map(it => {
+  return `<div class="zk-grid">${sortItems(items, 'zukan').map(it => {
     const have = S.collected(it.id);
     return `<button class="zk-item ${have ? 'have' : 'locked'} ${it.rarity ? 'r' + it.rarity : ''}" data-id="${it.id}">
       <span class="thumb">${thumbHTML(it)}</span>${have ? '' : `<span class="lock">${icon('lock')}</span>`}
